@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="theme-color" content="#0c0f1e" />
+<title>Worldwalker RPG</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" type="image/png" href="/assets/branding/worldwalker-emblem.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cinzel+Decorative:wght@700;900&family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Yuji+Syuku&family=Pirata+One&family=MedievalSharp&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css" />
+</head>
+<body data-world="Custom World" data-scene="starry_sky">
+
+<aside id="phone-host-banner" hidden>
+  <div><strong>PHONE MODE IS RUNNING</strong><span>Open <b id="phone-host-url"></b> on a phone connected to this trusted Wi-Fi.</span></div>
+  <button id="btn-copy-phone-url" type="button">COPY ADDRESS</button>
+  <small>Keep this window open while playing. Windows may ask you to allow private-network access.</small>
+</aside>
+
+<div id="fx-layer" aria-hidden="true"></div>
+<div id="toast-stack"></div>
+<div id="cinematic-banner"></div>
+
+<div class="app-shell">
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="brand">WORLDWALKER</div>
+      <nav class="menubar">
+        <div class="menu">
+          <button class="menu-btn">GAME</button>
+          <div class="menu-drop">
+            <button data-action="new-campaign">New Campaign</button>
+            <button data-action="save">Save</button>
+            <button data-action="load">Load</button>
+            <button data-action="undo">Undo Last Turn</button>
+            <button data-action="export">Export Campaign</button>
+            <button data-action="import">Import Campaign</button>
+          </div>
+        </div>
+        <div class="menu">
+          <button class="menu-btn">OPTIONS</button>
+          <div class="menu-drop">
+            <button data-action="settings">AI &amp; Portrait Setup</button>
+            <button data-action="asset-folder">Open Custom Art Folder</button>
+            <button data-action="music-folder">Open World Music Folder</button>
+            <button data-action="world-packs">World Packs</button>
+            <button data-action="diagnostics">Diagnostics</button>
+          </div>
+        </div>
+        <div class="menu">
+          <button class="menu-btn">HELP</button>
+          <div class="menu-drop">
+            <button data-action="help">How To Play</button>
+          </div>
+        </div>
+      </nav>
+    </div>
+    <div class="topbar-center">
+      <span id="hdr-world">Custom World</span>
+      <span class="sep">—</span>
+      <span id="hdr-location">Starting Region</span>
+    </div>
+    <div class="topbar-right">
+      <span id="hdr-turn" class="pill">Turn 0</span>
+      <span id="hdr-autosave" class="pill save-pill" title="Last autosave">Not saved</span>
+      <span id="hdr-ai" class="pill ai-pill">AI: READY TO TEST</span>
+      <span id="hdr-cost" class="pill cost-pill" title="Estimated AI spend this session" hidden></span>
+      <button id="btn-settings-gear" class="icon-btn" title="AI &amp; Portrait Setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+  </header>
+
+  <aside class="col col-left">
+    <section class="panel character-card">
+      <div class="portrait-frame">
+        <img id="portrait-img" class="portrait-image" alt="AI-generated character portrait" />
+        <canvas id="character-ambient" class="character-ambient" aria-hidden="true"></canvas>
+        <div id="portrait-loading" class="portrait-loading" hidden><span></span><b>CREATING PORTRAIT…</b></div>
+        <button id="btn-portrait-regenerate" class="portrait-regenerate" type="button" title="Regenerate AI portrait">↻</button>
+        <button id="btn-portrait-manage" class="portrait-manage" type="button" title="Manage portrait identity">✦</button>
+        <div id="portrait-status" class="portrait-status">WORLD PORTRAIT</div>
+        <div class="portrait-shade"></div>
+        <div id="position-badge" class="position-badge" style="display:none"></div>
+        <div class="portrait-caption">
+          <div id="portrait-name" class="portrait-name">Traveler</div>
+          <div id="portrait-class" class="portrait-class">Adventurer</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg></i>Character Sheet</span></header>
+      <div class="panel-body stat-summary" id="stat-summary-body">
+        <div class="row-between" id="level-summary"><span id="stat-level">Level 1</span><span id="stat-xp">XP 0 / 100</span></div>
+        <div class="bar-row">
+          <span class="bar-label">HP</span>
+          <div class="bar-track"><div id="bar-hp" class="bar-fill bar-hp" style="width:100%"></div></div>
+          <span id="bar-hp-text" class="bar-value">100 / 100</span>
+        </div>
+        <div class="bar-row">
+          <span class="bar-label" id="resource-label">Energy</span>
+          <div class="bar-track"><div id="bar-resource" class="bar-fill bar-resource" style="width:100%"></div></div>
+          <span id="bar-resource-text" class="bar-value">100 / 100</span>
+        </div>
+        <div class="bar-row xp-row" id="xp-summary">
+          <span class="bar-label">XP</span>
+          <div class="bar-track"><div id="bar-xp" class="bar-fill bar-xp" style="width:0%"></div></div>
+        </div>
+        <dl class="kv">
+          <dt id="stat-race-label" hidden>Race</dt><dd id="stat-race" hidden>Human</dd>
+          <dt>Age</dt><dd id="stat-age">Unknown</dd>
+          <dt>Status</dt><dd id="stat-status">Normal</dd>
+          <dt>Time</dt><dd id="stat-time">Day 1 — Morning</dd>
+          <dt id="stat-currency-label">Currency</dt><dd id="stat-currency">—</dd>
+        </dl>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-head"><span id="attributes-title"><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></i>Attributes</span></header>
+      <div class="panel-body">
+        <div id="attributes-grid" class="attr-grid"></div>
+        <div id="hidden-stats-wrap" class="hidden-stats-wrap" style="display:none">
+          <div class="hidden-stats-label">Hidden Stats</div>
+          <div id="hidden-stats-grid" class="attr-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" id="gear-panel" style="display:none">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></i><span id="gear-panel-title">Gear</span></span></header>
+      <div class="panel-body">
+        <ul id="gear-list" class="tag-list empty">Nothing equipped yet.</ul>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></i>Skills &amp; Titles</span></header>
+      <div class="panel-body skill-summary-click" data-journal="skills" role="button" tabindex="0" title="Open the full Skills &amp; Titles journal">
+        <ul id="skills-list" class="tag-list empty">None</ul>
+      </div>
+    </section>
+
+    <section class="panel" id="affiliations-panel" style="display:none">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></i>Affiliations</span></header>
+      <div class="panel-body skill-summary-click" data-journal="relationships" role="button" tabindex="0" title="Open the full Relationships &amp; Factions journal">
+        <ul id="affiliations-list" class="tag-list empty">None</ul>
+      </div>
+    </section>
+
+    <nav class="quick-nav">
+      <button data-journal="party">Party</button>
+      <button id="active-quest-preview" class="quest-nav-button empty" data-journal="quests"><span>Active Quest</span><small>No active quest</small></button>
+      <button id="world-feed-nav" data-journal="world-feed"><span>World Feed</span><small>No updates yet</small></button>
+      <button data-journal="codex">Codex</button>
+      <button data-journal="inventory">Bag</button>
+      <button data-journal="map">Map</button>
+    </nav>
+    <button id="btn-open-advisor" class="btn-ghost full advisor-btn"><i class="btn-icon-svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></i>ASK THE ADVISOR</button>
+  </aside>
+
+  <main class="col col-center">
+    <section class="panel scene-card">
+      <header class="panel-head scene-head">
+        <span id="scene-title">OPENING SCENE</span>
+        <button id="btn-retry-opening" class="btn-ghost small">↻ RETRY OPENING</button>
+      </header>
+      <div class="scene-viewport" id="scene-viewport">
+        <canvas id="scene-paint" class="scene-paint"></canvas>
+        <canvas id="scene-fx" class="scene-fx"></canvas>
+        <img id="scene-img" class="scene-img" alt="" />
+        <div class="scene-shade"></div>
+        <div class="scene-weather" id="scene-weather"></div>
+        <div class="scene-transition" id="scene-transition"></div>
+        <div class="scene-badge" id="scene-category-badge">STARRY SKY</div>
+        <div class="scene-loc"><span id="scene-location">Starting Region</span></div>
+        <div class="scene-world"><span id="scene-world">Custom World</span></div>
+      </div>
+    </section>
+
+    <section class="panel story-card no-collapse">
+      <header class="panel-head story-head">
+        <span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2z"/><path d="M22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg></i>Chronicle</span>
+        <button id="btn-story-latest" class="story-latest" type="button" title="Jump to the newest story beat">↓ LATEST</button>
+      </header>
+      <div class="panel-body story-feed" id="story-feed"></div>
+      <section id="intervention-bar" class="inline-intervention" hidden>
+        <img id="canon-event-banner" class="canon-event-banner" alt="" hidden />
+        <div class="intervention-copy">
+          <span id="canon-event-heading">MAJOR EVENT</span>
+          <h3 id="canon-intervention-text">The simulation reached an important decision.</h3>
+          <p id="canon-event-context"></p>
+          <strong id="canon-intervention-question">Do you want to intervene?</strong>
+        </div>
+        <div class="intervention-actions">
+          <button id="btn-canon-intervene" class="btn-primary">YES — STOP HERE</button>
+          <button id="btn-canon-later" class="btn-ghost">NO — KEEP SIMULATING</button>
+        </div>
+      </section>
+      <div class="suggestion-dock">
+        <span class="suggestion-label">Possible next moves</span>
+        <div class="suggested-actions" id="suggested-actions"></div>
+      </div>
+    </section>
+  </main>
+
+  <aside class="col col-right">
+    <section class="panel combat-panel" id="combat-panel" hidden>
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="20.5" y1="3.5" x2="9" y2="15"/><path d="M14.5 8 18 11.5"/><path d="M9 15 4 20"/><path d="M6.5 17.5 4 15l-1 3 3 3 3-1z"/></svg></i>Combat — Round <span id="combat-round">1</span></span></header>
+      <div class="panel-body">
+        <div id="combat-enemy" class="combat-enemy"></div>
+        <div id="combat-resource-row" class="combat-resource-row"></div>
+        <div class="combat-ability-row">
+          <label for="combat-ability">Ability</label>
+          <select id="combat-ability"><option value="">Plain Attack</option></select>
+        </div>
+        <div class="combat-actions">
+          <button id="btn-combat-attack" class="btn-primary" type="button"><i class="btn-icon-svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="20.5" y1="3.5" x2="9" y2="15"/><path d="M14.5 8 18 11.5"/><path d="M9 15 4 20"/><path d="M6.5 17.5 4 15l-1 3 3 3 3-1z"/></svg></i>ATTACK</button>
+          <button id="btn-combat-defend" class="btn-ghost" type="button"><i class="btn-icon-svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></i>DEFEND</button>
+          <button id="btn-combat-flee" class="btn-ghost" type="button"><i class="btn-icon-svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></i>FLEE</button>
+        </div>
+        <div class="combat-actions">
+          <button id="btn-combat-overwhelm" class="btn-ghost full" type="button" title="Attempt to end this fight outright with an established signature ability — absorption, Conqueror's Haki, domination, and the like. A real chance to fail, not a guaranteed win; try again if it doesn't land."><i class="btn-icon-svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17h18l-1.6-8.2-4.4 3.3L12 6l-3 6.1-4.4-3.3z"/><line x1="4" y1="21" x2="20" y2="21"/></svg></i>OVERWHELM</button>
+        </div>
+        <div id="combat-log" class="combat-log"></div>
+        <p class="hint combat-freeform-hint">Prefer to just describe what you do? Type it in Action Chat below and press Advance instead — combat never locks you into these buttons.</p>
+      </div>
+    </section>
+
+    <section class="panel composer-card action-chat-card no-collapse">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></i>Action Chat</span></header>
+      <div class="panel-body">
+        <div id="queued-actions" class="queued-actions"><p class="hint">No actions queued. Add as many as you want, in order.</p></div>
+        <div class="composer-row">
+          <textarea id="action-input" rows="4" placeholder="TYPE AN ACTION HERE&#10;Press Enter or Add to keep it in this chat until you Advance."></textarea>
+          <button id="btn-send" class="btn-primary">
+            <span class="btn-icon">＋</span><span>ADD ACTION</span>
+            <small>Press Enter</small>
+          </button>
+        </div>
+        <p class="hint action-chat-hint">Nothing resolves or receives a GM response until you press ADVANCE.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22 6 12 13 2 6"/></svg></i>Messages / Contact Activity</span></header>
+      <div class="panel-body">
+        <ul id="messages-list" class="tag-list empty">No messages yet.</ul>
+        <button id="btn-open-chat" class="btn-ghost full"><i class="btn-icon-svg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></i>OPEN FULL CHAT SCREEN</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></i>Time Control</span></header>
+      <div class="panel-body time-control">
+        <div class="time-row">
+          <input id="time-amount" type="number" min="1" value="1" aria-label="Time skip amount" hidden />
+          <select id="time-unit">
+            <option value="moment">moment</option>
+            <option value="next_event">next major event</option>
+            <option value="days">days</option>
+            <option value="weeks">weeks</option>
+            <option value="months">months</option>
+          </select>
+          <button id="btn-advance" class="btn-accent">ADVANCE</button>
+        </div>
+        <textarea id="time-plan" hidden></textarea>
+        <p class="hint" id="time-control-help">Moment resolves exactly one contextual story beat, never more than 24 hours.</p>
+        <button id="btn-detailed-time" class="btn-ghost full">⏳ DETAILED TIME OPTIONS</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></i>World Systems</span></header>
+      <div class="panel-body">
+        <p class="hint" id="time-mode-label">Time mode: moment</p>
+        <div class="world-systems-icons">
+          <span id="sys-sun" class="sys-icon">☀</span>
+          <span id="sys-fire" class="sys-icon">🔥</span>
+          <span id="sys-cloud" class="sys-icon">☁</span>
+          <span id="sys-wind" class="sys-icon">🌀</span>
+          <span id="sys-moon" class="sys-icon">🌙</span>
+        </div>
+        <div class="music-controls">
+          <div class="music-now"><span>♫ WORLD MUSIC</span><b id="music-title">No music found</b></div>
+          <div class="music-buttons">
+            <button id="btn-music-prev" type="button" title="Previous track">◀</button>
+            <button id="btn-music-play" type="button" title="Play or pause">▶</button>
+            <button id="btn-music-next" type="button" title="Next track">▶▶</button>
+            <button id="btn-music-refresh" type="button" title="Rescan music folder">↻</button>
+            <button id="btn-music-folder" type="button" title="Open this world's music folder">📁</button>
+          </div>
+          <p class="hint" id="music-help">Add MP3/MP4 files to this world's music folder.</p>
+        </div>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<!-- ============ MODALS ============ -->
+
+<div class="modal-backdrop" id="modal-welcome">
+  <div class="modal welcome-modal">
+    <div class="welcome-art" aria-hidden="true"></div>
+    <div class="welcome-content">
+      <div class="welcome-kicker">WORLDWALKER RPG</div>
+      <h1>Where will you walk?</h1>
+      <p>Begin a fresh story or return to a campaign saved on this computer.</p>
+      <button id="btn-welcome-new" class="btn-primary full welcome-choice" type="button">✦ START NEW CAMPAIGN</button>
+      <button id="btn-welcome-load" class="btn-ghost full welcome-choice" type="button">↺ LOAD SAVED GAME</button>
+      <p id="welcome-save-note" class="hint">Checking for saved campaigns…</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-campaign">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>New Campaign</span><button class="modal-close" data-close="modal-campaign">✕</button></header>
+    <div class="modal-body">
+      <label>Character Name</label>
+      <input id="nc-name" type="text" value="Traveler" />
+
+      <label>World</label>
+      <select id="nc-world"></select>
+      <p class="tagline" id="nc-tagline"></p>
+
+      <label>Player Character</label>
+      <select id="nc-character-mode">
+        <option value="">Original Character</option>
+      </select>
+      <p class="hint" id="nc-character-note">Create an original character shortly before the main storyline.</p>
+
+      <div id="nc-era-row" hidden>
+        <label>Starting Era</label>
+        <select id="nc-starting-era"></select>
+        <p class="hint" id="nc-era-note"></p>
+      </div>
+
+      <div class="two-col">
+        <div>
+          <label>Origin</label>
+          <select id="nc-origin"></select>
+        </div>
+        <div>
+          <label>Starting Archetype</label>
+          <select id="nc-archetype"></select>
+        </div>
+      </div>
+
+      <div id="nc-start-wrap" style="display:none">
+        <label>Starting Location</label>
+        <select id="nc-start"></select>
+      </div>
+
+      <label>Difficulty</label>
+      <select id="nc-difficulty"></select>
+      <p class="tagline" id="nc-diff-desc"></p>
+
+      <label>Background, training, traits, goals</label>
+      <textarea id="nc-background" rows="3"></textarea>
+
+      <label>Character appearance / look (used for portrait styling)</label>
+      <textarea id="nc-appearance" rows="2"></textarea>
+
+      <label id="nc-custom-label">Custom world description (Custom World only)</label>
+      <textarea id="nc-custom" rows="3"></textarea>
+
+      <label>Optional starting-stat adjustments</label>
+      <div class="stat-adjust-grid" id="nc-stats"></div>
+
+      <button id="btn-begin-campaign" class="btn-primary full">PREVIEW CAMPAIGN</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-campaign-preview">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>Confirm Campaign</span><button class="modal-close" data-close="modal-campaign-preview">✕</button></header>
+    <div class="modal-body">
+      <div id="campaign-preview" class="campaign-preview"></div>
+      <div class="modal-actions">
+        <button id="btn-preview-back" class="btn-ghost">BACK</button>
+        <button id="btn-confirm-campaign" class="btn-primary">START THIS CAMPAIGN</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-settings">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>AI &amp; Portrait Setup</span><button class="modal-close" data-close="modal-settings">✕</button></header>
+    <div class="modal-body">
+      <label>AI Mode</label>
+      <div class="radio-row">
+        <label><input type="radio" name="provider" value="local" checked /> LOCAL — LM Studio (FREE)</label>
+        <label><input type="radio" name="provider" value="cloud" /> OPENAI CLOUD (OPTIONAL)</label>
+      </div>
+
+      <label>Local Server</label>
+      <input id="st-base-url" type="text" value="http://localhost:1234/v1" />
+      <p class="hint">Default LM Studio: http://localhost:1234/v1</p>
+
+      <label>Local Auth Token (usually blank)</label>
+      <input id="st-token" type="password" />
+
+      <div class="two-col">
+        <div>
+          <label>Main GM Model</label>
+          <input id="st-main-model" type="text" list="model-suggestions" placeholder="e.g. gpt-5-nano" />
+          <p class="hint">Narration, rules, combat, progression</p>
+        </div>
+        <div>
+          <label>Background / Memory Model</label>
+          <input id="st-bg-model" type="text" list="model-suggestions" placeholder="e.g. gpt-5-nano" />
+          <p class="hint">Use the same model on modest PCs</p>
+        </div>
+      </div>
+      <datalist id="model-suggestions"></datalist>
+
+      <label>Cloud Presets — sets Main/Background/Image model and portrait quality together</label>
+      <div class="radio-row">
+        <button type="button" id="btn-preset-budget" class="btn-accent" title="Cheapest cloud models; still fully playable">BUDGET</button>
+        <button type="button" id="btn-preset-quality" class="btn-accent" title="Strongest cloud models and portraits; costs more per session">QUALITY</button>
+      </div>
+
+      <button id="btn-detect-models" class="btn-accent">DETECT MODELS (local only)</button>
+      <span id="detect-status" class="hint"></span>
+
+      <label>OpenAI API Key — only used in cloud mode</label>
+      <input id="st-api-key" type="password" />
+
+      <label>Narration</label>
+      <select id="st-narration">
+        <option selected>Concise</option>
+        <option>Detailed</option>
+        <option>Cinematic</option>
+      </select>
+
+      <div class="checkbox-row">
+        <label><input type="checkbox" id="st-autosave" checked /> Autosave every resolved turn</label>
+        <label><input type="checkbox" id="st-sound" checked /> Game sounds</label>
+        <label><input type="checkbox" id="st-music" checked /> World music</label>
+        <label><input type="checkbox" id="st-anim" checked /> Animations</label>
+        <label><input type="checkbox" id="st-portrait-enabled" checked /> Generate portraits from character changes</label>
+        <label><input type="checkbox" id="st-developer-mode" /> Developer diagnostics</label>
+      </div>
+      <label>Music Volume</label>
+      <input id="st-music-volume" type="range" min="0" max="1" step="0.05" value="0.35" />
+
+      <div class="two-col portrait-settings">
+        <div>
+          <label>OpenAI Image Model</label>
+          <input id="st-image-model" type="text" value="gpt-image-2" placeholder="gpt-image-2" />
+          <p class="hint">Used in OpenAI Cloud mode.</p>
+        </div>
+        <div>
+          <label>Local Image Model</label>
+          <input id="st-local-image-model" type="text" placeholder="Leave blank if unsupported" />
+          <p class="hint">Requires an OpenAI-compatible /images endpoint.</p>
+        </div>
+      </div>
+      <label>Portrait Quality</label>
+      <select id="st-portrait-quality">
+        <option selected>low</option>
+        <option>medium</option>
+        <option>high</option>
+        <option>auto</option>
+      </select>
+
+      <p class="hint">Local text inference has no per-turn API charge. Cloud portraits use the image API separately and may incur image-generation charges. Portraits regenerate only when visually relevant traits change and are cached on this computer.</p>
+
+      <div id="usage-summary" class="hint usage-summary"></div>
+
+      <button id="btn-save-settings" class="btn-primary full">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-chat">
+  <div class="modal modal-xl">
+    <header class="modal-head"><span>Chats &amp; Contacts</span><button class="modal-close" data-close="modal-chat">✕</button></header>
+    <div class="modal-body chat-body">
+      <div class="chat-contacts" id="chat-contacts"></div>
+      <div class="chat-thread">
+        <div class="chat-messages" id="chat-messages"></div>
+        <p class="hint chat-hint">Type normally to speak, or put an action in [brackets] — e.g. [hands over the letter] or [reaches for a weapon] — to attempt something physical during the conversation.</p>
+        <div class="chat-input-row">
+          <textarea id="chat-input" rows="2" placeholder="Say something, or [attempt an action in brackets]..."></textarea>
+          <button id="btn-chat-send" class="btn-primary">SEND</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-advisor">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>🧭 The Advisor</span><button class="modal-close" data-close="modal-advisor">✕</button></header>
+    <div class="modal-body advisor-body">
+      <p class="hint">Ask for a detailed power comparison, world briefing, canon-event countdown, or strategic plan. Advice never changes campaign state and costs no turn.</p>
+      <label class="advisor-mode-toggle"><input id="advisor-fourth-wall" type="checkbox" /> <span><b>Fourth-Wall mode</b><small>Expose d100 math, queue/time rules, AI uncertainty, and legal simulation exploits.</small></span></label>
+      <div class="advisor-starters" id="advisor-starters">
+        <button data-q="How strong am I compared to the threats near me right now?">⚖ Power levels</button>
+        <button data-q="What's the current state of the world I should know about?">🌍 State of the world</button>
+        <button data-q="What should I focus on doing next?">🎯 What should I do?</button>
+        <button data-q="Summarize the most important recent events I've been part of.">📜 Recent events</button>
+      </div>
+      <div class="chat-messages advisor-messages" id="advisor-messages"></div>
+      <div id="advisor-followups" class="advisor-followups"></div>
+      <div class="chat-input-row">
+        <textarea id="advisor-input" rows="2" placeholder="e.g. How strong am I compared to the local Marines? What should I focus on right now?"></textarea>
+        <button id="btn-advisor-send" class="btn-primary">ASK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-onboarding">
+  <div class="modal modal-lg onboarding-modal">
+    <header class="modal-head"><span>How Worldwalker Plays</span><button class="modal-close" data-close="modal-onboarding">✕</button></header>
+    <div class="modal-body">
+      <div class="onboarding-step">
+        <b>✒ Type actions, then ADVANCE</b>
+        <p>Typing an action just adds it to your Action Chat queue — nothing happens yet. Add as many as you like, in order, then press <b>ADVANCE</b> to have the GM resolve them all at once.</p>
+      </div>
+      <div class="onboarding-step">
+        <b>⏳ Moment vs. longer skips</b>
+        <p><b>Moment</b> (the default) resolves exactly one contextual story beat, never more than 24 hours. Switch the Time Control dropdown to days/weeks/months — or "next major event" — when you want to fast-forward training, travel, or downtime instead of playing it out beat by beat.</p>
+      </div>
+      <div class="onboarding-step">
+        <b>🧭 The Advisor is free</b>
+        <p>Stuck, or just want a read on the situation? <b>ASK THE ADVISOR</b> anytime for a power comparison, world briefing, or strategic suggestion. It never changes your campaign state and never costs a turn — ask it as often as you like.</p>
+      </div>
+      <button id="btn-onboarding-done" class="btn-primary full">GOT IT</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-time-detail">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>Time Control</span><button class="modal-close" data-close="modal-time-detail">✕</button></header>
+    <div class="modal-body">
+      <div class="two-col">
+        <div id="td-amount-field" hidden>
+          <label>Amount</label>
+          <input id="td-amount" type="number" min="1" value="1" />
+        </div>
+        <div>
+          <label>Unit</label>
+          <select id="td-unit">
+            <option value="moment" selected>moment — next story beat</option>
+            <option value="next_event">next major event — natural stop</option>
+            <option value="days">days</option>
+            <option value="weeks">weeks</option>
+            <option value="months">months</option>
+          </select>
+        </div>
+      </div>
+      <label>Planned Actions — performed in order (one per line)</label>
+      <textarea id="td-orders" rows="6" placeholder="Travel to the training grounds&#10;Practice sword forms&#10;Eat and recover&#10;Ask around for rumors"></textarea>
+      <label>Intensity</label>
+      <select id="td-intensity">
+        <option value="light">Light</option>
+        <option value="normal" selected>Normal</option>
+        <option value="intense">Intense</option>
+        <option value="extreme">Extreme</option>
+      </select>
+      <button id="btn-begin-timeskip" class="btn-primary full">BEGIN TIME SKIP</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-journal">
+  <div class="modal modal-xl">
+    <header class="modal-head"><span id="journal-title">Journal</span><button class="modal-close" data-close="modal-journal">✕</button></header>
+    <div class="modal-body">
+      <div class="journal-tabs" id="journal-tabs">
+        <button data-tab="party">Party</button>
+        <button data-tab="quests">Quests</button>
+        <button data-tab="skills">Skills &amp; Titles</button>
+        <button data-tab="world-feed">World Feed</button>
+        <button data-tab="codex">Codex</button>
+        <button data-tab="inventory">Bag</button>
+        <button data-tab="map">Map</button>
+        <button data-tab="relationships">Relationships &amp; Factions</button>
+        <button type="button" id="btn-journal-advanced-toggle" class="journal-advanced-toggle">More ▾</button>
+        <div class="journal-tabs-advanced" id="journal-tabs-advanced" hidden>
+          <button data-tab="progression">Progress</button>
+          <button data-tab="chapters">Chapters</button>
+          <button data-tab="clocks">World Clocks</button>
+          <button data-tab="prerequisites">Prerequisites</button>
+          <button data-tab="timeline">Timeline</button>
+          <button data-tab="schedule">Schedule</button>
+          <button data-tab="continuity">Continuity</button>
+          <button data-tab="lore">Lore Sources</button>
+          <button data-tab="tuning">Tuning</button>
+          <button data-tab="health">Campaign Health</button>
+        </div>
+      </div>
+      <div class="journal-panel" id="journal-panel"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-lethal">
+  <div class="modal">
+    <header class="modal-head danger-head"><span>⚠ Potentially Lethal Decision</span></header>
+    <div class="modal-body">
+      <p id="lethal-warning">Failure could kill your character.</p>
+      <p class="lethal-risk" id="lethal-risk">Risk: HIGH</p>
+      <p class="hint">If you die, the game will offer to rewind to this exact checkpoint.</p>
+      <div class="modal-actions">
+        <button id="btn-lethal-cancel" class="btn-ghost">Reconsider</button>
+        <button id="btn-lethal-confirm" class="btn-danger">Continue Anyway</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-major-roll">
+  <div class="modal major-roll-modal">
+    <header class="modal-head"><span>✦ FATE CHECK — D100</span></header>
+    <div class="modal-body major-roll-body">
+      <p id="major-roll-reason">A turning point hangs in the balance.</p>
+      <div class="d100-orb" id="d100-orb"><span id="d100-value">?</span><small>D100</small></div>
+      <p class="hint" id="major-roll-details">Your stats, skills and titles are added after the roll.</p>
+      <button id="btn-major-roll" class="btn-primary full">ROLL THE D100</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-difficult-check">
+  <div class="modal modal-lg difficult-check-modal">
+    <header class="modal-head danger-head"><span>⚠ DIFFICULT CHECKS AHEAD</span></header>
+    <div class="modal-body">
+      <p>No time has advanced. Review the expected checks before committing this plan.</p>
+      <div id="difficult-check-list" class="difficult-check-list"></div>
+      <div class="challenge-choice-grid">
+        <button id="btn-difficult-roll" class="btn-primary"><b>USE NORMAL D100</b><small>Accept the listed odds and continue.</small></button>
+        <button id="btn-difficult-timing" class="btn-ghost"><b>PLAY TIMING CLASH</b><small>Replace raw rolls with a reaction challenge.</small></button>
+        <button id="btn-difficult-tactical" class="btn-ghost"><b>PLAY TACTICAL APPROACH</b><small>Replace raw rolls with strategic choices.</small></button>
+      </div>
+      <button id="btn-difficult-cancel" class="btn-ghost full">CANCEL — EDIT QUEUED ACTIONS</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-timing-challenge">
+  <div class="modal challenge-modal">
+    <header class="modal-head"><span>✦ TIMING CLASH</span></header>
+    <div class="modal-body challenge-body">
+      <span id="timing-check-count" class="challenge-kicker">CHECK 1 OF 1</span>
+      <h3 id="timing-check-title">Difficult action</h3>
+      <p id="timing-check-info" class="hint"></p>
+      <div class="timing-track" id="timing-track"><div class="timing-good"></div><div class="timing-perfect"></div><div class="timing-needle" id="timing-needle"></div></div>
+      <div id="timing-attempts" class="timing-attempts">Attempt 1 of 3</div>
+      <button id="btn-timing-lock" class="btn-primary full">LOCK TIMING</button>
+      <button id="btn-timing-abort" class="btn-ghost full">CANCEL CHALLENGE</button>
+      <p class="hint">Three attempts are averaged into the raw 1–100 score. Stats, skills, titles, and circumstances are added afterward.</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-tactical-challenge">
+  <div class="modal modal-lg challenge-modal">
+    <header class="modal-head"><span>🧭 TACTICAL APPROACH</span></header>
+    <div class="modal-body challenge-body">
+      <span id="tactical-check-count" class="challenge-kicker">CHECK 1 OF 1</span>
+      <h3 id="tactical-check-title">Difficult action</h3>
+      <p id="tactical-check-info" class="hint"></p>
+      <div class="tactical-stage"><b id="tactical-stage-title">Stage 1 — Approach</b><span id="tactical-stage-help">Choose how to begin.</span></div>
+      <div id="tactical-options" class="tactical-options"></div>
+      <div id="tactical-progress" class="tactical-progress"></div>
+      <button id="btn-tactical-abort" class="btn-ghost full">CANCEL CHALLENGE</button>
+      <p class="hint">Visible tradeoffs matter. A small uncertainty adjustment prevents any single option from always being correct.</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-portrait-manager">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>Portrait Identity</span><button class="modal-close" data-close="modal-portrait-manager">✕</button></header>
+    <div class="modal-body">
+      <p class="hint">Lock permanent identity while allowing clothing, injuries, transformations, and temporary effects to change.</p>
+      <label>Canonical appearance</label>
+      <textarea id="portrait-canonical" rows="4"></textarea>
+      <label>Temporary visible changes — one per line</label>
+      <textarea id="portrait-temporary" rows="3" placeholder="Rain-soaked clothing&#10;Temporary transformation aura"></textarea>
+      <label><input id="portrait-locked" type="checkbox" /> Preserve this identity in future generations</label>
+      <label>Upload reference portrait (PNG, JPEG, or WebP)</label>
+      <input id="portrait-reference-file" type="file" accept="image/png,image/jpeg,image/webp" />
+      <div class="modal-actions wrap-actions">
+        <button id="btn-portrait-upload" class="btn-ghost">UPLOAD REFERENCE</button>
+        <button id="btn-portrait-revert" class="btn-ghost">PREVIOUS PORTRAIT</button>
+        <button id="btn-portrait-accept" class="btn-primary">SAVE IDENTITY</button>
+      </div>
+      <div id="portrait-history" class="portrait-history"></div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-diagnostics">
+  <div class="modal modal-xl">
+    <header class="modal-head"><span>Developer Diagnostics</span><button class="modal-close" data-close="modal-diagnostics">✕</button></header>
+    <div class="modal-body">
+      <div id="diagnostics-summary" class="diagnostics-summary"></div>
+      <pre id="diagnostics-json" class="diagnostics-json"></pre>
+      <button id="btn-diagnostics-export" class="btn-primary full">EXPORT DIAGNOSTIC REPORT</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-world-packs">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>Installable World Packs</span><button class="modal-close" data-close="modal-world-packs">✕</button></header>
+    <div class="modal-body" id="world-pack-content"></div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-death">
+  <div class="modal">
+    <header class="modal-head danger-head"><span>Your Character Died</span></header>
+    <div class="modal-body">
+      <p>Rewind to immediately before the lethal action?</p>
+      <div class="modal-actions">
+        <button id="btn-death-keep" class="btn-ghost">Keep This Death</button>
+        <button id="btn-death-rewind" class="btn-primary">Rewind &amp; Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-chapter-recap">
+  <div class="modal recap-modal">
+    <div class="recap-frame">
+      <div class="recap-kicker">PREVIOUSLY, ON</div>
+      <div id="recap-world" class="recap-world">Worldwalker</div>
+      <div id="recap-title" class="recap-title">Chapter 1</div>
+      <div id="recap-timespan" class="recap-timespan"></div>
+      <p id="recap-summary" class="recap-summary"></p>
+      <div class="recap-columns">
+        <div>
+          <div class="recap-label">Key Decisions</div>
+          <ul id="recap-decisions" class="recap-list"></ul>
+        </div>
+        <div>
+          <div class="recap-label">Lasting Changes</div>
+          <ul id="recap-changes" class="recap-list"></ul>
+        </div>
+      </div>
+      <button id="btn-recap-continue" class="btn-primary recap-continue">CONTINUE</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-status-window">
+  <div class="modal status-window-modal">
+    <div class="status-window-frame">
+      <header class="status-window-head">
+        <span class="status-window-ornament">◆</span>
+        <span>STATUS</span>
+        <span class="status-window-ornament">◆</span>
+      </header>
+      <div class="status-window-body">
+        <div class="status-window-titlecard">
+          <div id="sw-name" class="status-window-name">Traveler</div>
+          <div id="sw-class" class="status-window-class">Adventurer</div>
+          <div id="sw-meta" class="status-window-meta">Day 1 · Somewhere</div>
+        </div>
+        <div class="status-window-bars">
+          <div class="status-window-bar-row">
+            <span class="status-window-bar-label">HP</span>
+            <div class="bar-track"><div id="sw-bar-hp" class="bar-fill bar-hp" style="width:100%"></div></div>
+            <span id="sw-hp-text" class="status-window-bar-value">100 / 100</span>
+          </div>
+          <div class="status-window-bar-row">
+            <span id="sw-resource-label" class="status-window-bar-label">Energy</span>
+            <div class="bar-track"><div id="sw-bar-resource" class="bar-fill bar-resource" style="width:100%"></div></div>
+            <span id="sw-resource-text" class="status-window-bar-value">100 / 100</span>
+          </div>
+          <div class="status-window-bar-row" id="sw-xp-row">
+            <span class="status-window-bar-label">XP</span>
+            <div class="bar-track"><div id="sw-bar-xp" class="bar-fill bar-xp" style="width:0%"></div></div>
+            <span id="sw-xp-text" class="status-window-bar-value">0 / 100</span>
+          </div>
+        </div>
+        <div class="status-window-columns">
+          <div>
+            <div class="status-window-section-label">Attributes</div>
+            <div id="sw-attributes" class="status-window-attrs"></div>
+          </div>
+          <div>
+            <div class="status-window-section-label">Skills &amp; Titles</div>
+            <ul id="sw-skills" class="status-window-list"></ul>
+            <div class="status-window-section-label">Standing</div>
+            <div id="sw-misc" class="status-window-misc"></div>
+          </div>
+        </div>
+      </div>
+      <button id="btn-status-window-ok" class="btn-primary status-window-ok">OK</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-help">
+  <div class="modal modal-lg">
+    <header class="modal-head"><span>How To Play</span><button class="modal-close" data-close="modal-help">✕</button></header>
+    <div class="modal-body help-body">
+      <p>Add any number of actions to the queue. Queuing is planning only: the GM and world remain silent, and the clock does not move.</p>
+      <p>Choose an amount of time and press ADVANCE to review the plan. The game resolves the queued actions in order, raising difficulty or deferring later actions when the allotted time is insufficient.</p>
+      <p>Each major action, reaction, consequence, and due canon event appears as its own detailed story update. Canon is a living pressure rather than a railroad, so your choices can naturally change it.</p>
+      <p>Hard actions use local d20 rolls. High/extreme lethal choices warn you before commitment. Death can be rewound to the pre-Advance checkpoint.</p>
+      <p><strong>AI ROLES</strong><br/>Main model: Narrator + Rules Referee<br/>Background model: World/NPC Simulator + Memory Manager</p>
+      <p><strong>LOCAL AI</strong><br/>LM Studio can run both text roles on your own PC with no per-turn API fees. Open OPTIONS → AI &amp; Portrait Setup, start the LM Studio server, Detect Models, then Save. Portraits require a separately compatible image model.</p>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-load">
+  <div class="modal">
+    <header class="modal-head"><span>Campaign Library</span><button class="modal-close" data-close="modal-load">✕</button></header>
+    <div class="modal-body">
+      <div class="load-toolbar">
+        <input id="campaign-import-file" type="file" accept="application/json,.json" />
+        <button id="btn-campaign-import" class="btn-ghost" type="button">IMPORT CAMPAIGN</button>
+      </div>
+      <p class="hint">Each campaign shows the app version that last saved it. Delete is permanent; export a copy first if you may want it later.</p>
+      <ul class="tag-list" id="load-list"></ul>
+    </div>
+  </div>
+</div>
+
+<audio id="snd-ui_click" src="/assets/sounds/ui_click.wav" preload="auto"></audio>
+<audio id="snd-dice" src="/assets/sounds/dice.wav" preload="auto"></audio>
+<audio id="snd-xp" src="/assets/sounds/xp.wav" preload="auto"></audio>
+<audio id="snd-level_up" src="/assets/sounds/level_up.wav" preload="auto"></audio>
+<audio id="snd-message" src="/assets/sounds/message.wav" preload="auto"></audio>
+<audio id="snd-notify" src="/assets/sounds/notify.wav" preload="auto"></audio>
+<audio id="snd-danger" src="/assets/sounds/danger.wav" preload="auto"></audio>
+<audio id="snd-save" src="/assets/sounds/save.wav" preload="auto"></audio>
+<audio id="snd-time_skip" src="/assets/sounds/time_skip.wav" preload="auto"></audio>
+<audio id="snd-world_event" src="/assets/sounds/world_event.wav" preload="auto"></audio>
+<audio id="snd-error" src="/assets/sounds/error.wav" preload="auto"></audio>
+<audio id="snd-hit" src="/assets/sounds/hit.wav" preload="auto"></audio>
+<audio id="snd-achievement" src="/assets/sounds/achievement.wav" preload="auto"></audio>
+<audio id="music-player" preload="metadata"></audio>
+
+<script src="/js/app.js"></script>
+</body>
+</html>
