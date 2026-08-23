@@ -20,6 +20,9 @@ __pycache__/
 .venv/
 venv/
 
+# Runtime state written by the test suite (autosaves, etc.) — not source
+tests/.runtime/
+
 # OS cruft
 .DS_Store
 Thumbs.db
