@@ -1,0 +1,917 @@
+"""Core game engine: ported from the original Tkinter App class' business
+logic (character creation, assess/roll/resolve turn loop, time skips, chat,
+world ticks, memory management, save/load) with all Tkinter UI code removed.
+Returns plain dicts so a Flask layer can serialize them straight to JSON."""
+import copy, json, random, re, secrets, threading
+from datetime import datetime
+from pathlib import Path
+
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for
+from ai_client import AI
+from lore import format_lore_context
+from portrait_generator import portrait_view
+from state_guard import apply_guarded_patch, migrate_state
+from continuity import update_continuity
+from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
+from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
+                     update_chapter_memory, tick_world_clocks)
+
+
+DEFAULT_SETTINGS = {
+    "provider": "local",
+    "local_base_url": "http://localhost:1234/v1",
+    "local_token": "",
+    "api_key": "",
+    "model": "",
+    "secondary_model": "",
+    "narration": "Concise",
+    "autosave": True,
+    "sound_enabled": True,
+    "music_enabled": True,
+    "music_volume": 0.35,
+    "animations_enabled": True,
+    "portrait_generation_enabled": True,
+    "image_model": "gpt-image-2",
+    "local_image_model": "",
+    "portrait_quality": "low",
+    "developer_mode": False,
+}
+
+
+WORLD_STARTER_GEAR = {
+    "One Piece": "Travel-worn weapon and island supplies",
+    "Hunter x Hunter": "Practical travel gear and training wraps",
+    "Naruto": "Kunai pouch, shuriken and field supplies",
+    "Solo Max-Level Newbie": "Beginner weapon and emergency potion",
+    "Overgeared": "Beginner equipment set and trade tools",
+    "Reincarnated as a Slime": "Species-appropriate natural weapon or focus",
+    "Custom World": "Setting-appropriate weapon and travel kit",
+}
+
+WORLD_STARTER_SKILL = {
+    "One Piece": "Foundation Combat Style", "Hunter x Hunter": "Conditioned Fundamentals",
+    "Naruto": "Academy Fundamentals", "Solo Max-Level Newbie": "System Adaptation",
+    "Overgeared": "Class Fundamentals", "Reincarnated as a Slime": "Intrinsic Species Trait",
+    "Custom World": "Background Expertise",
+}
+
+POOL_STATS = {
+    "One Piece": (("Endurance", "Willpower"), ("Willpower", "Instinct")),
+    "Hunter x Hunter": (("Strength", "Willpower"), ("Aura Control", "Willpower")),
+    "Naruto": (("Taijutsu", "Willpower"), ("Chakra Control", "Ninjutsu")),
+    "Solo Max-Level Newbie": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
+    "Overgeared": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
+    "Reincarnated as a Slime": (("Instinct", "Willpower"), ("Magicule Control", "Skill Mastery")),
+    "Custom World": (("Constitution", "Strength"), ("Wisdom", "Intelligence")),
+}
+
+ABILITY_ASPECTS = {
+    "fire": "Ember", "flame": "Ember", "heat": "Ember", "water": "Tide",
+    "wind": "Gale", "air": "Gale", "lightning": "Storm", "electric": "Storm",
+    "earth": "Stone", "ice": "Frost", "shadow": "Shadow", "dark": "Shadow",
+    "light": "Radiance", "heal": "Renewal", "medical": "Renewal", "sense": "Echo",
+    "sensor": "Echo", "speed": "Flash", "strong": "Titan", "strength": "Titan",
+}
+
+WORLD_ABILITY_FORMS = {
+    "Naruto": [
+        ("{aspect} Thread Technique", "a personal chakra transformation discovered during uneven early training",
+         "forms fine {aspect_lower}-natured chakra threads for precise attacks, traps, sensing, or utility",
+         "complex shapes quickly exhaust chakra and collapse when concentration breaks",
+         "improve chakra control, learn the matching nature transformation, and develop larger stable patterns"),
+        ("{aspect} Pulse", "an unusual chakra response first triggered during a formative moment",
+         "releases a short pulse of {aspect_lower}-aligned chakra whose exact use adapts to the user's intent",
+         "has short range and becomes unreliable when emotionally or physically exhausted",
+         "practice controlled pulses, study sealing principles, and learn to sustain the effect"),
+    ],
+    "One Piece": [
+        ("{aspect} Imprint Style", "an improvised island fighting art shaped by the character's environment",
+         "imprints {aspect_lower}-themed force or motion into strikes, tools, and movement without ignoring physical limits",
+         "requires preparation and stamina; stronger effects expose the user to retaliation",
+         "condition the body, refine timing, and eventually combine the style with Haki if it is learned"),
+        ("{aspect} Instinct", "a rare natural sensitivity that has not yet matured into formal Haki",
+         "notices subtle {aspect_lower}-like patterns in danger, movement, and intent a moment earlier than normal",
+         "provides impressions rather than certainty and fails amid overwhelming chaos",
+         "survive demanding encounters, train awareness, and seek instruction in Observation Haki"),
+    ],
+    "Hunter x Hunter": [
+        ("{aspect} Resonance", "a dormant Nen inclination expressed before the character understands aura",
+         "causes aura to resonate with {aspect_lower}-themed conditions and hints at a future personal Hatsu",
+         "remains inconsistent until the character properly opens and controls their aura nodes",
+         "learn Ten, Ren, Zetsu and Hatsu, then define restrictions that strengthen the effect"),
+        ("{aspect} Tell", "an exceptional learned instinct that may later become a Nen technique",
+         "reads small bodily and environmental cues through a {aspect_lower}-themed mental association",
+         "can be deceived and becomes noisy under stress or unfamiliar conditions",
+         "test the instinct, study opponents, and later reinforce it with a suitable Nen category"),
+    ],
+    "Solo Max-Level Newbie": [
+        ("Adaptive Skill: {aspect} Script", "a background-derived trait recognized when the System evaluates the player",
+         "builds proficiency when the player repeats successful {aspect_lower}-aligned solutions",
+         "starts at low rank and loses efficiency when the same trick is forced into unsuitable situations",
+         "meet hidden conditions, diversify applications, and earn System achievements"),
+    ],
+    "Overgeared": [
+        ("Rare Skill: {aspect} Craft", "a personal knack translated into a Satisfy-compatible skill",
+         "adds {aspect_lower}-themed properties to appropriate crafted items or class techniques",
+         "success depends on materials, production skill, design quality, and class compatibility",
+         "raise production mastery, acquire better materials, and complete a related class quest"),
+    ],
+    "Reincarnated as a Slime": [
+        ("Extra Skill: {aspect} Weave", "a desire and prior-life inclination crystallized into a world-valid skill",
+         "shapes magicules into controlled {aspect_lower}-themed effects suited to the user's species",
+         "output is limited by magicule capacity, analysis, resistances, and control",
+         "increase magicule capacity, analyze related phenomena, and combine compatible skills"),
+    ],
+    "Custom World": [
+        ("{aspect} Gift", "a setting-consistent talent produced from the player's requested parameters",
+         "creates a flexible {aspect_lower}-themed effect within the established rules of the custom world",
+         "begins narrow in scope and cannot bypass costs, counters, or prerequisites established by the setting",
+         "practice its core use, discover its source, and earn broader applications through play"),
+    ],
+}
+
+WORLD_BACKGROUND_COLOR = {
+    "Naruto": ("a retired local shinobi", "a mission-era accident exposed the cost of acting without preparation"),
+    "One Piece": ("a weathered island veteran", "a pirate raid forced the community to rely on anyone willing to stand up"),
+    "Hunter x Hunter": ("a traveling specialist", "an encounter with a far stronger stranger revealed how large the world really was"),
+    "Solo Max-Level Newbie": ("an obsessive strategy partner", "years spent mastering impossible game scenarios turned obscure knowledge into instinct"),
+    "Overgeared": ("a demanding workshop senior", "a costly failure made persistence more important than easy talent"),
+    "Reincarnated as a Slime": ("an elder familiar with local monsters", "a territorial crisis revealed both the value and danger of unusual abilities"),
+    "Custom World": ("a locally respected mentor", "a dangerous incident revealed that talent without understanding creates consequences"),
+}
+
+WORLD_BACKGROUND_NAMES = {
+    "Naruto": ("Mika Sato", "Daichi Mori", "Ren Aburame"),
+    "One Piece": ("Mara Venn", "Old Corin", "Tessa Flint"),
+    "Hunter x Hunter": ("Ilya Rook", "Mina Vale", "Toren Ash"),
+    "Solo Max-Level Newbie": ("Seo Min-jae", "Han Yu-ri", "Park Do-jin"),
+    "Overgeared": ("Elian Voss", "Mira Anvil", "Garron Pell"),
+    "Reincarnated as a Slime": ("Rilsa", "Gelm", "Nemu"),
+    "Custom World": ("Ari Vale", "Mara Stone", "Toren Reed"),
+}
+
+BACKGROUND_HOMES = (
+    "A practical household taught them to contribute early, even when its members did not fully understand their ambitions.",
+    "They were raised by a small circle of relatives and neighbors whose support came with duties they still feel responsible for.",
+    "Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+)
+
+
+
+class TurnsMixin:
+    def assess(self, action):
+        p = {"task": "assess_action", "action": action, "state": self.trimmed_state_for_ai(),
+             "schema": {"requires_check": "bool", "impossible": "bool", "reason": "exact blocking prerequisite/rule and, if fixable, what must change; under 28 words",
+                        "prerequisite_track": "object with name/source_feat/status/known_requirements/met_requirements/missing_requirements/next_steps/notes when pursuing a notable capability, otherwise null",
+                        "ability": self.ability_enum(), "skill": "name or null",
+                        "difficulty_min": "1-100 lower edge for an average relevant character", "difficulty_max": "1-100 upper edge; application randomly samples this range",
+                        "relevant_average_stat": "world-relative attribute value of an average relevant character at this era",
+                        "situational_bonus": "-20 to 20 for concrete preparation/conditions only",
+                        "major_event": "true only for evolutions, transformations, climactic confrontations or irreversible major events",
+                        "major_reason": "short reason or empty",
+                        "lethal_risk": "none|low|moderate|high|extreme", "lethal_warning": "specific warning or empty, under 20 words",
+                        "stakes": "success/failure stakes, under 25 words total"}}
+        extra = self.gm_context(action) + " Assess only. Do not narrate or roll. This is d100, never d20/D&D. Set a narrow contextual difficulty range from what is realistic for the AVERAGE RELEVANT character in this world at this exact era; do not scale it to the player. The application randomly samples the final target. A hard or canon-divergent action is not automatically impossible. Mark major_event sparingly but always for evolutions, transformations and climactic confrontations. Keep fields terse and mechanically specific."
+        assessment = self.ai.request(extra, p, max_output_tokens=700)
+        self.last_assessment = copy.deepcopy(assessment)
+        return assessment
+
+    def action_explanation(self, action, assessment):
+        track = assessment.get("prerequisite_track") if isinstance(assessment.get("prerequisite_track"), dict) else {}
+        return {
+            "action": action,
+            "possible": not bool(assessment.get("impossible")),
+            "requires_check": bool(assessment.get("requires_check")),
+            "ability": assessment.get("ability") or "None",
+            "skill": assessment.get("skill"),
+            "difficulty_range": [assessment.get("difficulty_min"), assessment.get("difficulty_max")] if assessment.get("requires_check") else None,
+            "relevant_average_stat": assessment.get("relevant_average_stat"),
+            "major_event": bool(assessment.get("major_event")),
+            "stakes": assessment.get("stakes") or "No exceptional risk identified.",
+            "risk": assessment.get("lethal_risk") or "none",
+            "reason": assessment.get("reason") or "The action fits the currently known rules.",
+            "requirements_met": track.get("met_requirements", []),
+            "requirements_missing": track.get("missing_requirements", []),
+            "next_steps": track.get("next_steps", []),
+            "track_name": track.get("name", ""),
+        }
+
+    def preview_action(self, action):
+        assessment = self.assess(action)
+        self.upsert_prerequisite_track(assessment.get("prerequisite_track"))
+        explanation = self.action_explanation(action, assessment)
+        self.state.setdefault("diagnostics", {})["last_assessment"] = copy.deepcopy(explanation)
+        if assessment.get("impossible"):
+            self.autosave()
+        return {"assessment": assessment, "explanation": explanation}
+
+    def skill_bonus(self, skill):
+        sv = self.state.get("skills", {}).get(skill) if skill else None
+        if isinstance(sv, (int, float)): return int(sv)
+        if isinstance(sv, dict): return int(sv.get("bonus", sv.get("level", 0)) or 0)
+        return 0
+
+    def title_bonus(self):
+        titles = self.state.get("titles", [])
+        score = 0
+        for title in titles:
+            if isinstance(title, dict): score += int(title.get("bonus", 2) or 2)
+            elif str(title).strip(): score += 2
+        return min(30, score)
+
+    @staticmethod
+    def bonus_breakdown(ability, stat_bonus, skill, skill_bonus, title_bonus, situational_bonus, lucky_bonus=0):
+        """Every component feeding a check's total, in the order it's most
+        useful to read — only the ones actually doing something, so a
+        breakdown never pads itself out with '+0 Luck'."""
+        parts = []
+        if stat_bonus: parts.append({"label": ability or "Attribute", "value": stat_bonus})
+        if skill and skill_bonus: parts.append({"label": skill, "value": skill_bonus})
+        if title_bonus: parts.append({"label": "Titles", "value": title_bonus})
+        if situational_bonus: parts.append({"label": "Situation", "value": situational_bonus})
+        if lucky_bonus: parts.append({"label": "Breakthrough", "value": lucky_bonus})
+        return parts
+
+    @staticmethod
+    def format_bonus_breakdown(parts):
+        if not parts: return ""
+        return " · ".join(f"{p['label']} {p['value']:+d}" for p in parts)
+
+    def roll(self, assessment, manual_roll=None):
+        ability = assessment.get("ability") or abilities_for(self.state.get("world", "Custom World"))[0]
+        stat = int(self.state.get("stats", {}).get(ability, 30) or 30)
+        benchmark = max(1, int(assessment.get("relevant_average_stat", 30) or 30))
+        stat_bonus = int(round((stat - benchmark) / 4.0))
+        sk = assessment.get("skill")
+        sb, tb = self.skill_bonus(sk), self.title_bonus()
+        situational = clamp(int(assessment.get("situational_bonus", 0) or 0), -20, 20)
+        low = assessment.get("difficulty_min")
+        high = assessment.get("difficulty_max")
+        if low is None or high is None:  # migrate cached v2.4 assessments safely
+            legacy = int(assessment.get("base_dc", 15) or 15)
+            low, high = legacy * 3 - 5, legacy * 3 + 5
+        shift = int(DIFFICULTIES[self.state["difficulty"]].get("difficulty_shift", 0))
+        tuning = normalize_tuning(self.state)
+        if assessment.get("major_event") or assessment.get("lethal_risk") in {"moderate", "high", "extreme"}:
+            shift += int(round((tuning.get("combat_danger", 1.0) - 1.0) * 10))
+        low, high = clamp(int(low) + shift, 1, 100), clamp(int(high) + shift, 1, 100)
+        if low > high: low, high = high, low
+        difficulty = random.randint(low, high)
+        raw = clamp(int(manual_roll), 1, 100) if manual_roll is not None else random.randint(1, 100)
+        breakthrough = raw >= 99
+        lucky_bonus = 15 if breakthrough else 0
+        total = raw + stat_bonus + sb + tb + situational + lucky_bonus
+        success = total > difficulty
+        return {"roll": raw, "chosen": raw, "mode": "manual" if manual_roll is not None else "automatic",
+                "ability": ability, "ability_value": stat, "relevant_average_stat": benchmark,
+                "stat_bonus": stat_bonus, "skill": sk, "skill_bonus": sb, "title_bonus": tb,
+                "situational_bonus": situational, "lucky_bonus": lucky_bonus, "total": total,
+                "difficulty": difficulty, "difficulty_range": [low, high], "success": success,
+                "breakthrough": breakthrough,
+                "bonus_breakdown": self.bonus_breakdown(ability, stat_bonus, sk, sb, tb, situational, lucky_bonus)}
+
+    @staticmethod
+    def format_roll_summary(action, result):
+        """A compact numbers-only line, meant to sit directly under the
+        action it resolves (the Chronicle already shows that action as its
+        own line) rather than repeating it: '63 +8 = 71/100 needed 66 —
+        SUCCESS'. action is accepted for API compatibility but no longer
+        embedded — see engine_turns.take_turn, which always logs the action
+        immediately before this."""
+        bonus = int(result.get("total", 0)) - int(result.get("roll", 0))
+        needed = int(result.get("difficulty", 0)) + 1  # checks succeed strictly above difficulty
+        outcome = "SUCCESS" if result.get("success") else "FAILURE"
+        if result.get("breakthrough") and result.get("success"):
+            outcome = "BREAKTHROUGH"
+        mode = str(result.get("challenge_mode") or "").lower()
+        prefix = "Timing " if mode == "timing" else "Tactical " if mode == "tactical" else ""
+        return f"{prefix}{int(result.get('roll', 0))} {bonus:+d} = {int(result.get('total', 0))}/100 needed {needed} — {outcome}"
+
+    def preview_check(self, check, assessment=None, action=""):
+        """Explain expected d100 pressure before the simulation can advance."""
+        assessment = assessment if isinstance(assessment, dict) else {}
+        ability = check.get("ability") or abilities_for(self.state.get("world", "Custom World"))[0]
+        stat = int(self.state.get("stats", {}).get(ability, 30) or 30)
+        benchmark = max(1, int(check.get("relevant_average_stat", 30) or 30))
+        stat_bonus = int(round((stat - benchmark) / 4.0))
+        skill_bonus = self.skill_bonus(check.get("skill"))
+        title_bonus = self.title_bonus()
+        situational = clamp(int(check.get("situational_bonus", 0) or 0), -20, 20)
+        known_bonus = stat_bonus + skill_bonus + title_bonus + situational
+        low, high = check.get("difficulty_min"), check.get("difficulty_max")
+        if low is None or high is None:
+            legacy = int(check.get("base_dc", 15) or 15)
+            low, high = legacy * 3 - 5, legacy * 3 + 5
+        time_modifier = int(check.get("time_difficulty_modifier", 0) or 0)
+        if not time_modifier:
+            time_modifier = int(check.get("time_dc_modifier", assessment.get("time_budget", {}).get("time_dc_modifier", 0)) or 0) * 3
+        shift = int(DIFFICULTIES[self.state["difficulty"]].get("difficulty_shift", 0))
+        tuning = normalize_tuning(self.state)
+        if check.get("major_event") or check.get("lethal_risk") in {"moderate", "high", "extreme"}:
+            shift += int(round((tuning.get("combat_danger", 1.0) - 1.0) * 10))
+        low, high = clamp(int(low) + time_modifier + shift, 1, 100), clamp(int(high) + time_modifier + shift, 1, 100)
+        if low > high: low, high = high, low
+        raw_needed = max(1, min(101, int(round(((low + high) / 2) + 1 - known_bonus))))
+        breakdown = self.bonus_breakdown(ability, stat_bonus, check.get("skill"), skill_bonus, title_bonus, situational)
+        return {"id": str(check.get("id") or check.get("reason") or "check"), "action": str(action or check.get("reason") or "Uncertain action"),
+                "reason": str(check.get("reason") or "Uncertain outcome"), "ability": ability, "skill": check.get("skill"),
+                "difficulty_range": [low + 1, high + 1], "known_bonus": known_bonus, "expected_raw_needed": raw_needed,
+                "bonus_breakdown": breakdown,
+                "risk": check.get("lethal_risk", "none"), "major_event": bool(check.get("major_event")),
+                "difficult": raw_needed >= int(tuning.get("check_warning_threshold", 65)),
+                "odds_percent": max(0, min(100, round((101 - raw_needed))))}
+
+    def resolve(self, action, assessment, roll_result):
+        p = {"task": "narrator_and_resolution", "role": "Narrator + Rules Referee", "action": action,
+             "assessment": assessment, "dice_result": roll_result, "state_before": self.trimmed_state_for_ai(),
+             "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
+                        "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
+                        "events": [{"type": "xp|level_up|skill|title|quest|hidden_quest|item|loot|reputation|companion|codex|location|training|combat|injury|death|discovery|world", "message": "notification"}],
+                        "timeline_event": "major event or empty", "suggested_actions": ["exactly 3 optional contextual actions: strongest lead, growth/preparation, alternate hook. Each must name a real, specific person/place/faction/thread already in this campaign, not a generic template. Scale honestly — a longer-term lead can openly say so ('over the next few days...') rather than being forced into an instant."]}}
+        rules = self.gm_context(action) + " You are operating as the MAIN GM: Narrator + Rules Referee. Resolve strictly from dice_result when present. Never hide progression in narration. End by preserving or revealing an actionable journey thread and return exactly three useful, world-consistent suggested actions."
+        return self.request_with_narrative(rules, p, 1300)
+
+    def take_turn(self, action, confirmed_lethal=False, cached_assessment=None):
+        """Full assess -> (maybe roll) -> resolve pipeline for one player action.
+        Returns a dict describing what happened, including a lethal-confirmation
+        gate the frontend must resolve before the turn is allowed to proceed.
+        When the player confirms a lethal action, the frontend sends back the
+        exact assessment it was shown so we never silently re-roll the GM's
+        judgement of the danger."""
+        assessment = cached_assessment or self.assess(action)
+        self.last_assessment = copy.deepcopy(assessment)
+        self.upsert_prerequisite_track(assessment.get("prerequisite_track"))
+        if assessment.get("impossible"):
+            self.append("> " + str(action), "player")
+            self.append("[ACTION NOT POSSIBLE]\n" + assessment.get("reason", "Impossible under current conditions."), "system")
+            self.autosave()
+            return {"status": "impossible", "reason": assessment.get("reason", ""),
+                    "action_explanation": self.action_explanation(action, assessment), "story": self._flush_story()}
+        if assessment.get("lethal_risk") in ("high", "extreme") and not confirmed_lethal:
+            return {"status": "lethal_confirm_required", "assessment": assessment}
+        with self.lock:
+            self.checkpoints.append(copy.deepcopy(self.state))
+            self.checkpoints = self.checkpoints[-40:]
+        # The action always gets its own Chronicle line first — a roll (if
+        # any) attaches to it visually as a compact inline result, and the
+        # narrative that follows never has to re-state what was attempted.
+        self.append("> " + str(action), "player")
+        roll_result = None
+        if assessment.get("requires_check"):
+            roll_result = self.roll(assessment)
+            self.append(self.format_roll_summary(action, roll_result), "roll")
+        data = self.resolve(action, assessment, roll_result)
+        result = self.apply_resolution(data, is_opening=False, pending_action=action,
+                                       progression_context={"actions": [action], "rolls": [roll_result] if roll_result else [], "elapsed_minutes": 5})
+        result["assessment"] = assessment
+        result["action_explanation"] = self.action_explanation(action, assessment)
+        result["roll"] = roll_result
+        result["status"] = "resolved"
+        return result
+
+    def event_window_rules(self):
+        """Scoped GM instructions for one beat inside an already-active major
+        event — the player still needs the full world/ability/combat rules
+        to narrate consistently, but the SCENE must stay sealed to this
+        event: no wider-world advancement, no unrelated locations, and
+        critically, no time/calendar movement at all (this is a single
+        in-the-moment exchange, resolved exactly like any ordinary action)."""
+        title = str(self.state.get("active_canon_event") or "this event").strip()
+        context = str(self.state.get("interruption_context") or "").strip()
+        return self.gm_context(f"the ongoing major event: {title}") + f"""
+
+YOU ARE CURRENTLY RESOLVING A LIVE MAJOR EVENT SCENE, ONE BEAT AT A TIME — NOT A TIME SKIP.
+EVENT: {title}
+EVENT CONTEXT: {context or 'The player is directly engaged in this unfolding event.'}
+- Stay entirely inside this event's scene — its location, its immediate participants, its unfolding action. Do not narrate unrelated locations, unrelated threads, or the wider world advancing; the rest of the world resumes only once this event concludes.
+- This is a real choose-your-own-adventure exchange: present what is happening concretely, react directly and specifically to exactly what the player just said or did, and always offer real, situation-specific suggested_actions — never generic filler.
+- Resolve the player's stated action as something that actually happens this beat, not something merely attempted or prepared — a fast-moving live scene like this one is exactly where hedging ("you prepare to...", "you move to try...") reads worst. If it can plausibly succeed outright, it does; if something genuinely stops it, say concretely what happened instead. Never end a beat with the player's clear action left unresolved.
+- This should read as a substantial scene, not a one-shot — expect several back-and-forth exchanges before it naturally concludes. Do not set event_concluded after a single beat unless the player's own action genuinely ends it right there.
+- If the player's stated action itself declares an intent to carry through to this event's actual end — "I do X until the attack is over," "I keep helping until things settle," "I hold this position for the rest of the fight" — that is explicit authorization to advance straight through the scene's remaining beats and resolve it to its real conclusion in THIS response, not one more incremental check-in. Narrate the intervening span at a summary pace (what they did, what changed, how it wound down) the same way a time skip would, then land on the actual ending and set event_concluded=true. Manufacturing another "what do you do now?" prompt when the player already told you to keep going until a specific endpoint is a failure to honor their input, not thoroughness.
+- Never repeat or lightly reword a beat the player has already been given — if their input doesn't change anything material, that itself is a reason to move the scene forward (time passing, the situation shifting, a new development) rather than re-presenting the same moment.
+- Set event_concluded=true only when: (a) the scene has genuinely reached its real conclusion (the confrontation/moment is resolved, one way or another), or (b) the player's stated action clearly disengages from the event — fleeing, leaving the area, refusing to get involved, hiding, or similar. For (b), event_conclusion_summary must plainly state that the player left or avoided the event and how, so the very next turn picks up from exactly that reality (they were not present for whatever happened next, and only learn of the outcome secondhand later, if at all).
+- If the scene turns physical, use structured combat (state_patch.combat) exactly as you normally would — the player can also flee a fight via the combat controls, which should likewise end the event.
+- Never advance world_time, world_clock_minutes, canon_day, or the calendar here — the application does not permit it for this exchange regardless of what you write.
+Return ONLY valid JSON."""
+
+    @staticmethod
+    def _wants_event_resolution(action_text):
+        """Detects a player explicitly signaling they want to keep acting
+        all the way through to this event's actual conclusion ("I help
+        people until the attack is over") rather than getting one more
+        incremental beat. A general instruction buried in event_window_rules
+        proved unreliable on its own — the same lesson already learned from
+        _same_place and the power-goal mechanic — so this drives an
+        explicit, unambiguous per-turn directive instead of hoping the
+        model notices a general rule on its own."""
+        text = str(action_text or "").lower()
+        if "until" not in text and "till" not in text and "for the rest of" not in text:
+            return False
+        endpoint_words = ("over", "done", "end", "ends", "ended", "settle", "settled", "resolved",
+                           "resolves", "safe", "clear", "clears", "passes", "subsides", "finished", "through")
+        return "for the rest of" in text or any(w in text for w in endpoint_words)
+
+    def respond_to_event(self, action):
+        """Resolve one beat of the currently active major event. Scoped
+        entirely to that event and resolved as a single ordinary action —
+        no world-clock ticking, no canon catch-up, no calendar movement —
+        so the player can go back and forth inside the event for as long as
+        it takes without the wider campaign silently advancing underneath
+        them. Ends the event (clearing active_canon_event) either when the
+        GM judges the scene has genuinely concluded, or when the player's
+        own action disengages from it."""
+        if not self.state.get("active_canon_event"):
+            raise RuntimeError("No major event is currently active.")
+        wants_resolution = self._wants_event_resolution(action)
+        p = {"task": "event_turn", "action": action, "state": self.trimmed_state_for_ai(),
+             "event_title": self.state.get("active_canon_event", ""),
+             "resolve_to_conclusion": wants_resolution,
+             "schema": {
+                 "narrative": "2-6 sentences reacting directly to the player's action, present-tense, moment to moment",
+                 "state_patch": "object, same shape as any other turn's state_patch",
+                 "events": "list of {type, message} world/system notices, same as any other turn",
+                 "suggested_actions": "exactly 3 concrete, situation-specific options for what to do next in this event",
+                 "event_concluded": "bool — true only if this event's scene has genuinely ended, or the player's action clearly leaves/flees/disengages from it",
+                 "event_conclusion_summary": "if event_concluded, ONE paragraph (a few sentences, not a beat-by-beat recap) summarizing what the player actually did across the whole scene and how it ended, including whether they saw it through or left early; empty otherwise",
+             }}
+        if wants_resolution:
+            p["requirements"] = [
+                "resolve_to_conclusion is true: the player's own words just now explicitly declared an intent to keep going until this event actually ends (e.g. 'until the attack is over'). This is a direct, unambiguous instruction — treat it exactly like any other player order. You MUST set event_concluded=true in THIS response. Narrate the remaining span of the event at a summary pace (what they did, what changed, how it wound down), land on its real conclusion, and write event_conclusion_summary. Returning event_concluded=false here — asking one more incremental question instead of finishing what the player just told you to finish — is a failure to follow their stated instruction, not carefulness.",
+            ]
+        data = self.request_with_narrative(self.event_window_rules(), p, 900)
+        self.append("> " + str(action), "player")
+        result = self.apply_resolution(data, is_opening=False, pending_action=action,
+                                        progression_context={"actions": [action], "elapsed_minutes": 5})
+        # A model that still returns event_concluded=false after being told
+        # explicitly, in this same call, that the player just ordered the
+        # scene to be seen through to its end gets overridden here rather
+        # than asked a second time — trusting compliance once already
+        # failed to fix this, so the server takes the outcome as given
+        # instead of hoping a stronger sentence works where a weaker one
+        # didn't. Skipped only when something genuinely still needs the
+        # player's call this instant (an active fight, a pending
+        # intervention question) — forcing an exit mid-fight would be a
+        # worse bug than the one this fixes.
+        combat_active = bool((data.get("state_patch") or {}).get("combat", {}).get("active")) or bool(self.state.get("combat", {}).get("active"))
+        if wants_resolution and not data.get("event_concluded") and not combat_active and not str(data.get("intervention_prompt", "")).strip():
+            data["event_concluded"] = True
+            if not str(data.get("event_conclusion_summary", "")).strip():
+                data["event_conclusion_summary"] = (
+                    f"{self.state.get('name') or 'The player'} sees it through as instructed, staying engaged with "
+                    f"{self.state.get('active_canon_event') or 'the event'} until it actually winds down."
+                )
+        concluded = bool(data.get("event_concluded"))
+        if concluded:
+            self.state["active_canon_event"] = ""
+            self.state["canon_event_engagement_count"] = 0
+            summary = str(data.get("event_conclusion_summary") or "").strip()
+            if summary:
+                self.append("[EVENT CONCLUDED]\n" + summary, "system")
+            result["state"] = self.public_state()
+            result["story"] = self._flush_story()
+        result["event_concluded"] = concluded
+        return result
+
+    def upsert_prerequisite_track(self, track):
+        if not isinstance(track, dict) or not str(track.get("name", "")).strip():
+            return
+        clean = copy.deepcopy(track)
+        clean["name"] = str(clean["name"]).strip()
+        clean.setdefault("source_feat", clean["name"])
+        clean.setdefault("status", "in_progress")
+        for key in ("known_requirements", "met_requirements", "missing_requirements", "next_steps"):
+            value = clean.get(key, [])
+            clean[key] = value if isinstance(value, list) else [str(value)] if value else []
+        clean.setdefault("notes", "")
+        tracks = self.state.setdefault("prerequisite_tracks", [])
+        needle = clean["name"].lower()
+        for index, existing in enumerate(tracks):
+            if isinstance(existing, dict) and str(existing.get("name", "")).lower() == needle:
+                tracks[index] = clean
+                break
+        else:
+            tracks.append(clean)
+        self.state["prerequisite_tracks"] = tracks[-24:]
+
+    def append_growth_deltas(self, before):
+        """Inline Chronicle callout for stat/pool growth, e.g. 'Strength
+        44->46' — the same visibility a d100 roll line already gets. Without
+        this, training/growth only shows up buried in Journal -> Progression,
+        which is easy to miss turn-to-turn."""
+        def fmt(n):
+            return int(n) if float(n) == int(n) else round(float(n), 1)
+        lines = []
+        before_stats, after_stats = before.get("stats", {}) or {}, self.state.get("stats", {}) or {}
+        for name, after_val in after_stats.items():
+            prior = before_stats.get(name)
+            try:
+                prior, after_val = float(prior), float(after_val)
+            except (TypeError, ValueError):
+                continue
+            if after_val > prior:
+                lines.append(f"{name} {fmt(prior)}→{fmt(after_val)} (+{fmt(after_val - prior)})")
+        for label, key in (("Max HP", "hp_max"), (f"Max {self.state.get('resource_name', 'Resource')}", "resource_max")):
+            prior, after_val = before.get(key), self.state.get(key)
+            if prior is None or after_val is None or after_val <= prior:
+                continue
+            lines.append(f"{label} {fmt(prior)}→{fmt(after_val)} (+{fmt(after_val - prior)})")
+        if lines:
+            self.append("[GROWTH]\n" + "\n".join(lines), "growth")
+
+    def apply_resolution(self, data, is_opening=False, pending_action=None, progression_context=None):
+        with self.lock:
+            before = copy.deepcopy(self.state)
+            validation = apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="opening" if is_opening else "turn")
+            if not uses_xp_for(self.state.get("world")):
+                self.state["xp"], self.state["level"], self.state["xp_next"] = before.get("xp", 0), before.get("level", 1), before.get("xp_next", 100)
+            else:
+                context = progression_context if isinstance(progression_context, dict) else {}
+                self.apply_system_xp(before, context.get("actions", []) if not is_opening else [], context.get("rolls", []),
+                                     context.get("elapsed_minutes", 5), context.get("intensity", "normal"), data.get("events", []))
+            self.sync_derived_pools(before)
+            # "turn" is an app-controlled counter, never an AI-authored field —
+            # a state_patch that happens to include one (models sometimes do)
+            # must not be allowed to set it.
+            self.state["turn"] = before.get("turn", 0) if is_opening else before.get("turn", 0) + 1
+            tev = data.get("timeline_event", "")
+            if tev:
+                self.state.setdefault("timeline", []).append(tev)
+            self.state["suggested_actions"] = self.guided_suggestions(data.get("suggested_actions"))
+            self.append(data.get("narrative", "The scene advances."))
+            if not is_opening:
+                self.append_growth_deltas(before)
+            self.ensure_quest_briefings(before, pending_action or "")
+            normalize_quest_state_machine(self.state)
+            continuity_warnings = update_continuity(before, self.state, pending_action or ("campaign opening" if is_opening else ""), data.get("narrative", ""))
+            self.archive_finished_quests()
+            notifications = self.notify(before, self.state, data.get("events", []))
+            if not is_opening:
+                self.history.append({"turn": self.state["turn"], "action": pending_action, "time": datetime.now().isoformat(timespec="seconds")})
+                chapter = update_chapter_memory(before, self.state, pending_action, data.get("narrative", ""))
+                if chapter:
+                    self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "system")
+            self.autosave()
+            died = False
+            if self.state.get("hp", 1) <= 0 or not self.state.get("alive", True):
+                self.state["hp"] = 0
+                self.state["alive"] = False
+                died = True
+        return {
+            "narrative": data.get("narrative", ""),
+            "notifications": notifications,
+            "state": self.public_state(),
+            "died": died,
+            "can_rewind": died and bool(self.checkpoints),
+            "story": self._flush_story(),
+            "validation": validation,
+            "continuity_warnings": continuity_warnings,
+        }
+
+    def guided_suggestions(self, authored=None):
+        """Guarantee three optional, state-grounded leads even when a model
+        forgets or truncates its suggestion field."""
+        suggestions = []
+        for value in authored or []:
+            text = ai_text(value)
+            if text and text.lower() not in {x.lower() for x in suggestions}:
+                suggestions.append(text[:180])
+        for quest in self.state.get("quests", []):
+            if not isinstance(quest, dict): continue
+            conditions = quest.get("clear_conditions", []) or quest.get("current_knowledge", [])
+            if conditions:
+                suggestions.append(f"Follow the {quest.get('name', 'quest')} lead: {conditions[0]}")
+                break
+            if quest.get("name"):
+                suggestions.append(f"Investigate the next lead in {quest['name']}")
+                break
+        for track in self.state.get("prerequisite_tracks", []):
+            if isinstance(track, dict) and track.get("next_steps"):
+                suggestions.append(f"Progress toward {track.get('name', 'your goal')}: {track['next_steps'][0]}")
+                break
+        # Prefer a SPECIFIC, already-established name over a generic template
+        # whenever one exists — a known contact or an unexplored discovered
+        # location beats "ask around" every time this data is available.
+        contacts = [name for name, c in self.state.get("contacts", {}).items() if isinstance(c, dict) and c.get("can_contact", True)]
+        if contacts:
+            suggestions.append(f"Reach out to {contacts[-1]} and see what they know or need")
+        other_locations = [loc for loc in self.state.get("discovered_locations", []) if loc and loc != self.state.get("location")]
+        if other_locations:
+            suggestions.append(f"Travel to {other_locations[-1]} and see what's changed there")
+        world = self.state.get("world", "Custom World")
+        training = expansion_for(world).get("training", [])
+        archetype = (self.state.get("special", {}) or {}).get("Archetype", "")
+        if training:
+            suggestions.append(f"Spend real time training in {training[0]}{f' as a {archetype}' if archetype else ''}")
+        suggestions.append(f"Ask around {self.state.get('location', 'the area')} for relevant rumors and opportunities")
+        suggestions.append("Pursue whatever your background and goals would realistically point you toward next")
+        unique = []
+        for text in suggestions:
+            text = str(text).strip()
+            if text and text.lower() not in {x.lower() for x in unique}:
+                unique.append(text[:180])
+            if len(unique) == 3: break
+        return unique
+
+    def archive_finished_quests(self):
+        active, archive = [], self.state.setdefault("quest_archive", [])
+        for quest in self.state.get("quests", []):
+            status = str(quest.get("status", "") if isinstance(quest, dict) else "").lower()
+            if status in {"complete", "completed", "failed", "abandoned"}:
+                if isinstance(quest, dict):
+                    quest = copy.deepcopy(quest)
+                    quest.setdefault("archived_turn", self.state.get("turn", 0))
+                archive.append(quest)
+            else:
+                active.append(quest)
+        self.state["quests"] = active
+        self.state["quest_archive"] = archive[-200:]
+
+    def ensure_quest_briefings(self, before, trigger_text=""):
+        """Normalize new quests and guarantee a readable Chronicle briefing.
+
+        AI-authored state is still preferred, but an explicit player request to
+        begin a quest cannot disappear merely because a model omitted the
+        structured quest patch.
+        """
+        trigger = re.sub(r"\s+", " ", str(trigger_text or "")).strip()
+        prior_names = {
+            str(q.get("name", "")).strip().lower() for q in before.get("quests", [])
+            if isinstance(q, dict) and str(q.get("name", "")).strip()
+        }
+        quests = self.state.setdefault("quests", [])
+        is_start_request = bool(re.search(r"\b(?:start|begin|accept|take(?:\s+on)?)\b.{0,50}\b(?:quest|mission|job|contract)\b", trigger, re.I))
+        new_quests = [q for q in quests if isinstance(q, dict) and str(q.get("name", "")).strip().lower() not in prior_names]
+        if is_start_request and not new_quests:
+            match = re.search(r"\b(?:quest|mission|job|contract)\b\s*(?:to\s+)?(.+)$", trigger, re.I)
+            goal = (match.group(1).strip(" .") if match else "")[:240]
+            if not goal or goal.lower() in {"a", "one", "the", "new"}:
+                goal = "Find a concrete local problem and see it through"
+            name = goal[:72].title()
+            quest = {
+                "name": name,
+                "status": "Active",
+                "category": "personal",
+                "giver": "Self-directed",
+                "explanation": f"You committed to this goal at {self.state.get('location', 'your current location')}: {goal}.",
+                "current_knowledge": [f"Starting point: {self.state.get('location', 'current location')}"],
+                "clear_conditions": [goal],
+                "locations": [self.state.get("location", "Current location")],
+                "risks": ["Unknown until the first lead is investigated"],
+                "first_step": "Identify the nearest reliable lead, witness, patron, or location connected to the objective.",
+            }
+            quests.append(quest)
+            new_quests.append(quest)
+
+        for quest in new_quests:
+            conditions = quest.get("clear_conditions") or quest.get("objectives") or quest.get("objective") or []
+            if isinstance(conditions, str):
+                conditions = [conditions]
+            knowledge = quest.get("current_knowledge") or quest.get("knowledge") or []
+            if isinstance(knowledge, str):
+                knowledge = [knowledge]
+            locations = quest.get("locations") or []
+            if isinstance(locations, str):
+                locations = [locations]
+            risks = quest.get("risks") or quest.get("known_risks") or []
+            if isinstance(risks, str):
+                risks = [risks]
+            objective = str(conditions[0] if conditions else trigger or f"Advance {quest.get('name', 'this quest')}").strip()
+            quest["explanation"] = str(quest.get("explanation") or quest.get("description") or f"A new objective has begun: {objective}.")[:2000]
+            quest["current_knowledge"] = [ai_text(x)[:500] for x in knowledge[:40] if ai_text(x)] or [f"The quest begins at {self.state.get('location', 'the current location')}." ]
+            quest["clear_conditions"] = [ai_text(x)[:500] for x in conditions[:40] if ai_text(x)] or [objective[:500]]
+            quest["locations"] = [ai_text(x)[:500] for x in locations[:40] if ai_text(x)] or [str(self.state.get("location", "Current location"))]
+            quest["risks"] = [ai_text(x)[:500] for x in risks[:20] if ai_text(x)] or ["No specific danger is confirmed yet."]
+            quest["giver"] = str(quest.get("giver") or quest.get("cause") or "Circumstances")[:200]
+            quest["first_step"] = str(quest.get("first_step") or quest.get("next_step") or f"Follow the first known lead: {quest['current_knowledge'][0]}")[:500]
+            self.append(
+                f"[QUEST STARTED — {quest.get('name', 'New Quest')}]\n"
+                f"{quest['explanation']}\n"
+                f"Objective: {quest['clear_conditions'][0]}\n"
+                f"First step: {quest['first_step']}\n"
+                f"Known risk: {quest['risks'][0]}",
+                "system",
+            )
+        return new_quests
+
+    @staticmethod
+    def xp_threshold_for_level(level):
+        """XP needed to advance from *level* to the next level."""
+        return max(100, 100 + (max(1, int(level)) - 1) * 50)
+
+    def calculate_xp_award(self, actions, rolls=None, elapsed_minutes=5, intensity="normal", events=None):
+        """Return a bounded, explainable XP award for literal-System worlds.
+
+        The narrator may describe why something mattered, but it cannot forget
+        the reward or inflate it arbitrarily. Duration matters most for repeated
+        practice; challenge and outcome matter most for risky actions.
+        """
+        if not uses_xp_for(self.state.get("world")):
+            return 0, []
+        actions = [str(x).strip() for x in (actions or []) if str(x).strip()]
+        if not actions:
+            return 0, []
+        rolls = [x for x in (rolls or []) if isinstance(x, dict)]
+        minutes = max(1, int(elapsed_minutes or 1))
+        minutes_each = minutes / max(1, len(actions))
+        training_words = ("train", "practice", "study", "research", "drill", "meditat", "spar", "learn", "master", "craft")
+        danger_words = ("fight", "battle", "defeat", "boss", "dungeon", "raid", "quest", "mission", "survive", "hunt")
+        modest_words = ("rest", "sleep", "wait", "eat", "talk", "ask", "walk", "travel")
+        daily_rates = {"light": 3, "normal": 5, "intense": 7, "extreme": 9}
+        total, reasons = 0, []
+        for index, action in enumerate(actions):
+            lowered = action.lower()
+            if any(word in lowered for word in training_words):
+                effective_days = max(.05, minutes_each / 1440.0)
+                earned = max(1, round(effective_days * daily_rates.get(str(intensity).lower(), 5)))
+                reason = f"{round(effective_days, 2)} effective days of sustained practice"
+            elif any(word in lowered for word in danger_words):
+                earned, reason = 12, "meaningful combat, mission, or dangerous objective"
+            elif any(word in lowered for word in modest_words):
+                earned, reason = 3, "minor but relevant character activity"
+            else:
+                earned, reason = 6, "meaningful character action"
+            if index < len(rolls):
+                result = rolls[index]
+                difficulty = clamp(int(result.get("difficulty", 50) or 50), 1, 100)
+                challenge = 2 + difficulty // 12
+                if not result.get("success", False):
+                    challenge = max(1, round(challenge * .6))
+                if result.get("major_event"):
+                    challenge *= 2
+                if result.get("breakthrough"):
+                    challenge += 15
+                earned += challenge
+                reason += f"; contextual challenge {difficulty}/100"
+            total += earned
+            reasons.append({"action": action, "xp": earned, "reason": reason})
+        event_text = " ".join(
+            str(event.get("message", "") if isinstance(event, dict) else event).lower()
+            for event in (events or [])
+        )
+        if any(term in event_text for term in ("quest complete", "quest completed", "boss defeated", "achievement unlocked")):
+            total += 25
+            reasons.append({"action": "Milestone", "xp": 25, "reason": "completed quest, boss, or System achievement"})
+        tuning = normalize_tuning(self.state)
+        xp_rate = float(tuning.get("xp_rate", 1.0) or 1.0)
+        if xp_rate != 1.0:
+            for reason in reasons:
+                reason["xp"] = max(1, int(round(int(reason.get("xp", 0) or 0) * xp_rate)))
+            total = sum(int(reason.get("xp", 0) or 0) for reason in reasons)
+        return max(0, int(total)), reasons
+
+    def apply_system_xp(self, before, actions, rolls=None, elapsed_minutes=5, intensity="normal", events=None):
+        """Apply XP, carry overflow, and grant automatic level-up stats."""
+        if not uses_xp_for(self.state.get("world")):
+            return {"xp_awarded": 0, "levels_gained": 0, "stat_gains": {}, "reasons": []}
+        # XP, levels and base stats are application-controlled in System worlds.
+        self.state["xp"] = max(0, int(before.get("xp", 0) or 0))
+        self.state["level"] = max(1, int(before.get("level", 1) or 1))
+        self.state["xp_next"] = max(1, int(before.get("xp_next", self.xp_threshold_for_level(self.state["level"])) or 1))
+        self.state["stats"] = copy.deepcopy(before.get("stats", self.state.get("stats", {})))
+        award, reasons = self.calculate_xp_award(actions, rolls, elapsed_minutes, intensity, events)
+        self.state["xp"] += award
+        levels_gained = 0
+        stat_gains = {name: 0 for name in self.state.get("stats", {})}
+        primary = primary_stats_for(self.state.get("world"), self.state.get("special", {}).get("Archetype", ""))
+        while self.state["xp"] >= self.state["xp_next"]:
+            self.state["xp"] -= self.state["xp_next"]
+            self.state["level"] += 1
+            levels_gained += 1
+            for name in self.state.get("stats", {}):
+                gain = 1 + (2 if primary and name == primary[0] else 1 if len(primary) > 1 and name == primary[1] else 0)
+                self.state["stats"][name] = max(1, int(self.state["stats"].get(name, 1) or 1) + gain)
+                stat_gains[name] += gain
+            self.state["xp_next"] = self.xp_threshold_for_level(self.state["level"])
+        stat_gains = {name: gain for name, gain in stat_gains.items() if gain}
+        if award:
+            entry = {"type": "xp", "turn": int(before.get("turn", 0)) + 1, "xp_awarded": award,
+                     "levels_gained": levels_gained, "stat_gains": stat_gains, "reasons": reasons}
+            self.state.setdefault("progression_log", []).append(entry)
+            self.state["progression_log"] = self.state["progression_log"][-300:]
+        return {"xp_awarded": award, "levels_gained": levels_gained, "stat_gains": stat_gains, "reasons": reasons}
+
+    def notify(self, b, a, events):
+        msgs = []
+        cinematic = []
+        if a.get("xp") != b.get("xp"):
+            latest_progress = (a.get("progression_log") or [{}])[-1]
+            earned = latest_progress.get("xp_awarded") if isinstance(latest_progress, dict) and latest_progress.get("type") == "xp" else None
+            if earned is None:
+                earned = a.get("xp", 0) - b.get("xp", 0)
+            msgs.append(f"XP {int(earned):+d}  → {a.get('xp')}/{a.get('xp_next')}")
+        if a.get("level") != b.get("level"):
+            msgs.append(f"LEVEL UP!  {b.get('level')} → {a.get('level')}")
+        stat_changes = []
+        for stat, value in a.get("stats", {}).items():
+            old = b.get("stats", {}).get(stat)
+            if isinstance(value, (int, float)) and isinstance(old, (int, float)) and value != old:
+                stat_changes.append((stat, int(value) - int(old), int(value)))
+        if stat_changes and uses_xp_for(a.get("world")) and a.get("level") != b.get("level"):
+            msgs.append("LEVEL STATS: " + ", ".join(f"{name} {delta:+d}" for name, delta, _ in stat_changes))
+        else:
+            msgs.extend(f"{stat.upper()} {delta:+d}  → {value}" for stat, delta, value in stat_changes)
+        bs, as_ = b.get("skills", {}), a.get("skills", {})
+        for k, v in as_.items():
+            if k not in bs:
+                msgs.append(f"NEW SKILL: {k} — {v}")
+            elif bs[k] != v:
+                msgs.append(f"SKILL UPDATED: {k} — {bs[k]} → {v}")
+        new_titles = set(ai_text(t) for t in a.get("titles", []) if ai_text(t))
+        old_titles = set(ai_text(t) for t in b.get("titles", []) if ai_text(t))
+        for t in new_titles - old_titles:
+            msgs.append("TITLE ACQUIRED: " + t)
+        def _achievement_name(entry):
+            return entry.get("name", entry.get("title", "Achievement")) if isinstance(entry, dict) else str(entry)
+        old_achievements = {_achievement_name(x) for x in b.get("achievements", [])}
+        for entry in a.get("achievements", []):
+            name = _achievement_name(entry)
+            if name and name not in old_achievements:
+                msgs.append("ACHIEVEMENT UNLOCKED: " + name)
+        for q in a.get("quests", []):
+            if q not in b.get("quests", []):
+                msgs.append("QUEST UPDATED: " + (q.get("name", "Quest") if isinstance(q, dict) else str(q)))
+        for ev in events or []:
+            # XP and level notices are emitted from the authoritative state
+            # delta above; narrator-authored versions may be inaccurate.
+            if isinstance(ev, dict) and str(ev.get("type", "")).lower() in {"xp", "level", "level_up"}:
+                continue
+            m = ev.get("message", "") if isinstance(ev, dict) else str(ev)
+            if m and not any(m.lower() in x.lower() or x.lower() in m.lower() for x in msgs):
+                msgs.append(m)
+        try:
+            hp_delta = int(a.get("hp", 0)) - int(b.get("hp", 0))
+        except (TypeError, ValueError):
+            hp_delta = 0
+        damage_msg = None
+        if hp_delta < 0 and a.get("alive", True) and not any("damage" in m.lower() or "hurt" in m.lower() or "wound" in m.lower() for m in msgs):
+            damage_msg = f"Took {-hp_delta} damage"
+            msgs.append(damage_msg)
+        position_msg = None
+        if a.get("position") and a.get("position") != b.get("position"):
+            position_msg = f"New position: {a.get('position')}"
+            msgs.append(position_msg)
+        out = []
+        for m in msgs:
+            tag = "danger" if "death" in m.lower() else "system"
+            self.append("[SYSTEM]\n" + m, tag)
+            self.log(m)
+            ml = m.lower()
+            ctype = None
+            if m == position_msg:
+                ctype = "position"
+            elif "achievement unlocked" in ml:
+                ctype = "achievement"
+            elif "level up" in ml:
+                ctype = "level_up"
+            elif ml.startswith("xp ") or "xp +" in ml:
+                ctype = "xp"
+            elif "title acquired" in ml or "new skill" in ml or "skill updated" in ml:
+                ctype = "notify"
+            elif m == damage_msg:
+                ctype = "damage"
+            elif "death" in ml or "injury" in ml:
+                ctype = "danger"
+            out.append({"message": m, "tag": tag, "cinematic": ctype})
+        return out
+
+    def rewind_death(self):
+        with self.lock:
+            if not self.checkpoints:
+                return None
+            self.state = self.checkpoints.pop()
+            self.state["alive"] = True
+            self.append("[TIMELINE REWOUND]\nThe lethal action has been undone. You are back at the decision point.", "system")
+            self.autosave()
+        return {"state": self.public_state(), "story": self._flush_story()}
+
+    def undo(self):
+        with self.lock:
+            if not self.checkpoints:
+                return None
+            self.state = self.checkpoints.pop()
+            self.state["alive"] = True
+            self.append("[TURN REVERTED]\nThe last action has been undone.", "system")
+            self.autosave()
+        return {"state": self.public_state(), "story": self._flush_story()}
+
+    def queue_action(self, text):
+        action = str(text or "").strip()
+        if not action:
+            raise ValueError("Type an action before adding it to the queue.")
+        if len(action) > 800:
+            raise ValueError("Queued actions must be under 800 characters each.")
+        with self.lock:
+            self.state.setdefault("queued_actions", []).append(action)
+            self.state["queued_actions"] = self.state["queued_actions"][-50:]
+            self.autosave()
+        return copy.deepcopy(self.state["queued_actions"])
+
+    def remove_queued_action(self, index):
+        with self.lock:
+            actions = self.state.setdefault("queued_actions", [])
+            index = int(index)
+            if index < 0 or index >= len(actions):
+                raise IndexError("Queued action no longer exists.")
+            actions.pop(index)
+            self.autosave()
+        return copy.deepcopy(actions)

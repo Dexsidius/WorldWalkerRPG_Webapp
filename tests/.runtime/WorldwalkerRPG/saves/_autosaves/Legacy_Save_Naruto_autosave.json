@@ -1,0 +1,3768 @@
+{
+  "version": "2.6.29",
+  "schema_version": 6,
+  "save_kind": "autosave",
+  "saved_at": "2026-08-23T15:13:23",
+  "campaign": {
+    "name": "Legacy Save",
+    "world": "Naruto",
+    "turn": 7,
+    "world_time": "November 8, Year -12 — Morning, 08:00"
+  },
+  "state": {
+    "name": "Legacy Save",
+    "age": "",
+    "position": "",
+    "world": "Naruto",
+    "difficulty": "Adventurer",
+    "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+    "custom_world": "",
+    "race": "",
+    "calendar_epoch": "2026-08-23",
+    "calendar_anchor_day": null,
+    "last_protagonist_tick_day": null,
+    "active_canon_event": "Naruto's birth and the Nine-Tails attack",
+    "player_identity": {
+      "mode": "original",
+      "canon_character_id": "",
+      "canon_gravity": true
+    },
+    "level": 1,
+    "xp": 0,
+    "xp_next": 100,
+    "hp": 212,
+    "hp_max": 212,
+    "resource_name": "Chakra",
+    "resource": 219,
+    "resource_max": 219,
+    "stats": {
+      "Taijutsu": 61,
+      "Ninjutsu": 74,
+      "Genjutsu": 63,
+      "Chakra Control": 65,
+      "Willpower": 65,
+      "Intellect": 56
+    },
+    "hidden_stats": {},
+    "skills": {
+      "Ninjutsu Student Fundamentals": {
+        "rank": "Trained",
+        "bonus": 4,
+        "description": "Generated from the character's stated background and starting role."
+      }
+    },
+    "titles": [
+      "Leaf - Academy Student"
+    ],
+    "inventory": [],
+    "equipment": {
+      "Weapon": "Kunai and Shuriken Set"
+    },
+    "quests": [],
+    "relationships": {},
+    "reputation": {
+      "Konohagakure": 0,
+      "Sunagakure": 0,
+      "Kirigakure": 0,
+      "Kumogakure": 0,
+      "Iwagakure": 0
+    },
+    "factions": {
+      "Konohagakure": 0,
+      "Sunagakure": 0,
+      "Kirigakure": 0,
+      "Kumogakure": 0,
+      "Iwagakure": 0
+    },
+    "affiliations": [],
+    "companions": [],
+    "codex": [
+      {
+        "name": "Konohagakure",
+        "type": "Location",
+        "notes": "Starting location."
+      }
+    ],
+    "location": "Konohagakure",
+    "discovered_locations": [
+      "Konohagakure"
+    ],
+    "custom_locations": [],
+    "tower_floor": 1,
+    "tower_floor_deadline_day": null,
+    "tower_over": false,
+    "canon_event_engagement_count": 1,
+    "background_world_feed": [
+      "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+      "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+      "November 8, Year -12 — Naruto's birth and the Nine-Tails attack\nLocation: Konohagakure. Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+    ],
+    "last_major_beat_day": null,
+    "director_notes": "",
+    "simulation_scale": "Individual",
+    "world_time": "November 8, Year -12 — Morning, 08:00",
+    "status": [],
+    "alive": true,
+    "turn": 7,
+    "timeline": [
+      "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village..",
+      "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+      "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+      "November 8, Year -12 — Naruto's birth and the Nine-Tails attack\nLocation: Konohagakure. Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+    ],
+    "special": {
+      "Shinobi Rank": "Civilian",
+      "Nature Affinity": "Unknown",
+      "Chakra Control": 0,
+      "Known Jutsu": [],
+      "Clan": "None",
+      "Origin": "Academy Student",
+      "Archetype": "Ninjutsu Student",
+      "Background Details": {
+        "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+        "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+        "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+        "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+        "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+        "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+      },
+      "Growth Profile": {
+        "aptitude": "Typical local potential",
+        "learning_rate": 1.0,
+        "starting_strengths": [
+          "Ninjutsu"
+        ],
+        "accelerators": [
+          "Focused practice, a suitable mentor, and world-valid resources"
+        ],
+        "constraints": [
+          "Fatigue and recovery",
+          "Current mastery and diminishing returns",
+          "Access to teachers, knowledge, and materials"
+        ],
+        "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+      }
+    },
+    "canon_divergences": [],
+    "campaign_canon": [
+      {
+        "turn": 1,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "A day passes."
+      },
+      {
+        "turn": 2,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "A day passes."
+      },
+      {
+        "turn": 3,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "A day passes."
+      },
+      {
+        "turn": 4,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "A day passes."
+      },
+      {
+        "turn": 5,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "A day passes."
+      },
+      {
+        "turn": 6,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "A day passes."
+      },
+      {
+        "turn": 7,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "A day passes."
+      }
+    ],
+    "world_events": [
+      "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+      "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+      "November 8, Year -12 — Naruto's birth and the Nine-Tails attack\nLocation: Konohagakure. Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+    ],
+    "currency": {
+      "name": "Ryo",
+      "amount": 570
+    },
+    "currencies": {},
+    "npc_memories": {},
+    "shops": [],
+    "known_recipes": [],
+    "training_log": [],
+    "combat": {},
+    "active_encounters": [],
+    "hidden_quests": [],
+    "quest_archive": [],
+    "achievements": [],
+    "world_clock_minutes": 10560,
+    "location_details": {},
+    "travel_history": [],
+    "loot_history": [],
+    "ability_progress": {},
+    "contacts": {
+      "Konohagakure": {
+        "name": "Konohagakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Sunagakure": {
+        "name": "Sunagakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Kirigakure": {
+        "name": "Kirigakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Kumogakure": {
+        "name": "Kumogakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Iwagakure": {
+        "name": "Iwagakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      }
+    },
+    "chat_threads": {
+      "Konohagakure": [],
+      "Sunagakure": [],
+      "Kirigakure": [],
+      "Kumogakure": [],
+      "Iwagakure": []
+    },
+    "unread_chats": [],
+    "group_chats": {},
+    "time_mode": "moment",
+    "queued_actions": [],
+    "standing_orders": [
+      "Continue"
+    ],
+    "time_skip_history": [
+      {
+        "turn": 0,
+        "elapsed": {
+          "amount": 1,
+          "unit": "days"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": false
+      },
+      {
+        "turn": 1,
+        "elapsed": {
+          "amount": 1,
+          "unit": "days"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": false
+      },
+      {
+        "turn": 2,
+        "elapsed": {
+          "amount": 1,
+          "unit": "days"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": false
+      },
+      {
+        "turn": 3,
+        "elapsed": {
+          "amount": 1,
+          "unit": "days"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": false
+      },
+      {
+        "turn": 4,
+        "elapsed": {
+          "amount": 1,
+          "unit": "days"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": false
+      },
+      {
+        "turn": 5,
+        "elapsed": {
+          "amount": 1,
+          "unit": "days"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": false
+      },
+      {
+        "turn": 6,
+        "elapsed": {
+          "amount": 1440,
+          "unit": "minutes"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": true
+      }
+    ],
+    "current_activity": null,
+    "calendar": {
+      "day": 8,
+      "month": 1,
+      "year": 1,
+      "hour": 8,
+      "minute": 0
+    },
+    "scheduled_events": [],
+    "long_term_projects": [],
+    "appearance_desc": "",
+    "portrait_traits": [],
+    "portrait_identity": {
+      "locked": false,
+      "canonical_description": "",
+      "temporary_traits": [],
+      "history": [],
+      "reference_file": ""
+    },
+    "campaign_id": "70c0b2b9ed1dc929",
+    "campaign_created_version": "2.6.29",
+    "campaign_last_saved_version": "2.6.29",
+    "schema_version": 6,
+    "world_pack_id": "builtin",
+    "last_autosave": "2026-08-23T15:13:23",
+    "suggested_actions": [
+      "a",
+      "b",
+      "c"
+    ],
+    "advisor_thread": [],
+    "prerequisite_tracks": [],
+    "continuity_ledger": {
+      "facts": [],
+      "warnings": [],
+      "last_checked_turn": 7
+    },
+    "validation_log": [
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 0,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      },
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 1,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      },
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 2,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      },
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 3,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      },
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 4,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      },
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 5,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      },
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 6,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      }
+    ],
+    "diagnostics": {},
+    "weather": "clear",
+    "canon_day": -4380,
+    "canon_time_minutes": -6306720,
+    "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+    "canon_events_fired": [
+      "day:-4857:The Kannabi Bridge mission",
+      "day:-4856:Yahiko's death and the founding of Akatsuki",
+      "day:-4380:Naruto's birth and the Nine-Tails attack"
+    ],
+    "pending_minor_events": [],
+    "minutes_since_status_window": 10080,
+    "status_window_due": false,
+    "progression_log": [],
+    "starting_power_band": "Average beginner",
+    "starting_power_notice": "",
+    "chapter_summaries": [],
+    "chapter_buffer": [
+      {
+        "turn": 1,
+        "time": "November 2, Year -12 — Morning, 08:00",
+        "canon_day": -4386,
+        "action": "Advance: Continue",
+        "summary": "A day passes.",
+        "changes": []
+      },
+      {
+        "turn": 2,
+        "time": "November 3, Year -12 — Morning, 08:00",
+        "canon_day": -4385,
+        "action": "Advance: Continue",
+        "summary": "A day passes.",
+        "changes": []
+      },
+      {
+        "turn": 3,
+        "time": "November 4, Year -12 — Morning, 08:00",
+        "canon_day": -4384,
+        "action": "Advance: Continue",
+        "summary": "A day passes.",
+        "changes": []
+      },
+      {
+        "turn": 4,
+        "time": "November 5, Year -12 — Morning, 08:00",
+        "canon_day": -4383,
+        "action": "Advance: Continue",
+        "summary": "A day passes.",
+        "changes": []
+      },
+      {
+        "turn": 5,
+        "time": "November 6, Year -12 — Morning, 08:00",
+        "canon_day": -4382,
+        "action": "Advance: Continue",
+        "summary": "A day passes.",
+        "changes": []
+      },
+      {
+        "turn": 6,
+        "time": "November 7, Year -12 — Morning, 08:00",
+        "canon_day": -4381,
+        "action": "Advance: Continue",
+        "summary": "A day passes.",
+        "changes": []
+      },
+      {
+        "turn": 7,
+        "time": "November 8, Year -12 — Morning, 08:00",
+        "canon_day": -4380,
+        "action": "Advance: Continue",
+        "summary": "A day passes.",
+        "changes": []
+      }
+    ],
+    "npc_clocks": {},
+    "faction_clocks": {
+      "Konohagakure": {
+        "name": "Konohagakure",
+        "kind": "faction",
+        "goal": "Advance Konohagakure's current agenda",
+        "progress": 28,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "November 8, Year -12 — Morning, 08:00"
+      },
+      "Sunagakure": {
+        "name": "Sunagakure",
+        "kind": "faction",
+        "goal": "Advance Sunagakure's current agenda",
+        "progress": 28,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "November 8, Year -12 — Morning, 08:00"
+      },
+      "Kirigakure": {
+        "name": "Kirigakure",
+        "kind": "faction",
+        "goal": "Advance Kirigakure's current agenda",
+        "progress": 28,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "November 8, Year -12 — Morning, 08:00"
+      },
+      "Kumogakure": {
+        "name": "Kumogakure",
+        "kind": "faction",
+        "goal": "Advance Kumogakure's current agenda",
+        "progress": 28,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "November 8, Year -12 — Morning, 08:00"
+      },
+      "Iwagakure": {
+        "name": "Iwagakure",
+        "kind": "faction",
+        "goal": "Advance Iwagakure's current agenda",
+        "progress": 28,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "November 8, Year -12 — Morning, 08:00"
+      }
+    },
+    "difficulty_controls": {
+      "check_warning_threshold": 65,
+      "xp_rate": 1.0,
+      "training_rate": 1.0,
+      "breakthrough_rate": 1.0,
+      "combat_danger": 1.0,
+      "resource_pressure": 1.0
+    },
+    "progression_preset": {
+      "label": "Chakra practice, missions, and instruction",
+      "training_rate": 1.0,
+      "breakthrough_rate": 1.0,
+      "xp_rate": 0.0,
+      "travel_scale": 1.0
+    },
+    "planned_route": [],
+    "lore_sources": []
+  },
+  "history": [],
+  "checkpoints": [
+    {
+      "name": "Legacy Save",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": null,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 212,
+      "hp_max": 212,
+      "resource_name": "Chakra",
+      "resource": 219,
+      "resource_max": 219,
+      "stats": {
+        "Taijutsu": 61,
+        "Ninjutsu": 74,
+        "Genjutsu": 63,
+        "Chakra Control": 65,
+        "Willpower": 65,
+        "Intellect": 56
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "January 1, Year 1 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 0,
+      "timeline": [
+        "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [],
+      "world_events": [],
+      "currency": {
+        "name": "Ryo",
+        "amount": 570
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 480,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [],
+      "current_activity": null,
+      "calendar": {
+        "day": 1,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "70c0b2b9ed1dc929",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "",
+      "suggested_actions": [
+        "Reach out to Iwagakure and see what they know or need",
+        "Spend real time training in Chakra Control as a Ninjutsu Student",
+        "Ask around Konohagakure for relevant rumors and opportunities"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 0
+      },
+      "validation_log": [],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -4387,
+      "canon_time_minutes": -6316800,
+      "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+      "canon_events_fired": [],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 0,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [],
+      "npc_clocks": {},
+      "faction_clocks": {},
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    },
+    {
+      "name": "Legacy Save",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": null,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 212,
+      "hp_max": 212,
+      "resource_name": "Chakra",
+      "resource": 219,
+      "resource_max": 219,
+      "stats": {
+        "Taijutsu": 61,
+        "Ninjutsu": 74,
+        "Genjutsu": 63,
+        "Chakra Control": 65,
+        "Willpower": 65,
+        "Intellect": 56
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "November 2, Year -12 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 1,
+      "timeline": [
+        "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village..",
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [
+        {
+          "turn": 1,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        }
+      ],
+      "world_events": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "currency": {
+        "name": "Ryo",
+        "amount": 570
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 1920,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [
+        {
+          "turn": 0,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        }
+      ],
+      "current_activity": null,
+      "calendar": {
+        "day": 2,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "70c0b2b9ed1dc929",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "2026-08-23T15:13:23",
+      "suggested_actions": [
+        "a",
+        "b",
+        "c"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 1
+      },
+      "validation_log": [
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 0,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        }
+      ],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -4386,
+      "canon_time_minutes": -6315360,
+      "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+      "canon_events_fired": [
+        "day:-4857:The Kannabi Bridge mission",
+        "day:-4856:Yahiko's death and the founding of Akatsuki"
+      ],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 1440,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [
+        {
+          "turn": 1,
+          "time": "November 2, Year -12 — Morning, 08:00",
+          "canon_day": -4386,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        }
+      ],
+      "npc_clocks": {},
+      "faction_clocks": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "faction",
+          "goal": "Advance Konohagakure's current agenda",
+          "progress": 4,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 2, Year -12 — Morning, 08:00"
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "faction",
+          "goal": "Advance Sunagakure's current agenda",
+          "progress": 4,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 2, Year -12 — Morning, 08:00"
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "faction",
+          "goal": "Advance Kirigakure's current agenda",
+          "progress": 4,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 2, Year -12 — Morning, 08:00"
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "faction",
+          "goal": "Advance Kumogakure's current agenda",
+          "progress": 4,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 2, Year -12 — Morning, 08:00"
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "faction",
+          "goal": "Advance Iwagakure's current agenda",
+          "progress": 4,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 2, Year -12 — Morning, 08:00"
+        }
+      },
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    },
+    {
+      "name": "Legacy Save",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": null,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 212,
+      "hp_max": 212,
+      "resource_name": "Chakra",
+      "resource": 219,
+      "resource_max": 219,
+      "stats": {
+        "Taijutsu": 61,
+        "Ninjutsu": 74,
+        "Genjutsu": 63,
+        "Chakra Control": 65,
+        "Willpower": 65,
+        "Intellect": 56
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "November 3, Year -12 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 2,
+      "timeline": [
+        "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village..",
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [
+        {
+          "turn": 1,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 2,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        }
+      ],
+      "world_events": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "currency": {
+        "name": "Ryo",
+        "amount": 570
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 3360,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [
+        {
+          "turn": 0,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 1,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        }
+      ],
+      "current_activity": null,
+      "calendar": {
+        "day": 3,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "70c0b2b9ed1dc929",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "2026-08-23T15:13:23",
+      "suggested_actions": [
+        "a",
+        "b",
+        "c"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 2
+      },
+      "validation_log": [
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 0,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 1,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        }
+      ],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -4385,
+      "canon_time_minutes": -6313920,
+      "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+      "canon_events_fired": [
+        "day:-4857:The Kannabi Bridge mission",
+        "day:-4856:Yahiko's death and the founding of Akatsuki"
+      ],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 2880,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [
+        {
+          "turn": 1,
+          "time": "November 2, Year -12 — Morning, 08:00",
+          "canon_day": -4386,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 2,
+          "time": "November 3, Year -12 — Morning, 08:00",
+          "canon_day": -4385,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        }
+      ],
+      "npc_clocks": {},
+      "faction_clocks": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "faction",
+          "goal": "Advance Konohagakure's current agenda",
+          "progress": 8,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 3, Year -12 — Morning, 08:00"
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "faction",
+          "goal": "Advance Sunagakure's current agenda",
+          "progress": 8,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 3, Year -12 — Morning, 08:00"
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "faction",
+          "goal": "Advance Kirigakure's current agenda",
+          "progress": 8,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 3, Year -12 — Morning, 08:00"
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "faction",
+          "goal": "Advance Kumogakure's current agenda",
+          "progress": 8,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 3, Year -12 — Morning, 08:00"
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "faction",
+          "goal": "Advance Iwagakure's current agenda",
+          "progress": 8,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 3, Year -12 — Morning, 08:00"
+        }
+      },
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    },
+    {
+      "name": "Legacy Save",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": null,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 212,
+      "hp_max": 212,
+      "resource_name": "Chakra",
+      "resource": 219,
+      "resource_max": 219,
+      "stats": {
+        "Taijutsu": 61,
+        "Ninjutsu": 74,
+        "Genjutsu": 63,
+        "Chakra Control": 65,
+        "Willpower": 65,
+        "Intellect": 56
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "November 4, Year -12 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 3,
+      "timeline": [
+        "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village..",
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [
+        {
+          "turn": 1,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 2,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 3,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        }
+      ],
+      "world_events": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "currency": {
+        "name": "Ryo",
+        "amount": 570
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 4800,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [
+        {
+          "turn": 0,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 1,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 2,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        }
+      ],
+      "current_activity": null,
+      "calendar": {
+        "day": 4,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "70c0b2b9ed1dc929",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "2026-08-23T15:13:23",
+      "suggested_actions": [
+        "a",
+        "b",
+        "c"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 3
+      },
+      "validation_log": [
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 0,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 1,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 2,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        }
+      ],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -4384,
+      "canon_time_minutes": -6312480,
+      "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+      "canon_events_fired": [
+        "day:-4857:The Kannabi Bridge mission",
+        "day:-4856:Yahiko's death and the founding of Akatsuki"
+      ],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 4320,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [
+        {
+          "turn": 1,
+          "time": "November 2, Year -12 — Morning, 08:00",
+          "canon_day": -4386,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 2,
+          "time": "November 3, Year -12 — Morning, 08:00",
+          "canon_day": -4385,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 3,
+          "time": "November 4, Year -12 — Morning, 08:00",
+          "canon_day": -4384,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        }
+      ],
+      "npc_clocks": {},
+      "faction_clocks": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "faction",
+          "goal": "Advance Konohagakure's current agenda",
+          "progress": 12,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 4, Year -12 — Morning, 08:00"
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "faction",
+          "goal": "Advance Sunagakure's current agenda",
+          "progress": 12,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 4, Year -12 — Morning, 08:00"
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "faction",
+          "goal": "Advance Kirigakure's current agenda",
+          "progress": 12,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 4, Year -12 — Morning, 08:00"
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "faction",
+          "goal": "Advance Kumogakure's current agenda",
+          "progress": 12,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 4, Year -12 — Morning, 08:00"
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "faction",
+          "goal": "Advance Iwagakure's current agenda",
+          "progress": 12,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 4, Year -12 — Morning, 08:00"
+        }
+      },
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    },
+    {
+      "name": "Legacy Save",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": null,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 212,
+      "hp_max": 212,
+      "resource_name": "Chakra",
+      "resource": 219,
+      "resource_max": 219,
+      "stats": {
+        "Taijutsu": 61,
+        "Ninjutsu": 74,
+        "Genjutsu": 63,
+        "Chakra Control": 65,
+        "Willpower": 65,
+        "Intellect": 56
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "November 5, Year -12 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 4,
+      "timeline": [
+        "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village..",
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [
+        {
+          "turn": 1,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 2,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 3,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 4,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        }
+      ],
+      "world_events": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "currency": {
+        "name": "Ryo",
+        "amount": 570
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 6240,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [
+        {
+          "turn": 0,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 1,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 2,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 3,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        }
+      ],
+      "current_activity": null,
+      "calendar": {
+        "day": 5,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "70c0b2b9ed1dc929",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "2026-08-23T15:13:23",
+      "suggested_actions": [
+        "a",
+        "b",
+        "c"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 4
+      },
+      "validation_log": [
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 0,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 1,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 2,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 3,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        }
+      ],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -4383,
+      "canon_time_minutes": -6311040,
+      "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+      "canon_events_fired": [
+        "day:-4857:The Kannabi Bridge mission",
+        "day:-4856:Yahiko's death and the founding of Akatsuki"
+      ],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 5760,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [
+        {
+          "turn": 1,
+          "time": "November 2, Year -12 — Morning, 08:00",
+          "canon_day": -4386,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 2,
+          "time": "November 3, Year -12 — Morning, 08:00",
+          "canon_day": -4385,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 3,
+          "time": "November 4, Year -12 — Morning, 08:00",
+          "canon_day": -4384,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 4,
+          "time": "November 5, Year -12 — Morning, 08:00",
+          "canon_day": -4383,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        }
+      ],
+      "npc_clocks": {},
+      "faction_clocks": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "faction",
+          "goal": "Advance Konohagakure's current agenda",
+          "progress": 16,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 5, Year -12 — Morning, 08:00"
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "faction",
+          "goal": "Advance Sunagakure's current agenda",
+          "progress": 16,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 5, Year -12 — Morning, 08:00"
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "faction",
+          "goal": "Advance Kirigakure's current agenda",
+          "progress": 16,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 5, Year -12 — Morning, 08:00"
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "faction",
+          "goal": "Advance Kumogakure's current agenda",
+          "progress": 16,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 5, Year -12 — Morning, 08:00"
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "faction",
+          "goal": "Advance Iwagakure's current agenda",
+          "progress": 16,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 5, Year -12 — Morning, 08:00"
+        }
+      },
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    },
+    {
+      "name": "Legacy Save",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": null,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 212,
+      "hp_max": 212,
+      "resource_name": "Chakra",
+      "resource": 219,
+      "resource_max": 219,
+      "stats": {
+        "Taijutsu": 61,
+        "Ninjutsu": 74,
+        "Genjutsu": 63,
+        "Chakra Control": 65,
+        "Willpower": 65,
+        "Intellect": 56
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "November 6, Year -12 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 5,
+      "timeline": [
+        "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village..",
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [
+        {
+          "turn": 1,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 2,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 3,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 4,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 5,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        }
+      ],
+      "world_events": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "currency": {
+        "name": "Ryo",
+        "amount": 570
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 7680,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [
+        {
+          "turn": 0,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 1,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 2,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 3,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 4,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        }
+      ],
+      "current_activity": null,
+      "calendar": {
+        "day": 6,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "70c0b2b9ed1dc929",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "2026-08-23T15:13:23",
+      "suggested_actions": [
+        "a",
+        "b",
+        "c"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 5
+      },
+      "validation_log": [
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 0,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 1,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 2,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 3,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 4,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        }
+      ],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -4382,
+      "canon_time_minutes": -6309600,
+      "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+      "canon_events_fired": [
+        "day:-4857:The Kannabi Bridge mission",
+        "day:-4856:Yahiko's death and the founding of Akatsuki"
+      ],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 7200,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [
+        {
+          "turn": 1,
+          "time": "November 2, Year -12 — Morning, 08:00",
+          "canon_day": -4386,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 2,
+          "time": "November 3, Year -12 — Morning, 08:00",
+          "canon_day": -4385,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 3,
+          "time": "November 4, Year -12 — Morning, 08:00",
+          "canon_day": -4384,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 4,
+          "time": "November 5, Year -12 — Morning, 08:00",
+          "canon_day": -4383,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 5,
+          "time": "November 6, Year -12 — Morning, 08:00",
+          "canon_day": -4382,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        }
+      ],
+      "npc_clocks": {},
+      "faction_clocks": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "faction",
+          "goal": "Advance Konohagakure's current agenda",
+          "progress": 20,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 6, Year -12 — Morning, 08:00"
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "faction",
+          "goal": "Advance Sunagakure's current agenda",
+          "progress": 20,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 6, Year -12 — Morning, 08:00"
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "faction",
+          "goal": "Advance Kirigakure's current agenda",
+          "progress": 20,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 6, Year -12 — Morning, 08:00"
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "faction",
+          "goal": "Advance Kumogakure's current agenda",
+          "progress": 20,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 6, Year -12 — Morning, 08:00"
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "faction",
+          "goal": "Advance Iwagakure's current agenda",
+          "progress": 20,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 6, Year -12 — Morning, 08:00"
+        }
+      },
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    },
+    {
+      "name": "Legacy Save",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation. The turning point came when a border skirmish forced a choice between running and standing with the unit. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": null,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 212,
+      "hp_max": 212,
+      "resource_name": "Chakra",
+      "resource": 219,
+      "resource_max": 219,
+      "stats": {
+        "Taijutsu": 61,
+        "Ninjutsu": 74,
+        "Genjutsu": 63,
+        "Chakra Control": 65,
+        "Willpower": 65,
+        "Intellect": 56
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "November 7, Year -12 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 6,
+      "timeline": [
+        "Legacy Save enters the story at Konohagakure. One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village..",
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. Their home life was modest and sometimes unstable, making preparation, loyalty, and self-reliance learned habits rather than slogans.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Isamu Nara, an aging weapons specialist, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A border skirmish forced a choice between running and standing with the unit.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [
+        {
+          "turn": 1,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 2,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 3,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 4,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 5,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        },
+        {
+          "turn": 6,
+          "time": "2026-08-23T15:13:23",
+          "action": "Advance: Continue",
+          "outcome": "A day passes."
+        }
+      ],
+      "world_events": [
+        "July 11, Year -13 — The Kannabi Bridge mission\nLocation: Kannabi Bridge. Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief. The player may engage with, avoid, redirect, or fundamentally alter what follows.",
+        "July 12, Year -13 — Yahiko's death and the founding of Akatsuki\nLocation: Amegakure. Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+      ],
+      "currency": {
+        "name": "Ryo",
+        "amount": 570
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 9120,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [
+        {
+          "turn": 0,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 1,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 2,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 3,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 4,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        },
+        {
+          "turn": 5,
+          "elapsed": {
+            "amount": 1,
+            "unit": "days"
+          },
+          "orders": [
+            "Continue"
+          ],
+          "interrupted": false
+        }
+      ],
+      "current_activity": null,
+      "calendar": {
+        "day": 7,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "70c0b2b9ed1dc929",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "2026-08-23T15:13:23",
+      "suggested_actions": [
+        "a",
+        "b",
+        "c"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 6
+      },
+      "validation_log": [
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 0,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 1,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 2,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 3,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 4,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        },
+        {
+          "time": "2026-08-23T15:13:23",
+          "turn": 5,
+          "source": "time_skip",
+          "accepted": [],
+          "rejected": [],
+          "repairs": []
+        }
+      ],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -4381,
+      "canon_time_minutes": -6308160,
+      "canon_anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village.",
+      "canon_events_fired": [
+        "day:-4857:The Kannabi Bridge mission",
+        "day:-4856:Yahiko's death and the founding of Akatsuki"
+      ],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 8640,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [
+        {
+          "turn": 1,
+          "time": "November 2, Year -12 — Morning, 08:00",
+          "canon_day": -4386,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 2,
+          "time": "November 3, Year -12 — Morning, 08:00",
+          "canon_day": -4385,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 3,
+          "time": "November 4, Year -12 — Morning, 08:00",
+          "canon_day": -4384,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 4,
+          "time": "November 5, Year -12 — Morning, 08:00",
+          "canon_day": -4383,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 5,
+          "time": "November 6, Year -12 — Morning, 08:00",
+          "canon_day": -4382,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        },
+        {
+          "turn": 6,
+          "time": "November 7, Year -12 — Morning, 08:00",
+          "canon_day": -4381,
+          "action": "Advance: Continue",
+          "summary": "A day passes.",
+          "changes": []
+        }
+      ],
+      "npc_clocks": {},
+      "faction_clocks": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "faction",
+          "goal": "Advance Konohagakure's current agenda",
+          "progress": 24,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 7, Year -12 — Morning, 08:00"
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "faction",
+          "goal": "Advance Sunagakure's current agenda",
+          "progress": 24,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 7, Year -12 — Morning, 08:00"
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "faction",
+          "goal": "Advance Kirigakure's current agenda",
+          "progress": 24,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 7, Year -12 — Morning, 08:00"
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "faction",
+          "goal": "Advance Kumogakure's current agenda",
+          "progress": 24,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 7, Year -12 — Morning, 08:00"
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "faction",
+          "goal": "Advance Iwagakure's current agenda",
+          "progress": 24,
+          "threshold": 100,
+          "status": "active",
+          "last_update": "November 7, Year -12 — Morning, 08:00"
+        }
+      },
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    }
+  ],
+  "story_log": [
+    {
+      "text": "[CANON TIMELINE]\nNovember 8, Year -12 — Naruto's birth and the Nine-Tails attack\nLocation: Konohagakure. Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival. The player may engage with, avoid, redirect, or fundamentally alter what follows.\nPrior divergences may alter how this event unfolds.",
+      "tag": "canon_event",
+      "time": "2026-08-23T15:13:23",
+      "canon_day": -4380
+    },
+    {
+      "text": "[MAJOR CANON EVENT]\nMajor canon event reached: Naruto's birth and the Nine-Tails attack.",
+      "tag": "canon_event",
+      "time": "2026-08-23T15:13:23"
+    }
+  ],
+  "system_log": []
+}

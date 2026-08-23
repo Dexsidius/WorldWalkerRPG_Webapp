@@ -1,0 +1,715 @@
+{
+  "version": "2.6.29",
+  "schema_version": 6,
+  "save_kind": "autosave",
+  "saved_at": "2026-08-23T15:13:23",
+  "campaign": {
+    "name": "Traveler",
+    "world": "Naruto",
+    "turn": 1,
+    "world_time": "January 8, Year 1 — Morning, 08:00"
+  },
+  "state": {
+    "name": "Traveler",
+    "age": "",
+    "position": "",
+    "world": "Naruto",
+    "difficulty": "Adventurer",
+    "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. They were raised mostly by example rather than instruction, learning more from watching than from being taught outright. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Daichi Mori, a retired local shinobi, supplied guidance, friction, and an unfinished expectation. The turning point came when a mission-era accident exposed the cost of acting without preparation. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+    "custom_world": "",
+    "race": "",
+    "calendar_epoch": "2026-08-23",
+    "calendar_anchor_day": -7,
+    "last_protagonist_tick_day": null,
+    "active_canon_event": "",
+    "player_identity": {
+      "mode": "original",
+      "canon_character_id": "",
+      "canon_gravity": true
+    },
+    "level": 1,
+    "xp": 0,
+    "xp_next": 100,
+    "hp": 222,
+    "hp_max": 222,
+    "resource_name": "Chakra",
+    "resource": 206,
+    "resource_max": 206,
+    "stats": {
+      "Taijutsu": 66,
+      "Ninjutsu": 75,
+      "Genjutsu": 58,
+      "Chakra Control": 58,
+      "Willpower": 65,
+      "Intellect": 64
+    },
+    "hidden_stats": {},
+    "skills": {
+      "Ninjutsu Student Fundamentals": {
+        "rank": "Trained",
+        "bonus": 4,
+        "description": "Generated from the character's stated background and starting role."
+      }
+    },
+    "titles": [
+      "Leaf - Academy Student"
+    ],
+    "inventory": [],
+    "equipment": {
+      "Weapon": "Kunai and Shuriken Set"
+    },
+    "quests": [],
+    "relationships": {},
+    "reputation": {
+      "Konohagakure": 0,
+      "Sunagakure": 0,
+      "Kirigakure": 0,
+      "Kumogakure": 0,
+      "Iwagakure": 0
+    },
+    "factions": {
+      "Konohagakure": 0,
+      "Sunagakure": 0,
+      "Kirigakure": 0,
+      "Kumogakure": 0,
+      "Iwagakure": 0
+    },
+    "affiliations": [],
+    "companions": [],
+    "codex": [
+      {
+        "name": "Konohagakure",
+        "type": "Location",
+        "notes": "Starting location."
+      }
+    ],
+    "location": "Konohagakure",
+    "discovered_locations": [
+      "Konohagakure"
+    ],
+    "custom_locations": [],
+    "tower_floor": 1,
+    "tower_floor_deadline_day": null,
+    "tower_over": false,
+    "canon_event_engagement_count": 0,
+    "background_world_feed": [
+      "January 8, Year 1 — Academy graduation night — the Mizuki incident\nLocation: Konohagakure. Naruto's graduation is followed the same night by Mizuki's betrayal: he tricks Naruto into stealing the Forbidden Scroll of Seals before being stopped, and the new genin generation begins forming. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+    ],
+    "last_major_beat_day": null,
+    "director_notes": "",
+    "simulation_scale": "Individual",
+    "world_time": "January 8, Year 1 — Morning, 08:00",
+    "status": [],
+    "alive": true,
+    "turn": 1,
+    "timeline": [
+      "Traveler enters the story at Konohagakure. Seven days before Naruto's Academy graduation.",
+      "January 8, Year 1 — Academy graduation night — the Mizuki incident\nLocation: Konohagakure. Naruto's graduation is followed the same night by Mizuki's betrayal: he tricks Naruto into stealing the Forbidden Scroll of Seals before being stopped, and the new genin generation begins forming. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+    ],
+    "special": {
+      "Shinobi Rank": "Civilian",
+      "Nature Affinity": "Unknown",
+      "Chakra Control": 0,
+      "Known Jutsu": [],
+      "Clan": "None",
+      "Origin": "Academy Student",
+      "Archetype": "Ninjutsu Student",
+      "Background Details": {
+        "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. They were raised mostly by example rather than instruction, learning more from watching than from being taught outright.",
+        "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+        "key_connection": "Daichi Mori, a retired local shinobi, supplied guidance, friction, and an unfinished expectation.",
+        "formative_event": "A mission-era accident exposed the cost of acting without preparation.",
+        "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+        "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+      },
+      "Growth Profile": {
+        "aptitude": "Typical local potential",
+        "learning_rate": 1.0,
+        "starting_strengths": [
+          "Ninjutsu"
+        ],
+        "accelerators": [
+          "Focused practice, a suitable mentor, and world-valid resources"
+        ],
+        "constraints": [
+          "Fatigue and recovery",
+          "Current mastery and diminishing returns",
+          "Access to teachers, knowledge, and materials"
+        ],
+        "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+      }
+    },
+    "canon_divergences": [],
+    "campaign_canon": [
+      {
+        "turn": 1,
+        "time": "2026-08-23T15:13:23",
+        "action": "Advance: Continue",
+        "outcome": "Time passes."
+      }
+    ],
+    "world_events": [
+      "January 8, Year 1 — Academy graduation night — the Mizuki incident\nLocation: Konohagakure. Naruto's graduation is followed the same night by Mizuki's betrayal: he tricks Naruto into stealing the Forbidden Scroll of Seals before being stopped, and the new genin generation begins forming. The player may engage with, avoid, redirect, or fundamentally alter what follows."
+    ],
+    "currency": {
+      "name": "Ryo",
+      "amount": 575
+    },
+    "currencies": {},
+    "npc_memories": {},
+    "shops": [],
+    "known_recipes": [],
+    "training_log": [],
+    "combat": {},
+    "active_encounters": [],
+    "hidden_quests": [],
+    "quest_archive": [],
+    "achievements": [],
+    "world_clock_minutes": 10560,
+    "location_details": {},
+    "travel_history": [],
+    "loot_history": [],
+    "ability_progress": {},
+    "contacts": {
+      "Konohagakure": {
+        "name": "Konohagakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Sunagakure": {
+        "name": "Sunagakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Kirigakure": {
+        "name": "Kirigakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Kumogakure": {
+        "name": "Kumogakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      },
+      "Iwagakure": {
+        "name": "Iwagakure",
+        "kind": "group",
+        "status": "Known",
+        "relationship": 0,
+        "last_known_location": "Unknown",
+        "notes": [
+          "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+        ],
+        "can_contact": true,
+        "first_met_turn": 0
+      }
+    },
+    "chat_threads": {
+      "Konohagakure": [],
+      "Sunagakure": [],
+      "Kirigakure": [],
+      "Kumogakure": [],
+      "Iwagakure": []
+    },
+    "unread_chats": [],
+    "group_chats": {},
+    "time_mode": "moment",
+    "queued_actions": [],
+    "standing_orders": [
+      "Continue"
+    ],
+    "time_skip_history": [
+      {
+        "turn": 0,
+        "elapsed": {
+          "amount": 10080,
+          "unit": "minutes"
+        },
+        "orders": [
+          "Continue"
+        ],
+        "interrupted": false
+      }
+    ],
+    "current_activity": null,
+    "calendar": {
+      "day": 8,
+      "month": 1,
+      "year": 1,
+      "hour": 8,
+      "minute": 0
+    },
+    "scheduled_events": [],
+    "long_term_projects": [],
+    "appearance_desc": "",
+    "portrait_traits": [],
+    "portrait_identity": {
+      "locked": false,
+      "canonical_description": "",
+      "temporary_traits": [],
+      "history": [],
+      "reference_file": ""
+    },
+    "campaign_id": "ffa54cf7c436a7de",
+    "campaign_created_version": "2.6.29",
+    "campaign_last_saved_version": "2.6.29",
+    "schema_version": 6,
+    "world_pack_id": "builtin",
+    "last_autosave": "",
+    "suggested_actions": [
+      "a",
+      "b",
+      "c"
+    ],
+    "advisor_thread": [],
+    "prerequisite_tracks": [],
+    "continuity_ledger": {
+      "facts": [],
+      "warnings": [],
+      "last_checked_turn": 1
+    },
+    "validation_log": [
+      {
+        "time": "2026-08-23T15:13:23",
+        "turn": 0,
+        "source": "time_skip",
+        "accepted": [],
+        "rejected": [],
+        "repairs": []
+      }
+    ],
+    "diagnostics": {},
+    "weather": "clear",
+    "canon_day": 0,
+    "canon_time_minutes": 480,
+    "canon_anchor": "Seven days before Naruto's Academy graduation",
+    "canon_events_fired": [
+      "day:0:Academy graduation night — the Mizuki incident"
+    ],
+    "pending_minor_events": [],
+    "minutes_since_status_window": 10080,
+    "status_window_due": false,
+    "progression_log": [],
+    "starting_power_band": "Average beginner",
+    "starting_power_notice": "",
+    "chapter_summaries": [],
+    "chapter_buffer": [
+      {
+        "turn": 1,
+        "time": "January 8, Year 1 — Morning, 08:00",
+        "canon_day": 0,
+        "action": "Advance: Continue",
+        "summary": "Time passes.",
+        "changes": []
+      }
+    ],
+    "npc_clocks": {},
+    "faction_clocks": {
+      "Konohagakure": {
+        "name": "Konohagakure",
+        "kind": "faction",
+        "goal": "Advance Konohagakure's current agenda",
+        "progress": 18,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "January 8, Year 1 — Morning, 08:00"
+      },
+      "Sunagakure": {
+        "name": "Sunagakure",
+        "kind": "faction",
+        "goal": "Advance Sunagakure's current agenda",
+        "progress": 18,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "January 8, Year 1 — Morning, 08:00"
+      },
+      "Kirigakure": {
+        "name": "Kirigakure",
+        "kind": "faction",
+        "goal": "Advance Kirigakure's current agenda",
+        "progress": 18,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "January 8, Year 1 — Morning, 08:00"
+      },
+      "Kumogakure": {
+        "name": "Kumogakure",
+        "kind": "faction",
+        "goal": "Advance Kumogakure's current agenda",
+        "progress": 18,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "January 8, Year 1 — Morning, 08:00"
+      },
+      "Iwagakure": {
+        "name": "Iwagakure",
+        "kind": "faction",
+        "goal": "Advance Iwagakure's current agenda",
+        "progress": 18,
+        "threshold": 100,
+        "status": "active",
+        "last_update": "January 8, Year 1 — Morning, 08:00"
+      }
+    },
+    "difficulty_controls": {
+      "check_warning_threshold": 65,
+      "xp_rate": 1.0,
+      "training_rate": 1.0,
+      "breakthrough_rate": 1.0,
+      "combat_danger": 1.0,
+      "resource_pressure": 1.0
+    },
+    "progression_preset": {
+      "label": "Chakra practice, missions, and instruction",
+      "training_rate": 1.0,
+      "breakthrough_rate": 1.0,
+      "xp_rate": 0.0,
+      "travel_scale": 1.0
+    },
+    "planned_route": [],
+    "lore_sources": []
+  },
+  "history": [],
+  "checkpoints": [
+    {
+      "name": "Traveler",
+      "age": "",
+      "position": "",
+      "world": "Naruto",
+      "difficulty": "Adventurer",
+      "background": "Origin: Academy Student\nStarting archetype: Ninjutsu Student\nRaised around Academy Student, they learned the habits and pressures expected of a Ninjutsu Student. They were raised mostly by example rather than instruction, learning more from watching than from being taught outright. They have not given a fixed account of their earlier life. Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu. Daichi Mori, a retired local shinobi, supplied guidance, friction, and an unfinished expectation. The turning point came when a mission-era accident exposed the cost of acting without preparation. They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world. They still lack the experience and resources to turn every promising instinct into a dependable result.",
+      "custom_world": "",
+      "race": "",
+      "calendar_epoch": "2026-08-23",
+      "calendar_anchor_day": -7,
+      "last_protagonist_tick_day": null,
+      "active_canon_event": "",
+      "player_identity": {
+        "mode": "original",
+        "canon_character_id": "",
+        "canon_gravity": true
+      },
+      "level": 1,
+      "xp": 0,
+      "xp_next": 100,
+      "hp": 222,
+      "hp_max": 222,
+      "resource_name": "Chakra",
+      "resource": 206,
+      "resource_max": 206,
+      "stats": {
+        "Taijutsu": 66,
+        "Ninjutsu": 75,
+        "Genjutsu": 58,
+        "Chakra Control": 58,
+        "Willpower": 65,
+        "Intellect": 64
+      },
+      "hidden_stats": {},
+      "skills": {
+        "Ninjutsu Student Fundamentals": {
+          "rank": "Trained",
+          "bonus": 4,
+          "description": "Generated from the character's stated background and starting role."
+        }
+      },
+      "titles": [
+        "Leaf - Academy Student"
+      ],
+      "inventory": [],
+      "equipment": {
+        "Weapon": "Kunai and Shuriken Set"
+      },
+      "quests": [],
+      "relationships": {},
+      "reputation": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "factions": {
+        "Konohagakure": 0,
+        "Sunagakure": 0,
+        "Kirigakure": 0,
+        "Kumogakure": 0,
+        "Iwagakure": 0
+      },
+      "affiliations": [],
+      "companions": [],
+      "codex": [
+        {
+          "name": "Konohagakure",
+          "type": "Location",
+          "notes": "Starting location."
+        }
+      ],
+      "location": "Konohagakure",
+      "discovered_locations": [
+        "Konohagakure"
+      ],
+      "custom_locations": [],
+      "tower_floor": 1,
+      "tower_floor_deadline_day": null,
+      "tower_over": false,
+      "canon_event_engagement_count": 0,
+      "background_world_feed": [],
+      "last_major_beat_day": null,
+      "director_notes": "",
+      "simulation_scale": "Individual",
+      "world_time": "January 1, Year 1 — Morning, 08:00",
+      "status": [],
+      "alive": true,
+      "turn": 0,
+      "timeline": [
+        "Traveler enters the story at Konohagakure. Seven days before Naruto's Academy graduation."
+      ],
+      "special": {
+        "Shinobi Rank": "Civilian",
+        "Nature Affinity": "Unknown",
+        "Chakra Control": 0,
+        "Known Jutsu": [],
+        "Clan": "None",
+        "Origin": "Academy Student",
+        "Archetype": "Ninjutsu Student",
+        "Background Details": {
+          "upbringing": "Raised around Academy Student with expectations suited to a Ninjutsu Student. They were raised mostly by example rather than instruction, learning more from watching than from being taught outright.",
+          "training_history": "Their early ninjutsu student practice was uneven but persistent, emphasizing Ninjutsu.",
+          "key_connection": "Daichi Mori, a retired local shinobi, supplied guidance, friction, and an unfinished expectation.",
+          "formative_event": "A mission-era accident exposed the cost of acting without preparation.",
+          "motivation": "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world.",
+          "starting_complication": "They still lack the experience and resources to turn every promising instinct into a dependable result."
+        },
+        "Growth Profile": {
+          "aptitude": "Typical local potential",
+          "learning_rate": 1.0,
+          "starting_strengths": [
+            "Ninjutsu"
+          ],
+          "accelerators": [
+            "Focused practice, a suitable mentor, and world-valid resources"
+          ],
+          "constraints": [
+            "Fatigue and recovery",
+            "Current mastery and diminishing returns",
+            "Access to teachers, knowledge, and materials"
+          ],
+          "explanation": "This multiplier affects sustained training gains, while teachers, resources, rolls, recovery, and current mastery still determine actual results."
+        }
+      },
+      "canon_divergences": [],
+      "campaign_canon": [],
+      "world_events": [],
+      "currency": {
+        "name": "Ryo",
+        "amount": 575
+      },
+      "currencies": {},
+      "npc_memories": {},
+      "shops": [],
+      "known_recipes": [],
+      "training_log": [],
+      "combat": {},
+      "active_encounters": [],
+      "hidden_quests": [],
+      "quest_archive": [],
+      "achievements": [],
+      "world_clock_minutes": 480,
+      "location_details": {},
+      "travel_history": [],
+      "loot_history": [],
+      "ability_progress": {},
+      "contacts": {
+        "Konohagakure": {
+          "name": "Konohagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Sunagakure": {
+          "name": "Sunagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kirigakure": {
+          "name": "Kirigakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Kumogakure": {
+          "name": "Kumogakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        },
+        "Iwagakure": {
+          "name": "Iwagakure",
+          "kind": "group",
+          "status": "Known",
+          "relationship": 0,
+          "last_known_location": "Unknown",
+          "notes": [
+            "A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."
+          ],
+          "can_contact": true,
+          "first_met_turn": 0
+        }
+      },
+      "chat_threads": {
+        "Konohagakure": [],
+        "Sunagakure": [],
+        "Kirigakure": [],
+        "Kumogakure": [],
+        "Iwagakure": []
+      },
+      "unread_chats": [],
+      "group_chats": {},
+      "time_mode": "days",
+      "queued_actions": [],
+      "standing_orders": [
+        "Continue"
+      ],
+      "time_skip_history": [],
+      "current_activity": null,
+      "calendar": {
+        "day": 1,
+        "month": 1,
+        "year": 1,
+        "hour": 8,
+        "minute": 0
+      },
+      "scheduled_events": [],
+      "long_term_projects": [],
+      "appearance_desc": "",
+      "portrait_traits": [],
+      "portrait_identity": {
+        "locked": false,
+        "canonical_description": "",
+        "temporary_traits": [],
+        "history": [],
+        "reference_file": ""
+      },
+      "campaign_id": "ffa54cf7c436a7de",
+      "campaign_created_version": "2.6.29",
+      "campaign_last_saved_version": "2.6.29",
+      "schema_version": 6,
+      "world_pack_id": "builtin",
+      "last_autosave": "",
+      "suggested_actions": [
+        "Reach out to Iwagakure and see what they know or need",
+        "Spend real time training in Chakra Control as a Ninjutsu Student",
+        "Ask around Konohagakure for relevant rumors and opportunities"
+      ],
+      "advisor_thread": [],
+      "prerequisite_tracks": [],
+      "continuity_ledger": {
+        "facts": [],
+        "warnings": [],
+        "last_checked_turn": 0
+      },
+      "validation_log": [],
+      "diagnostics": {},
+      "weather": "clear",
+      "canon_day": -7,
+      "canon_time_minutes": -9600,
+      "canon_anchor": "Seven days before Naruto's Academy graduation",
+      "canon_events_fired": [],
+      "pending_minor_events": [],
+      "minutes_since_status_window": 0,
+      "status_window_due": false,
+      "progression_log": [],
+      "starting_power_band": "Average beginner",
+      "starting_power_notice": "",
+      "chapter_summaries": [],
+      "chapter_buffer": [],
+      "npc_clocks": {},
+      "faction_clocks": {},
+      "difficulty_controls": {
+        "check_warning_threshold": 65,
+        "xp_rate": 1.0,
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "combat_danger": 1.0,
+        "resource_pressure": 1.0
+      },
+      "progression_preset": {
+        "label": "Chakra practice, missions, and instruction",
+        "training_rate": 1.0,
+        "breakthrough_rate": 1.0,
+        "xp_rate": 0.0,
+        "travel_scale": 1.0
+      },
+      "planned_route": [],
+      "lore_sources": []
+    }
+  ],
+  "story_log": [
+    {
+      "text": "[CAMPAIGN START]\nTraveler — Naruto — Adventurer\nShinobi villages, chakra, missions, bloodlines, rival nations, and hidden techniques.",
+      "tag": "system",
+      "time": "2026-08-23T15:13:23"
+    },
+    {
+      "text": "[CANON TIMELINE]\nJanuary 8, Year 1 — Academy graduation night — the Mizuki incident\nLocation: Konohagakure. Naruto's graduation is followed the same night by Mizuki's betrayal: he tricks Naruto into stealing the Forbidden Scroll of Seals before being stopped, and the new genin generation begins forming. The player may engage with, avoid, redirect, or fundamentally alter what follows.\nPrior divergences may alter how this event unfolds.",
+      "tag": "canon_event",
+      "time": "2026-08-23T15:13:23",
+      "canon_day": 0
+    }
+  ],
+  "system_log": []
+}

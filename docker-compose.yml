@@ -1,0 +1,60 @@
+# One Worldwalker RPG game is one shared state per running instance — it is
+# NOT multiplayer in the sense of several people sharing one character or
+# world. To let several people each play their own independent campaign,
+# run one isolated container PER PLAYER, each on its own port and its own
+# data volume, as below. Copy/extend this block for each additional player,
+# or regenerate this whole file with generate-compose.py.
+#
+# Usage:
+#   docker compose up -d --build
+# Each player then connects to http://<nas-ip>:<their-port>/ in a browser.
+#
+# mem_limit / cpus cap what each container can use, so one runaway session
+# can't starve the NAS for everyone else. Adjust to fit the NAS's specs.
+#
+# AUTH_USER / AUTH_PASS are optional — uncomment and set both to require a
+# login for that player's instance. Leave commented out to disable auth
+# (the default). See LINUX_SERVER_README.txt.
+
+services:
+  worldwalker-player1:
+    build: .
+    container_name: worldwalker-player1
+    mem_limit: 1g
+    cpus: 1.0
+    ports:
+      - "5001:8765"
+    volumes:
+      - ./data/player1:/data
+    environment:
+      # - AUTH_USER=player1
+      # - AUTH_PASS=changeme1
+    restart: unless-stopped
+
+  worldwalker-player2:
+    build: .
+    container_name: worldwalker-player2
+    mem_limit: 1g
+    cpus: 1.0
+    ports:
+      - "5002:8765"
+    volumes:
+      - ./data/player2:/data
+    environment:
+      # - AUTH_USER=player2
+      # - AUTH_PASS=changeme2
+    restart: unless-stopped
+
+  worldwalker-player3:
+    build: .
+    container_name: worldwalker-player3
+    mem_limit: 1g
+    cpus: 1.0
+    ports:
+      - "5003:8765"
+    volumes:
+      - ./data/player3:/data
+    environment:
+      # - AUTH_USER=player3
+      # - AUTH_PASS=changeme3
+    restart: unless-stopped
