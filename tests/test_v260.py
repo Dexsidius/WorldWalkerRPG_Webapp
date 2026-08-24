@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from game import GameSession
 from systems import (
-    FACTION_DESTROYED_THRESHOLD, campaign_health, map_snapshot, normalize_quest_state_machine,
+    FACTION_DESTROYED_THRESHOLD, _is_canon_protected, campaign_health, map_snapshot, normalize_quest_state_machine,
     normalize_tuning, relationship_snapshot, tick_world_clocks, update_chapter_memory,
 )
 from continuity import update_continuity
@@ -2659,6 +2659,52 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("/api/reentry_recap", js)
         app_py = (ROOT / "backend" / "app.py").read_text(encoding="utf-8")
         self.assertIn('"/api/reentry_recap"', app_py)
+
+    def test_yonko_crews_are_real_polities_not_just_map_color(self):
+        # Big Mom (Totto Land) and Kaido (Wano) have unambiguous canon
+        # territory; Whitebeard is alive and at full strength at this
+        # world's default campaign start (seven days before Foosha, well
+        # before Marineford), so Fishman Island under his flag is accurate
+        # there too. They need to exist on the actual map (not just as a
+        # WORLD_TERRITORIES entry with nothing to attach to) and be seeded
+        # as tracked factions, or they're not real polities, just trivia.
+        map_names = {n[0] for n in WORLD_DATA["One Piece"]["map"]}
+        self.assertIn("Totto Land", map_names)
+        self.assertIn("Wano Country", map_names)
+        self.assertIn("Fishman Island", map_names)
+        territories = {"Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates", "Fishman Island": "Whitebeard Pirates"}
+        for name, expected_controller in territories.items():
+            snap = next(n for n in map_snapshot(BASE_STATE, WORLD_DATA["One Piece"]["map"], "One Piece")["nodes"] if n["name"] == name)
+            self.assertEqual(snap["controller"], expected_controller)
+        for faction in ("Whitebeard Pirates", "Big Mom Pirates", "Kaido's Beasts Pirates", "Shanks' Red Hair Pirates"):
+            self.assertIn(faction, WORLD_DATA["One Piece"]["factions"])
+
+    def test_yonko_crews_are_seeded_live_at_campaign_creation(self):
+        stats = {name: 30 for name in abilities_for("One Piece")}
+        game = GameSession()
+        game.new_campaign("Test", "One Piece", "Adventurer", "", "", "", "Aspiring Pirate", "Brawler", stats)
+        self.assertIn("Big Mom Pirates", game.state["factions"])
+        self.assertIn("Kaido's Beasts Pirates", game.state["factions"])
+        self.assertIn("Big Mom Pirates", game.state["contacts"])
+        self.assertTrue(game.state["contacts"]["Big Mom Pirates"]["can_contact"])
+        # They're seeded, so tick_world_clocks should pick them up as real
+        # faction clocks on the very first tick, not wait for the AI to
+        # happen to introduce them in prose first.
+        tick_world_clocks(game.state, 1440)
+        self.assertIn("Big Mom Pirates", game.state["faction_clocks"])
+        self.assertIn("Kaido's Beasts Pirates", game.state["faction_clocks"])
+        # And they're protected by the same canon-protection guardrail as
+        # the five-great-villages tier of polity, not a lesser tier.
+        self.assertTrue(_is_canon_protected(game.state, "Big Mom Pirates", "faction_clocks"))
+
+    def test_naruto_amegakure_and_iron_country_are_tracked_polities(self):
+        map_names = {n[0] for n in WORLD_DATA["Naruto"]["map"]}
+        self.assertIn("Amegakure", map_names)
+        self.assertIn("Iron Country", map_names)
+        for name in ("Amegakure", "Iron Country"):
+            self.assertIn(name, WORLD_DATA["Naruto"]["factions"])
+            snap = next(n for n in map_snapshot(BASE_STATE, WORLD_DATA["Naruto"]["map"], "Naruto")["nodes"] if n["name"] == name)
+            self.assertNotEqual(snap["controller"], "Unknown")
 
 
 if __name__ == "__main__":

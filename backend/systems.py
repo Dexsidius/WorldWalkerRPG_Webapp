@@ -34,9 +34,11 @@ WORLD_PROGRESSION_PRESETS = {
 
 
 WORLD_TERRITORIES = {
-    "One Piece": {"Shells Town": "Marines", "Loguetown": "Marines", "Enies Lobby": "World Government", "Sabaody": "World Government", "Arlong Park": "Pirates"},
+    "One Piece": {"Shells Town": "Marines", "Loguetown": "Marines", "Enies Lobby": "World Government", "Sabaody": "World Government", "Arlong Park": "Pirates",
+                  "Fishman Island": "Whitebeard Pirates", "Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates"},
     "Hunter x Hunter": {"Hunter Exam Site": "Hunter Association", "Hunter Association HQ": "Hunter Association", "Meteor City": "Phantom Troupe", "Kukuroo Mountain": "Zoldyck Family", "Yorknew City": "Yorknew Mafia"},
-    "Naruto": {"Konohagakure": "Konohagakure", "Sunagakure": "Sunagakure", "Kirigakure": "Kirigakure", "Kumogakure": "Kumogakure", "Iwagakure": "Iwagakure"},
+    "Naruto": {"Konohagakure": "Konohagakure", "Sunagakure": "Sunagakure", "Kirigakure": "Kirigakure", "Kumogakure": "Kumogakure", "Iwagakure": "Iwagakure",
+               "Amegakure": "Amegakure", "Iron Country": "Iron Country"},
     "Solo Max-Level Newbie": {"Earth — Tower Entrance": "Players", "Floor 10": "Tower Administrators", "Floor 20": "Tower Administrators", "Floor 30": "Tower Administrators", "Floor 40": "Tower Administrators", "Floor 50+": "Tower Administrators"},
     "Overgeared": {"Winston": "Local Lords", "Titan": "Kingdom", "Saharan Empire": "Kingdom", "Reidan": "Guilds"},
     "Reincarnated as a Slime": {"Great Jura Forest": "Jura Forest Monsters", "Goblin Village": "Jura Forest Monsters", "Tempest": "Jura Forest Monsters", "Kingdom of Falmuth": "Kingdom of Falmuth", "Demon Lord's Domain": "Demon Lords"},

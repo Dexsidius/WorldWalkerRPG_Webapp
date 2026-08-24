@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.39"
+APP_VERSION = "2.6.40"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -143,7 +143,22 @@ WORLD_DATA = {
         "progression": ["Level","XP","Haki","Combat Style","Bounty","Crew","Reputation","Titles"],
         "rules": "Honor One Piece world logic. Islands and seas matter. Marines, pirates, kingdoms and crews pursue their own motives. Devil Fruits are unique. Haki requires plausible awakening/training. Bounties respond to notoriety and government threat assessment. Canon may diverge permanently.",
         "start": "Foosha Village",
-        "factions": {"Marines": 0, "World Government": 0, "Revolutionary Army": 0, "Pirates": 0},
+        # Yonko crews are this world's real polities, not just powerful
+        # individuals — canon-confirmed territory each: Big Mom rules Totto
+        # Land, Kaido conquered and rules Wano, Whitebeard formally placed
+        # Fishman Island under his protection. Seeded here (not just added
+        # to WORLD_TERRITORIES below) so they're live, tracked factions
+        # with their own clock from turn one — contactable, able to gain or
+        # lose ground, and protected from being casually wiped out by an
+        # off-screen dice roll — the same as Marines/World Government
+        # already were. The default campaign start (seven days before
+        # Foosha) is well before Marineford, so Whitebeard is alive and at
+        # full strength here, not a stale reference to a dead Yonko. Shanks
+        # has no single canon-confirmed home territory the way the other
+        # three do, so he's tracked as a faction without a matching map
+        # entry, same as Marines/World Government already are.
+        "factions": {"Marines": 0, "World Government": 0, "Revolutionary Army": 0, "Pirates": 0,
+                     "Whitebeard Pirates": 0, "Big Mom Pirates": 0, "Kaido's Beasts Pirates": 0, "Shanks' Red Hair Pirates": 0},
         "map": [
             ("Foosha Village",12,70,"settlement",1), ("Goa Kingdom",20,64,"kingdom",2),
             ("Shells Town",30,74,"marine",2), ("Orange Town",38,65,"settlement",2),
@@ -153,7 +168,9 @@ WORLD_DATA = {
             ("Little Garden",61,35,"island",6), ("Alabasta",50,44,"kingdom",7),
             ("Jaya",41,31,"island",7), ("Skypiea",38,17,"sky",8),
             ("Water 7",29,32,"city",8), ("Enies Lobby",20,24,"government",9),
-            ("Sabaody",15,13,"archipelago",10), ("New World",78,17,"region",12)
+            ("Sabaody",15,13,"archipelago",10), ("New World",78,17,"region",12),
+            ("Fishman Island",68,25,"island",11), ("Totto Land",87,23,"island",13),
+            ("Wano Country",92,11,"nation",14)
         ],
         "special": {"Haki":{"Observation":0,"Armament":0,"Conqueror":0}, "Bounty":0, "Devil Fruit":"None", "Crew":"None"}
     },
@@ -180,7 +197,13 @@ WORLD_DATA = {
         "progression": ["Level","XP","Chakra","Jutsu","Rank","Village Reputation","Titles"],
         "rules": "Honor Naruto world logic. Chakra, elemental affinities, clan techniques, ranks, missions and village politics matter. Jutsu require training, inheritance, instruction or legitimate copying conditions. Powerful bloodlines are rare. Villages remember betrayal, service and classified knowledge.",
         "start": "Konohagakure",
-        "factions": {"Konohagakure":0,"Sunagakure":0,"Kirigakure":0,"Kumogakure":0,"Iwagakure":0},
+        # Amegakure and Iron Country are already on this world's own map
+        # below with their own sovereign governance in canon (Amegakure,
+        # Land of Iron's samurai under Mifune) — tracked the same as the
+        # five great villages instead of defaulting to "Unknown" on the map
+        # and being invisible as factions until the story happened to
+        # introduce them.
+        "factions": {"Konohagakure":0,"Sunagakure":0,"Kirigakure":0,"Kumogakure":0,"Iwagakure":0,"Amegakure":0,"Iron Country":0},
         # Coordinates calibrated against a manga-sourced "Naruto World" map
         # (player-supplied) now used as this world's map background — most
         # placements are the confirmed canon locations from that reference,
