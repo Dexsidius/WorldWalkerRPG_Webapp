@@ -2501,6 +2501,72 @@ $("#btn-chat-send").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Power Summary — an instant, no-AI-call read of the character's current
+// standing: an estimated tier (mirrors worlds.py's POWER_TIERS, the same
+// ladder the Advisor anchors its own power comparisons to, so the two never
+// contradict each other), key stats, and titles. Deliberately does NOT
+// fabricate a comparison against named rivals — Worldwalker has no tracked
+// per-NPC power data to draw that from honestly, so that judgment call is
+// handed off to the Advisor instead, which has real campaign context.
+// ---------------------------------------------------------------------------
+const POWER_TIERS = [
+  [0, "Mundane", "An ordinary person with no combat training."],
+  [1, "Trained", "A capable fighter or specialist."],
+  [2, "Skilled", "A seasoned professional."],
+  [3, "Elite", "Among the best in a city or region."],
+  [4, "Exceptional", "A nationally recognized talent."],
+  [5, "Powerhouse", "Capable of single-handedly turning a battle."],
+  [6, "Superhuman", "Clearly beyond ordinary human limits."],
+  [7, "Legendary", "A living legend."],
+  [8, "World-Class", "Among the strongest beings in the setting."],
+  [9, "Cataclysmic", "Can reshape a region or end a war single-handedly."],
+  [10, "Reality-Bending", "Power that strains or breaks the setting's normal rules entirely."],
+];
+const POWER_TIER_THRESHOLDS = [20, 35, 50, 65, 80, 95, 110, 130, 160, 200];
+
+function estimatePowerTier(stats) {
+  const values = Object.values(stats || {}).map(Number).filter((n) => Number.isFinite(n));
+  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+  let index = 0;
+  for (const threshold of POWER_TIER_THRESHOLDS) { if (avg >= threshold) index++; else break; }
+  const [, name, description] = POWER_TIERS[index];
+  return { index, name, description, avg };
+}
+
+function openPowerSummary() {
+  const s = APP.state || {};
+  const tier = estimatePowerTier(s.stats);
+  const statRows = Object.entries(s.stats || {})
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .map(([name, value]) => {
+      const pct = Math.max(2, Math.min(100, Number(value) || 0));
+      return `<div class="power-stat-row"><i class="a-icon">${abilityIcon(name)}</i><span>${escapeHtml(name)}</span>
+        <div class="clock-track"><i style="width:${pct}%"></i></div><b>${escapeHtml(value)}</b></div>`;
+    }).join("") || '<div class="hint">No stats recorded yet.</div>';
+  const titles = (s.titles || []).map((t) => `<span class="power-title-chip">🏅 ${escapeHtml(titleLabel(t))}</span>`).join("");
+  $("#power-summary-body").innerHTML = `
+    <div class="power-summary-head">
+      <div><b>${escapeHtml(s.name || "Traveler")}</b><span>${escapeHtml(s.world || "")}${s.position ? ` · ${escapeHtml(s.position)}` : ""}</span></div>
+    </div>
+    <div class="power-tier-card">
+      <div class="power-tier-badge">Tier ${tier.index} · ${escapeHtml(tier.name)}</div>
+      <p>${escapeHtml(tier.description)}</p>
+      <small>Estimated from current stats, not an official ranking — ask the Advisor for a real read grounded in the campaign.</small>
+    </div>
+    <div class="power-stat-list">${statRows}</div>
+    ${titles ? `<div class="power-title-list">${titles}</div>` : ""}
+    <button id="btn-power-summary-ask-advisor" class="btn-ghost full">⚖ Ask the Advisor how you compare</button>
+  `;
+  $("#btn-power-summary-ask-advisor").addEventListener("click", () => {
+    closeModal("modal-power-summary");
+    closeModal("modal-journal");
+    openModal("modal-advisor");
+    askAdvisor("How strong am I compared to the threats and rivals around me right now?");
+  });
+  openModal("modal-power-summary");
+}
+
+// ---------------------------------------------------------------------------
 // Advisor — Pax Historia-style meta guide: power levels, world state, advice.
 // Out-of-character, no turn cost, no state changes. Responses are structured
 // (summary + bullet points + suggested follow-ups) rather than a text blob.
@@ -2636,7 +2702,8 @@ async function openJournal(tab) {
     const titleRows = titles.length
       ? titles.map((title) => `<div class="jrow">🏅 ${escapeHtml(titleLabel(title))}</div>`).join("")
       : '<div class="jrow hint">No titles earned yet.</div>';
-    panel.innerHTML = `<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+    panel.innerHTML = `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button><h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+    $("#btn-open-power-summary").addEventListener("click", openPowerSummary);
   } else if (tab === "achievements") {
     const achievements = data.achievements || [];
     const titles = data.titles || [];

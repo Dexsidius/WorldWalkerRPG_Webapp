@@ -2458,6 +2458,22 @@ class WorldwalkerV260Tests(unittest.TestCase):
         game_naruto = self.fresh("Naruto")
         self.assertIn("D-rank", game_naruto.gm_rules())
 
+    def test_power_summary_button_and_modal_are_wired_into_the_skills_tab(self):
+        html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="modal-power-summary"', html)
+        self.assertIn('id="btn-open-power-summary"', js)
+        self.assertIn("openPowerSummary", js)
+        # The tier ladder mirrors worlds.py's POWER_TIERS so the Advisor and
+        # this instant, no-AI-call summary never disagree about what a given
+        # tier name means.
+        self.assertIn("Reality-Bending", js)
+        # Deliberately does not fabricate a named-rival comparison (no
+        # tracked per-NPC power data to draw one from honestly) — hands that
+        # judgment off to the Advisor, which has real campaign context.
+        self.assertIn("askAdvisor(", js)
+        self.assertIn("Ask the Advisor", js)
+
 
 if __name__ == "__main__":
     unittest.main()
