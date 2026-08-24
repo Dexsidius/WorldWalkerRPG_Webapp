@@ -393,8 +393,19 @@ function appendStoryEntries(entries) {
     // its own visible label — otherwise it silently reads as a continuation
     // of the previous event instead of a separate one.
     let lastWasUntitledNarrative = false;
+    // Purely mechanical/administrative notices (an undo confirmation, a
+    // stat-delta readout, "quest complete" bookkeeping) don't belong in the
+    // middle of the story being told — collected here and rendered as one
+    // collapsed strip at the end of the beat instead of a normal row, same
+    // idea as the roll pill below but for things with no single narrative
+    // line to attach to.
+    const metaEntries = [];
     run.entries.forEach((entry) => {
       const part = storyEntryParts(entry);
+      if (part.tag === "meta") {
+        metaEntries.push(part);
+        return;
+      }
       // A roll's numbers belong right next to the action they resolved, not
       // as their own separate row — attach as a compact inline pill onto
       // whatever action line immediately preceded it in this beat.
@@ -459,6 +470,13 @@ function appendStoryEntries(entries) {
       }
       lastRow = div;
     });
+    if (metaEntries.length) {
+      const strip = document.createElement("details");
+      strip.className = "story-beat-system";
+      strip.innerHTML = `<summary>System (${metaEntries.length})</summary>` +
+        metaEntries.map((part) => `<div class="story-beat-system-row"><b>${escapeHtml(part.label)}</b><span>${escapeHtml(part.body)}</span></div>`).join("");
+      entriesWrap.appendChild(strip);
+    }
     feed.appendChild(beat);
   });
   pruneStoryFeed(feed);
@@ -1629,7 +1647,7 @@ async function handleTurnResult(result, action) {
     return;
   }
   if (result.status === "impossible") {
-    appendStoryEntries([{ text: "[ACTION NOT POSSIBLE]\n" + result.reason, tag: "system" }]);
+    appendStoryEntries([{ text: "[ACTION NOT POSSIBLE]\n" + result.reason, tag: "meta" }]);
     return;
   }
   // While the event window is open, its own feed is the only place this
@@ -1899,7 +1917,7 @@ $("#btn-lethal-confirm").addEventListener("click", async () => {
 });
 $("#btn-lethal-cancel").addEventListener("click", () => {
   closeModal("modal-lethal");
-  appendStoryEntries([{ text: "[ACTION REVERTED]\nYou stop before committing to the lethal decision.", tag: "danger" }]);
+  appendStoryEntries([{ text: "[ACTION REVERTED]\nYou stop before committing to the lethal decision.", tag: "meta" }]);
   APP.pendingLethal = null;
 });
 

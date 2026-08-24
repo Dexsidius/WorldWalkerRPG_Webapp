@@ -601,6 +601,16 @@ input,select,textarea{ font-family:inherit; }
 .combat-log .combat-log-row.player{ color:var(--accent2); }
 .story-entry .typing-caret{ display:inline-block; width:8px; height:14px; background:var(--accent2); margin-left:2px; animation:caretBlink 1s steps(1) infinite; vertical-align:-2px; }
 .story-beat:last-child{ margin-bottom:10px; }
+/* Collapsed by default — mechanical/administrative notices (undo
+   confirmations, stat-delta readouts, quest-complete bookkeeping) that
+   don't belong in the middle of the story being told, but shouldn't be
+   lost either. */
+.story-beat-system{ border-top:1px solid rgba(255,255,255,.035); padding:7px 14px 8px 15px; font-size:10.5px; }
+.story-beat-system summary{ cursor:pointer; color:var(--muted); font-weight:800; letter-spacing:.06em; text-transform:uppercase; font-size:9px; list-style:none; }
+.story-beat-system summary::-webkit-details-marker{ display:none; }
+.story-beat-system summary::before{ content:"⚙ "; }
+.story-beat-system-row{ margin-top:6px; padding-left:14px; color:var(--muted); line-height:1.5; }
+.story-beat-system-row b{ display:block; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:9px; margin-bottom:1px; }
 /* A genuine popup, not inline content the player has to scroll the
    Chronicle to find — same fixed full-viewport treatment as every other
    decision modal (.modal-backdrop), just kept as its own element since a

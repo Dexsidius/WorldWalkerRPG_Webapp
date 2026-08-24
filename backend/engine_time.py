@@ -1003,7 +1003,7 @@ class TimeSkipMixin:
             apply_guarded_patch(self.state, patch, allow_time=False, source="continuity_correction")
         addendum = str(data.get("addendum", "")).strip()
         if addendum:
-            self.append("[CONTINUITY NOTE]\n" + addendum, "system")
+            self.append("[CONTINUITY NOTE]\n" + addendum, "meta")
         self.log("Continuity correction applied: " + "; ".join(new_warnings))
         return {"addendum": addendum, "patched": bool(patch)}
 
@@ -1133,9 +1133,9 @@ class TimeSkipMixin:
                 # independently of the player — same background-feed mirror
                 # as the canon catch-up backstop above.
                 self.state.setdefault("background_world_feed", []).append(message)
-                self.append("[WORLD CLOCK]\n" + event.get("message", "A distant agenda advances."), "system")
+                self.append("[WORLD CLOCK]\n" + event.get("message", "A distant agenda advances."), "meta")
             for name in completed_quests:
-                self.append(f"[QUEST COMPLETE — {name}]\nAll required objectives have been completed.", "system")
+                self.append(f"[QUEST COMPLETE — {name}]\nAll required objectives have been completed.", "meta")
             notifications = self.notify(before, self.state, list(data.get("events", []) or []) + clock_events)
             if interrupted and data.get("interruption_kind") == "canon_event":
                 notifications.append({"message": "MAJOR CANON EVENT: " + data.get("interruption_reason", "A major canon event is unfolding."),
@@ -1155,7 +1155,7 @@ class TimeSkipMixin:
                 self.request_continuity_correction(new_warnings, data.get("narrative", ""))
             chapter = update_chapter_memory(before, self.state, "Advance: " + "; ".join(context.get("actions", [])), data.get("narrative", ""))
             if chapter:
-                self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "system")
+                self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
             self.archive_finished_quests()
             # A time skip can end the character's life just as surely as a
             # single action or a combat round can (a failed extreme-danger
@@ -1203,7 +1203,7 @@ class TimeSkipMixin:
             return
         if elapsed_minutes >= 1440:
             days_left = max(0, int(deadline - self.state.get("canon_day", 0)))
-            self.append(f"[TOWER COUNTDOWN]\n{days_left} day(s) remain before this floor's countdown reaches zero.", "system")
+            self.append(f"[TOWER COUNTDOWN]\n{days_left} day(s) remain before this floor's countdown reaches zero.", "meta")
         if self.state.get("canon_day", 0) >= deadline:
             self.state["tower_over"] = True
             self.state["alive"] = False

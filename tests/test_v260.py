@@ -2257,6 +2257,74 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertNotIn("lastAction = text", wait_handler)
         self.assertNotIn("lastAction =", wait_handler)
 
+    def test_administrative_notices_are_tagged_meta_not_system(self):
+        # A real complaint: the Chronicle mixed real story prose with
+        # bracket-labeled bookkeeping (stat deltas, undo confirmations,
+        # "quest complete" notices) that reads as pure UI chrome, not
+        # narration. Those specific notices now use a distinct "meta" tag
+        # so the frontend can collapse them into a separate strip instead
+        # of interrupting the story — while genuinely narrative content
+        # that merely happens to carry a "system"-styled label (a dated
+        # time-skip beat, a canon-timeline note, a quest briefing) is
+        # untouched and stays tagged "system", not swept up by mistake.
+        game = self.fresh("Naruto")
+
+        # Stat growth: a real story delta but a purely mechanical readout.
+        before = copy.deepcopy(game.state)
+        game.state["stats"]["Taijutsu"] += 2
+        game.append_growth_deltas(before)
+        self.assertEqual(game.story_log[-1]["tag"], "meta")
+        self.assertTrue(game.story_log[-1]["text"].startswith("[GROWTH]"))
+
+        # notify(): a non-death mechanical readout goes to meta, but a
+        # death-related one keeps its "danger" tag — that one is a real,
+        # urgent story beat, not administrative noise.
+        b, a = copy.deepcopy(game.state), copy.deepcopy(game.state)
+        a["xp"] = b.get("xp", 0) + 1
+        game.notify(b, a, [])
+        self.assertEqual(game.story_log[-1]["tag"], "meta")
+        game.notify(b, a, [{"message": "A quiet death passes unnoticed nearby."}])
+        self.assertEqual(game.story_log[-1]["tag"], "danger")
+
+        # These next three flush story_log as part of their own return
+        # value (the same mechanism the API layer relies on), so the tag
+        # has to be checked on what they returned, not on story_log after
+        # the call — it's already been drained back to empty by then.
+        result = game.take_turn("Fly to the moon barehanded", cached_assessment={"impossible": True, "reason": "No known ability grants flight."})
+        self.assertEqual(result["story"][-1]["tag"], "meta")
+        self.assertTrue(result["story"][-1]["text"].startswith("[ACTION NOT POSSIBLE]"))
+
+        game.checkpoints.append(copy.deepcopy(game.state))
+        result = game.undo()
+        self.assertEqual(result["story"][-1]["tag"], "meta")
+        self.assertTrue(result["story"][-1]["text"].startswith("[TURN REVERTED]"))
+
+        game.checkpoints.append(copy.deepcopy(game.state))
+        result = game.rewind_death()
+        self.assertEqual(result["story"][-1]["tag"], "meta")
+        self.assertTrue(result["story"][-1]["text"].startswith("[TIMELINE REWOUND]"))
+
+    def test_quest_briefing_and_canon_notes_keep_their_system_tag(self):
+        # These carry real, actionable narrative content (a quest's actual
+        # objective/first step, a canon-timeline event's description) —
+        # unlike the bookkeeping notices above, hiding these in a collapsed
+        # strip would risk the player missing something they need, so they
+        # must NOT have been swept into the "meta" retagging.
+        source = (ROOT / "backend" / "engine_time.py").read_text(encoding="utf-8")
+        self.assertIn('"tag": "canon_event" if major else "system"', source)
+        self.assertIn('pending_appends.append({"text": "[SCHEDULED EVENT]\\n" + detail, "tag": "system"', source)
+        turns_source = (ROOT / "backend" / "engine_turns.py").read_text(encoding="utf-8")
+        start = turns_source.index("[QUEST STARTED")
+        self.assertIn('"system"', turns_source[start:start + 500])
+
+    def test_chronicle_collapses_meta_entries_into_a_system_strip(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('if (part.tag === "meta") {', js)
+        self.assertIn("metaEntries.push(part)", js)
+        self.assertIn('strip.className = "story-beat-system"', js)
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".story-beat-system{", css)
+
 
 if __name__ == "__main__":
     unittest.main()
