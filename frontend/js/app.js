@@ -414,9 +414,17 @@ function appendStoryEntries(entries) {
       const label = document.createElement("div");
       label.className = "story-entry-label";
       label.textContent = part.label;
+      // bodyWrap (not body itself) is the grid's 2nd column — body keeps its
+      // exact class/role as the typeText/renderBoldedText target either way,
+      // but any richer beat extras below live as normal stacked children of
+      // bodyWrap instead of extra grid siblings, so they can never fight the
+      // label/body column placement no matter how many of them there are.
+      const bodyWrap = document.createElement("div");
+      bodyWrap.className = "story-entry-body";
       const body = document.createElement("div");
       body.className = "story-entry-copy";
-      div.append(label, body);
+      bodyWrap.appendChild(body);
+      div.append(label, bodyWrap);
       entriesWrap.appendChild(div);
       if (part.tag === "narrative" && APP.animationsEnabled) {
         typeText(body, part.body);
@@ -424,6 +432,30 @@ function appendStoryEntries(entries) {
         renderBoldedText(body, part.body);
       } else {
         body.textContent = part.body;
+      }
+      // Only a dated multi-beat update carries this — a plain moment-to-
+      // moment turn's entry.detail (if any) is the roll-tooltip string
+      // handled above, never an object, so this can't misfire on those.
+      if (entry.detail && typeof entry.detail === "object") {
+        if (entry.detail.entities && entry.detail.entities.length) {
+          const chips = document.createElement("div");
+          chips.className = "story-entry-chips";
+          chips.innerHTML = entry.detail.entities.map((name) => `<span>${escapeHtml(name)}</span>`).join("");
+          bodyWrap.insertBefore(chips, body);
+        }
+        if (entry.detail.quote && entry.detail.quote.text) {
+          const quote = document.createElement("blockquote");
+          quote.className = "story-entry-quote";
+          quote.innerHTML = `<p>${escapeHtml(entry.detail.quote.text)}</p>` + (entry.detail.quote.speaker ? `<cite>— ${escapeHtml(entry.detail.quote.speaker)}</cite>` : "");
+          bodyWrap.appendChild(quote);
+        }
+        if (entry.detail.map_changes && entry.detail.map_changes.length) {
+          const details = document.createElement("details");
+          details.className = "story-entry-map-changes";
+          const n = entry.detail.map_changes.length;
+          details.innerHTML = `<summary>${n} Map Change${n === 1 ? "" : "s"}</summary><ul>${entry.detail.map_changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`;
+          bodyWrap.appendChild(details);
+        }
       }
       lastRow = div;
     });

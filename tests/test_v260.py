@@ -68,6 +68,54 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertFalse(result["interrupted"])
         self.assertEqual(result["intervention_prompt"], "")
 
+    def test_time_skip_beats_carry_chip_map_change_and_quote_detail(self):
+        # Pax Historia-style dense feed: a multi-day skip's dated beats
+        # should carry enough structured extra to render as a rich card
+        # (entity chips, a rare map-control change, a rare pull-quote)
+        # instead of a plain paragraph — but only when the AI actually
+        # supplied them, and derived from the same **bolded** convention
+        # already used for Codex linking, not a separate AI field, so it
+        # can never drift out of sync with what the prose actually bolds.
+        class RichBeatAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                if payload["task"] == "assess_time_skip":
+                    return {"checks": [], "reachable_actions": payload["planned_actions"], "deferred_actions": []}
+                return {
+                    "narrative": "The week unfolds.",
+                    "updates": [
+                        {"sequence": 1, "type": "faction_reaction", "title": "Dawn of the Shadow Multiverse",
+                         "canon_day": 3, "narrative": "**Shizuno** stands with the **Empire of the End** as the **Spire of Infinity** stabilizes a bridge to **Reality-701**.",
+                         "why_it_matters": "", "player_knowledge": "", "next_pressure": "",
+                         "map_changes": ["The Empire of the End gains a foothold in Reality-701", "  "],
+                         "quote": {"text": "The first bridge is stable.", "speaker": "Solomon"}},
+                        {"sequence": 2, "type": "world_event", "title": "Quiet Day", "canon_day": 4,
+                         "narrative": "Little of note happens.", "why_it_matters": "", "player_knowledge": "", "next_pressure": ""},
+                    ],
+                    "state_patch": {}, "events": [], "timeline_events": [], "elapsed": {"amount": 7, "unit": "days"},
+                    "interrupted": False, "completed_actions": [], "deferred_actions": [],
+                    "major_event_reached": False, "major_event_kind": "", "major_event_title": "",
+                    "suggested_actions": ["Continue", "Rest", "Investigate"],
+                }
+
+        game = self.fresh("Reincarnated as a Slime")
+        game.ai = RichBeatAI()
+        assessed = game.assess_time_skip(7, "days", "Let the week play out", "normal")
+        result = game.run_time_skip(assessed["amount"], assessed["unit"], assessed["orders"], "normal", assessed["assessment"])
+        story = result["story"]
+
+        rich = next(e for e in story if "DAWN OF THE SHADOW MULTIVERSE" in e["text"])
+        self.assertEqual(rich["canon_day"], 3)
+        self.assertEqual(set(rich["detail"]["entities"]), {"Shizuno", "Empire of the End", "Spire of Infinity", "Reality-701"})
+        # A blank/whitespace-only entry is dropped rather than showing up as
+        # an empty line in the map-changes list.
+        self.assertEqual(rich["detail"]["map_changes"], ["The Empire of the End gains a foothold in Reality-701"])
+        self.assertEqual(rich["detail"]["quote"], {"text": "The first bridge is stable.", "speaker": "Solomon"})
+
+        # A beat with no bolded names, no map change, and no quote carries
+        # no detail at all — the plain-paragraph rendering it already had.
+        quiet = next(e for e in story if "QUIET DAY" in e["text"])
+        self.assertIsNone(quiet.get("detail"))
+
     def test_minigame_roll_can_replace_a_regular_check(self):
         game = self.fresh()
         game.ai = PlanningAI()
