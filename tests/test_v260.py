@@ -2954,8 +2954,30 @@ class WorldwalkerV260Tests(unittest.TestCase):
     def test_currency_hp_quest_rules_include_worked_bad_good_examples(self):
         game = self.fresh("Naruto")
         rules = game.gm_rules()
-        self.assertEqual(rules.count("BAD:"), 3)
-        self.assertEqual(rules.count("GOOD:"), 3)
+        self.assertGreaterEqual(rules.count("BAD:"), 7)
+        self.assertGreaterEqual(rules.count("GOOD:"), 7)
+
+    def test_more_rules_have_worked_bad_good_examples_added(self):
+        # A broader pass beyond just currency/hp/quest: structured combat
+        # aggregation, ordinary actions never advancing time, map control
+        # changes, canon-day timeline comparison, quest acceptance, and shop
+        # price shape all got the same treatment once those three proved
+        # the pattern works.
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn('BAD: state_patch.combat.enemy is a list of 4 separate bandits', rules)
+        self.assertIn('BAD: the player says "I spend the afternoon training"', rules)
+        self.assertIn("BAD: narrative says \"the village now answers to the rebels\"", rules)
+        self.assertIn("BAD: a character speaks of a CANON HISTORY event as still ahead", rules)
+        self.assertIn('BAD: narrative says "you accept the delivery job"', rules)
+        self.assertIn('BAD: {"name": "Kunai Pouch", "price": "around 50 Ryo"}', rules)
+
+    def test_advisor_rules_include_a_worked_example_against_deflecting(self):
+        game = self.fresh("Naruto")
+        game.state["advisor_thread"] = []
+        social_src = (ROOT / "backend" / "engine_social.py").read_text(encoding="utf-8")
+        self.assertIn("BAD: \"That's not something I have tracked information on.\"", social_src)
+        self.assertIn("GOOD: \"He's not someone you've crossed paths with", social_src)
 
     def test_gm_rules_end_with_a_final_reminders_recap_near_the_schema_instruction(self):
         game = self.fresh("Naruto")
