@@ -45,6 +45,7 @@ WORLD_STARTER_GEAR = {
     "Solo Max-Level Newbie": "Beginner weapon and emergency potion",
     "Overgeared": "Beginner equipment set and trade tools",
     "Reincarnated as a Slime": "Species-appropriate natural weapon or focus",
+    "Bleach": "Zanpakuto (or, before awakened powers, an ordinary student's belongings)",
     "Custom World": "Setting-appropriate weapon and travel kit",
 }
 
@@ -52,7 +53,7 @@ WORLD_STARTER_SKILL = {
     "One Piece": "Foundation Combat Style", "Hunter x Hunter": "Conditioned Fundamentals",
     "Naruto": "Academy Fundamentals", "Solo Max-Level Newbie": "System Adaptation",
     "Overgeared": "Class Fundamentals", "Reincarnated as a Slime": "Intrinsic Species Trait",
-    "Custom World": "Background Expertise",
+    "Bleach": "Shinigami Fundamentals", "Custom World": "Background Expertise",
 }
 
 POOL_STATS = {

@@ -19,7 +19,7 @@ from systems import (
 )
 from continuity import update_continuity
 from state_guard import migrate_state, apply_guarded_patch
-from worlds import BASE_STATE, WORLD_DATA, abilities_for, format_calendar_date, timeline_for, expansion_for, start_options_for, starting_era_by_id, power_tier_reference
+from worlds import BASE_STATE, WORLD_DATA, abilities_for, format_calendar_date, timeline_for, expansion_for, start_options_for, starting_era_by_id, power_tier_reference, playable_characters_for
 
 
 class PlanningAI:
@@ -3345,6 +3345,76 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("clock.immediate_goal || clock.goal", js)
         self.assertIn("clock.mid_term_goal", js)
         self.assertIn("clock.core_ambition", js)
+
+    # ---------------------------------------------------------------
+    # Bleach world
+    # ---------------------------------------------------------------
+
+    def test_bleach_world_data_is_fully_populated_not_falling_back_to_custom_world(self):
+        self.assertIn("Bleach", WORLD_DATA)
+        self.assertEqual(abilities_for("Bleach"), ["Zanjutsu", "Hakuda", "Hoho", "Kido", "Reiatsu Control", "Willpower"])
+        self.assertEqual(expansion_for("Bleach")["currency"], "Yen")
+        self.assertNotEqual(expansion_for("Bleach"), expansion_for("Custom World"))
+        self.assertEqual(WORLD_DATA["Bleach"]["resource"], "Reiryoku")
+        self.assertIn("Gotei 13", WORLD_DATA["Bleach"]["factions"])
+
+    def test_bleach_map_and_territory_names_are_cross_consistent(self):
+        # WORLD_TERRITORIES/WORLD_START_OPTIONS/MAJOR_CHARACTER_STARTS all
+        # reference location names by exact string match against the map —
+        # a typo in any of them silently breaks map-controller lookup or
+        # the New Campaign location dropdown.
+        map_names = {n[0] for n in WORLD_DATA["Bleach"]["map"]}
+        from systems import WORLD_TERRITORIES
+        for name in WORLD_TERRITORIES["Bleach"]:
+            self.assertIn(name, map_names)
+        for option in start_options_for("Bleach"):
+            self.assertIn(option["location"], map_names)
+        for character in playable_characters_for("Bleach"):
+            self.assertIn(character["location"], map_names)
+
+    def test_bleach_hueco_mundo_has_no_seeded_controller(self):
+        # Seeding a controller for Hueco Mundo/Las Noches at the default
+        # campaign start (pre-Aizen-reveal) would spoil the Soul Society
+        # arc's own twist before the story gets there.
+        from systems import WORLD_TERRITORIES
+        self.assertNotIn("Hueco Mundo", WORLD_TERRITORIES["Bleach"])
+        self.assertNotIn("Las Noches", WORLD_TERRITORIES["Bleach"])
+
+    def test_ichigo_canon_start_produces_the_correct_series_opening_state(self):
+        game = GameSession()
+        game.new_campaign("Ari", "Bleach", "Adventurer", "", "", "", "Karakura High Student", "Zanjutsu Specialist",
+                           {n: 30 for n in abilities_for("Bleach")}, canon_character_id="ichigo_series_start")
+        self.assertEqual(game.state["name"], "Ichigo Kurosaki")
+        self.assertEqual(game.state["location"], "Kurosaki Clinic")
+        self.assertEqual(game.state["canon_day"], 0)
+        self.assertEqual(game.state["player_identity"]["mode"], "canon")
+        self.assertEqual(game.state["player_identity"]["canon_character_id"], "ichigo_series_start")
+
+    def test_original_shinigami_one_year_before_start_lands_a_year_early(self):
+        game = GameSession()
+        game.new_campaign("Traveler", "Bleach", "Adventurer", "", "", "", "Shino Academy Graduate", "Kido Caster",
+                           {n: 30 for n in abilities_for("Bleach")}, start_location="Seireitei", starting_era_id="year_before_arrival")
+        self.assertEqual(game.state["canon_day"], -367)
+        self.assertEqual(game.state["player_identity"]["mode"], "original")
+        self.assertEqual(game.state["location"], "Seireitei")
+
+    def test_bleach_gm_rules_include_aizen_secrecy_instruction(self):
+        # Aizen's true nature is the single biggest spoiler risk in the
+        # whole setting — confirm the guard actually lives in the rendered
+        # rules text (the part the model sees), not just as a code comment.
+        game = self.fresh("Bleach")
+        rules = game.gm_rules()
+        self.assertIn("never hint, foreshadow", rules)
+        self.assertIn("Hogyoku", rules)
+        self.assertIn("Visored", rules)
+
+    def test_bleach_canon_timeline_covers_rukias_arrival_and_aizens_betrayal(self):
+        timeline = timeline_for("Bleach")
+        titles = [e["title"] for e in timeline["events"]]
+        self.assertTrue(any("Rukia Kuchiki arrives" in t for t in titles))
+        self.assertTrue(any("Aizen's betrayal" in t for t in titles))
+        rukia_arrival = next(e for e in timeline["events"] if e["day"] == 0)
+        self.assertEqual(rukia_arrival["location"], "Kurosaki Clinic")
 
 
 if __name__ == "__main__":

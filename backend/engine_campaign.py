@@ -52,7 +52,7 @@ WORLD_STARTER_SKILL = {
     "One Piece": "Foundation Combat Style", "Hunter x Hunter": "Conditioned Fundamentals",
     "Naruto": "Academy Fundamentals", "Solo Max-Level Newbie": "System Adaptation",
     "Overgeared": "Class Fundamentals", "Reincarnated as a Slime": "Intrinsic Species Trait",
-    "Custom World": "Background Expertise",
+    "Bleach": "Shinigami Fundamentals", "Custom World": "Background Expertise",
 }
 
 # A concrete, named starting weapon/tool per archetype — "a sword", not "a
