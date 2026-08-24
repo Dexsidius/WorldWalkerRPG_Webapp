@@ -696,9 +696,17 @@ input,select,textarea{ font-family:inherit; }
 /* ==========================================================================
    Right column extras
    ========================================================================== */
-.time-row{ display:flex; gap:8px; margin-bottom:8px; }
-#time-amount{ width:64px; }
-#time-unit{ flex:1; }
+/* flex-wrap, not just narrower gaps: with the amount field shown (any unit
+   above "moment"), the amount input + unit select + ADVANCE button's combined
+   min-content width can exceed the sidebar column's width at plenty of
+   ordinary desktop sizes, not just the small-screen breakpoint below — flex
+   items refuse to shrink past their own min-content size by default, so
+   without wrapping the row simply overflows and the button gets visually
+   clipped at the column edge instead of ever actually squeezing down. */
+.time-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+#time-amount{ width:64px; flex-shrink:0; }
+#time-unit{ flex:1 1 100px; min-width:90px; }
+.time-row #btn-advance{ flex:1 1 auto; }
 .time-row input, .time-row select{
   background:rgba(0,0,0,.28); border:1px solid var(--border-soft); color:var(--text);
   border-radius:8px; padding:8px 10px; font-size:12px;
@@ -1175,8 +1183,7 @@ input,select,textarea{ font-family:inherit; }
   .composer-row,.time-row{ gap:7px; }
   #action-input{ font-size:16px; }
   .action-chat-card #action-input{ min-height:120px; }
-  .time-row{ flex-wrap:wrap; }
-  .time-row #btn-advance{ min-height:44px; flex:1; }
+  .time-row #btn-advance{ min-height:44px; }
   .portrait-card{ max-height:none; }
   .portrait-frame{ min-height:260px; }
   .modal{ width:calc(100vw - 14px)!important; max-width:none!important; max-height:92dvh; }

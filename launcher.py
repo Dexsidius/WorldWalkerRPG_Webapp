@@ -145,9 +145,6 @@ if __name__ == "__main__":
     else:
         webview.create_window("Worldwalker RPG", url, width=1520, height=940, min_size=(1180, 720))
     try:
-        # debug=True temporarily, to diagnose the Godot-layer black-square
-        # issue with real console/computed-style data instead of guessing
-        # blind — remove again once that's actually fixed and confirmed.
-        webview.start(debug=True)
+        webview.start()
     finally:
         SERVER.shutdown()

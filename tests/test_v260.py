@@ -790,6 +790,23 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn('.col-center{ order:2;', css)
         self.assertIn('LAN_MODE = "--lan" in sys.argv', launcher)
         self.assertIn('url.pathname.startsWith("/api/")', service_worker)
+        # webview.start(debug=True) was only ever meant to be temporary, for
+        # diagnosing the Godot black-square bug with real console access —
+        # that bug is fixed and confirmed (v2.6.29+), so DevTools access
+        # should not still be exposed in a shipped build.
+        self.assertIn("webview.start()", launcher)
+        self.assertNotIn("debug=True", launcher)
+
+    def test_sidebar_time_row_wraps_instead_of_clipping_the_advance_button(self):
+        # A real report: selecting days/weeks/months reveals the amount
+        # input alongside the unit dropdown and ADVANCE button in the same
+        # narrow sidebar row — three items' combined min-content width
+        # exceeds the column's width at plenty of ordinary desktop sizes
+        # (not just the small-screen breakpoint), and flex items refuse to
+        # shrink past their own min-content by default, so the row silently
+        # overflowed and clipped the button instead of ever squeezing it.
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".time-row{ display:flex; flex-wrap:wrap;", css)
 
     def test_service_worker_clones_the_response_before_any_async_gap(self):
         # Cloning a Response inside a `caches.open(...).then(...)` callback
