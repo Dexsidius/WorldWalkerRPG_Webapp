@@ -39,6 +39,10 @@ APP_OWNED = {
     # supplies a one-line reason via reputation_chain_events each turn, but
     # never authors the accumulated faction_chain history directly.
     "faction_chain",
+    # The permanent, app-owned purchase-offer ledger (systems.py) — the GM
+    # supplies a one-turn purchase_offer, but never authors the resolved
+    # flag or ids in purchase_offers directly.
+    "purchase_offers",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}

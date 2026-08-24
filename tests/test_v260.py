@@ -15,7 +15,7 @@ from game import GameSession
 from systems import (
     FACTION_DESTROYED_THRESHOLD, _is_canon_protected, campaign_health, map_snapshot, normalize_quest_state_machine,
     normalize_tuning, relationship_snapshot, tick_world_clocks, update_chapter_memory,
-    parse_price, resolve_shop_purchase,
+    parse_price, resolve_shop_purchase, record_purchase_offer, resolve_purchase_offer,
 )
 from continuity import update_continuity
 from state_guard import migrate_state, apply_guarded_patch
@@ -2808,6 +2808,103 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertEqual(game.state["currency"]["amount"], 400)
         with self.assertRaises(ValueError):
             game.buy_shop_item("Weapons Stall", "Nonexistent Item")
+
+    def test_record_purchase_offer_turns_a_transient_offer_into_a_permanent_entry(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Ryo", "amount": 500}
+        state["purchase_offer"] = {"item": "Healing Salve", "price": "30 Ryo", "vendor": "a passing herbalist"}
+        detail = record_purchase_offer(state)
+        self.assertEqual(detail["item"], "Healing Salve")
+        self.assertEqual(detail["price"], 30)
+        self.assertEqual(detail["currency"], "Ryo")
+        self.assertIsNone(state["purchase_offer"])
+        self.assertEqual(len(state["purchase_offers"]), 1)
+        self.assertFalse(state["purchase_offers"][0]["resolved"])
+        self.assertEqual(state["purchase_offers"][0]["id"], detail["id"])
+
+    def test_record_purchase_offer_ignores_a_missing_item_or_unparseable_price(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["purchase_offer"] = {"item": "", "price": 30}
+        self.assertIsNone(record_purchase_offer(state))
+        state["purchase_offer"] = {"item": "Mystery Box", "price": "free maybe"}
+        self.assertIsNone(record_purchase_offer(state))
+        state["purchase_offer"] = None
+        self.assertIsNone(record_purchase_offer(state))
+
+    def test_resolve_purchase_offer_deducts_currency_and_marks_resolved(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Ryo", "amount": 500}
+        state["purchase_offer"] = {"item": "Healing Salve", "price": 30, "vendor": "a herbalist"}
+        detail = record_purchase_offer(state)
+        ok, message, price = resolve_purchase_offer(state, detail["id"])
+        self.assertTrue(ok)
+        self.assertEqual(price, 30)
+        self.assertEqual(state["currency"]["amount"], 470)
+        self.assertTrue(any(i.get("name") == "Healing Salve" for i in state["inventory"]))
+        self.assertTrue(state["purchase_offers"][0]["resolved"])
+        # Can't buy it twice.
+        ok2, message2, _ = resolve_purchase_offer(state, detail["id"])
+        self.assertFalse(ok2)
+        self.assertIn("already bought", message2)
+
+    def test_resolve_purchase_offer_rejects_insufficient_funds_or_an_unknown_id(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Ryo", "amount": 10}
+        state["purchase_offer"] = {"item": "Healing Salve", "price": 30}
+        detail = record_purchase_offer(state)
+        ok, _, price = resolve_purchase_offer(state, detail["id"])
+        self.assertFalse(ok)
+        self.assertIsNone(price)
+        self.assertEqual(state["currency"]["amount"], 10)
+        ok2, message2, _ = resolve_purchase_offer(state, "not-a-real-id")
+        self.assertFalse(ok2)
+        self.assertIn("no longer available", message2)
+
+    def test_purchase_offers_is_application_owned_and_rejects_direct_ai_authorship(self):
+        state = copy.deepcopy(BASE_STATE)
+        report = apply_guarded_patch(state, {"purchase_offers": [{"id": "fake", "item": "Fabricated", "price": 1, "resolved": False}]}, allow_time=False, source="turn")
+        self.assertIn("purchase_offers", [r["field"] for r in report["rejected"]])
+        self.assertEqual(state["purchase_offers"], [])
+
+    def test_apply_resolution_attaches_a_purchase_offer_to_the_story_entry(self):
+        game = self.fresh("Naruto")
+        game.state["currency"] = {"name": "Ryo", "amount": 500}
+        data = {
+            "narrative": "A merchant at the stall offers you a Healing Salve for 30 Ryo.",
+            "state_patch": {"purchase_offer": {"item": "Healing Salve", "price": 30, "vendor": "the merchant"}},
+            "events": [], "suggested_actions": [],
+        }
+        result = game.apply_resolution(data, pending_action="Browse the stall")
+        narrative_entry = next(e for e in result["story"] if e.get("tag") is None)
+        self.assertIsNotNone(narrative_entry.get("detail"))
+        self.assertEqual(narrative_entry["detail"]["purchase_offer"]["item"], "Healing Salve")
+        self.assertEqual(narrative_entry["detail"]["purchase_offer"]["price"], 30)
+        self.assertEqual(len(game.state["purchase_offers"]), 1)
+        self.assertIsNone(game.state["purchase_offer"])
+
+    def test_buy_purchase_offer_endpoint_is_deterministic_and_never_calls_the_ai(self):
+        game = self.fresh("Naruto")
+        game.state["currency"] = {"name": "Ryo", "amount": 500}
+        game.state["purchase_offer"] = {"item": "Healing Salve", "price": 30}
+        detail = record_purchase_offer(game.state)
+        game.ai.request = lambda *a, **k: (_ for _ in ()).throw(AssertionError("buy_purchase_offer must not call the AI"))
+        result = game.buy_purchase_offer(detail["id"])
+        self.assertEqual(result["price"], 30)
+        self.assertEqual(game.state["currency"]["amount"], 470)
+        with self.assertRaises(ValueError):
+            game.buy_purchase_offer(detail["id"])
+
+    def test_gm_rules_document_narrative_purchase_offers(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("purchase_offer", rules)
+        self.assertIn("Buy button for it right in the Chronicle", rules)
+
+    def test_story_feed_renders_a_buy_button_for_a_purchase_offer(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("entry.detail.purchase_offer", js)
+        self.assertIn("data-offer-buy", js)
+        self.assertIn("/api/purchase_offer/buy", js)
 
     def test_continuity_records_an_npc_chain_event_and_pings_the_chronicle_on_attitude_change(self):
         # The whole point of consequence chains: "why does this NPC feel

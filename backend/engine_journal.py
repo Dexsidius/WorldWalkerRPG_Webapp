@@ -14,7 +14,7 @@ from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks, tension_level, resolve_shop_purchase)
+                     update_chapter_memory, tick_world_clocks, tension_level, resolve_shop_purchase, resolve_purchase_offer)
 
 
 DEFAULT_SETTINGS = {
@@ -171,6 +171,14 @@ class JournalMixin:
 
     def buy_shop_item(self, shop_name, item_name):
         ok, message, price = resolve_shop_purchase(self.state, shop_name, item_name)
+        if not ok:
+            raise ValueError(message)
+        self.append(message, "meta")
+        self.autosave()
+        return {"message": message, "price": price, "currency": self.state.get("currency"), "inventory": self.state.get("inventory"), "story": self._flush_story()}
+
+    def buy_purchase_offer(self, offer_id):
+        ok, message, price = resolve_purchase_offer(self.state, offer_id)
         if not ok:
             raise ValueError(message)
         self.append(message, "meta")

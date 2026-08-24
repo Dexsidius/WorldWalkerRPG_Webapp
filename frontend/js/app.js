@@ -479,6 +479,16 @@ function appendStoryEntries(entries) {
           details.innerHTML = `<summary>${n} Map Change${n === 1 ? "" : "s"}</summary><ul>${entry.detail.map_changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`;
           bodyWrap.appendChild(details);
         }
+        if (entry.detail.purchase_offer) {
+          const offer = entry.detail.purchase_offer;
+          const card = document.createElement("div");
+          card.className = "story-purchase-offer";
+          card.innerHTML = `<span class="story-purchase-offer-name">${escapeHtml(offer.item)}</span>` +
+            (offer.vendor ? `<span class="story-purchase-offer-vendor">from ${escapeHtml(offer.vendor)}</span>` : "") +
+            `<span class="story-purchase-offer-price">${escapeHtml(offer.price)} ${escapeHtml(offer.currency || "")}</span>` +
+            `<button type="button" class="story-purchase-offer-buy" data-offer-buy="${escapeHtml(offer.id)}">Buy</button>`;
+          bodyWrap.appendChild(card);
+        }
       }
       lastRow = div;
     });
@@ -3140,6 +3150,30 @@ $("#journal-panel").addEventListener("click", async (event) => {
     const people = node.notable_individuals || [];
     detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")} · tier ${escapeHtml(node.tier || 1)}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes)}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller)}</dd>${node.danger_level ? `<dt>Danger</dt><dd class="danger-label danger-${escapeHtml(node.danger_level.toLowerCase())}">${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Notable individuals</dt><dd>${people.length ? people.map(escapeHtml).join(", ") : "None recorded yet"}</dd><dt>Quest links</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "None known"}</dd></dl>`;
     return;
+  }
+});
+
+// Delegated from document (not #story-feed) because that container gets
+// replaced when the campaign view mounts — same reason .codex-term clicks
+// above are delegated from document instead of a specific ancestor.
+document.addEventListener("click", async (event) => {
+  const buyButton = event.target.closest("[data-offer-buy]");
+  if (!buyButton) return;
+  if (buyButton.disabled) return;
+  buyButton.disabled = true;
+  const id = buyButton.getAttribute("data-offer-buy");
+  try {
+    const result = await apiPost("/api/purchase_offer/buy", { id });
+    showToast(result.message, "notify");
+    buyButton.textContent = "Bought";
+    const card = buyButton.closest(".story-purchase-offer");
+    if (card) card.classList.add("resolved");
+    const refreshed = await apiGet("/api/state");
+    APP.campaignActive = refreshed.campaign_active;
+    renderState(refreshed.state);
+  } catch (error) {
+    showToast(error.message, "danger");
+    buyButton.disabled = false;
   }
 });
 

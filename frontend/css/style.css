@@ -528,6 +528,14 @@ input,select,textarea{ font-family:inherit; }
 .story-entry-map-changes summary::before{ content:"🗺 "; }
 .story-entry-map-changes ul{ margin:6px 0 0; padding-left:16px; color:var(--sub); }
 .story-entry-map-changes li{ line-height:1.5; }
+.story-purchase-offer{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding:8px 12px; border:1px solid rgba(var(--gold-rgb,230,200,119),.35); border-radius:8px; background:rgba(var(--gold-rgb,230,200,119),.08); }
+.story-purchase-offer-name{ font-weight:700; color:var(--text); }
+.story-purchase-offer-vendor{ color:var(--sub); font-size:11px; }
+.story-purchase-offer-price{ margin-left:auto; color:var(--gold); font-size:12px; white-space:nowrap; }
+.story-purchase-offer-buy{ background:rgba(var(--accent-rgb),.18); border:1px solid rgba(var(--accent-rgb),.45); color:var(--text); border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; }
+.story-purchase-offer-buy:hover:not(:disabled){ background:rgba(var(--accent-rgb),.3); }
+.story-purchase-offer-buy:disabled{ opacity:.5; cursor:not-allowed; }
+.story-purchase-offer.resolved{ opacity:.6; }
 .story-roll-pill{ font-family:var(--font-mono); font-size:10.5px; font-weight:700; font-style:normal; padding:2px 8px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); color:var(--sub); white-space:nowrap; }
 .story-roll-pill[title]{ cursor:help; }
 .story-roll-pill.hit{ color:#8fe0a0; background:rgba(80,200,120,.12); border-color:rgba(80,200,120,.35); }
