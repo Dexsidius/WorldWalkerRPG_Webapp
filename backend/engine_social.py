@@ -6,7 +6,7 @@ import copy, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
-from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, power_tier_reference
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -176,6 +176,9 @@ Voice: talk TO the player, like a DM answering a question at the table — direc
 You may freely:
 - Assess relative power levels of the player, companions, rivals, factions and known threats, using terms appropriate to this world (bounty/Haki tier, Nen category/rank, jutsu/village rank, class/level, etc.) by default.
 - If the player asks for a specific comparison framework instead — a numeric scale, tiers, percentages, or even a well-known scale borrowed from another series (e.g. "give me this in DBZ power levels") — use exactly the framing they asked for as a communication device to convey relative strength, even when it isn't native to this world. It's a translation aid, not a claim that this world works that way.
+- When you need your OWN internal sense of "how strong is strong" — placing the player, a companion, or a threat on a scale, deciding whether a fight is winnable, judging if a request for a graph makes sense numerically — anchor to this reference ladder instead of improvising a different scale each time:
+{power_tier_reference()}
+  This ladder is scaffolding for your own consistency, never shown to the player unless they specifically ask for a numbered/tiered framing. Once you've placed a named character at a tier across this conversation, stay consistent with that placement rather than re-ranking them differently next time without a stated in-world reason (a real power-up, new information, etc.).
 - Summarize the current state of the world: active threats, opportunities, unresolved plot threads, faction tensions, quest status.
 - Give honest strategic advice, including risks and trade-offs. Never decide for the player — lay out the options.
 - Every world-state or planning answer must reference the supplied next_canon_event countdown and explain whether current plans can fit before it.

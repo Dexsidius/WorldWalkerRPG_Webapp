@@ -5,8 +5,34 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.34"
+APP_VERSION = "2.6.35"
 APP_NAME = "Worldwalker RPG"
+
+# A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
+# worlds natively use a numeric power scale (Naruto has jutsu/rank, One Piece
+# has bounty/Haki, Overgeared has level/class...), so this isn't shown to the
+# player or injected into any world's own fiction — it exists purely so the
+# Advisor's own power comparisons stay internally consistent turn to turn
+# instead of improvising a different ad-hoc scale every time it's asked,
+# and so a player-requested framing (DBZ power levels, whatever) has a
+# stable internal reference to translate from.
+POWER_TIERS = [
+    (0, "Mundane", "An ordinary person with no combat training."),
+    (1, "Trained", "A capable fighter or specialist — early-career adventurer, soldier, low-rank professional."),
+    (2, "Skilled", "A seasoned professional — veteran soldier, competent mage, respected local talent."),
+    (3, "Elite", "Among the best in a city or region — elite unit member, a minor noble house's champion."),
+    (4, "Exceptional", "A nationally recognized talent — famous hero, high-ranking officer, renowned specialist."),
+    (5, "Powerhouse", "Capable of single-handedly turning a battle — feared commander, master of their craft."),
+    (6, "Superhuman", "Clearly beyond ordinary human limits — genuinely supernatural strength, speed, or power."),
+    (7, "Legendary", "A living legend — decides the fate of nations, feared across a continent."),
+    (8, "World-Class", "Among the strongest beings in the setting — can threaten a nation alone."),
+    (9, "Cataclysmic", "Can reshape a region or end a war single-handedly."),
+    (10, "Reality-Bending", "Power that strains or breaks the setting's normal rules entirely."),
+]
+
+
+def power_tier_reference():
+    return "\n".join(f"{n}. {name} — {desc}" for n, name, desc in POWER_TIERS)
 
 DIFFICULTIES = {
     "Story": {"difficulty_shift": -15, "dc_shift": -3, "enemy_edge": -2, "death": "rare", "freedom": "very high",

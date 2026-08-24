@@ -10,11 +10,11 @@ sys.path.insert(0, str(ROOT / "backend"))
 from game import GameSession
 from systems import (
     campaign_health, map_snapshot, normalize_quest_state_machine,
-    normalize_tuning, tick_world_clocks, update_chapter_memory,
+    normalize_tuning, relationship_snapshot, tick_world_clocks, update_chapter_memory,
 )
 from continuity import update_continuity
 from state_guard import migrate_state
-from worlds import BASE_STATE, WORLD_DATA, abilities_for, format_calendar_date, timeline_for, expansion_for, start_options_for, starting_era_by_id
+from worlds import BASE_STATE, WORLD_DATA, abilities_for, format_calendar_date, timeline_for, expansion_for, start_options_for, starting_era_by_id, power_tier_reference
 
 
 class PlanningAI:
@@ -2324,6 +2324,75 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn('strip.className = "story-beat-system"', js)
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         self.assertIn(".story-beat-system{", css)
+
+    def test_advisor_anchors_power_comparisons_to_a_stable_tier_reference(self):
+        # Without a fixed reference, the Advisor previously improvised a
+        # different power scale every time it was asked — fine for a single
+        # answer, but inconsistent across a conversation (a rival placed at
+        # "elite" one question could read as "legendary" the next with
+        # nothing in the world having changed). The ladder is baked into
+        # every advisor call so its own sense of "how strong is strong"
+        # stays fixed for a given campaign.
+        class RecordingAdvisorAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                self.rules = rules
+                return {"summary": "Test.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        ai = RecordingAdvisorAI()
+        game.ai = ai
+        game.ask_advisor("How strong am I compared to the Akatsuki?")
+        self.assertIn("Mundane", ai.rules)
+        self.assertIn("Reality-Bending", ai.rules)
+        self.assertIn("stay consistent with that placement", ai.rules)
+
+    def test_npc_goal_layers_feed_clocks_and_relationship_view(self):
+        # Optional depth beyond the single .goal line every tracked NPC
+        # already gets: immediate/mid-term/core-ambition. The clock
+        # mechanism should prefer the concrete immediate_goal over the
+        # older single-field goal when both are present (it's the more
+        # specific, more actionable one), and the relationship view should
+        # surface all three layers so the player can actually see them.
+        game = self.fresh("Naruto")
+        game.state["npc_memories"]["Itachi"] = {
+            "goal": "Watch over the village from the shadows",
+            "immediate_goal": "Recover a stolen scroll before it reaches Orochimaru",
+            "mid_term_goal": "Dismantle the Akatsuki from within",
+            "core_ambition": "Protect Sasuke without him ever knowing",
+            "recurring": True,
+        }
+        tick_world_clocks(game.state, 1440)
+        self.assertIn("Recover a stolen scroll before it reaches Orochimaru", game.state["npc_clocks"]["Itachi"]["goal"])
+
+        view = relationship_snapshot(game.state)
+        itachi = next(p for p in view["people"] if p["name"] == "Itachi")
+        self.assertEqual(itachi["goal"], "Recover a stolen scroll before it reaches Orochimaru")
+        self.assertEqual(itachi["mid_term_goal"], "Dismantle the Akatsuki from within")
+        self.assertEqual(itachi["core_ambition"], "Protect Sasuke without him ever knowing")
+
+        # An NPC with only the legacy single goal field still works exactly
+        # as before — the new layers are additive, not required.
+        game.state["npc_memories"]["Iruka"] = {"goal": "Keep the Academy running smoothly", "recurring": True}
+        view2 = relationship_snapshot(game.state)
+        iruka = next(p for p in view2["people"] if p["name"] == "Iruka")
+        self.assertEqual(iruka["goal"], "Keep the Academy running smoothly")
+        self.assertEqual(iruka["mid_term_goal"], "")
+        self.assertEqual(iruka["core_ambition"], "")
+
+    def test_gm_rules_document_the_optional_goal_layers(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("immediate_goal", rules)
+        self.assertIn("mid_term_goal", rules)
+        self.assertIn("core_ambition", rules)
+
+    def test_relationship_card_shows_goal_layers_when_present(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("person.mid_term_goal", js)
+        self.assertIn("person.core_ambition", js)
+        self.assertIn("Building toward:", js)
+        self.assertIn("Deep down wants:", js)
 
 
 if __name__ == "__main__":

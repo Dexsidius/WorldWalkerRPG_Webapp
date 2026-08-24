@@ -175,7 +175,7 @@ def tick_world_clocks(state, elapsed_minutes):
     npc_clocks = state.setdefault("npc_clocks", {})
     for name, memory in state.get("npc_memories", {}).items():
         if not isinstance(memory, dict): continue
-        goal = memory.get("goal") or memory.get("current_goal")
+        goal = memory.get("immediate_goal") or memory.get("goal") or memory.get("current_goal")
         nemesis = bool(memory.get("nemesis"))
         important = memory.get("recurring") or nemesis or str(memory.get("importance", "")).lower() in {"important", "major", "high"}
         if goal or important:
@@ -442,7 +442,12 @@ def relationship_snapshot(state):
         rows.append({"name": name, "score": max(-100, min(100, score)), "label": str(label or "Unknown"),
                      "last_known_location": mem.get("last_known_location", "Unknown"), "knowledge": _list(mem.get("knows") or mem.get("knowledge")),
                      "promises": list(dict.fromkeys(map(str, promises)))[:20], "debts": list(dict.fromkeys(map(str, debts)))[:20],
-                     "goal": mem.get("goal") or mem.get("current_goal") or "Unknown", "contact": contacts.get(name, {}),
+                     "goal": mem.get("immediate_goal") or mem.get("goal") or mem.get("current_goal") or "Unknown", "contact": contacts.get(name, {}),
+                     # mid_term_goal/core_ambition are optional depth beyond the
+                     # single goal line every NPC already gets — only present
+                     # once the GM has actually bothered laying out this NPC's
+                     # longer arc, not backfilled for every minor character.
+                     "mid_term_goal": mem.get("mid_term_goal") or "", "core_ambition": mem.get("core_ambition") or "",
                      "nemesis": bool(mem.get("nemesis"))})
     affiliations = []
     for aff in state.get("affiliations", []):
