@@ -1995,9 +1995,13 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # session alone added several thousand characters across a handful
         # of features) gets a deliberate look before it ships, not a silent
         # creep someone only notices later as "the game feels laggy."
+        # Raised 60000 -> 64000 deliberately: a full worked combat example
+        # (the strongest lever in prompt engineering, per the user's own
+        # explicit ask) plus three restraint EDGE CASE examples pushed this
+        # past the old ceiling. Real cost, consciously accepted, not creep.
         game = self.fresh("Naruto")
         game.state["factions"] = dict(WORLD_DATA["Naruto"]["factions"])
-        self.assertLess(len(game.gm_rules()), 60000)
+        self.assertLess(len(game.gm_rules()), 64000)
 
     def test_starting_currency_scales_with_world_and_background(self):
         # Every campaign used to start with a flat 250 regardless of world
@@ -2899,6 +2903,84 @@ class WorldwalkerV260Tests(unittest.TestCase):
         rules = game.gm_rules()
         self.assertIn("purchase_offer", rules)
         self.assertIn("Buy button for it right in the Chronicle", rules)
+
+    def test_currency_hp_quest_rules_include_restraint_edge_case_examples(self):
+        # The existing BAD/GOOD pairs only ever showed the failure direction
+        # (a change that should have happened but didn't) — without a
+        # matching "don't over-correct" example, a model could just as
+        # easily start docking hp/currency defensively on every near-miss.
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("currency.amount correctly stays unchanged here, since no transaction actually happened", rules)
+        self.assertIn("hp correctly stays unchanged here even though a weapon was swung", rules)
+        self.assertIn('status correctly stays "active" here, since the quest genuinely hasn\'t finished yet', rules)
+        self.assertEqual(rules.count("EDGE CASE"), 3)
+
+    def test_currency_examples_use_the_worlds_actual_currency_name(self):
+        naruto_rules = self.fresh("Naruto").gm_rules()
+        self.assertIn("50 Ryo", naruto_rules)
+        one_piece_rules = self.fresh("One Piece").gm_rules()
+        self.assertIn("50 Berries", one_piece_rules)
+        self.assertNotIn("50 Ryo", one_piece_rules)
+
+    def test_combat_schema_has_a_full_worked_example(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("WORKED EXAMPLE of starting structured combat", rules)
+        self.assertIn('"name": "Bandit"', rules)
+        self.assertIn('"non_lethal": false', rules)
+
+    def test_rate_last_turn_good_snapshots_the_most_recent_campaign_canon_entry(self):
+        game = self.fresh("Naruto")
+        game.state["campaign_canon"] = [
+            {"turn": 1, "action": "Look around", "outcome": "You take in the village square."},
+            {"turn": 2, "action": "Talk to Iruka", "outcome": "Iruka greets you warmly and asks about your training."},
+        ]
+        result = game.rate_last_turn_good()
+        self.assertEqual(result["rated_turn"], 2)
+        self.assertEqual(len(game.state["rated_good_turns"]), 1)
+        self.assertEqual(game.state["rated_good_turns"][0]["action"], "Talk to Iruka")
+
+    def test_rate_last_turn_good_raises_with_no_turns_yet(self):
+        game = self.fresh("Naruto")
+        game.state["campaign_canon"] = []
+        with self.assertRaises(ValueError):
+            game.rate_last_turn_good()
+
+    def test_rate_last_turn_good_dedupes_by_turn_and_caps_at_five(self):
+        game = self.fresh("Naruto")
+        for i in range(1, 8):
+            game.state["campaign_canon"] = [{"turn": i, "action": f"Action {i}", "outcome": f"Outcome {i}"}]
+            game.rate_last_turn_good()
+        self.assertEqual(len(game.state["rated_good_turns"]), 5)
+        self.assertEqual([r["turn"] for r in game.state["rated_good_turns"]], [3, 4, 5, 6, 7])
+        # Re-rating an already-rated turn doesn't duplicate it.
+        game.state["campaign_canon"] = [{"turn": 7, "action": "Action 7", "outcome": "Outcome 7"}]
+        game.rate_last_turn_good()
+        self.assertEqual(len(game.state["rated_good_turns"]), 5)
+
+    def test_rated_good_turns_is_application_owned_and_rejects_direct_ai_authorship(self):
+        state = copy.deepcopy(BASE_STATE)
+        report = apply_guarded_patch(state, {"rated_good_turns": [{"turn": 1, "action": "fake", "outcome": "fake"}]}, allow_time=False, source="turn")
+        self.assertIn("rated_good_turns", [r["field"] for r in report["rejected"]])
+        self.assertEqual(state["rated_good_turns"], [])
+
+    def test_rated_good_example_snippet_is_empty_until_something_is_rated(self):
+        game = self.fresh("Naruto")
+        self.assertEqual(game.rated_good_example_snippet(), "")
+        game.state["campaign_canon"] = [{"turn": 1, "action": "Talk to Iruka", "outcome": "Iruka greets you warmly."}]
+        game.rate_last_turn_good()
+        snippet = game.rated_good_example_snippet()
+        self.assertIn("PLAYER-APPROVED EXAMPLE", snippet)
+        self.assertIn("Talk to Iruka", snippet)
+        self.assertIn("Iruka greets you warmly.", snippet)
+        self.assertIn(snippet, game.gm_context("test"))
+
+    def test_rate_turn_button_is_wired_in_the_frontend(self):
+        html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="btn-rate-turn-good"', html)
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('"/api/turn/rate_good"', js)
 
     def test_story_feed_renders_a_buy_button_for_a_purchase_offer(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")

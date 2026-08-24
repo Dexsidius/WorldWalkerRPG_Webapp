@@ -460,8 +460,10 @@ input,select,textarea{ font-family:inherit; }
    ========================================================================== */
 .story-card{ flex:1 1 0; min-width:0; display:flex; flex-direction:column; min-height:0; background:linear-gradient(160deg,rgba(var(--glass-rgb),.96),rgba(5,7,10,.96)); }
 .story-head{ align-items:center; }
-.story-latest{ margin-left:auto; border:1px solid var(--border-soft); border-radius:999px; padding:4px 9px; background:rgba(0,0,0,.2); color:var(--muted); font-size:9px; font-weight:900; letter-spacing:.08em; cursor:pointer; }
+.story-latest{ margin-left:8px; border:1px solid var(--border-soft); border-radius:999px; padding:4px 9px; background:rgba(0,0,0,.2); color:var(--muted); font-size:9px; font-weight:900; letter-spacing:.08em; cursor:pointer; }
 .story-latest:hover{ color:var(--accent2); border-color:var(--accent2); }
+.story-rate-good{ margin-left:auto; border:1px solid var(--border-soft); border-radius:999px; padding:4px 9px; background:rgba(0,0,0,.2); color:var(--muted); font-size:9px; font-weight:900; letter-spacing:.08em; cursor:pointer; }
+.story-rate-good:hover{ color:var(--gold); border-color:var(--gold); }
 .story-feed{ flex:1 1 0; width:100%; min-width:0; height:0; min-height:0; overflow-y:scroll; overscroll-behavior:contain; display:flex; flex-direction:column; gap:16px; padding:16px 18px 34px; font-size:13.5px; line-height:1.6; scroll-behavior:smooth; }
 .composer-card{ flex-shrink:0; }
 .story-beat{ flex:0 0 auto; width:100%; min-width:0; min-height:max-content; position:relative; animation:entryIn .35s cubic-bezier(.2,.8,.25,1) both; border:1px solid var(--border-soft); border-radius:10px; background:rgba(255,255,255,.015); overflow:hidden; box-shadow:0 6px 18px rgba(0,0,0,.22); }

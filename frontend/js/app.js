@@ -539,6 +539,13 @@ $("#btn-story-latest").addEventListener("click", () => {
   feed.scrollTo({ top: feed.scrollHeight, behavior: APP.animationsEnabled ? "smooth" : "auto" });
 });
 
+$("#btn-rate-turn-good").addEventListener("click", async () => {
+  try {
+    await apiPost("/api/turn/rate_good", {});
+    showToast("Marked as a good turn — the GM will draw on it as a real example.", "notify");
+  } catch (error) { showToast(error.message, "danger"); }
+});
+
 // ---------------------------------------------------------------------------
 // State rendering
 // ---------------------------------------------------------------------------
