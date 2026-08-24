@@ -2760,6 +2760,7 @@ async function openJournal(tab) {
     const people = data.relationships_view?.people || [];
     const factions = data.relationships_view?.factions || [];
     const affiliations = data.relationships_view?.affiliations || [];
+    const npcNetwork = data.relationships_view?.npc_network || [];
     panel.innerHTML = `<div class="system-summary"><b>RELATIONSHIPS &amp; FACTIONS</b><span>Trust is evidence, not automatic obedience.</span></div>` +
       `<h3>Affiliations — your rank and standing</h3>` + (affiliations.length ? affiliations.map((a) => `<div class="jrow affiliation-row${a.status && a.status !== "active" ? ` ${escapeHtml(a.status)}` : ""}"><b>${escapeHtml(a.rank || "Member")}</b> — ${escapeHtml(a.faction)}${a.status && a.status !== "active" ? `<span class="affiliation-status">${escapeHtml(a.status)}</span>` : ""}${a.joined ? `<br><small>Joined: ${escapeHtml(a.joined)}</small>` : ""}${a.notes ? `<br><small>${escapeHtml(a.notes)}</small>` : ""}</div>`).join("") : '<div class="jrow hint">Not formally affiliated with any group, alliance, or hierarchy yet.</div>') +
       `<h3>People</h3>` + (people.length ? people.map((person) => {
@@ -2771,6 +2772,18 @@ async function openJournal(tab) {
           (person.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(person.core_ambition)}</p>` : "");
         return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}</div></details>`;
       }).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
+      // NPCs relating to each other independent of the player — allies,
+      // rivals, grudges the GM has established between two named
+      // characters. This is the only place that data is actually visible;
+      // without it, tracked NPC-to-NPC dynamics would just be invisible
+      // bookkeeping the player has no way to see or reason about.
+      `<h3>NPC Network — how they relate to each other</h3>` + (npcNetwork.length ? npcNetwork.map((rel) => {
+        const negative = rel.strength < 0;
+        return `<div class="jrow npc-network-row"><b>${escapeHtml(rel.a)}</b> <span class="npc-network-type">${escapeHtml(rel.type)}</span> <b>${escapeHtml(rel.b)}</b>
+          <span class="npc-network-strength ${negative ? "negative" : "positive"}">${rel.strength > 0 ? "+" : ""}${escapeHtml(rel.strength)}</span>
+          ${rel.status && rel.status !== "active" ? `<span class="affiliation-status">${escapeHtml(rel.status)}</span>` : ""}
+          ${rel.note ? `<br><small>${escapeHtml(rel.note)}</small>` : ""}</div>`;
+      }).join("") : '<div class="jrow hint">No relationships between other characters have been established yet.</div>') +
       `<h3>Faction standing</h3>` + (factions.length ? factions.map((f) => `<div class="jrow"><b>${escapeHtml(f.name)}</b><br>${escapeHtml(typeof f.standing === "object" ? compactReadable(f.standing.label || f.standing.status || f.standing.score) : f.standing)}</div>`).join("") : '<div class="jrow hint">No faction reputation has been recorded.</div>');
   } else if (tab === "prerequisites") {
     const tracks = data.prerequisite_tracks || [];
@@ -2861,9 +2874,9 @@ async function openJournal(tab) {
     nodes.forEach((node) => {
       const dot = document.createElement("button");
       dot.type = "button";
-      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "");
+      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
       dot.style.left = node.x + "%"; dot.style.top = node.y + "%";
-      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}`;
+      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}${node.recently_changed ? " · Control recently changed" : ""}`;
       dot.setAttribute("data-map-node", node.name);
       dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.name)}</span>`;
       canvas.appendChild(dot);

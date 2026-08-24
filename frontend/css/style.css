@@ -594,6 +594,12 @@ input,select,textarea{ font-family:inherit; }
 .affiliation-row b{ color:var(--gold); }
 .affiliation-status{ margin-left:6px; padding:1px 7px; border-radius:999px; background:rgba(255,255,255,.08); color:var(--sub); font-size:10.5px; text-transform:uppercase; }
 .affiliation-row.exiled, .affiliation-row.former{ border-left-color:var(--danger); opacity:.75; }
+.npc-network-row{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px; }
+.npc-network-row b{ color:var(--text); }
+.npc-network-type{ color:var(--accent2); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; }
+.npc-network-strength{ font-family:var(--font-mono); font-size:11px; font-weight:700; }
+.npc-network-strength.positive{ color:var(--success); }
+.npc-network-strength.negative{ color:var(--danger); }
 #affiliations-list li{ display:flex; align-items:baseline; gap:4px; flex-wrap:wrap; }
 .combat-log{ font-family:var(--font-mono); font-size:11.5px; color:var(--sub); max-height:140px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
 .combat-log .combat-log-row.hit{ color:#ffb0a8; }
@@ -1057,6 +1063,17 @@ input,select,textarea{ font-family:inherit; }
 .map-node.here .map-label{ color:#fff4c8; border-color:rgba(var(--accent-rgb),.7); font-weight:800; }
 .map-node.danger-tense:not(.here) .map-pip{ box-shadow:0 0 10px var(--gold); border-color:rgba(var(--gold-rgb,230,200,119),.8); }
 .map-node.danger-critical:not(.here) .map-pip{ background:var(--danger); box-shadow:0 0 12px var(--danger); animation:mapPulse 1.4s ease-in-out infinite; }
+/* A territory's controlling faction just changed (on-screen or off) — a
+   distinct ring so "something notable happened here" reads differently
+   from the "here"/danger pulses, which otherwise made a flip invisible
+   until the player happened to notice the color or the buried world-event
+   text. Fades out on its own once the change is a few turns old, via
+   map_snapshot's recently_changed window, not a one-shot flag. */
+.map-node.territory-changed:not(.here) .map-pip::after{
+  content:""; position:absolute; inset:-6px; border-radius:50%;
+  border:2px solid var(--accent2); animation:territoryChangeRing 1.6s ease-out infinite;
+}
+@keyframes territoryChangeRing{ 0%{ transform:scale(.6); opacity:.9; } 100%{ transform:scale(1.9); opacity:0; } }
 .danger-label{ font-weight:700; }
 .danger-label.danger-calm{ color:var(--success); }
 .danger-label.danger-uneasy{ color:var(--sub); }

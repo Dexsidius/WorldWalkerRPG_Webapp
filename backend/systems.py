@@ -458,8 +458,26 @@ def relationship_snapshot(state):
             "status": str(aff.get("status", "active") or "active"), "joined": str(aff.get("joined", "")),
             "notes": str(aff.get("notes", "")),
         })
+    npc_network = []
+    for key, rel in (state.get("npc_relationships") or {}).items():
+        if not isinstance(rel, dict):
+            continue
+        a, b = str(rel.get("a") or "").strip(), str(rel.get("b") or "").strip()
+        if not a or not b:
+            parts = str(key).split("::", 1)
+            a = a or (parts[0] if parts else "")
+            b = b or (parts[1] if len(parts) > 1 else "")
+        if not a or not b:
+            continue
+        try:
+            strength = max(-100, min(100, int(rel.get("strength", 0) or 0)))
+        except (TypeError, ValueError):
+            strength = 0
+        npc_network.append({"a": a, "b": b, "type": str(rel.get("type") or "unknown"),
+                             "strength": strength, "status": str(rel.get("status") or "active"),
+                             "note": str(rel.get("note") or "")})
     return {"people": rows, "factions": [{"name": name, "standing": value} for name, value in state.get("reputation", {}).items()],
-            "affiliations": affiliations}
+            "affiliations": affiliations, "npc_network": npc_network}
 
 
 def campaign_health(state):
@@ -608,6 +626,7 @@ def map_snapshot(state, world_map, world):
         for location in _list(quest.get("locations")):
             quest_locations.setdefault(str(location).lower(), []).append(quest.get("name", "Quest"))
     scale = progression_preset_for(world).get("travel_scale", 1.0)
+    current_turn = int(state.get("turn", 0) or 0)
     nodes = []
     for name, x, y, kind, tier in full_map:
         distance = math.dist((float(current_node[1]), float(current_node[2])), (float(x), float(y)))
@@ -616,9 +635,15 @@ def map_snapshot(state, world_map, world):
         for loc, names in quest_locations.items():
             if loc in str(name).lower() or str(name).lower() in loc: quests.extend(names)
         detail = state.get("location_details", {}).get(name, {}) if isinstance(state.get("location_details", {}).get(name), dict) else {}
+        changed_turn = detail.get("controller_changed_turn")
+        # A window, not a one-shot flag, so the highlight survives across a
+        # couple of turns of the player just not happening to open the map
+        # the instant it changed — see update_continuity's territory diff.
+        recently_changed = isinstance(changed_turn, (int, float)) and (current_turn - int(changed_turn)) <= 3
         nodes.append({"name": name, "x": x, "y": y, "kind": kind, "tier": tier, "current": name == current_node[0],
                       "discovered": name in discovered or name == current_node[0], "travel_minutes": travel_minutes,
                       "controller": detail.get("controlling_faction") or detail.get("faction") or territories.get(name, "Unknown"),
                       "quests": list(dict.fromkeys(quests)), "notes": detail.get("notes") or detail.get("description") or "No additional local notes recorded.",
-                      "notable_individuals": _notable_individuals_for(state, name), "danger_level": str(detail.get("danger_level") or "")})
+                      "notable_individuals": _notable_individuals_for(state, name), "danger_level": str(detail.get("danger_level") or ""),
+                      "recently_changed": recently_changed})
     return {"nodes": nodes}

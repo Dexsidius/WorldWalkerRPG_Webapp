@@ -40,6 +40,26 @@ def update_continuity(before, after, action="", narrative=""):
         facts.append({**stamp, "type": "location", "text": f"Player moved from {before.get('location')} to {after.get('location')}."})
     if before.get("appearance_desc") != after.get("appearance_desc"):
         facts.append({**stamp, "type": "appearance", "text": f"Current appearance: {after.get('appearance_desc')}."})
+    # A location's controlling_faction can change from either source: the
+    # GM's own state_patch (a player-witnessed change) or the mechanical
+    # off-screen conflict resolver in systems.py (a background one) — both
+    # have already been applied to `after` by the time this runs, so a
+    # single before/after diff here catches either origin instead of having
+    # to stamp the same thing in two separate places. Stamped here rather
+    # than left implicit so the map can show a "recently changed" highlight
+    # instead of a territory flip only ever being visible as a buried
+    # single-line world-event message.
+    before_details = before.get("location_details") if isinstance(before.get("location_details"), dict) else {}
+    after_details = after.get("location_details") if isinstance(after.get("location_details"), dict) else {}
+    for loc, detail in after_details.items():
+        if not isinstance(detail, dict):
+            continue
+        prior_detail = before_details.get(loc) if isinstance(before_details.get(loc), dict) else {}
+        prior_controller = prior_detail.get("controlling_faction")
+        new_controller = detail.get("controlling_faction")
+        if new_controller != prior_controller and (prior_detail or new_controller):
+            detail["controller_changed_turn"] = turn
+            facts.append({**stamp, "type": "territory", "text": f"{loc}'s controlling power changed from {prior_controller or 'unclaimed'} to {new_controller or 'unclaimed'}."})
     new_titles = set(ai_text(t) for t in after.get("titles", []) if ai_text(t))
     old_titles = set(ai_text(t) for t in before.get("titles", []) if ai_text(t))
     for title in new_titles - old_titles:

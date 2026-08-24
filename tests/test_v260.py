@@ -2474,6 +2474,64 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("askAdvisor(", js)
         self.assertIn("Ask the Advisor", js)
 
+    def test_npc_relationships_default_and_are_documented_in_gm_rules(self):
+        self.assertEqual(BASE_STATE["npc_relationships"], {})
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("npc_relationships", rules)
+        # The instruction has to actually say divergences override stock
+        # canon for NPC-NPC dynamics too, not just player-facing ones —
+        # that's the whole point of tracking this at all.
+        self.assertIn("the divergence wins", rules)
+
+    def test_relationship_snapshot_surfaces_the_npc_network(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["npc_relationships"] = {
+            "Itachi::Shisui": {"a": "Itachi", "b": "Shisui", "type": "mentor", "strength": 80, "status": "active", "note": "Closest friend and confidant."},
+            "Danzo::Itachi": {"a": "Danzo", "b": "Itachi", "type": "grudge", "strength": -60, "status": "estranged", "note": "Coerced, resentful."},
+            "BadEntry": {"type": "rival"},  # no a/b and no recoverable "A::B" key — dropped, not crashed on
+        }
+        view = relationship_snapshot(state)
+        network = view["npc_network"]
+        self.assertEqual(len(network), 2)
+        mentor = next(r for r in network if r["type"] == "mentor")
+        self.assertEqual(mentor["strength"], 80)
+        grudge = next(r for r in network if r["type"] == "grudge")
+        self.assertEqual(grudge["status"], "estranged")
+
+    def test_territory_control_changes_are_stamped_and_surfaced_on_the_map(self):
+        # Both sources of a controlling_faction change (a direct AI
+        # state_patch, or the mechanical off-screen conflict resolver in
+        # systems.py) go through apply_guarded_patch before update_continuity
+        # runs, so a single before/after diff here catches either origin.
+        before = copy.deepcopy(BASE_STATE)
+        before["location_details"] = {"Konoha": {"controlling_faction": "Land of Fire"}}
+        before["turn"] = 10
+        after = copy.deepcopy(before)
+        after["turn"] = 11
+        after["location_details"] = {"Konoha": {"controlling_faction": "Sound Village"}}
+        warnings = update_continuity(before, after, "Off-screen conflict", "")
+        self.assertEqual(after["location_details"]["Konoha"]["controller_changed_turn"], 11)
+        self.assertTrue(any("Konoha" in f["text"] and "Sound Village" in f["text"] for f in after["continuity_ledger"]["facts"]))
+
+        game = self.fresh("Naruto")
+        game.state["turn"] = 12
+        game.state["location_details"] = {game.state["location"]: {"controlling_faction": "Test Faction", "controller_changed_turn": 11}}
+        snap = map_snapshot(game.state, WORLD_DATA["Naruto"]["map"], "Naruto")
+        node = next(n for n in snap["nodes"] if n["name"] == game.state["location"])
+        self.assertTrue(node["recently_changed"])
+        # Outside the recency window, the highlight goes away on its own.
+        game.state["location_details"][game.state["location"]]["controller_changed_turn"] = 2
+        snap2 = map_snapshot(game.state, WORLD_DATA["Naruto"]["map"], "Naruto")
+        node2 = next(n for n in snap2["nodes"] if n["name"] == game.state["location"])
+        self.assertFalse(node2["recently_changed"])
+
+    def test_map_shows_a_recently_changed_territory_highlight(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("territory-changed", js)
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".map-node.territory-changed", css)
+
 
 if __name__ == "__main__":
     unittest.main()
