@@ -292,7 +292,7 @@ def scene_category(state):
     if any(k in blob for k in ["mountain", "valley", "cliff"]):
         return "mountain_castle"
     default_map = {"Overgeared": "kingdom", "One Piece": "harbor_port", "Hunter x Hunter": "forest_path",
-                    "Naruto": "town_square", "Solo Max-Level Newbie": "tower_hub"}
+                    "Naruto": "town_square", "Solo Max-Level Newbie": "tower_hub", "Bleach": "town_square"}
     return default_map.get(state.get("world"), "starry_sky")
 
 

@@ -30,6 +30,7 @@ WORLD_PROGRESSION_PRESETS = {
     "Solo Max-Level Newbie": {"label": "Tower XP and achievement progression", "training_rate": .88, "breakthrough_rate": 1.05, "xp_rate": 1.18, "travel_scale": .85},
     "Overgeared": {"label": "Satisfy XP, classes, affinity, and production mastery", "training_rate": .95, "breakthrough_rate": 1.08, "xp_rate": 1.10, "travel_scale": .90},
     "Reincarnated as a Slime": {"label": "Skills, magicules, naming, and evolution", "training_rate": 1.04, "breakthrough_rate": .92, "xp_rate": 0.0, "travel_scale": 1.05},
+    "Bleach": {"label": "Zanjutsu drills, Kido study, and a bond with one's Zanpakuto", "training_rate": .96, "breakthrough_rate": .90, "xp_rate": 0.0, "travel_scale": 1.05},
     "Custom World": {"label": "Setting-defined growth", "training_rate": 1.00, "breakthrough_rate": 1.00, "xp_rate": 1.00, "travel_scale": 1.00},
 }
 
@@ -44,6 +45,12 @@ WORLD_TERRITORIES = {
     "Solo Max-Level Newbie": {"Earth — Tower Entrance": "Players", "Floor 10": "Tower Administrators", "Floor 20": "Tower Administrators", "Floor 30": "Tower Administrators", "Floor 40": "Tower Administrators", "Floor 50+": "Tower Administrators"},
     "Overgeared": {"Winston": "Local Lords", "Titan": "Kingdom", "Saharan Empire": "Kingdom", "Reidan": "Guilds"},
     "Reincarnated as a Slime": {"Great Jura Forest": "Jura Forest Monsters", "Goblin Village": "Jura Forest Monsters", "Tempest": "Jura Forest Monsters", "Kingdom of Falmuth": "Kingdom of Falmuth", "Demon Lord's Domain": "Demon Lords"},
+    # Hueco Mundo/Las Noches deliberately have no controller seeded here —
+    # at this world's default campaign start (pre-Aizen-reveal), who
+    # actually holds it isn't public knowledge yet, and seeding one would
+    # spoil the Soul Society arc's own twist before the story gets there.
+    "Bleach": {"Seireitei": "Gotei 13", "Rukongai": "Gotei 13", "Shino Academy": "Gotei 13",
+               "Senzaikyu": "Central 46", "Central 46 Chambers": "Central 46"},
     "Custom World": {"Starting Region": "Local Faction"},
 }
 

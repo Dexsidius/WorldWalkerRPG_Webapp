@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.51"
+APP_VERSION = "2.6.52"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -269,6 +269,27 @@ WORLD_DATA = {
         ],
         "special": {"Named Skills":[], "Evolution Stage":"Unnamed", "Magicule Capacity":0, "Species":"Unknown"}
     },
+    "Bleach": {
+        "tagline": "Shinigami, Hollows, Zanpakuto, and the fragile boundary between the living world and Soul Society.",
+        "resource": "Reiryoku",
+        "progression": ["Level","XP","Reiryoku","Techniques","Rank","Soul Society Standing","Titles"],
+        # Aizen's true loyalties are this world's single biggest canon
+        # secret at the campaign's default start — the actual instruction
+        # protecting it lives in the "rules" string below (it has to, to
+        # reach the model), not just here as a code comment.
+        "rules": "Honor Bleach world logic. Ordinary humans cannot see spirits; a rare few (like Ichigo Kurosaki) can from birth. Shinigami (Soul Reapers) wield a Zanpakuto — a living, unique spirit-blade every Shinigami eventually learns to hear and name — through Zanjutsu, Hakuda, Hoho and Kido training; its Shikai and later Bankai release states are earned through a real bond with the blade's spirit, never handed out casually. Hollows are corrupted, hungry spirits that Shinigami are duty-bound to purify (Konso) or destroy; a Hollow-corrupted human or Shinigami can become a Vizard. Quincy purify spirits by destroying them outright using bow-and-arrow reishi techniques, and have a long, bitter history with the Gotei 13. Soul Society (Seireitei, governed by the Gotei 13's thirteen divisions and Central 46, surrounded by the sprawling Rukongai) and the living world (Karakura Town and beyond) are connected but distinct; unauthorized travel between them, and unauthorized transfer of Shinigami powers to a human, are both serious offenses under Soul Society law. Central 46 and the Gotei 13's own internal politics are real and can move against the player. Until this campaign's own timeline or the player's actions genuinely uncover it, Sosuke Aizen is a well-regarded, seemingly loyal 5th Division captain — never hint, foreshadow, or let any NPC act as though his true nature or the Hogyoku's existence is already known; the same discretion applies to the Visored, who are still living in hiding and should not surface as a usable faction or ally prematurely. Canon may diverge permanently.",
+        "start": "Karakura Town",
+        "factions": {"Gotei 13": 0, "Central 46": 0, "Onmitsukido": 0},
+        "map": [
+            ("Karakura Town",22,68,"settlement",1), ("Karakura High School",28,74,"settlement",1),
+            ("Kurosaki Clinic",16,72,"landmark",1), ("Urahara Shop",30,60,"shop",3),
+            ("Rukongai",68,58,"region",4), ("Shino Academy",64,44,"training",4),
+            ("Seireitei",78,38,"government",6), ("Senzaikyu",84,30,"prison",7),
+            ("Sokyoku Hill",88,22,"landmark",8), ("Central 46 Chambers",72,26,"government",8),
+            ("Hueco Mundo",30,14,"region",12), ("Las Noches",18,8,"nation",14)
+        ],
+        "special": {"Shinigami Rank":"Unranked","Zanpakuto":"None","Shikai":"Unachieved","Bankai":"Unachieved","Squad":"None"}
+    },
     "Custom World": {
         "tagline": "A freeform world defined by you.",
         "resource": "Energy",
@@ -482,6 +503,27 @@ CANON_TIMELINES = {
         {"major": False, "day": 90, "title": "New specialists arrive", "location": "Tempest", "summary": "Additional dwarven craftsmen round out the settlement's early industry, from potion-brewing to construction."},
         {"day": 100, "title": "Tempest emerges", "location": "Tempest", "summary": "A multi-species settlement begins to become a recognized nation."},
     ]},
+    # Day numbers below are the best available reconstruction, not a single
+    # manga-stated day-by-day countdown — the source is precise about
+    # Rukia's execution clock (a 35-day grace period shortened to 25 by
+    # Central 46, later moved up further) but does not give one clean
+    # total day-count from her arrival to the Soul Society infiltration.
+    # Pre-day-0 historical_only entries (Masaki's death, Kaien's death) use
+    # the same kind of explicit campaign-relative estimate the other
+    # worlds' ancient-era entries already use, since canon gives ages and
+    # rough eras here too, not exact dates.
+    "Bleach": {"start_day": -3, "anchor": "Three days before Rukia Kuchiki arrives in Karakura Town", "events": [
+        {"major": False, "historical_only": True, "day": -2190, "title": "Masaki Kurosaki's death", "location": "Karakura Town", "summary": "A Hollow called Grand Fisher kills Ichigo's mother on a riverbank while she shields him — he was nine years old, and could not yet tell humans from spirits."},
+        {"major": False, "historical_only": True, "day": -1460, "title": "Kaien Shiba's death", "location": "Seireitei", "summary": "The 13th Division's lieutenant, Kaien Shiba, and his wife Miyako are killed by a Hollow. No one has been promoted to fill the vacant lieutenant seat since."},
+        {"day": 0, "title": "Rukia Kuchiki arrives in Karakura Town", "location": "Kurosaki Clinic", "summary": "A Hollow attacks the Kurosaki family; badly wounded fighting it, Rukia transfers her own Shinigami powers to Ichigo — an act forbidden by Soul Society law — so he can save his family and finish the Hollow himself."},
+        {"major": False, "day": 20, "title": "Uryu Ishida makes himself known", "location": "Karakura Town", "summary": "The last known Quincy in the area confronts Ichigo over a Shinigami's duty versus a Quincy's, opening a rivalry rooted in a much older grudge between their two traditions."},
+        {"major": False, "day": 40, "title": "Orihime and Chad's spiritual awareness grows", "location": "Karakura Town", "summary": "Prolonged proximity to Ichigo's now-considerable Reiryoku begins waking latent spiritual power in his closest friends."},
+        {"day": 60, "title": "Renji and Byakuya come for Rukia", "location": "Karakura Town", "summary": "Lieutenant Renji Abarai and Captain Byakuya Kuchiki — Rukia's own adoptive brother — arrive under Soul Society orders to reclaim her stolen powers and take her back for trial, defeating Ichigo in the process."},
+        {"day": 61, "title": "Rukia is sentenced to execution", "location": "Seireitei", "summary": "Central 46 sentences Rukia to death for the forbidden transfer, and irregularly shortens her grace period from 35 days to 25 — an early, visible sign that something is manipulating the process from behind the scenes."},
+        {"major": False, "day": 71, "title": "Training with Urahara Kisuke", "location": "Urahara Shop", "summary": "Kisuke Urahara trains Ichigo for ten intensive days, restoring and strengthening his Shinigami powers and teaching him to physically open a path into Soul Society."},
+        {"major": False, "day": 74, "title": "The push into Seireitei", "location": "Seireitei", "summary": "Ichigo and his allies force their way into Soul Society and begin fighting through the Gotei 13 toward Rukia's execution."},
+        {"day": 88, "title": "Aizen's betrayal at Sokyoku Hill", "location": "Sokyoku Hill", "summary": "At the execution itself, Sosuke Aizen fakes his own death and reveals he orchestrated the entire arrest and execution — using Rukia and a power called the Hogyoku he'd hidden inside her soul all along — before defecting from Soul Society with Gin Ichimaru and Kaname Tosen."},
+    ]},
     "Custom World": {"start_day": -7, "anchor": "Seven days before the world's opening incident", "events": [
         {"day": 0, "title": "Opening incident", "location": "Starting Region", "summary": "The custom world's first major story pressure begins; adapt this event to the player's setting."},
     ]},
@@ -519,6 +561,12 @@ WORLD_STARTING_ERAS = {
         {"id": "rogers_execution", "label": "Gold Roger's execution", "start_day": -7920,
          "anchor": "Twenty-two years before Luffy sets sail, on the day Gold Roger is executed at Loguetown and the Great Pirate Era begins."},
     ],
+    "Bleach": [
+        {"id": "rukia_arrival", "label": "Rukia's Arrival in Karakura Town (default)", "start_day": -3,
+         "anchor": "Three days before the Shinigami Rukia Kuchiki arrives in Karakura Town and a Hollow attack on the Kurosaki family changes everything."},
+        {"id": "year_before_arrival", "label": "One year before the series begins (as an original Shinigami)", "start_day": -367,
+         "anchor": "One year before Rukia Kuchiki is sent to investigate Hollow activity in Karakura Town. Soul Society is at peace — Sosuke Aizen is a well-regarded captain of the 5th Division, the Gotei 13's thirteen divisions are fully staffed, and nothing yet hints at what's coming. A good point to start as a Shinigami newly graduated from the Shino Academy and just assigned to a squad."},
+    ],
 }
 
 
@@ -548,6 +596,7 @@ WORLD_CALENDARS = {
     "Hunter x Hunter": _REAL_MONTHS,
     "Overgeared": _REAL_MONTHS,
     "Reincarnated as a Slime": _REAL_MONTHS,
+    "Bleach": _REAL_MONTHS,
 }
 _CAL_DAYS_PER_MONTH = 30
 _CAL_MONTHS_PER_YEAR = 12
@@ -648,6 +697,14 @@ WORLD_PRIMERS = {
         "factions": ["The scattered monster tribes and races of the Jura Forest and beyond, historically wary of each other", "Human nations, generally distrustful of monsters", "The world's Demon Lords — a handful of individually terrifying, world-shaping rulers"],
         "locations": ["The Great Jura Forest — a vast, monster-heavy wilderness", "Dwargon and other established dwarven and human kingdoms", "The wider continent's nations, both human- and monster-led"],
         "starting_note": "Campaigns begin at the very start of a new life in this world — before any settlement, alliance or reputation exists.",
+    },
+    "Bleach": {
+        "premise": "Beneath the ordinary world lies Soul Society — the afterlife realm the dead pass into, governed by Shinigami (Soul Reapers) who guide lost souls and purify the corrupted spirits called Hollows. When a rare human who can see spirits crosses paths with a Shinigami on duty, the boundary between the two worlds stops being so clean.",
+        "tone": "Shonen action with real weight: found-family bonds, loyalty tested against institutional authority, and a recurring theme of mercy versus duty.",
+        "power_system": "Shinigami channel Reiryoku (spiritual power) through Zanjutsu (swordsmanship), Hakuda (unarmed combat), Hoho (speed — Shunpo is its signature technique) and Kido (incantation-based spells, split into offensive Hado and restraining Bakudo). Every Shinigami's Zanpakuto is a living, unique spirit blade; learning its true name unlocks Shikai, and a deep, hard-won bond with it can unlock the far more powerful Bankai. Hollows, Quincy (who destroy spirits outright with reishi-based archery) and later Vizard and Arrancar each represent a different relationship to the same spiritual power.",
+        "factions": ["The Gotei 13 — Soul Society's thirteen Shinigami divisions, each led by a Captain", "Central 46 — Soul Society's judicial authority, nominally acting for the unseen Soul King", "The Onmitsukido (Stealth Force) and Kido Corps — Soul Society's covert-ops and spellcasting bodies"],
+        "locations": ["Karakura Town — an ordinary Japanese town with unusually high spiritual activity", "Seireitei — the walled inner city housing the Gotei 13 and Central 46, surrounded by the sprawling Rukongai districts", "Hueco Mundo — the Hollows' harsh home dimension, and whatever lies within its fortress, Las Noches"],
+        "starting_note": "Most campaigns begin right as an ordinary life first collides with Soul Society's world — before any real standing, rank, or reputation on either side of that line exists.",
     },
 }
 
@@ -758,6 +815,9 @@ MAJOR_CHARACTER_STARTS = {
     "Reincarnated as a Slime": [
         {"id":"rimuru_awakens","name":"Rimuru Tempest","label":"Rimuru — awakening in the cave","start_day":0,"location":"Great Jura Forest — Sealed Cave","age":0,"origin":"Reincarnated Otherworlder","archetype":"Skill Analyst","appearance":"A small translucent blue slime with a soft internal glow and an expressive, fluid silhouette.","background":"The first moments after reincarnating inside the Sealed Cave."}
     ],
+    "Bleach": [
+        {"id":"ichigo_series_start","name":"Ichigo Kurosaki","label":"Ichigo — the night Rukia arrives","start_day":0,"location":"Kurosaki Clinic","age":15,"origin":"Karakura High Student","archetype":"Zanjutsu Specialist","appearance":"A tall, lean, strongly-built first-year high schooler with spiky orange hair and a near-permanent scowl often mistaken for delinquency, wearing the standard black Karakura High uniform.","background":"The mid-May night a Hollow attacks the Kurosaki family and Rukia Kuchiki, badly wounded defending them, transfers her own Shinigami powers to him — an act normally forbidden by Soul Society law. He has been able to see spirits his whole life, but this is the moment everything actually changes."}
+    ],
 }
 
 
@@ -788,6 +848,12 @@ WORLD_START_OPTIONS = {
         {"label": "Iwagakure", "location": "Iwagakure", "note": "A shinobi of Iwagakure, the Hidden Stone Village."},
         {"label": "Akatsuki (Amegakure)", "location": "Amegakure", "note": "Starting already recruited into the Akatsuki, an international criminal organization operating out of Amegakure — not affiliated with any Hidden Village."},
         {"label": "Iron Country", "location": "Iron Country", "note": "A samurai-in-training of Iron Country — chakra plays little part in daily life here; skill is earned through the blade and discipline, not jutsu."},
+    ],
+    "Bleach": [
+        {"label": "Karakura Town (spirit-sighted civilian)", "location": "Karakura Town", "note": "An ordinary resident of Karakura Town who can see spirits — no Shinigami powers yet."},
+        {"label": "Seireitei (Shinigami of the Gotei 13)", "location": "Seireitei", "note": "Already a Shinigami, stationed in Soul Society — pairs naturally with starting one year before the series."},
+        {"label": "Rukongai (soul of the outer districts)", "location": "Rukongai", "note": "A soul born and raised in the Rukongai, Soul Society's sprawling outer districts, before ever setting foot in Seireitei."},
+        {"label": "Shino Academy (Shinigami-in-training)", "location": "Shino Academy", "note": "Currently training at the Shino Academy, not yet assigned to a squad."},
     ],
 }
 
@@ -889,6 +955,18 @@ WORLD_EXPANSIONS = {
         "encounters":["Field Monsters","Bandits","Rival Players","Dungeon Mob","Elite Monster","Boss"],
         "systems":["Class","Crafting","Item Rating","Guild","NPC Affinity","Reputation"]
     },
+    "Bleach": {
+        "currency":"Yen", "currency_baseline":3000,
+        "economy_notes":"Karakura Town is contemporary Japan, so treat prices like real everyday Yen — a meal or bus fare runs hundreds of Yen, ordinary shopping and supplies in the low thousands, and a family/clinic-scale budget in the tens of thousands. Soul Society runs on its own currency, Kan (a coin similar to a Japanese 5-Yen piece) — Shinigami are paid in Kan and it's the pricing unit within Seireitei, though the deeper into Rukongai a scene goes, the more barter replaces money outright. Track Kan separately in state_patch.currencies once the player is actually stationed in Soul Society rather than converting it to Yen; the two are not meant to be interchangeable on the page.",
+        "origins":["Karakura High Student","Spirit-Sighted Civilian","Rukongai Orphan","Noble Clan Scion","Shino Academy Graduate",
+                   "Onmitsukido Trainee","Quincy Descendant","Substitute Shinigami Candidate"],
+        "archetypes":["Zanjutsu Specialist","Kido Caster","Hakuda Fighter","Hoho Specialist","Healer","Tactician","Quincy Marksman"],
+        "training":["Zanjutsu Drills","Kido Incantation Practice","Hakuda Conditioning","Shunpo Practice","Reiatsu Control","Zanpakuto Communication"],
+        "shop_types":["Urahara Shop","Karakura Convenience Store","Seireitei Kan Exchange","Squad Quartermaster","Black Market"],
+        "loot":["Yen","Kan","Soul Candy","Gikongan","Spirit Medicine","Zanpakuto Fragment"],
+        "encounters":["Hollow","Rogue Spirit","Rival Shinigami","Onmitsukido Patrol","Quincy","Menos"],
+        "systems":["Reiryoku","Reiatsu","Zanpakuto","Shikai","Bankai","Squad Rank","Soul Society Standing"]
+    },
     "Custom World": {
         "currency":"Currency", "currency_baseline":250,
         "origins":["Local","Traveler","Soldier","Scholar","Outcast","Artisan"],
@@ -930,6 +1008,7 @@ WORLD_ABILITIES = {
     "Overgeared": ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Luck"],
     "Custom World": ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"],
     "Reincarnated as a Slime": ["Magicule Control", "Skill Mastery", "Instinct", "Insight", "Willpower", "Presence"],
+    "Bleach": ["Zanjutsu", "Hakuda", "Hoho", "Kido", "Reiatsu Control", "Willpower"],
 }
 
 # "full_sheet" worlds are status-window/LitRPG genres where the classic
@@ -943,6 +1022,7 @@ WORLD_STAT_STYLE = {
     "Overgeared": "full_sheet",
     "Custom World": "full_sheet",
     "Reincarnated as a Slime": "narrative",
+    "Bleach": "narrative",
 }
 
 # Numbered XP/levels remain available only where the source world presents
@@ -965,6 +1045,7 @@ WORLD_GEAR_STYLE = {
     "Overgeared": "full",
     "Custom World": "full",
     "Reincarnated as a Slime": "weapon_only",
+    "Bleach": "weapon_only",
 }
 
 
@@ -1018,6 +1099,12 @@ ARCHETYPE_PRIMARY_STAT = {
         "Diplomat/Leader": ["Presence", "Willpower"], "Support/Healer": ["Insight", "Presence"],
         "Assassin-type Monster": ["Instinct", "Insight"],
     },
+    "Bleach": {
+        "Zanjutsu Specialist": ["Zanjutsu", "Hoho"], "Kido Caster": ["Kido", "Reiatsu Control"],
+        "Hakuda Fighter": ["Hakuda", "Hoho"], "Hoho Specialist": ["Hoho", "Zanjutsu"],
+        "Healer": ["Kido", "Willpower"], "Tactician": ["Willpower", "Reiatsu Control"],
+        "Quincy Marksman": ["Reiatsu Control", "Hoho"],
+    },
 }
 
 
@@ -1048,12 +1135,12 @@ WORLD_DEFAULT_ABILITY_RESOURCE = {
 WORLD_SPEED_STAT = {
     "One Piece": "Agility", "Hunter x Hunter": "Agility", "Naruto": "Taijutsu",
     "Solo Max-Level Newbie": "Dexterity", "Overgeared": "Dexterity",
-    "Reincarnated as a Slime": "Instinct", "Custom World": "Dexterity",
+    "Reincarnated as a Slime": "Instinct", "Custom World": "Dexterity", "Bleach": "Hoho",
 }
 WORLD_DEFENSE_STAT = {
     "One Piece": "Endurance", "Hunter x Hunter": "Willpower", "Naruto": "Willpower",
     "Solo Max-Level Newbie": "Constitution", "Overgeared": "Constitution",
-    "Reincarnated as a Slime": "Willpower", "Custom World": "Constitution",
+    "Reincarnated as a Slime": "Willpower", "Custom World": "Constitution", "Bleach": "Willpower",
 }
 
 
