@@ -2073,9 +2073,12 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # (only paid for on a turn plausibly about to touch state_patch.combat),
         # so a normal non-combat turn sits back around ~60600 again — this
         # checks the worst case (combat-relevant) with headroom for growth.
+        # Raised again 63000 -> 64000: a real user-reported simulation bug
+        # (a stated "wait until X" condition getting silently dropped during
+        # a time skip) needed a real fix, not a trim to fit under budget.
         game = self.fresh("Naruto")
         game.state["factions"] = dict(WORLD_DATA["Naruto"]["factions"])
-        self.assertLess(len(game.gm_rules("I attack the bandit.")), 63000)
+        self.assertLess(len(game.gm_rules("I attack the bandit.")), 64000)
 
     def test_starting_currency_scales_with_world_and_background(self):
         # Every campaign used to start with a flat 250 regardless of world
@@ -3003,6 +3006,28 @@ class WorldwalkerV260Tests(unittest.TestCase):
         rules = game.gm_rules()
         self.assertIn("purchase_offer", rules)
         self.assertIn("Buy button for it right in the Chronicle", rules)
+
+    def test_gm_rules_document_honoring_an_explicit_wait_until_condition(self):
+        # A real user report: "I wait in a defensive perimeter until the
+        # attack" would resolve a time skip without the attack ever being
+        # addressed one way or the other — the stated condition just got
+        # lost among other events, or the skip silently stopped for
+        # something else entirely.
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("wait until the attack", rules)
+        self.assertIn("that stated condition, not a generic notion of \"something happens,\" is what the wait is actually FOR", rules)
+        self.assertIn("BAD: player orders \"I wait in a defensive perimeter until the attack,\"", rules)
+        self.assertIn("GOOD: either the attack genuinely happens", rules)
+
+    def test_event_driven_major_assessment_prioritizes_a_named_wait_condition(self):
+        # "next major event" mode is otherwise scoped to a fixed taxonomy of
+        # big canon-scale beats — an explicitly named wait condition needs
+        # to override that taxonomy, or "wait until the attack" could get
+        # silently swapped for some unrelated bigger event instead.
+        src = (ROOT / "backend" / "engine_time.py").read_text(encoding="utf-8")
+        self.assertIn("EXCEPTION: if planned_actions itself names an explicit wait condition", src)
+        self.assertIn("overriding the generic taxonomy above", src)
 
     def test_currency_hp_quest_rules_include_restraint_edge_case_examples(self):
         # The existing BAD/GOOD pairs only ever showed the failure direction
