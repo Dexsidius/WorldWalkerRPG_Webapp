@@ -1,4 +1,5 @@
 """Deterministic campaign-continuity ledger and contradiction warnings."""
+import re
 from datetime import datetime
 
 from util import ai_text
@@ -6,6 +7,27 @@ from util import ai_text
 
 def _quest_map(items):
     return {str(q.get("name", "")).lower(): q for q in items if isinstance(q, dict) and q.get("name")}
+
+
+# A real player report: buying something in the narrative repeatedly left
+# currency.amount untouched, and payment for work that should plausibly pay
+# rarely showed up either. The GM prompt already says currency "must change
+# with every transaction" (engine_core.py), but that's prose the model can
+# just forget under schema pressure the same way it forgets other fields —
+# this catches the mismatch after the fact so it can feed the same
+# correction pass every other continuity warning already uses, rather than
+# relying on the instruction alone.
+_CURRENCY_SPEND_RE = re.compile(r"\b(buys?|bought|purchas\w*|pays? for|paid for|hands? over|handed over)\b", re.I)
+_CURRENCY_EARN_RE = re.compile(
+    r"\b(gets? paid|is paid|was paid|pays? (?:you|your|him|her|them|the)|receives? payment|"
+    r"collects? (?:the|a|her|his|their) (?:reward|payment|fee|wages?)|"
+    r"earns?|reward of|paid (?:him|her|them)|sells? it for|sold it for)\b", re.I,
+)
+_CURRENCY_NO_TRANSACTION_RE = re.compile(
+    r"\b(declin\w*|refus\w*|can'?t afford|cannot afford|couldn'?t afford|too expensive|"
+    r"decides? not to|chooses? not to|considers? buying|thinks? about buying)\b", re.I,
+)
+_CURRENCY_GENERIC_RE = re.compile(r"\b(coins?|gold|money|payment|reward|fee|wages?)\b", re.I)
 
 
 def update_continuity(before, after, action="", narrative=""):
@@ -65,6 +87,15 @@ def update_continuity(before, after, action="", narrative=""):
         if new_loc and new_loc != "Unknown" and new_loc != old_memory.get("last_known_location") and narrative:
             if str(name).lower() not in str(narrative).lower() and str(new_loc).lower() not in str(narrative).lower():
                 warnings.append(f"{name}'s last-known location changed to {new_loc}, but neither is mentioned in the narrative.")
+    currency_before = before.get("currency") if isinstance(before.get("currency"), dict) else {}
+    currency_after = after.get("currency") if isinstance(after.get("currency"), dict) else {}
+    if narrative and currency_before.get("amount") == currency_after.get("amount") and not _CURRENCY_NO_TRANSACTION_RE.search(narrative):
+        currency_name = str(currency_after.get("name") or currency_before.get("name") or "").strip()
+        currency_mentioned = (bool(currency_name) and currency_name.lower() in narrative.lower()) or bool(_CURRENCY_GENERIC_RE.search(narrative))
+        if currency_mentioned and _CURRENCY_SPEND_RE.search(narrative):
+            warnings.append(f"The narrative describes a purchase or payment being made, but currency.amount ({currency_after.get('amount')} {currency_name}) did not decrease.")
+        elif currency_mentioned and _CURRENCY_EARN_RE.search(narrative):
+            warnings.append(f"The narrative describes the player being paid, rewarded, or earning {currency_name or 'money'}, but currency.amount did not increase.")
     if action:
         after.setdefault("campaign_canon", []).append({**stamp, "action": str(action)[:500], "outcome": str(narrative)[:1200]})
         after["campaign_canon"] = after["campaign_canon"][-250:]

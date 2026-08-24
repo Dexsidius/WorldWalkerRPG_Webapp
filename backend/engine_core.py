@@ -351,6 +351,7 @@ Return ONLY valid JSON. No markdown fences."""
 
     def gm_rules(self):
         wd = WORLD_DATA[self.state["world"]]
+        ex = expansion_for(self.state["world"])
         d = DIFFICULTIES[self.state["difficulty"]]
         tuning = normalize_tuning(self.state)
         progression_preset = progression_preset_for(self.state.get("world"))
@@ -635,8 +636,8 @@ NON-NEGOTIABLE RULES
 - Impossible actions are not rollable.
 - The world never arbitrarily scales to the player.
 - NPCs, allies, rivals and enemies must have varied capability levels appropriate to their role and this world's power scale — a random background character, a seasoned specialist, and a named rival should feel meaningfully different in competence. Do not make everyone equally skilled.
-- Track every currency the player obtains. The primary currency lives in state_patch.currency ({{name, amount}}) and must change with every transaction, reward or loss. If the player obtains a genuinely distinct second currency (guild points, faction tokens, foreign coin, event currency, arena tickets, etc.), track it separately in state_patch.currencies as {{"CurrencyName": amount}} — never conflate it with the primary currency or silently drop it.
-- Currency is a tracked resource like XP, not an afterthought: award it whenever the fiction would obviously produce it — a completed job/quest/mission with pay, a bounty claimed, loot sold, wages earned, a bet won — sized realistically for this world's economy and the character's current standing. Deduct it just as reliably for purchases, bribes, fines, debts, and losses. A character who has clearly been working, adventuring, or trading for a stretch of time should not still be sitting on an unchanged amount.
+- Track every currency the player obtains. The primary currency lives in state_patch.currency ({{name, amount}}) and MUST change in the SAME state_patch as any turn whose narrative describes a purchase, sale, payment, reward, bribe, fine, debt, or loss — if the prose says money changed hands, the number changes in the same response, never "implied" and left for later. If the player obtains a genuinely distinct second currency (guild points, faction tokens, foreign coin, event currency, arena tickets, etc.), track it separately in state_patch.currencies as {{"CurrencyName": amount}} — never conflate it with the primary currency or silently drop it.
+- Currency is a tracked resource like XP, not an afterthought: award it whenever the fiction would obviously produce it — a completed job/quest/mission with pay, a bounty claimed, loot sold, wages earned, a bet won — sized realistically for this world's economy and the character's current standing. Deduct it just as reliably for purchases, bribes, fines, debts, and losses. A character who has clearly been working, adventuring, or trading for a stretch of time should not still be sitting on an unchanged amount.{(chr(10) + "- " + ex["economy_notes"]) if ex.get("economy_notes") else ""}
 - Any gear, weapon, or item the player starts with, finds, or is given must be a specific, concrete, world-appropriate named thing ("a rusted shortsword", "a Kunai pouch") — never a vague placeholder like "a weapon" or "travel supplies". Fit it to the character's actual background, archetype, and station, not a generic default.
 - Keep narrative prose short: a few sentences to one short paragraph per response. Only a single moment-to-moment turn focuses on one thing at a time — any longer timespan (a day, a training session, a journey) should move through several distinct beats/events across it rather than one flattened event, while still staying concise overall.
 - Award XP only when this world's progression rule explicitly says it has a canonical in-fiction XP/level system.

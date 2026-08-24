@@ -2394,6 +2394,70 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("Building toward:", js)
         self.assertIn("Deep down wants:", js)
 
+    def test_continuity_flags_a_purchase_that_never_touched_currency(self):
+        # A real player report: buying something in the narrative repeatedly
+        # left currency.amount untouched. The GM prompt already said
+        # currency "must change with every transaction" — prose alone
+        # wasn't enough, so this catches the mismatch mechanically after
+        # the fact instead of just trusting the instruction was followed.
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Buy kunai", "You buy a fresh set of kunai from the weapons shop, handing over a stack of Ryo to the merchant.")
+        self.assertTrue(any("currency.amount" in w and "did not decrease" in w for w in warnings))
+
+    def test_continuity_flags_a_payment_that_never_touched_currency(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Complete the escort mission", "The client thanks you and pays your fee in full before you part ways.")
+        self.assertTrue(any("did not increase" in w for w in warnings))
+
+    def test_continuity_does_not_flag_a_declined_or_unrelated_purchase(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        # Declined purchase: no real transaction happened, so no warning.
+        warnings = update_continuity(before, after, "Browse the shop", "You look over the shop's wares but decide the asking price in Ryo is too expensive and walk away.")
+        self.assertFalse(any("currency.amount" in w for w in warnings))
+        # An actual currency change present: nothing to flag either way.
+        after2 = copy.deepcopy(before)
+        after2["currency"]["amount"] = 400
+        warnings2 = update_continuity(before, after2, "Buy kunai", "You buy a fresh set of kunai, handing over a stack of Ryo.")
+        self.assertFalse(any("currency.amount" in w for w in warnings2))
+
+    def test_regular_turn_now_triggers_continuity_correction_like_time_skip_does(self):
+        # apply_resolution (an ordinary single-action turn — the far more
+        # common turn type, and the one a simple "I buy X" almost always
+        # goes through) computed continuity_warnings but never acted on
+        # them; only apply_time_skip called request_continuity_correction.
+        # Nothing on the frontend even reads continuity_warnings, so a real
+        # slip on a regular turn went uncorrected forever until now.
+        game = self.fresh("Naruto")
+        game.state["currency"] = {"name": "Ryo", "amount": 500}
+        calls = []
+        game.request_continuity_correction = lambda warnings, narrative: calls.append(warnings)
+        data = {
+            "narrative": "You buy a set of kunai from the weapons shop, handing over a stack of Ryo.",
+            "state_patch": {}, "events": [], "suggested_actions": [],
+        }
+        game.apply_resolution(data, pending_action="Buy kunai from the shop")
+        self.assertTrue(calls)
+        self.assertTrue(any("currency.amount" in w for w in calls[0]))
+
+    def test_gm_rules_include_world_specific_economy_reference(self):
+        # A real player note: One Piece's Yonko are worth billions of
+        # Berries, and the old vague "sized realistically for this world's
+        # economy" instruction had nothing concrete to anchor to — the AI
+        # was left guessing what "realistic" even means for six wildly
+        # different fictional economies.
+        game = self.fresh("One Piece")
+        rules = game.gm_rules()
+        self.assertIn("Yonko", rules)
+        self.assertIn("4,000,000,000", rules)
+        game_naruto = self.fresh("Naruto")
+        self.assertIn("D-rank", game_naruto.gm_rules())
+
 
 if __name__ == "__main__":
     unittest.main()

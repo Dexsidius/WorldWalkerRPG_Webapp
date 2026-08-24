@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.35"
+APP_VERSION = "2.6.36"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -778,6 +778,7 @@ BASE_STATE = {
 WORLD_EXPANSIONS = {
     "One Piece": {
         "currency":"Berries", "currency_baseline":5000,
+        "economy_notes":"Canon reference scale: a cheap meal or basic supplies run tens to low hundreds of Berries; a decent weapon or a few days' lodging is in the low thousands; a serious ship upgrade or rare item reaches the tens of thousands to low millions. Bounties (not liquid cash, but the setting's main power/wealth signal) scale from ~30,000,000 for a newly-dangerous rookie into the hundreds of millions for known threats, and Yonko-tier figures sit at 4,000,000,000+ Berries. A Yonko or a World Government-backed noble's actual liquid wealth is billions; an ordinary adventurer's is not — keep the player's own numbers grounded in their actual station even as the setting's upper end is enormous.",
         "origins":["East Blue Civilian","Island Martial Artist","Dockworker","Bounty-Hunter Trainee","Runaway Noble","Aspiring Pirate","Marine Recruit",
                    "Veteran Crew Member","Notorious Bounty-Head"],
         "archetypes":["Brawler","Swordsman","Marksman","Navigator","Shipwright","Medic","Roguish Fighter"],
@@ -789,6 +790,7 @@ WORLD_EXPANSIONS = {
     },
     "Hunter x Hunter": {
         "currency":"Jenny", "currency_baseline":3000,
+        "economy_notes":"Canon reference scale: Jenny tracks roughly 1:1 with real-world yen, so treat amounts like everyday yen prices — a meal or simple supplies run hundreds to a few thousand Jenny, ordinary lodging or gear in the low thousands to tens of thousands. Licensed Hunters receive major government stipends and access, worth a lifetime total in the billions — becoming a Hunter is itself treated as a life-changing financial event, not just a title. High-stakes rewards, auction items, and major bounties can reach into the hundreds of millions to billions of Jenny for the setting's biggest names.",
         "origins":["Yorknew Local","Rural Prodigy","Martial-Arts Student","Street Survivor","Merchant Family","Exam Aspirant",
                    "Licensed Hunter","Veteran Hunter"],
         "archetypes":["Martial Artist","Tracker","Strategist","Infiltrator","Medic","Treasure Hunter","Information Broker"],
@@ -800,6 +802,7 @@ WORLD_EXPANSIONS = {
     },
     "Naruto": {
         "currency":"Ryo", "currency_baseline":500,
+        "economy_notes":"Canon reference scale (databook mission pay): D-rank missions pay 5,000-50,000 Ryo, C-rank 30,000-100,000 Ryo, B-rank 80,000-200,000 Ryo — A-rank and S-rank scale well beyond that, into the hundreds of thousands to low millions for a village's most sensitive work. Everyday purchases (a meal, basic supplies, kunai/shuriken restock) run tens to a few hundred Ryo. A shinobi actively taking missions should see their Ryo move with real frequency; a genin's finances and a jonin's or a clan head's are entirely different scales.",
         "origins":["Civilian Academy Hopeful","Shinobi Clan Child","Orphan Trainee","Merchant Family","Border-Village Youth","Academy Graduate",
                    "Uchiha Clan Child","Iron Country Samurai-in-Training","Rogue Ninja (Missing-nin)","Anbu Root Recruit",
                    "Chunin on Active Duty","Jonin Squad Leader"],
@@ -812,6 +815,7 @@ WORLD_EXPANSIONS = {
     },
     "Solo Max-Level Newbie": {
         "currency":"Coins", "currency_baseline":300,
+        "economy_notes":"Tower/gamer-fiction economy: nominal numbers run much higher than a real-world equivalent — early floors deal in tens to low hundreds of Coins for basic gear and potions, but drops, clears, and player-market trades scale fast, reaching the thousands to tens of thousands by mid-tower and far beyond at high floors and for named/unique gear. A player actively clearing floors, selling drops, or completing floor quests should see Coins move often and in escalating amounts as they climb, not stay flat.",
         "origins":["Veteran Gamer","Competitive Raider","Puzzle Specialist","Martial Artist","Streamer","Ordinary Survivor","Elite Ranker"],
         "archetypes":["All-Rounder","Melee","Ranged","Caster","Assassin","Tank","Support"],
         "training":["Stat Optimization","Weapon Mastery","Mana Control","Skill Repetition","Boss Pattern Study","Hidden-Condition Research"],
@@ -822,6 +826,7 @@ WORLD_EXPANSIONS = {
     },
     "Overgeared": {
         "currency":"Gold", "currency_baseline":200,
+        "economy_notes":"Canon reference scale: this is a VRMMO economy with real, large numbers — basic potions/repairs/travel run single-to-low-double-digit Gold, decent crafted gear reaches the hundreds to low thousands, and a genuinely notable item or a solid raid/dungeon haul can be worth millions of Gold (canon examples: a single named weapon valued around 8,000,000 Gold; a guild's raid haul around 21,000,000 Gold). A crafter, trader, or active dungeon-clearer should see Gold swing by real, escalating amounts — a beginning adventurer's numbers and a renowned blacksmith's or top guild's are different orders of magnitude entirely.",
         "origins":["New Player","Crafter","Mercenary Player","Merchant","Blacksmith Apprentice","Quest Hunter","Veteran Adventurer","Renowned Craftsman"],
         "archetypes":["Warrior","Swordsman","Archer","Mage","Assassin","Blacksmith","Support"],
         "training":["Weapon Proficiency","Blacksmithing","Crafting","Skill Grinding","Stat Training","NPC Affinity"],
@@ -842,6 +847,7 @@ WORLD_EXPANSIONS = {
     },
     "Reincarnated as a Slime": {
         "currency":"Gold Coin", "currency_baseline":150,
+        "economy_notes":"Canon reference scale: one Gold Coin is worth roughly $1000 — most ordinary people never handle one directly, transacting instead in smaller silver/copper-equivalent amounts for daily life. Treat routine purchases (a meal, simple supplies, a night's lodging) as costing a small fraction of a Gold Coin or a handful at most; only real purchases — good gear, trade goods, services from a named merchant or nation — should move whole Gold Coins, and a large transaction (a guild/nation-level deal, rare materials, a significant commission) can run into the hundreds or thousands.",
         "origins":["Reincarnated Otherworlder","Native Monster","Isekai'd Human","Orphaned Demi-Human","Failed Hero Candidate","Displaced Noble",
                    "Veteran Tempest Officer","Named Monster of Renown"],
         "archetypes":["Brawler Monster","Skill Analyst","Elementalist","Beast-kin Warrior","Diplomat/Leader","Support/Healer","Assassin-type Monster"],
