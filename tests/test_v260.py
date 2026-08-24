@@ -2888,6 +2888,81 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("npc_memories[name].chain", social_src)
         self.assertIn("faction_chain[name]", social_src)
 
+    def test_request_with_narrative_retries_once_on_a_high_confidence_continuity_violation(self):
+        # Marries the two proven patterns from tonight: request_with_narrative
+        # already retries once on a blank narrative; this extends the same
+        # one-retry discipline to a currency/hp/quest mismatch caught by
+        # simulating the patch on a throwaway state copy BEFORE the turn is
+        # ever finalized, instead of only silently patching it after.
+        game = self.fresh("Naruto")
+        game.state["hp"], game.state["hp_max"] = 80, 100
+        calls = []
+
+        class RetryAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                calls.append(rules)
+                hp = 80 if len(calls) == 1 else 60
+                return {"narrative": "The blade cuts into you and you stagger back bleeding.", "state_patch": {"hp": hp}}
+
+        game.ai = RetryAI()
+        data = game.request_with_narrative("RULES", {"task": "narrator_and_resolution", "action": "Fight the bandit"}, 500)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("REMINDER", calls[1])
+        self.assertIn("wounded", calls[1])
+        self.assertEqual(data["state_patch"]["hp"], 60)
+
+    def test_request_with_narrative_does_not_retry_a_clean_response(self):
+        game = self.fresh("Naruto")
+        game.state["hp"] = 80
+        calls = []
+
+        class CleanAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                calls.append(rules)
+                return {"narrative": "You browse the market stalls.", "state_patch": {}}
+
+        game.ai = CleanAI()
+        game.request_with_narrative("RULES", {"task": "narrator_and_resolution", "action": "Browse the market"}, 500)
+        self.assertEqual(len(calls), 1)
+
+    def test_trimmed_state_for_ai_gives_full_detail_only_to_relevant_npcs_when_roster_is_large(self):
+        game = self.fresh("Naruto")
+        game.state["location"] = "Konohagakure"
+        memories = {}
+        for i in range(10):
+            memories[f"NPC{i}"] = {"attitude": "Neutral", "last_known_location": "Somewhere Else",
+                                    "promises": ["a promise"], "debts": ["a debt"],
+                                    "chain": [{"event": "x", "turn": 1, "canon_day": 1}], "knows": ["secret info"]}
+        memories["Iruka"] = {"attitude": "Friendly", "last_known_location": "Konohagakure",
+                              "promises": ["will help"], "debts": [],
+                              "chain": [{"event": "trained you", "turn": 2, "canon_day": 1}], "knows": ["your backstory"]}
+        game.state["npc_memories"] = memories
+        snapshot = game.trimmed_state_for_ai()
+        iruka = snapshot["npc_memories"]["Iruka"]
+        self.assertIn("knows", iruka)
+        stub = snapshot["npc_memories"]["NPC0"]
+        self.assertNotIn("knows", stub)
+        self.assertIn("chain", stub)
+        self.assertEqual(stub["chain"][0]["event"], "x")
+
+    def test_trimmed_state_for_ai_leaves_a_small_npc_roster_untouched(self):
+        game = self.fresh("Naruto")
+        game.state["npc_memories"] = {"Iruka": {"attitude": "Friendly", "knows": ["your backstory"]}}
+        snapshot = game.trimmed_state_for_ai()
+        self.assertIn("knows", snapshot["npc_memories"]["Iruka"])
+
+    def test_currency_hp_quest_rules_include_worked_bad_good_examples(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertEqual(rules.count("BAD:"), 3)
+        self.assertEqual(rules.count("GOOD:"), 3)
+
+    def test_gm_rules_end_with_a_final_reminders_recap_near_the_schema_instruction(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("FINAL REMINDERS", rules)
+        self.assertLess(rules.index("Return ONLY valid JSON") - rules.index("FINAL REMINDERS"), 700)
+
     def test_yonko_crews_are_seeded_live_at_campaign_creation(self):
         stats = {name: 30 for name in abilities_for("One Piece")}
         game = GameSession()
