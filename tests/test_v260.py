@@ -931,6 +931,33 @@ class WorldwalkerV260Tests(unittest.TestCase):
             exported_html = (ROOT / "frontend" / "godot" / project / "index.html").read_text(encoding="utf-8")
             self.assertIn("background:transparent!important", exported_html, f"frontend/godot/{project}/index.html")
 
+    def test_godot_ambient_layers_fill_their_container_instead_of_letterboxing(self):
+        # A real report, after the black-square bug above was fixed: the
+        # banner picture only occupied a centered strip with black bars on
+        # either side. Godot's window/stretch/aspect defaults to "keep",
+        # which pillarboxes/letterboxes to preserve each project's fixed
+        # design resolution (640x260 / 280x200 / 960x600) instead of filling
+        # whatever shape its actual embedding container is — invisible
+        # before, because the whole canvas rendered opaque black anyway, so
+        # the letterbox bars blended into the same black square. Fixing the
+        # black-square bug made the previously-hidden pillarboxing visible.
+        # "expand" fills the container with no letterboxing, but the
+        # emitters were hand-placed in each .tscn assuming the fixed design
+        # size, so each script must also rescale them off the live
+        # get_viewport_rect().size or they'd stay pinned to their original
+        # small patch instead of covering the actual, larger visible area.
+        for project in ("scene_ambient", "portrait_ambient", "map_ambient"):
+            cfg = (ROOT / "godot" / project / "project.godot").read_text(encoding="utf-8")
+            self.assertIn('window/stretch/aspect="expand"', cfg, f"{project}/project.godot")
+        scene_script = (ROOT / "godot" / "scene_ambient" / "scene_theme.gd").read_text(encoding="utf-8")
+        self.assertIn("get_viewport_rect().size", scene_script)
+        self.assertIn("get_viewport().size_changed.connect(_fit_to_viewport)", scene_script)
+        portrait_script = (ROOT / "godot" / "portrait_ambient" / "ambient_theme.gd").read_text(encoding="utf-8")
+        self.assertIn("get_viewport_rect().size", portrait_script)
+        self.assertIn("get_viewport().size_changed.connect(_fit_to_viewport)", portrait_script)
+        map_script = (ROOT / "godot" / "map_ambient" / "map_theme.gd").read_text(encoding="utf-8")
+        self.assertIn("get_viewport().size_changed.connect(_fit_to_viewport)", map_script)
+
     def test_godot_map_ambient_export_and_embed_wiring_are_present(self):
         # The map's real interactive parts (pan/zoom, territory Voronoi
         # coloring, clickable pins) are untouched — this is purely an

@@ -55,8 +55,28 @@ const THEMES := {
 	},
 }
 
+
+# AmbientParticles was hand-placed in portrait_ambient.tscn assuming this
+# exact canvas size. window/stretch/aspect="expand" (project.godot) grows
+# the live viewport past this whenever the portrait frame's own aspect
+# ratio differs from it, so the emission circle needs rescaling to keep
+# covering the actual visible area instead of staying pinned to its
+# original small patch.
+const _DESIGN_SIZE := Vector2(280, 200)
+
 func _ready() -> void:
 	apply_theme(THEMES.get(_world_from_query(), DEFAULT_THEME))
+	_fit_to_viewport()
+	get_viewport().size_changed.connect(_fit_to_viewport)
+
+func _fit_to_viewport() -> void:
+	var vp := get_viewport_rect().size
+	if vp.x <= 0 or vp.y <= 0:
+		return
+	particles.position = vp * 0.5
+	var mat := particles.process_material as ParticleProcessMaterial
+	if mat:
+		mat.emission_sphere_radius = 90.0 * max(vp.x / _DESIGN_SIZE.x, vp.y / _DESIGN_SIZE.y)
 
 func _world_from_query() -> String:
 	if not OS.has_feature("web"):

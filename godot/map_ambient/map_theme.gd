@@ -14,6 +14,16 @@ extends Node2D
 var danger_nodes: Array = []
 var pulse_t := 0.0
 
+# CloudParticles was hand-placed in map_ambient.tscn assuming this exact
+# canvas size (a thin vertical spawn strip just off the left edge, tall
+# enough to cover the full design height). window/stretch/aspect="expand"
+# (project.godot) grows the live viewport past this whenever the map
+# panel's own aspect ratio differs from it, so the spawn strip needs
+# rescaling to stay off-screen-left and cover the full actual height —
+# the danger-marker pulses in _draw() already read get_viewport_rect().size
+# fresh every frame and don't need this.
+const _DESIGN_SIZE := Vector2(960, 600)
+
 func _ready() -> void:
 	if not OS.has_feature("web"):
 		return
@@ -25,6 +35,17 @@ func _ready() -> void:
 		if kv.size() == 2 and kv[0] == "danger":
 			var parsed: Variant = JSON.parse_string(kv[1].uri_decode())
 			danger_nodes = parsed if parsed is Array else []
+	_fit_to_viewport()
+	get_viewport().size_changed.connect(_fit_to_viewport)
+
+func _fit_to_viewport() -> void:
+	var vp := get_viewport_rect().size
+	if vp.x <= 0 or vp.y <= 0:
+		return
+	cloud_particles.position = Vector2(-40.0 * (vp.x / _DESIGN_SIZE.x), vp.y * 0.5)
+	var mat := cloud_particles.process_material as ParticleProcessMaterial
+	if mat:
+		mat.emission_box_extents = Vector3(30.0, vp.y * 0.5, 0.0)
 
 func _process(delta: float) -> void:
 	pulse_t += delta

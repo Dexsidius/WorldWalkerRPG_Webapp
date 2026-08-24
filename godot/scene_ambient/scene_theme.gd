@@ -111,10 +111,37 @@ const WEATHER_THEMES := {
 var _last_theme_key := ""
 var _poll_timer := 0.0
 
+# The emitters below were hand-placed in scene_ambient.tscn assuming this
+# exact canvas size. window/stretch/aspect="expand" (project.godot) grows
+# the live viewport past this whenever the embedding container's aspect
+# ratio differs from it — which it always does, since every scene banner
+# size on the page is wider/narrower than this fixed design canvas — so
+# without rescaling, the emitters would stay pinned to their original small
+# patch instead of covering the actual, larger visible area.
+const _DESIGN_SIZE := Vector2(640, 260)
+
 func _ready() -> void:
 	var params := _query_params()
 	_last_theme_key = params.get("category", "") + "::" + params.get("weather", "")
 	set_theme(params.get("category", ""), params.get("weather", ""))
+	_fit_to_viewport()
+	get_viewport().size_changed.connect(_fit_to_viewport)
+
+func _fit_to_viewport() -> void:
+	var vp := get_viewport_rect().size
+	if vp.x <= 0 or vp.y <= 0:
+		return
+	var sx := vp.x / _DESIGN_SIZE.x
+	var sy := vp.y / _DESIGN_SIZE.y
+	var s: float = max(sx, sy)
+	category_particles.position = Vector2(vp.x * 0.5, vp.y * (170.0 / _DESIGN_SIZE.y))
+	var cat_mat := category_particles.process_material as ParticleProcessMaterial
+	if cat_mat:
+		cat_mat.emission_sphere_radius = 260.0 * s
+	weather_particles.position = Vector2(vp.x * 0.5, -10.0 * sy)
+	var weather_mat := weather_particles.process_material as ParticleProcessMaterial
+	if weather_mat:
+		weather_mat.emission_box_extents = Vector3(340.0 * sx, 2.0, 0.0)
 
 func _process(delta: float) -> void:
 	# A JS eval() round-trip every single frame is wasteful for something
