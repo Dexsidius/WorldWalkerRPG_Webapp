@@ -1159,6 +1159,8 @@ class TimeSkipMixin:
             self.state["suggested_actions"] = self.guided_suggestions(data.get("suggested_actions"))
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, "Advance: " + "; ".join(self.state.get("standing_orders", [])), data.get("narrative", ""))
+            for note in self.state.pop("_pending_chronicle_notes", []):
+                self.append(note, "meta")
             new_warnings = [w for w in continuity_warnings if w not in prior_warnings]
             if new_warnings:
                 self.request_continuity_correction(new_warnings, data.get("narrative", ""))

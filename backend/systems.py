@@ -464,6 +464,17 @@ def _collapse_faction(state, loser_name, winner_name):
     return events
 
 
+def _chain_entries(value):
+    """Sanitize a consequence-chain list (continuity.py) for display: keep
+    only well-formed {event, turn, canon_day} entries, most recent first,
+    capped for the journal card rather than the full stored history."""
+    if not isinstance(value, list):
+        return []
+    out = [{"event": str(item.get("event"))[:300], "turn": item.get("turn"), "canon_day": item.get("canon_day")}
+           for item in value if isinstance(item, dict) and item.get("event")]
+    return list(reversed(out[-6:]))
+
+
 def relationship_snapshot(state):
     rows = []
     memories = state.get("npc_memories", {})
@@ -490,7 +501,7 @@ def relationship_snapshot(state):
                      # once the GM has actually bothered laying out this NPC's
                      # longer arc, not backfilled for every minor character.
                      "mid_term_goal": mem.get("mid_term_goal") or "", "core_ambition": mem.get("core_ambition") or "",
-                     "nemesis": bool(mem.get("nemesis"))})
+                     "nemesis": bool(mem.get("nemesis")), "chain": _chain_entries(mem.get("chain"))})
     affiliations = []
     for aff in state.get("affiliations", []):
         if not isinstance(aff, dict) or not str(aff.get("faction", "")).strip():
@@ -518,7 +529,9 @@ def relationship_snapshot(state):
         npc_network.append({"a": a, "b": b, "type": str(rel.get("type") or "unknown"),
                              "strength": strength, "status": str(rel.get("status") or "active"),
                              "note": str(rel.get("note") or "")})
-    return {"people": rows, "factions": [{"name": name, "standing": value} for name, value in state.get("reputation", {}).items()],
+    faction_chain = state.get("faction_chain") if isinstance(state.get("faction_chain"), dict) else {}
+    return {"people": rows, "factions": [{"name": name, "standing": value, "chain": _chain_entries(faction_chain.get(name))}
+                                          for name, value in state.get("reputation", {}).items()],
             "affiliations": affiliations, "npc_network": npc_network}
 
 
