@@ -635,6 +635,35 @@ class CampaignMixin:
                     "status": "Known", "can_contact": True,
                     "notes": ["A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."],
                 })
+            # A canon character start with a real established cast (see
+            # MAJOR_CHARACTER_STARTS's seed_npcs/seed_faction_rosters)
+            # gets that cast mechanically seeded into tracked state right
+            # here — not just described in prose background text and left
+            # for the AI to infer correctly every session. This is the
+            # same "prompt alone is unreliable, pair it with something
+            # real" pattern the currency/HP/quest-completion detectors
+            # already established: a player starting as Yahiko should
+            # have Nagato and Konan as real tracked companions and Jiraiya
+            # as a real tracked mentor from turn one, not a random
+            # AI-invented training partner because nothing concrete told
+            # it who was actually there.
+            if scenario:
+                for npc in scenario.get("seed_npcs", []):
+                    npc_name = str(npc.get("name") or "").strip()
+                    if not npc_name:
+                        continue
+                    self.state.setdefault("npc_memories", {})[npc_name] = {
+                        "attitude": npc.get("attitude", "Ally"),
+                        "goal": npc.get("goal", ""),
+                        "last_known_location": npc.get("last_known_location", start),
+                        "recurring": True,
+                    }
+                    self.ensure_contact(npc_name, "person", {"status": "Known", "can_contact": True})
+                    if npc.get("is_companion"):
+                        self.state.setdefault("companions", []).append({"name": npc_name, "role": npc.get("goal", "")})
+                rosters = scenario.get("seed_faction_rosters")
+                if isinstance(rosters, dict) and rosters:
+                    self.state["faction_rosters"] = copy.deepcopy(rosters)
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

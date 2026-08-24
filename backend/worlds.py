@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.52"
+APP_VERSION = "2.6.53"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -213,7 +213,7 @@ WORLD_DATA = {
         # five great villages instead of defaulting to "Unknown" on the map
         # and being invisible as factions until the story happened to
         # introduce them.
-        "factions": {"Konohagakure":0,"Sunagakure":0,"Kirigakure":0,"Kumogakure":0,"Iwagakure":0,"Amegakure":0,"Iron Country":0},
+        "factions": {"Konohagakure":0,"Sunagakure":0,"Kirigakure":0,"Kumogakure":0,"Iwagakure":0,"Amegakure":0,"Iron Country":0,"Akatsuki":0},
         # Coordinates calibrated against a manga-sourced "Naruto World" map
         # (player-supplied) now used as this world's map background — most
         # placements are the confirmed canon locations from that reference,
@@ -794,17 +794,75 @@ def world_primer_for(world, custom_world_text=""):
 # estimates where the source does not provide a complete day-by-day calendar.
 MAJOR_CHARACTER_STARTS = {
     "One Piece": [
-        {"id":"luffy_departure","name":"Monkey D. Luffy","label":"Luffy — leaving Foosha Village","start_day":0,"location":"Foosha Village","age":17,"origin":"Foosha Village","archetype":"Brawler","appearance":"A lean young pirate with black hair, a straw hat, red vest, shorts, sandals, and a small scar under one eye.","background":"The morning he intends to begin his pirate voyage."},
-        {"id":"zoro_shells","name":"Roronoa Zoro","label":"Zoro — prisoner at Shells Town","start_day":3,"location":"Shells Town","age":19,"origin":"Bounty Hunter","archetype":"Swordsman","appearance":"A muscular green-haired swordsman wearing simple travel clothes and carrying three swords when armed.","background":"Imprisoned at the Marine base after protecting civilians."}
+        {"id":"luffy_departure","name":"Monkey D. Luffy","label":"Luffy — leaving Foosha Village","start_day":0,"location":"Foosha Village","age":17,"origin":"Foosha Village","archetype":"Brawler","appearance":"A lean young pirate with black hair, a straw hat, red vest, shorts, sandals, and a small scar under one eye.","background":"The morning he intends to begin his pirate voyage.",
+         # Ace and Sabo are real, alive relationships from Luffy's own
+         # background, but neither is present at the dock this morning —
+         # not seeded as npc_memories to avoid implying they're currently
+         # trackable/contactable when the story hasn't put them back in
+         # touch yet. Sabo is deliberately seeded as Luffy BELIEVES him
+         # (dead, killed as a boy) rather than the truth the manga only
+         # reveals decades later — the same spoiler discipline already
+         # applied to Bleach's Aizen: seed the character's own knowledge,
+         # never an omniscient future reveal.
+         "seed_npcs":[
+             {"name":"Shanks","attitude":"Beloved mentor figure, just departed","goal":"Sailing on toward the Grand Line himself — the reason Luffy is finally setting out today.","is_companion":False,"last_known_location":"Unknown"},
+             {"name":"Sabo","attitude":"Beloved sworn brother, believed dead","goal":"As far as Luffy knows, Sabo died protecting him as a child — settled grief, not an open mystery.","is_companion":False,"last_known_location":"Unknown"},
+         ]},
+        {"id":"zoro_shells","name":"Roronoa Zoro","label":"Zoro — prisoner at Shells Town","start_day":3,"location":"Shells Town","age":19,"origin":"Bounty Hunter","archetype":"Swordsman","appearance":"A muscular green-haired swordsman wearing simple travel clothes and carrying three swords when armed.","background":"Imprisoned at the Marine base after protecting civilians.",
+         "seed_npcs":[
+             {"name":"Kuina","attitude":"Deceased childhood rival, deeply formative","goal":"Died young in an accidental fall; the vow they made — that one of them would become the world's greatest swordsman — is why Zoro carries Wado Ichimonji and why he fights at all.","is_companion":False,"last_known_location":"Deceased"},
+             {"name":"Koshiro","attitude":"Respected old teacher","goal":"Runs his dojo back home; gave Zoro Kuina's sword when he set out.","is_companion":False,"last_known_location":"Unknown"},
+         ]}
     ],
     "Hunter x Hunter": [
-        {"id":"gon_departure","name":"Gon Freecss","label":"Gon — leaving Whale Island","start_day":0,"location":"Whale Island","age":12,"origin":"Whale Island","archetype":"Tracker","appearance":"A small athletic boy with spiky black-green hair, bright brown eyes, a green jacket and shorts, and sturdy boots.","background":"The morning he leaves Whale Island to pursue the Hunter Exam."},
-        {"id":"kurapika_exam","name":"Kurapika","label":"Kurapika — Hunter Exam journey","start_day":1,"location":"Hunter Exam Route","age":17,"origin":"Kurta Survivor","archetype":"Strategist","appearance":"A slight blond teenager with gray-brown eyes and a blue-and-gold traditional tunic.","background":"Traveling toward the Hunter Exam while pursuing information about the Kurta eyes."}
+        {"id":"gon_departure","name":"Gon Freecss","label":"Gon — leaving Whale Island","start_day":0,"location":"Whale Island","age":12,"origin":"Whale Island","archetype":"Tracker","appearance":"A small athletic boy with spiky black-green hair, bright brown eyes, a green jacket and shorts, and sturdy boots.","background":"The morning he leaves Whale Island to pursue the Hunter Exam.",
+         "seed_npcs":[
+             {"name":"Mito Freecss","attitude":"Devoted guardian","goal":"Raised Gon on Whale Island; worries about him constantly but let him go.","is_companion":False,"last_known_location":"Whale Island"},
+             {"name":"Ging Freecss","attitude":"Absent father, the reason for this whole journey","goal":"A legendary Hunter whose whereabouts Gon doesn't actually know — finding him is the real destination.","is_companion":False,"last_known_location":"Unknown"},
+         ]},
+        {"id":"kurapika_exam","name":"Kurapika","label":"Kurapika — Hunter Exam journey","start_day":1,"location":"Hunter Exam Route","age":17,"origin":"Kurta Survivor","archetype":"Strategist","appearance":"A slight blond teenager with gray-brown eyes and a blue-and-gold traditional tunic.","background":"Traveling toward the Hunter Exam while pursuing information about the Kurta eyes.",
+         "seed_npcs":[
+             {"name":"Pairo","attitude":"Deceased childhood best friend","goal":"Killed in the Phantom Troupe's massacre of the Kurta clan — the reason Kurapika became a Hunter at all.","is_companion":False,"last_known_location":"Deceased"},
+         ]}
     ],
     "Naruto": [
-        {"id":"naruto_birth","name":"Naruto Uzumaki","label":"Naruto — night of his birth","start_day":-4380,"location":"Konohagakure","age":0,"origin":"Uzumaki newborn","archetype":"Unformed Potential","appearance":"A newborn boy with fine blond hair and three faint whisker-like marks on each cheek.","background":"The night of his birth, before the Nine-Tails attack reshapes the village and his life."},
-        {"id":"yahiko_akatsuki","name":"Yahiko","label":"Yahiko — founding the Akatsuki","start_day":-4856,"location":"Amegakure","age":17,"origin":"Amegakure War Orphan","archetype":"Ninjutsu Student","appearance":"A lean orange-haired young shinobi with determined eyes, rain gear, and a forehead protector worn openly.","background":"During the war-torn era when Yahiko, Nagato, and Konan begin organizing the original Akatsuki around peace."},
-        {"id":"naruto_graduation","name":"Naruto Uzumaki","label":"Naruto — Academy graduation night","start_day":0,"location":"Konohagakure","age":12,"origin":"Academy Student","archetype":"Ninjutsu Student","appearance":"A short blond academy student with blue eyes, whisker-like cheek marks, goggles, and an orange-and-blue outfit.","background":"The day of the Academy graduation and the Scroll of Seals incident."}
+        {"id":"naruto_birth","name":"Naruto Uzumaki","label":"Naruto — night of his birth","start_day":-4380,"location":"Konohagakure","age":0,"origin":"Uzumaki newborn","archetype":"Unformed Potential","appearance":"A newborn boy with fine blond hair and three faint whisker-like marks on each cheek.","background":"The night of his birth, before the Nine-Tails attack reshapes the village and his life.",
+         # Minato and Kushina are both alive for the first part of this very
+         # night before the Reaper Death Seal and the Nine-Tails extraction
+         # kill them — deliberately NOT seeded as ongoing npc_memories
+         # entries (marking them "recurring" would be misleading when the
+         # scene they're seeded into is the same one that kills them).
+         # Hiruzen survives and becomes Naruto's real ongoing guardian
+         # figure, so he's the one seeded here.
+         "seed_npcs":[
+             {"name":"Hiruzen Sarutobi","attitude":"Steps in as guardian figure","goal":"The Third Hokage, present in the village tonight — becomes the closest thing Naruto has to a guardian going forward.","is_companion":False,"last_known_location":"Konohagakure"},
+         ]},
+        {"id":"yahiko_akatsuki","name":"Yahiko","label":"Yahiko — founding the Akatsuki","start_day":-4856,"location":"Amegakure","age":17,"origin":"Amegakure War Orphan","archetype":"Ninjutsu Student","appearance":"A lean orange-haired young shinobi with determined eyes, rain gear, and a forehead protector worn openly.","background":"During the war-torn era when Yahiko, Nagato, and Konan begin organizing the original Akatsuki around peace.",
+         # The original Akatsuki was a three-person operation — Yahiko,
+         # Nagato, and Konan — trained together for three years by Jiraiya
+         # after being orphaned in the Second Shinobi World War. Kakuzu and
+         # (black) Zetsu are NOT founding members: Kakuzu joins only after
+         # Yahiko's death once Nagato/Obito reshape Akatsuki into the
+         # criminal organization, and Zetsu was never a rank-and-file
+         # member at all — he's Madara/Obito's own planted spy watching
+         # Nagato from outside the group. Seeding the wrong roster here
+         # would be exactly the kind of ungrounded, non-canon detail this
+         # feature exists to prevent.
+         "seed_npcs":[
+             {"name":"Nagato","attitude":"Devoted ally","goal":"Build a world without the suffering Amegakure has known, alongside Yahiko and Konan.","is_companion":True},
+             {"name":"Konan","attitude":"Devoted ally","goal":"Support Yahiko's vision of peace for Amegakure.","is_companion":True},
+             {"name":"Jiraiya","attitude":"Respected mentor, distant","goal":"Returned to Konoha after three years training the three of them; still watches his former students' progress from afar.","is_companion":False,"last_known_location":"Konohagakure"},
+         ],
+         "seed_faction_rosters":{"Akatsuki":["Yahiko","Nagato","Konan"]}},
+        {"id":"naruto_graduation","name":"Naruto Uzumaki","label":"Naruto — Academy graduation night","start_day":0,"location":"Konohagakure","age":12,"origin":"Academy Student","archetype":"Ninjutsu Student","appearance":"A short blond academy student with blue eyes, whisker-like cheek marks, goggles, and an orange-and-blue outfit.","background":"The day of the Academy graduation and the Scroll of Seals incident.",
+         # Sasuke and Sakura are known classmates at this point but NOT yet
+         # teammates — Team 7 doesn't form until a few days after this, so
+         # they're deliberately left unseeded rather than implied to
+         # already be companions.
+         "seed_npcs":[
+             {"name":"Iruka Umino","attitude":"Devoted teacher","goal":"His Academy instructor, central to this exact day's events — protects Naruto during the Scroll of Seals incident and gives him his own forehead protector.","is_companion":False,"last_known_location":"Konohagakure"},
+             {"name":"Mizuki","attitude":"Just revealed as a traitor, hostile","goal":"A fellow instructor exposed this same night as working for Orochimaru; defeated and captured, not a free threat any longer.","is_companion":False,"last_known_location":"Konohagakure"},
+         ]}
     ],
     "Solo Max-Level Newbie": [
         {"id":"jinhyeok_tower","name":"Kang Jinhyeok","label":"Jinhyeok — Tower manifestation","start_day":0,"location":"Earth — Tower Entrance","age":27,"origin":"Veteran Gamer","archetype":"All-Rounder","appearance":"A sharp-eyed young Korean man with dark hair, practical modern clothing, and a calm calculating expression.","background":"The day the Tower of Trials becomes reality."}
@@ -816,7 +874,18 @@ MAJOR_CHARACTER_STARTS = {
         {"id":"rimuru_awakens","name":"Rimuru Tempest","label":"Rimuru — awakening in the cave","start_day":0,"location":"Great Jura Forest — Sealed Cave","age":0,"origin":"Reincarnated Otherworlder","archetype":"Skill Analyst","appearance":"A small translucent blue slime with a soft internal glow and an expressive, fluid silhouette.","background":"The first moments after reincarnating inside the Sealed Cave."}
     ],
     "Bleach": [
-        {"id":"ichigo_series_start","name":"Ichigo Kurosaki","label":"Ichigo — the night Rukia arrives","start_day":0,"location":"Kurosaki Clinic","age":15,"origin":"Karakura High Student","archetype":"Zanjutsu Specialist","appearance":"A tall, lean, strongly-built first-year high schooler with spiky orange hair and a near-permanent scowl often mistaken for delinquency, wearing the standard black Karakura High uniform.","background":"The mid-May night a Hollow attacks the Kurosaki family and Rukia Kuchiki, badly wounded defending them, transfers her own Shinigami powers to him — an act normally forbidden by Soul Society law. He has been able to see spirits his whole life, but this is the moment everything actually changes."}
+        {"id":"ichigo_series_start","name":"Ichigo Kurosaki","label":"Ichigo — the night Rukia arrives","start_day":0,"location":"Kurosaki Clinic","age":15,"origin":"Karakura High Student","archetype":"Zanjutsu Specialist","appearance":"A tall, lean, strongly-built first-year high schooler with spiky orange hair and a near-permanent scowl often mistaken for delinquency, wearing the standard black Karakura High uniform.","background":"The mid-May night a Hollow attacks the Kurosaki family and Rukia Kuchiki, badly wounded defending them, transfers her own Shinigami powers to him — an act normally forbidden by Soul Society law. He has been able to see spirits his whole life, but this is the moment everything actually changes.",
+         # Isshin is seeded as he actually presents at this point in canon —
+         # a goofy, purely human clinic doctor. His real past as a former
+         # Squad 10 Captain is a Thousand-Year Blood War-era reveal, more
+         # than a decade of story away from this start; seeding the truth
+         # here would spoil it the same way seeding Aizen's true nature
+         # into this world's factions would.
+         "seed_npcs":[
+             {"name":"Isshin Kurosaki","attitude":"Loving, embarrassing father","goal":"Runs the family clinic; presents as an ordinary, if eccentric, human doctor.","is_companion":False,"last_known_location":"Kurosaki Clinic"},
+             {"name":"Yuzu Kurosaki","attitude":"Devoted younger sister","goal":"Keeps the household running — cooking, cleaning — and worries over everyone.","is_companion":False,"last_known_location":"Kurosaki Clinic"},
+             {"name":"Karin Kurosaki","attitude":"Sharp-tongued younger sister","goal":"Plays soccer and, unlike Yuzu, has her own latent ability to see spirits.","is_companion":False,"last_known_location":"Kurosaki Clinic"},
+         ]}
     ],
 }
 
@@ -892,6 +961,14 @@ BASE_STATE = {
     # thumbs-upped, fed back into resolve()'s prompt as a real, campaign-
     # specific "match this quality" example instead of a hand-written one.
     "rated_good_turns":[],
+    # faction_rosters tracks WHO is actually in a named group ({faction:
+    # [member names]}) — factions/reputation only ever tracked a standing
+    # score, never membership, so the GM had nothing concrete to check
+    # before narrating "who's in the Akatsuki right now" and would invent
+    # plausible-sounding filler instead. Canon-character starts with a
+    # real established roster (see MAJOR_CHARACTER_STARTS) seed this at
+    # creation; the GM keeps it updated as membership actually changes.
+    "faction_rosters":{},
     "known_recipes":[],"training_log":[],"combat":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":6,"world_pack_id":"builtin","last_autosave":"","suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[]
 }
 

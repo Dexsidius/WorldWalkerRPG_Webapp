@@ -2076,9 +2076,14 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # Raised again 63000 -> 64000: a real user-reported simulation bug
         # (a stated "wait until X" condition getting silently dropped during
         # a time skip) needed a real fix, not a trim to fit under budget.
+        # Raised again 64000 -> 66000: a real user-reported grounding bug —
+        # the GM inventing generic filler NPCs instead of drawing on a
+        # canon character's actual seeded companions/mentors, and having
+        # no mechanism to track faction membership accurately — needed the
+        # companion-grounding and faction_rosters instructions below.
         game = self.fresh("Naruto")
         game.state["factions"] = dict(WORLD_DATA["Naruto"]["factions"])
-        self.assertLess(len(game.gm_rules("I attack the bandit.")), 64000)
+        self.assertLess(len(game.gm_rules("I attack the bandit.")), 66000)
 
     def test_starting_currency_scales_with_world_and_background(self):
         # Every campaign used to start with a flat 250 regardless of world
@@ -3389,6 +3394,46 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertEqual(game.state["canon_day"], 0)
         self.assertEqual(game.state["player_identity"]["mode"], "canon")
         self.assertEqual(game.state["player_identity"]["canon_character_id"], "ichigo_series_start")
+        self.assertIn("Isshin Kurosaki", game.state["npc_memories"])
+        self.assertIn("Yuzu Kurosaki", game.state["npc_memories"])
+        self.assertIn("Karin Kurosaki", game.state["npc_memories"])
+
+    # ---------------------------------------------------------------
+    # Canon-character companion/mentor/roster seeding (a real user
+    # report: starting as Yahiko generated a random invented training
+    # partner instead of drawing on his actual, real canon companions)
+    # ---------------------------------------------------------------
+
+    def test_yahiko_start_seeds_the_real_founding_akatsuki_not_an_invented_or_wrong_roster(self):
+        game = GameSession()
+        game.new_campaign("Ari", "Naruto", "Adventurer", "", "", "", "Amegakure War Orphan", "Ninjutsu Student",
+                           {n: 30 for n in abilities_for("Naruto")}, canon_character_id="yahiko_akatsuki")
+        self.assertEqual(set(game.state["npc_memories"].keys()), {"Nagato", "Konan", "Jiraiya"})
+        self.assertEqual(game.state["faction_rosters"], {"Akatsuki": ["Yahiko", "Nagato", "Konan"]})
+        # Kakuzu and Zetsu were NOT founding members — Kakuzu joins only
+        # after Yahiko's death, and Zetsu was never a rank-and-file member
+        # at all. Seeding them here would be exactly the kind of
+        # ungrounded, non-canon detail this feature exists to prevent.
+        self.assertNotIn("Kakuzu", game.state["npc_memories"])
+        self.assertNotIn("Zetsu", game.state["npc_memories"])
+        companion_names = {c["name"] for c in game.state["companions"]}
+        self.assertEqual(companion_names, {"Nagato", "Konan"})
+        self.assertNotIn("Jiraiya", companion_names)  # mentor, not a traveling companion
+        self.assertTrue(game.state["contacts"]["Nagato"]["can_contact"])
+
+    def test_canon_start_with_no_seed_data_leaves_npc_memories_empty(self):
+        game = GameSession()
+        game.new_campaign("Traveler", "Solo Max-Level Newbie", "Adventurer", "", "", "", "Veteran Gamer", "All-Rounder",
+                           {n: 30 for n in abilities_for("Solo Max-Level Newbie")}, canon_character_id="jinhyeok_tower")
+        self.assertEqual(game.state["npc_memories"], {})
+        self.assertEqual(game.state["faction_rosters"], {})
+
+    def test_gm_rules_instruct_grounding_scenes_in_seeded_companions_and_maintaining_faction_rosters(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("state_patch.faction_rosters", rules)
+        self.assertIn("invented substitute", rules)
+        self.assertIn("never narrate a group's membership in a way that contradicts", rules)
 
     def test_original_shinigami_one_year_before_start_lands_a_year_early(self):
         game = GameSession()
