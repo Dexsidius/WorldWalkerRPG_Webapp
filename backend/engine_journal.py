@@ -185,6 +185,23 @@ class JournalMixin:
         self.autosave()
         return {"message": message, "price": price, "currency": self.state.get("currency"), "inventory": self.state.get("inventory"), "story": self._flush_story()}
 
+    def rate_last_turn_good(self):
+        """Snapshots the most recent resolved turn ({turn, action, outcome},
+        already recorded in campaign_canon) into rated_good_turns — a small,
+        player-curated pool resolve() draws from to show the model a real
+        example from THIS campaign instead of a hand-written generic one.
+        Snapshotting (not just referencing a turn number) means the example
+        survives even if campaign_canon later trims that entry off."""
+        canon = self.state.get("campaign_canon") or []
+        if not canon:
+            raise ValueError("There's no turn to rate yet.")
+        last = canon[-1]
+        rated = [r for r in (self.state.get("rated_good_turns") or []) if r.get("turn") != last.get("turn")]
+        rated.append({"turn": last.get("turn"), "action": str(last.get("action") or "")[:500], "outcome": str(last.get("outcome") or "")[:1200]})
+        self.state["rated_good_turns"] = rated[-5:]
+        self.autosave()
+        return {"rated_turn": last.get("turn")}
+
     def visible_schedule(self):
         visible = []
         for event in self.state.get("scheduled_events", []):

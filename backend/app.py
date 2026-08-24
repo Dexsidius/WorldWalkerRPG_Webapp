@@ -817,6 +817,14 @@ def api_purchase_offer_buy():
         return err(e, 400)
 
 
+@app.route("/api/turn/rate_good", methods=["POST"])
+def api_turn_rate_good():
+    try:
+        return jsonify(game.rate_last_turn_good())
+    except Exception as e:
+        return err(e, 400)
+
+
 @app.route("/api/diagnostics")
 def api_diagnostics():
     data = game.diagnostics_snapshot()

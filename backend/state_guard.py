@@ -43,6 +43,9 @@ APP_OWNED = {
     # supplies a one-turn purchase_offer, but never authors the resolved
     # flag or ids in purchase_offers directly.
     "purchase_offers",
+    # Only the player's own rating action (engine_journal.rate_last_turn_good)
+    # writes this — never the GM.
+    "rated_good_turns",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
