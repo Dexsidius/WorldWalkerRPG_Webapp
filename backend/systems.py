@@ -8,6 +8,7 @@ import copy
 import math
 import random
 import re
+import secrets
 
 from util import ai_text
 
@@ -704,6 +705,61 @@ def resolve_shop_purchase(state, shop_name, item_name):
         if item["stock"] <= 0:
             inventory.remove(item)
     return True, f"Bought {display_name} from {shop.get('name', shop_name)} for {price} {currency.get('name', 'currency')}.", price
+
+
+def record_purchase_offer(state):
+    """A transient, AI-facing purchase_offer ({item, price, vendor}) — set
+    whenever this turn's narrative presents a concrete opportunity to buy
+    something, e.g. a merchant naming a price mid-scene — becomes a
+    permanent, app-owned entry in purchase_offers with a real id and
+    resolved=false. Mirrors the npc_memories[name].chain_event pattern in
+    continuity.py: the AI's job is just naming what's on offer, the app
+    owns the durable bookkeeping (id, resolved state) so a purchase can
+    never be trusted to whatever the client echoes back on click. Returns
+    a small dict for the story entry's `detail` (None if nothing valid was
+    offered) so the Chronicle can render a real Buy button for it."""
+    raw = state.pop("purchase_offer", None)
+    state["purchase_offer"] = None
+    if not isinstance(raw, dict):
+        return None
+    item = str(raw.get("item") or "").strip()
+    price = parse_price(raw.get("price"))
+    if not item or not price:
+        return None
+    offer_id = secrets.token_hex(6)
+    vendor = str(raw.get("vendor") or "").strip()
+    offers = state.setdefault("purchase_offers", [])
+    offers.append({"id": offer_id, "item": item, "price": price, "vendor": vendor, "turn": state.get("turn", 0), "resolved": False})
+    state["purchase_offers"] = offers[-20:]
+    currency_name = (state.get("currency") or {}).get("name", "Currency") if isinstance(state.get("currency"), dict) else "Currency"
+    return {"id": offer_id, "item": item, "price": price, "vendor": vendor, "currency": currency_name}
+
+
+def resolve_purchase_offer(state, offer_id):
+    """Deterministic buy for a narrative purchase_offer (see
+    record_purchase_offer above): looks up the REAL stored price by id —
+    never trusts a client-supplied price — deducts currency, adds
+    inventory, and marks the offer resolved so it can't be bought twice.
+    Returns (ok, message, price_paid_or_None), same shape as
+    resolve_shop_purchase."""
+    offers = state.get("purchase_offers") if isinstance(state.get("purchase_offers"), list) else []
+    offer = next((o for o in offers if isinstance(o, dict) and o.get("id") == offer_id), None)
+    if offer is None:
+        return False, "That offer is no longer available.", None
+    if offer.get("resolved"):
+        return False, f"You already bought {offer.get('item')}.", None
+    price = offer.get("price")
+    currency = state.get("currency") if isinstance(state.get("currency"), dict) else {"name": "Currency", "amount": 0}
+    amount = currency.get("amount", 0)
+    if not isinstance(amount, (int, float)):
+        amount = 0
+    if amount < price:
+        return False, f"Not enough {currency.get('name', 'currency')} — {offer.get('item')} costs {price}, you have {amount}.", None
+    currency["amount"] = amount - price
+    state["currency"] = currency
+    state.setdefault("inventory", []).append({"name": offer.get("item"), "source": f"Bought from {offer.get('vendor') or 'an offer'}"})
+    offer["resolved"] = True
+    return True, f"Bought {offer.get('item')} for {price} {currency.get('name', 'currency')}.", price
 
 
 def _notable_individuals_for(state, place_name):

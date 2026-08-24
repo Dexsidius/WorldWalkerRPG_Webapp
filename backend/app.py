@@ -808,6 +808,15 @@ def api_shop_buy():
         return err(e, 400)
 
 
+@app.route("/api/purchase_offer/buy", methods=["POST"])
+def api_purchase_offer_buy():
+    d = request.get_json(force=True)
+    try:
+        return jsonify(game.buy_purchase_offer(d.get("id", "")))
+    except Exception as e:
+        return err(e, 400)
+
+
 @app.route("/api/diagnostics")
 def api_diagnostics():
     data = game.diagnostics_snapshot()

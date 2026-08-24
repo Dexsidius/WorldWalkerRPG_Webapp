@@ -14,7 +14,7 @@ from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks)
+                     update_chapter_memory, tick_world_clocks, record_purchase_offer)
 
 
 DEFAULT_SETTINGS = {
@@ -537,7 +537,8 @@ Return ONLY valid JSON."""
             if tev:
                 self.state.setdefault("timeline", []).append(tev)
             self.state["suggested_actions"] = self.guided_suggestions(data.get("suggested_actions"))
-            self.append(data.get("narrative", "The scene advances."))
+            offer_detail = record_purchase_offer(self.state)
+            self.append(data.get("narrative", "The scene advances."), detail=({"purchase_offer": offer_detail} if offer_detail else None))
             if not is_opening:
                 self.append_growth_deltas(before)
             self.ensure_quest_briefings(before, pending_action or "")
