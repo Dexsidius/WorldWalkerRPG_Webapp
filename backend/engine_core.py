@@ -293,6 +293,32 @@ class CoreMixin:
                 })
                 for name, mem in memories.items()
             }
+        # Same relevance-filter idea, applied to the two other fields most
+        # likely to balloon over a long campaign as the player travels: a
+        # shop discovered three towns ago has no business costing tokens on
+        # every turn once the player has moved on, and neither does the
+        # free-text notes on a location the player isn't anywhere near.
+        # Both only trim detail, never drop an entry — an off-screen shop
+        # keeps its name/type/location, an off-screen location keeps its
+        # controller and danger level, since either could still matter for
+        # an Advisor question or forward planning.
+        current_location = str(self.state.get("location") or "")
+        shops = snapshot.get("shops")
+        if isinstance(shops, list) and len(shops) > 6:
+            snapshot["shops"] = [
+                sh if not isinstance(sh, dict) or not sh.get("location") or str(sh.get("location")) == current_location
+                else {"name": sh.get("name"), "type": sh.get("type"), "location": sh.get("location")}
+                for sh in shops
+            ]
+        location_details = snapshot.get("location_details")
+        if isinstance(location_details, dict) and len(location_details) > 10:
+            snapshot["location_details"] = {
+                name: (detail if name == current_location or not isinstance(detail, dict) else {
+                    "controlling_faction": detail.get("controlling_faction"),
+                    "danger_level": detail.get("danger_level"),
+                })
+                for name, detail in location_details.items()
+            }
         canon = self.state.get("campaign_canon") or []
         if not canon:
             snapshot.pop("campaign_canon", None)
@@ -325,10 +351,33 @@ class CoreMixin:
         return "|".join(abilities_for(self.state.get("world", "Custom World")))
 
     def gm_context(self, query=""):
-        """Core rules plus a compact, query-relevant offline lore retrieval."""
+        """Core rules plus a compact, query-relevant offline lore retrieval.
+        `query` is also passed to gm_rules() as a combat-relevance hint — in
+        the normal resolve() call path it IS the player's raw action text,
+        which is exactly what deciding "is a worked combat example worth
+        the tokens this turn" needs. Other call sites (event scenes,
+        campaign opening) pass a synthetic query instead of a literal
+        action; a false negative there just means no example that turn,
+        which is a missed teaching moment, not a correctness bug — so it's
+        safe to reuse loosely rather than plumbing a separate parameter."""
         lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state)
         self.last_lore_context = lore
-        return self.gm_rules() + (("\n\n" + lore) if lore else "") + self.rated_good_example_snippet()
+        return self.gm_rules(query) + (("\n\n" + lore) if lore else "") + self.rated_good_example_snippet()
+
+    _COMBAT_SIGNAL_RE = re.compile(
+        r"\b(attack|fight|strike|stab|slash|shoot|punch|kick|draw (?:my|your|his|her|their) (?:blade|sword|weapon|gun)|"
+        r"charge at|engage|duel|spar|ambush|kill|defend against|block|dodge|parry)\b", re.I)
+
+    def _combat_relevant(self, action_hint=""):
+        """Whether this turn is plausibly about to touch state_patch.combat
+        — either it's already active, or the action text signals a fight
+        starting. Used only to decide whether the worked combat example
+        (gm_rules' single biggest addition) is worth the tokens this turn;
+        never gates the combat RULES themselves, only the teaching example."""
+        combat = self.state.get("combat")
+        if isinstance(combat, dict) and combat.get("active"):
+            return True
+        return bool(self._COMBAT_SIGNAL_RE.search(str(action_hint or "")))
 
     def rated_good_example_snippet(self):
         """A real, player-approved turn from THIS campaign (see
@@ -446,7 +495,7 @@ CORE PRINCIPLES
 {extra}
 Return ONLY valid JSON. No markdown fences."""
 
-    def gm_rules(self):
+    def gm_rules(self, action_hint=""):
         wd = WORLD_DATA[self.state["world"]]
         ex = expansion_for(self.state["world"])
         d = DIFFICULTIES[self.state["difficulty"]]
@@ -460,6 +509,22 @@ Return ONLY valid JSON. No markdown fences."""
                 "(e.g. Luck, a hidden class, a hidden talent). Do not reveal them for free. When the character earns a genuine "
                 "in-fiction way to see them (a status window unlock, an analysis/appraisal skill, a milestone, a mentor's judgment), "
                 "add the revealed stat and its value to state_patch.hidden_stats. Never put an undiscovered stat there."
+            )
+        # Only paid for on a turn that's plausibly about to touch
+        # state_patch.combat — interpolated at the TAIL of gm_rules(), not
+        # here, alongside canon_clock_block: this flag is per-turn-volatile
+        # (depends on action_hint), and anything volatile placed early in
+        # the prompt breaks the cacheable stable prefix the canon_day fix
+        # (see test_gm_rules_stays_cache_friendly_across_a_canon_day_change)
+        # already went out of its way to protect.
+        combat_example_rule = ""
+        if self._combat_relevant(action_hint):
+            combat_example_rule = (
+                '\n- WORKED EXAMPLE of starting structured combat correctly (real values, every required field filled — match this shape, not just the general idea):\n'
+                '  Player action: "I draw my blade and attack the bandit blocking the road."\n'
+                '  narrative: "The bandit doesn\'t back down — he pulls a rusted shortsword and squares up as you draw your own blade. This is happening."\n'
+                '  state_patch.combat: {"active": true, "round": 1, "non_lethal": false, "location": "the forest road", "enemy": {"name": "Bandit", "is_group": false, "group_size": null, "hp": 40, "hp_max": 40, "difficulty_min": 25, "difficulty_max": 40, "attack_min": 20, "attack_max": 35, "power": 15, "alive": true}}\n'
+                '  Note what makes this correct: every field present with a real number (no placeholders, no field left for "later"), non_lethal is explicitly false because this is a real hostile fight, and the enemy\'s power/difficulty are sized for an ordinary bandit — not scaled up or down to match the player.'
             )
         world_name = self.state.get("world", "Custom World")
         race_rule = ""
@@ -759,11 +824,6 @@ NON-NEGOTIABLE RULES
 - Track WHY an NPC's attitude or a faction's reputation actually moved, not just the new label/number: whenever npc_memories[name].attitude changes or meaningfully deepens this turn, also set npc_memories[name].chain_event to ONE plain sentence naming what just happened between the player and that NPC — the application permanently records it and surfaces it in the Chronicle automatically, so never write npc_memories[name].chain yourself, only chain_event. Likewise, whenever a faction's entry in state_patch.reputation changes, include a matching state_patch.reputation_chain_events entry: {{"FactionName": "one plain sentence"}}. Before writing a scene involving a named NPC or faction that already has recorded history (npc_memories[name].chain / faction_chain[name], visible in state), ground their behavior and any dialogue in those REAL recorded reasons — never let an established grudge or debt silently evaporate, and never invent a different reason than what's actually on record.
 - Structured combat is always exactly ONE player-side entity against exactly ONE opposing entity — never a list of separate individually-targetable enemies. When the opposition is a single person, that person IS the entity. When the opposition is multiple people (a squad, a mob, a pack of beasts), represent the WHOLE group as one aggregate entity — do not create one list item per person. BAD: state_patch.combat.enemy is a list of 4 separate bandits, each individually targetable. GOOD: state_patch.combat.enemy is one entity named "Bandit Group" with is_group=true, group_size=4, and hp_max/power sized for the whole group's real aggregate threat.
 - When structured combat begins, set state_patch.combat = {{"active": true, "round": 1, "non_lethal": true|false, "location": "...", "enemy": {{"name": "...", "is_group": true|false, "group_size": N or null, "hp": N, "hp_max": N, "difficulty_min": 1-100, "difficulty_max": 1-100, "attack_min": 1-100, "attack_max": 1-100, "power": world-relative stat estimate, "alive": true}}}}. difficulty_min/max is how hard this opponent is for the player to hit; attack_min/max is how hard it is for the player to avoid or resist this opponent's attacks; power is this opponent's rough stat level on the same world-relative scale the player's own stats use. Every field is required — the application resolves individual exchanges itself and needs real numbers, not just prose. After this turn, further rounds are resolved by the application, not by you; you narrate again only when asked to relay a combat outcome.
-- WORKED EXAMPLE of starting structured combat correctly (real values, every required field filled — match this shape, not just the general idea):
-  Player action: "I draw my blade and attack the bandit blocking the road."
-  narrative: "The bandit doesn't back down — he pulls a rusted shortsword and squares up as you draw your own blade. This is happening."
-  state_patch.combat: {{"active": true, "round": 1, "non_lethal": false, "location": "the forest road", "enemy": {{"name": "Bandit", "is_group": false, "group_size": null, "hp": 40, "hp_max": 40, "difficulty_min": 25, "difficulty_max": 40, "attack_min": 20, "attack_max": 35, "power": 15, "alive": true}}}}
-  Note what makes this correct: every field present with a real number (no placeholders, no field left for "later"), non_lethal is explicitly false because this is a real hostile fight, and the enemy's power/difficulty are sized for an ordinary bandit — not scaled up or down to match the player.
 - Set combat.non_lethal = true for a friendly spar, a rank/promotion test, a supervised duel, or any bout both sides understand is not to the death — the application then floors HP at 1 for both combatants instead of 0, so the bout is won or lost on points and neither side can actually die from it. Leave it false (the default) for any fight with real danger — a hostile enemy, a wild beast, a battle where death is a genuine possible outcome. Never route a routine training montage through structured combat at all (non_lethal or otherwise) — training stays narrated prose handled by the normal training/ability-progress mechanics, not a round-by-round fight.
 - When a time-skip response, a canon event the player chose to personally engage in, or a danger interruption escalates into an actual fight — the player is squaring off against a real opponent with blows being traded, not just facing a single uncertain moment — prefer starting structured combat (state_patch.combat) over resolving the whole fight as one abstract check, so the player gets real round-by-round agency in it. A single quick, low-stakes scuffle or a moment too brief to actually play out round-by-round can still be a normal check; a real battle should not be flattened into one roll.
 - Set hp_max/power/difficulty from the opponent's own CANONICAL strength — their actual established rank, reputation, and capability in this world/source material — never auto-balanced or scaled to whatever would make a "fair" or "interesting" fight against the player's current power level. A canonically weak or ordinary opponent stays weak even against a weak player; a canonically overwhelming one stays overwhelming even against a strong player. Only deviate from canonical strength when the campaign's own story has diverged in a way that plausibly changed this specific opponent (injury, power-up, different history, AU divergence) — and if so, that divergence should already be reflected elsewhere in state/continuity, not invented just for this fight.
@@ -775,7 +835,7 @@ NON-NEGOTIABLE RULES
 - Also set a combat skill's effect_type when it isn't a simple damaging strike: "heal" for a skill that restores the player's own HP, "debuff" for one that weakens the opponent for a few rounds. Leave it unset (defaults to damage) for ordinary attacks and techniques.
 - A character with a canon or established instant-win-caliber personal ability — absorbing/consuming an opponent, a domination or knockout-by-presence effect (e.g. Conqueror's Haki), hypnosis, and similarly decisive signature abilities — can attempt to end a fight outright with it at any time, in or out of structured combat, if their sheet or established narrative actually supports having it. In structured combat this is the dedicated "overwhelm" action the application resolves mechanically (a real chance to fail rather than an automatic win, though the player may try again on later rounds); in plain prose, resolve it like any other action through assess/roll/resolve. Never treat it as a guaranteed win — its odds still depend on the actual power/resistance gap between the two combatants, and a comparably strong or well-suited opponent can plausibly resist or counter it.
 - When narrating a combat outcome of "overwhelmed" (relayed via narrate_combat's mechanical_log), describe it as the player's own established instant-win-type ability actually landing — in a way consistent with what that specific character's sheet or established narrative supports — not a generic knockout.
-- Shops are location-dependent. When merchants are discovered, populate shops with name/type and plausible inventory/prices — give each inventory entry a clean {{"name": ..., "price": <plain integer>}} shape (no currency name or extra words baked into the price field) so the player can buy it directly through the app's own shop screen without needing you to resolve the transaction. BAD: {{"name": "Kunai Pouch", "price": "around 50 {ex.get('currency', 'Currency')}"}} — a string the app can't reliably parse. GOOD: {{"name": "Kunai Pouch", "price": 50}}. Purchases made through free-form prose action (not the shop screen) must still change currency and inventory yourself in the same state_patch.
+- Shops are location-dependent. When merchants are discovered, populate shops with name/type/location and plausible inventory/prices — give each inventory entry a clean {{"name": ..., "price": <plain integer>}} shape (no currency name or extra words baked into the price field) so the player can buy it directly through the app's own shop screen without needing you to resolve the transaction. BAD: {{"name": "Kunai Pouch", "price": "around 50 {ex.get('currency', 'Currency')}"}} — a string the app can't reliably parse. GOOD: {{"name": "Kunai Pouch", "price": 50}}. Always include a shop's "location" field (where it actually is) — the application uses it to keep shops the player isn't currently near out of your context in a long campaign, so an omitted location risks that shop's inventory silently going stale. Purchases made through free-form prose action (not the shop screen) must still change currency and inventory yourself in the same state_patch.
 - Beyond a persistent shop's inventory, whenever THIS turn's narrative presents a concrete, immediate one-off opportunity to buy something for a stated price — a merchant naming a price mid-scene, a passerby offering to sell something, a vendor quoting a cost — also set state_patch.purchase_offer = {{"item": "...", "price": <plain integer>, "vendor": "who's offering it, optional"}} so the app can show the player a real Buy button for it right in the Chronicle, without them having to separately declare "I buy X" as a new action. Only set this for a genuine, stated-price offer actually happening THIS turn, never for a vague future possibility ("you could probably buy one somewhere") — and never resolve the purchase yourself in state_patch.currency/inventory when you set this field, since clicking the button is what completes the transaction. Omit it entirely on turns with no such offer; it does not need to appear every turn.
 - Loot must be plausible to the defeated foe/location. Record important loot in loot_history.
 - Training consumes meaningful world time and advances ability_progress/skills gradually. Significant breakthroughs should generate explicit skill/system events.
@@ -813,6 +873,7 @@ NON-NEGOTIABLE RULES
 - Training gains depend on duration, intensity, recovery, talent, teacher/resources, current mastery, diminishing returns, and supplied dice results.
 - World events and canon timelines continue during skips unless prior player actions have changed them.
 {canon_clock_block}
+{combat_example_rule}
 
 FINAL REMINDERS — the details most often missed under attention pressure earlier in this same list. Check these last, right before you finalize state_patch:
 - If the narrative describes money changing hands, currency.amount changed in this state_patch.
