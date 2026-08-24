@@ -2083,21 +2083,27 @@ $("#btn-difficult-cancel").addEventListener("click", () => {
 $("#btn-difficult-timing").addEventListener("click", () => startChallenge("timing"));
 $("#btn-difficult-tactical").addEventListener("click", () => startChallenge("tactical"));
 
+// Each stage is a risk-tolerance choice, not a specific action — the check
+// title above these options already names the actual action (a jutsu, a
+// negotiation, a lockpick, whatever it is), so the options themselves stay
+// domain-neutral instead of forcing combat phrasing ("technique", "feint")
+// onto checks that aren't a fight at all, which used to read as a total
+// non sequitur against a social or stealth check.
 const TACTICAL_STAGES = [
-  { title: "Stage 1 — Read the situation", help: "Choose how to create an opening.", options: [
-    { label: "Study the opening", detail: "Steady information, modest payoff.", points: 18, volatility: 3 },
-    { label: "Exploit the environment", detail: "Better payoff if circumstances cooperate.", points: 22, volatility: 8 },
-    { label: "Seize the initiative", detail: "High reward with a serious swing.", points: 27, volatility: 17 },
+  { title: "Stage 1 — Opening", help: "Choose how cautiously to open.", options: [
+    { label: "Play it safe", detail: "Steady footing, modest payoff.", points: 18, volatility: 3 },
+    { label: "Take a calculated risk", detail: "Better payoff if it pans out.", points: 22, volatility: 8 },
+    { label: "Go all in", detail: "High reward with a serious swing.", points: 27, volatility: 17 },
   ]},
-  { title: "Stage 2 — Execute", help: "Choose how to commit your technique.", options: [
-    { label: "Precise technique", detail: "Reliable and resource-conscious.", points: 20, volatility: 4 },
-    { label: "Adaptive feint", detail: "Strong but dependent on reading the opposition.", points: 24, volatility: 10 },
-    { label: "Maximum output", detail: "Powerful, costly, and unstable.", points: 29, volatility: 19 },
+  { title: "Stage 2 — Commitment", help: "Choose how hard to commit.", options: [
+    { label: "Stay measured", detail: "Reliable and resource-conscious.", points: 20, volatility: 4 },
+    { label: "Push harder", detail: "Strong but dependent on things breaking your way.", points: 24, volatility: 10 },
+    { label: "Full commitment", detail: "Powerful, costly, and unstable.", points: 29, volatility: 19 },
   ]},
-  { title: "Stage 3 — Finish", help: "Decide how much certainty to trade for impact.", options: [
-    { label: "Secure the result", detail: "Protect what you have gained.", points: 17, volatility: 2 },
-    { label: "Press the advantage", detail: "Balanced risk and reward.", points: 23, volatility: 9 },
-    { label: "All or nothing", detail: "The largest possible swing.", points: 31, volatility: 24 },
+  { title: "Stage 3 — Close it out", help: "Decide how much certainty to trade for impact.", options: [
+    { label: "Lock in what you have", detail: "Protect what you've gained.", points: 17, volatility: 2 },
+    { label: "Press for more", detail: "Balanced risk and reward.", points: 23, volatility: 9 },
+    { label: "Everything on this", detail: "The largest possible swing.", points: 31, volatility: 24 },
   ]},
 ];
 
@@ -2449,14 +2455,33 @@ $("#btn-chat-send").addEventListener("click", async () => {
 // Out-of-character, no turn cost, no state changes. Responses are structured
 // (summary + bullet points + suggested follow-ups) rather than a text blob.
 // ---------------------------------------------------------------------------
+function renderAdvisorChart(chart) {
+  if (!chart || !chart.items || !chart.items.length) return "";
+  const max = Math.max(...chart.items.map((it) => Math.abs(it.value)), 1e-9);
+  const rows = chart.items.map((it) => {
+    const pct = Math.max(2, Math.abs(it.value) / max * 100);
+    const valueLabel = Number.isFinite(it.value) ? (Math.abs(it.value) >= 1000 ? it.value.toLocaleString() : String(it.value)) : "";
+    return `<div class="advisor-chart-row">
+      <div class="advisor-chart-label">${escapeHtml(it.label)}</div>
+      <div class="advisor-chart-track"><div class="advisor-chart-bar" style="width:${pct}%"></div></div>
+      <div class="advisor-chart-value">${escapeHtml(valueLabel)}</div>
+    </div>`;
+  }).join("");
+  return `<div class="advisor-chart">
+    <div class="advisor-chart-title">${escapeHtml(chart.title || "Comparison")}${chart.unit ? ` <span>(${escapeHtml(chart.unit)})</span>` : ""}</div>
+    ${rows}
+  </div>`;
+}
+
 function renderAdvisorMessage(m) {
   if (m.role === "player") {
     return `<div class="chat-msg outgoing"><div class="meta">You</div>${escapeHtml(m.text)}</div>`;
   }
   const points = (m.points || []).map((p) => `<li>${escapeHtml(p)}</li>`).join("");
   const countdown = m.canon_countdown?.label ? `<div class="advisor-countdown">⏳ ${escapeHtml(m.canon_countdown.label)}</div>` : "";
-  return `<div class="chat-msg incoming"><div class="meta">Advisor${m.fourth_wall ? " · FOURTH-WALL" : ""}</div>
+  return `<div class="chat-msg incoming advisor-msg"><div class="meta">Advisor${m.fourth_wall ? " · FOURTH-WALL" : ""}</div>
     <div class="advisor-msg-summary">${escapeHtml(m.summary || m.text || "...")}</div>
+    ${renderAdvisorChart(m.chart)}
     ${countdown}${points ? `<ul class="advisor-msg-points">${points}</ul>` : ""}
   </div>`;
 }

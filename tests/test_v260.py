@@ -1813,6 +1813,91 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertEqual(long_call["max_output_tokens"], 1000)
         self.assertNotEqual(long_call["schema"]["points"], [])
 
+    def test_advisor_speaks_like_a_dm_and_resolves_untracked_questions_from_canon(self):
+        # The Advisor used to default to a dry "Pax-Historia-style briefing"
+        # report voice for anything but rules questions, and hedged on
+        # anything not explicitly in tracked state instead of reasoning from
+        # this world's canon at the current timeline point — a real
+        # complaint, since most interesting questions ("what's Itachi up to
+        # right now?") are about things the player hasn't personally tracked.
+        class RecordingAdvisorAI:
+            def __init__(self):
+                self.payload = None
+                self.rules = None
+
+            def request(self, rules, payload, max_output_tokens=0):
+                self.rules = rules
+                self.payload = payload
+                return {"summary": "Test.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = RecordingAdvisorAI()
+        game.state["canon_divergences"] = [{"turn": 3, "text": "Mizuki was arrested before he could steal the scroll."}]
+
+        game.ask_advisor("What's Itachi been doing lately, and is that still true given how my campaign has gone?")
+
+        self.assertIn("like a DM answering a question at the table", game.ai.rules)
+        self.assertIn("don't deflect", game.ai.rules)
+        self.assertIn("canon_divergences", game.ai.rules)
+        self.assertEqual(game.ai.payload["canon_divergences"], game.state["canon_divergences"])
+
+    def test_advisor_chart_is_sanitized_and_capped(self):
+        class ChartAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                return {
+                    "summary": "Here's how you compare.",
+                    "points": [], "follow_ups": [],
+                    "chart": {
+                        "title": "Power Levels", "unit": "DBZ Power Level",
+                        "items": [
+                            {"label": "You", "value": 9001},
+                            {"label": "Rival", "value": "not a number"},
+                            {"label": "", "value": 500},
+                            {"label": "Bystander", "value": 12},
+                        ] + [{"label": f"Extra {i}", "value": i} for i in range(10)],
+                    },
+                }
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = ChartAI()
+        result = game.ask_advisor("Graph my power level against the others in DBZ terms.")
+        chart = result["entry"]["chart"]
+        self.assertEqual(chart["title"], "Power Levels")
+        self.assertEqual(chart["unit"], "DBZ Power Level")
+        # The non-numeric and empty-label entries are dropped, and the list
+        # is capped at 8 even though the model sent more.
+        self.assertLessEqual(len(chart["items"]), 8)
+        self.assertIn({"label": "You", "value": 9001.0}, chart["items"])
+        self.assertNotIn("Rival", [it["label"] for it in chart["items"]])
+
+    def test_advisor_chart_absent_when_ai_returns_nothing_or_garbage(self):
+        class NoChartAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                return {"summary": "Plain answer, no chart.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = NoChartAI()
+        result = game.ask_advisor("How strong am I?")
+        self.assertIsNone(result["entry"]["chart"])
+
+    def test_advisor_wording_requesting_a_graph_flags_the_ai_call(self):
+        class RecordingAdvisorAI:
+            def __init__(self):
+                self.rules = None
+
+            def request(self, rules, payload, max_output_tokens=0):
+                self.rules = rules
+                return {"summary": "Test.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = RecordingAdvisorAI()
+        game.ask_advisor("Can you chart my power level versus the others?")
+        self.assertIn("WORDING SUGGESTS THEY WANT A VISUAL", game.ai.rules)
+
     def test_gm_rules_stays_cache_friendly_across_a_canon_day_change(self):
         # gm_rules() is resent in full on every single AI call. canon_day
         # changes on nearly every time skip, so if anything volatile sits

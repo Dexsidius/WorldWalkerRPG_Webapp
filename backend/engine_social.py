@@ -152,9 +152,11 @@ class SocialMixin:
         # conversational question, not a chat acknowledgment, so a 10-char
         # cutoff would almost never fire on an actual short question.
         concise = len(str(question).split()) <= 6
+        wants_chart = bool(re.search(r"\b(graph|chart|plot|visuali[sz]e|bar\s*chart)\b", str(question), re.I))
         payload = {
             "task": "advisor_question", "question": question, "state": self.trimmed_state_for_ai(),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
+            "canon_divergences": self.state.get("canon_divergences") or [],
             "thread_history": self.state.get("advisor_thread", [])[-16:],
             "schema": {
                 "summary": ("ONE direct sentence answering the question — nothing more" if concise else
@@ -163,19 +165,26 @@ class SocialMixin:
                            ["4-8 substantive supporting points with evidence, comparison, timing, odds, tradeoffs or concrete next steps"]),
                 "follow_ups": ([] if concise else
                                ["2-3 short natural follow-up questions the player might want to ask next, phrased as the PLAYER would ask them"]),
+                "chart": ("null unless the player explicitly asked for a graph/chart/visual comparison, or the answer is fundamentally "
+                          "a numeric comparison across 3+ things a chart would communicate faster than prose — in which case: "
+                          '{"title": "short chart title", "unit": "what the numbers mean, e.g. \'DBZ Power Level\'", '
+                          '"items": [{"label": "name", "value": number}, ...2-8 entries, highest first]}'),
             },
         }
-        rules = f"""You are "The Advisor" for {self.state.get('world','the world')} — an out-of-character, omniscient guide available to the player at any time. You are NOT an in-fiction character and you are not bound by the normal rule that NPCs only know what they could plausibly know.
+        rules = f"""You are "The Advisor" for {self.state.get('world','the world')} — a Dungeon Master the player can lean over and ask a question any time play pauses. You are NOT an in-fiction character and not bound by "NPCs only know what they'd plausibly know" — you know everything tracked plus this world's full canon.
+Voice: talk TO the player, like a DM answering a question at the table — direct, plain, second person ("you're", "they've"), a real opinion when asked for one. Not a report, not a wiki article. This applies to every kind of question, not just rules questions — a strategy or world-state answer should still sound like a person talking, just with more to say.
 You may freely:
 - Assess relative power levels of the player, companions, rivals, factions and known threats, using terms appropriate to this world (bounty/Haki tier, Nen category/rank, jutsu/village rank, class/level, etc.) by default.
 - If the player asks for a specific comparison framework instead — a numeric scale, tiers, percentages, or even a well-known scale borrowed from another series (e.g. "give me this in DBZ power levels") — use exactly the framing they asked for as a communication device to convey relative strength, even when it isn't native to this world. It's a translation aid, not a claim that this world works that way.
 - Summarize the current state of the world: active threats, opportunities, unresolved plot threads, faction tensions, quest status.
 - Give honest strategic advice, including risks and trade-offs. Never decide for the player — lay out the options.
 - Every world-state or planning answer must reference the supplied next_canon_event countdown and explain whether current plans can fit before it.
-- Speak plainly from the full tracked state given to you. Extrapolate reasonably, but never invent concrete facts about unknowns as if certain — say when you're speculating.
-- When the question is really a rules/mechanics clarifying question (how something works, what's allowed, what would happen if...), answer the way a good tabletop DM explains the rules at the table: direct, plain, second person, happy to walk through an example — not a dry analytical report. Save the more structured Pax-Historia-style briefing format for world-state and strategy questions.
+- ASKED ABOUT SOMETHING NOT IN THE TRACKED STATE (an off-screen character, faction, or event the player hasn't personally touched): don't deflect to "I don't know" or "that's not tracked." Answer it — reason from this world's canon AT THE CURRENT POINT IN THE TIMELINE (the tracked world_time/canon day, never spoiling events still ahead of it), the same way a DM who knows the source material would. First check canon_divergences: if a recorded divergence changed that person/place/event, the divergence is the truth and overrides stock canon — say so plainly ("in this campaign, X happened instead, because..."). Only hedge when canon genuinely never reveals the answer even in principle — and even then, give your best-reasoned read before admitting the limit, don't lead with the disclaimer.
+- When the question is really a rules/mechanics clarifying question (how something works, what's allowed, what would happen if...), walk through it directly with an example if that helps — never a dry analytical report.
+- When the player explicitly asks for a graph/chart/visual comparison, or the honest best answer to their question is fundamentally "here's how N things stack up numerically," fill in the chart field per the schema instead of (or alongside) explaining it in prose — don't just describe numbers in a sentence when they asked to see them.
 {"FOURTH-WALL MODE IS ON. You may additionally expose and analyze the simulation's d100 math, generated difficulty range, stat/title bonuses, queue/time-budget behavior, canon-stop boundaries, AI uncertainty, save/rewind behavior, and clever ways to exploit those rules without falsifying state or changing it. Clearly distinguish engine facts from speculative model behavior." if fourth_wall else "FOURTH-WALL MODE IS OFF. Stay focused on story-world strategy and tracked facts; do not discuss software or hidden engine implementation."}
-{"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a Pax-Historia-like briefing: detailed enough to support a decision, organized and concrete, but still scannable."}
+{"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a real briefing: enough to support a decision, organized and concrete, but still sounds like someone talking to you, not a form being filled out."}
+{"THE PLAYER'S WORDING SUGGESTS THEY WANT A VISUAL (graph/chart/plot) — populate the chart field; don't just describe the numbers in prose instead." if wants_chart else ""}
 You never alter game state; this is a conversation only. Return ONLY valid JSON, no markdown fences."""
         data = self.ai.request(rules, payload, max_output_tokens=200 if concise else 1000)
         entry = {
@@ -183,6 +192,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             "summary": (data.get("summary") or "").strip() or "...",
             "points": [ai_text(p) for p in (data.get("points") or []) if ai_text(p)][:8],
             "follow_ups": [ai_text(q) for q in (data.get("follow_ups") or []) if ai_text(q)][:3],
+            "chart": self._sanitize_advisor_chart(data.get("chart")),
             "fourth_wall": bool(fourth_wall), "canon_countdown": self.canon_countdown(),
             "turn": self.state.get("turn", 0),
         }
@@ -190,6 +200,35 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             self.state.setdefault("advisor_thread", []).append(entry)
             self.autosave()
         return {"entry": entry, "state": self.public_state()}
+
+    @staticmethod
+    def _sanitize_advisor_chart(raw):
+        """The model sometimes returns chart items with a non-numeric value,
+        a missing label, or more entries than the schema asked for — none of
+        that should be able to break rendering, so coerce or drop rather
+        than trusting the shape."""
+        if not isinstance(raw, dict):
+            return None
+        items = []
+        for item in (raw.get("items") or [])[:8]:
+            if not isinstance(item, dict):
+                continue
+            label = ai_text(item.get("label") or item.get("name") or "")
+            value = item.get("value")
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            if not label:
+                continue
+            items.append({"label": label, "value": value})
+        if not items:
+            return None
+        return {
+            "title": ai_text(raw.get("title") or "") or "Comparison",
+            "unit": ai_text(raw.get("unit") or ""),
+            "items": items,
+        }
 
     def ensure_contact(self, name, kind="person", details=None):
         if not name:
