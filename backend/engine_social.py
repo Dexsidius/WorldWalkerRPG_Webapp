@@ -144,14 +144,25 @@ class SocialMixin:
             with self.lock:
                 self.state["advisor_thread"].append(entry)
             return {"entry": entry, "state": self.public_state()}
+        # A one-word "thanks" or a quick "how strong am I?" doesn't deserve
+        # the same 4-8 point structured briefing as a real strategy question
+        # — mirrors Pax Historia's own Advisor, which detects a short player
+        # message and short-circuits to a one-sentence reply instead of its
+        # full analysis format. Word count, not character count: this is a
+        # conversational question, not a chat acknowledgment, so a 10-char
+        # cutoff would almost never fire on an actual short question.
+        concise = len(str(question).split()) <= 6
         payload = {
             "task": "advisor_question", "question": question, "state": self.trimmed_state_for_ai(),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
             "thread_history": self.state.get("advisor_thread", [])[-16:],
             "schema": {
-                "summary": "2-4 direct sentences answering the question with a bottom line and important context",
-                "points": ["4-8 substantive supporting points with evidence, comparison, timing, odds, tradeoffs or concrete next steps"],
-                "follow_ups": ["2-3 short natural follow-up questions the player might want to ask next, phrased as the PLAYER would ask them"],
+                "summary": ("ONE direct sentence answering the question — nothing more" if concise else
+                            "2-4 direct sentences answering the question with a bottom line and important context"),
+                "points": ([] if concise else
+                           ["4-8 substantive supporting points with evidence, comparison, timing, odds, tradeoffs or concrete next steps"]),
+                "follow_ups": ([] if concise else
+                               ["2-3 short natural follow-up questions the player might want to ask next, phrased as the PLAYER would ask them"]),
             },
         }
         rules = f"""You are "The Advisor" for {self.state.get('world','the world')} — an out-of-character, omniscient guide available to the player at any time. You are NOT an in-fiction character and you are not bound by the normal rule that NPCs only know what they could plausibly know.
@@ -164,8 +175,9 @@ You may freely:
 - Speak plainly from the full tracked state given to you. Extrapolate reasonably, but never invent concrete facts about unknowns as if certain — say when you're speculating.
 - When the question is really a rules/mechanics clarifying question (how something works, what's allowed, what would happen if...), answer the way a good tabletop DM explains the rules at the table: direct, plain, second person, happy to walk through an example — not a dry analytical report. Save the more structured Pax-Historia-style briefing format for world-state and strategy questions.
 {"FOURTH-WALL MODE IS ON. You may additionally expose and analyze the simulation's d100 math, generated difficulty range, stat/title bonuses, queue/time-budget behavior, canon-stop boundaries, AI uncertainty, save/rewind behavior, and clever ways to exploit those rules without falsifying state or changing it. Clearly distinguish engine facts from speculative model behavior." if fourth_wall else "FOURTH-WALL MODE IS OFF. Stay focused on story-world strategy and tracked facts; do not discuss software or hidden engine implementation."}
-Give a Pax-Historia-like briefing: detailed enough to support a decision, organized and concrete, but still scannable. You never alter game state; this is a conversation only. Return ONLY valid JSON, no markdown fences."""
-        data = self.ai.request(rules, payload, max_output_tokens=1000)
+{"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a Pax-Historia-like briefing: detailed enough to support a decision, organized and concrete, but still scannable."}
+You never alter game state; this is a conversation only. Return ONLY valid JSON, no markdown fences."""
+        data = self.ai.request(rules, payload, max_output_tokens=200 if concise else 1000)
         entry = {
             "role": "advisor",
             "summary": (data.get("summary") or "").strip() or "...",
@@ -205,6 +217,11 @@ Give a Pax-Historia-like briefing: detailed enough to support a decision, organi
         if not self.ai_ready():
             return {"state": self.public_state(), "story": self._flush_story()}
         contact = self.state.get("contacts", {}).get(thread, {})
+        # Same effort-matching as the Advisor's concise mode: a one-line
+        # text doesn't need the same output budget as a real negotiation
+        # attempt, and asking for less also reinforces the length-matching
+        # instruction below rather than leaving the model room to pad anyway.
+        concise = len(str(message).split()) <= 6
         payload = {
             "task": "side_chat_reply", "role": "Narrator + NPC dialogue", "thread": thread, "player_message": message,
             "state": self.trimmed_state_for_ai(), "thread_history": self.state.get("chat_threads", {}).get(thread, [])[-20:],
@@ -218,13 +235,14 @@ Give a Pax-Historia-like briefing: detailed enough to support a decision, organi
                 "Do not pause or replace the main adventure scene.",
                 "Before responding, check campaign_canon (recent turn history) and this contact's npc_memories entry for anything the player and this contact have already done, discussed, or resolved together — including in the main scene, not just prior chat messages. Never have them ask about, re-propose, or act surprised by something already settled; reference it as already known instead.",
                 "Any meaningful promise, information, relationship change, quest lead, or arrangement must be represented in state_patch.",
-                "If this conversation creates a promise, deadline, grudge, standing order, or new agenda item for the contacted person or group, record it in state_patch.scheduled_events (with due_canon_day) and/or update their entry in npc_clocks/faction_clocks — a commitment made here must be able to resurface naturally in a future world update, the same as one made in the main scene."
+                "If this conversation creates a promise, deadline, grudge, standing order, or new agenda item for the contacted person or group, record it in state_patch.scheduled_events (with due_canon_day) and/or update their entry in npc_clocks/faction_clocks — a commitment made here must be able to resurface naturally in a future world update, the same as one made in the main scene.",
+                "Keep the reply's length roughly proportional to the player's message — a short line deserves a short reply, not a paragraph; match their register and effort rather than always writing at maximum length."
             ],
             "schema": {"reply": "string or empty if no immediate reply", "sender": "speaker",
                        "state_patch": "contacts, npc_memories, relationships, quests, scheduled_events, npc_clocks, faction_clocks or other side-chat consequences",
                        "events": "system notifications if needed"}
         }
-        data = self.ai.request(self.gm_rules(), payload, max_output_tokens=500)
+        data = self.ai.request(self.core_rules(), payload, max_output_tokens=150 if concise else 500)
         with self.lock:
             before = copy.deepcopy(self.state)
             apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="side_chat")
@@ -257,7 +275,9 @@ Give a Pax-Historia-like briefing: detailed enough to support a decision, organi
             "schema": {"send": "boolean", "thread": "contact/group name", "sender": "speaker name",
                        "message": "short natural chat message", "contact_patch": "optional contact/group metadata updates"}
         }
-        rules = self.gm_rules() + "\nYou are checking for an unsolicited communication event, not advancing the main scene.\nMessages are asynchronous side communications. Preserve lore, technology, communication methods, distance, and world rules.\nIf the world has no modern phones, interpret 'chat' as the nearest lore-appropriate medium: Den Den Mushi, messenger, letter, radio, courier, system message, guild chat, etc.\n"
+        rules = self.core_rules(extra="You are checking for an unsolicited communication event, not advancing the main scene.\n"
+                                      "Messages are asynchronous side communications. Preserve lore, technology, communication methods, distance, and world rules.\n"
+                                      "If the world has no modern phones, interpret 'chat' as the nearest lore-appropriate medium: Den Den Mushi, messenger, letter, radio, courier, system message, guild chat, etc.")
         try:
             data = self.ai_bg.request(rules, payload, max_output_tokens=350)
         except Exception as e:
@@ -298,7 +318,7 @@ Give a Pax-Historia-like briefing: detailed enough to support a decision, organi
                        "Only return a player-visible heard_event when this tick's changes would actually reach or affect the player or a portion of the world connected to them — never for the protagonist's own routine, unconnected progress. Most ticks should leave heard_event empty."
                    ],
                    "schema": {"state_patch": "world_events, npc_memories, factions, canon_divergences or other justified world-state changes", "heard_event": "brief rumor/news/observation or empty"}}
-        rules = self.gm_rules() + " This is a background simulation tick. Preserve geography, travel time, NPC knowledge and causality. Do not resolve a player action."
+        rules = self.core_rules(extra="This is a background simulation tick. Preserve geography, travel time, NPC knowledge and causality. Do not resolve a player action.")
         try:
             data = self.ai_bg.request(rules, payload, max_output_tokens=450)
         except Exception as e:
@@ -322,7 +342,7 @@ Give a Pax-Historia-like briefing: detailed enough to support a decision, organi
         payload = {"task": "memory_manager", "role": "Memory Manager", "state": self.trimmed_state_for_ai(),
                    "requirements": "Compress/update recurring NPC memories, relationship facts, promises, debts, suspicions, discovered facts, and last-known locations. Preserve uncertainty and delete nothing important. Do not narrate a scene.",
                    "schema": {"state_patch": "npc_memories, contacts, chat_threads metadata, relationships, codex, location_details, ability_progress or other memory-oriented changes only", "memory_note": "brief maintenance note or empty"}}
-        rules = self.gm_rules() + " You are the MEMORY MANAGER. Be conservative. Never invent player actions, secret knowledge, or relationship changes unsupported by the state."
+        rules = self.core_rules(extra="You are the MEMORY MANAGER. Be conservative. Never invent player actions, secret knowledge, or relationship changes unsupported by the state.")
         try:
             data = self.ai_bg.request(rules, payload, max_output_tokens=450)
         except Exception as e:

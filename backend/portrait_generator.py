@@ -42,29 +42,34 @@ def _record_portrait_usage(provider, quality):
 
 WORLD_PORTRAIT_STYLES = {
     "One Piece": (
-        "whimsical high-energy ocean adventure manga; exaggerated but appealing anatomy; "
-        "eccentric readable silhouette; bold variable black ink; flat saturated cel colors; "
-        "playful expressive facial construction"
+        "the One Piece anime/manga's own house style: whimsical high-energy ocean adventure manga; "
+        "exaggerated but appealing anatomy; eccentric readable silhouette; bold variable black ink; "
+        "flat saturated cel colors; playful expressive facial construction"
     ),
     "Naruto": (
-        "dynamic hand-inked ninja action manga; angular clean silhouette; restrained earth colors "
-        "with one vivid accent; crisp cel shading; expressive eyes and practical shinobi design"
+        "the Naruto anime/manga's own house style: dynamic hand-inked ninja action manga; angular "
+        "clean silhouette; restrained earth colors with one vivid accent; crisp cel shading; "
+        "expressive eyes and practical shinobi design"
     ),
     "Hunter x Hunter": (
-        "crisp strategic adventure manga; clean variable ink lines; bold simple color shapes; "
-        "natural expressive face; subtle crosshatching; energetic but grounded"
+        "the Hunter x Hunter anime/manga's own house style: crisp strategic adventure manga; clean "
+        "variable ink lines; bold simple color shapes; natural expressive face; subtle crosshatching; "
+        "energetic but grounded"
     ),
     "Solo Max-Level Newbie": (
-        "premium Korean action webtoon; semi-realistic anatomy; precise digital linework; smooth "
-        "layered cel shading; dramatic luminous system accents and polished finish"
+        "a premium Korean action webtoon's house style, matching this series' own presentation: "
+        "semi-realistic anatomy; precise digital linework; smooth layered cel shading; dramatic "
+        "luminous system accents and polished finish"
     ),
     "Overgeared": (
-        "high-detail Korean fantasy webtoon; heroic semi-realistic anatomy; richly rendered metal, "
-        "leather, and cloth; crisp digital linework; warm cinematic highlights"
+        "a high-detail Korean fantasy webtoon's house style, matching this series' own presentation: "
+        "heroic semi-realistic anatomy; richly rendered metal, leather, and cloth; crisp digital "
+        "linework; warm cinematic highlights"
     ),
     "Reincarnated as a Slime": (
-        "vibrant modern isekai anime; friendly expressive character design; clean graceful linework; "
-        "luminous soft cel shading; jewel-like magical color accents"
+        "the Reincarnated as a Slime anime's own house style: vibrant modern isekai anime; friendly "
+        "expressive character design; clean graceful linework; luminous soft cel shading; jewel-like "
+        "magical color accents"
     ),
     "Custom World": (
         "cinematic anime-inspired RPG concept illustration; elegant ink contours; painterly cel "
@@ -187,7 +192,7 @@ VISIBLE WORLD-SYSTEM TRAITS: {json.dumps(special, ensure_ascii=False, default=st
 POSITION / ROLE: {state.get('position') or 'new adventurer'}
 
 IDENTITY: {identity_rule}
-STYLE: {style}. Capture the setting's broad visual language without copying any named artist, panel, cover, canon character, costume, pose, or emblem.
+STYLE: Render fully and unmistakably in {style}. Commit completely to it — line weight, shading technique, color saturation, proportions, and rendering approach should all read as drawn in that exact style, not a generic anime/fantasy-art default that merely gestures at it. The goal is a portrait that would look at home next to official art for this series. The only boundaries: never depict an actual named canon character's likeness, never reproduce a specific existing panel/cover/official artwork, and never copy a franchise logo or exact insignia design — the ORIGINAL character described above, drawn fully in the series' own visual style.
 AFFILIATION MARKERS: If AFFILIATIONS / FACTIONS lists an active membership in a known in-world faction/order/village, dress the character with that group's ordinary everyday visual identifiers, fitting their actual rank/role — e.g. a shinobi affiliated with a hidden village wears a forehead-protector-style headband, an Akatsuki-type organization's member wears its signature dark cloak, a knight order's member wears its house colors or sigil-bearing surcoat. Render these as generic in-fiction garments/props appropriate to the affiliation (a plain metal-plate headband, a cloud-patterned cloak) rather than reproducing any franchise's exact official logo or insignia design.
 COMPOSITION: one character only, waist-up, centered three-quarter view, face unobstructed, safe margins, made for a compact game portrait card.
 BACKDROP: {backdrop}; atmospheric and subdued so the character dominates.

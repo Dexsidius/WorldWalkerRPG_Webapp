@@ -22,7 +22,7 @@
   --success:#7fce9c;
   --gold:#e6c877;
   --glass-rgb:14,18,32;
-  --glass-alpha:.52;
+  --glass-alpha:.82;
   --glass-alpha-soft:.38;
   --glass-blur:18px;
   --font-display:'Cinzel', Georgia, 'Times New Roman', serif;
@@ -45,7 +45,10 @@ body{
     radial-gradient(900px 650px at 108% 6%, rgba(var(--accent-rgb),.16), transparent 58%),
     radial-gradient(1400px 900px at 50% 115%, rgba(var(--accent2-rgb),.10), transparent 65%),
     linear-gradient(180deg,var(--bg-2),var(--bg) 45%);
-  background-attachment:fixed;
+  /* body never actually scrolls on desktop (panels scroll internally), so
+     this looks identical to "fixed" either way — "fixed" just forces a
+     more expensive compositing mode for no visual benefit here. */
+  background-attachment:scroll;
   color:var(--text);
   font-family:var(--font-body);
   overflow:hidden;
@@ -111,9 +114,16 @@ input,select,textarea{ font-family:inherit; }
   align-items:center;
   justify-content:space-between;
   position:relative;
-  background:rgba(var(--glass-rgb),.6);
-  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
-  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
+  /* No backdrop-filter here (or on .panel below) on purpose — this bar and
+     every panel on screen used to each carry their own live backdrop blur
+     over a large multi-layer animated gradient body background. With a
+     dozen-plus panels typically visible at once, that's a dozen-plus
+     continuously-recomposited blur regions scaling with window size — the
+     exact "smoother when not maximized" signature of a compositing-bound
+     GPU, especially on WebView2/integrated graphics. A solid, slightly more
+     opaque background reads almost identically without paying that cost
+     every frame. */
+  background:rgba(var(--glass-rgb),.88);
   border:1px solid rgba(255,255,255,.08);
   border-radius:var(--radius-sm);
   padding:0 16px;
@@ -171,6 +181,11 @@ input,select,textarea{ font-family:inherit; }
 .ai-pill.busy{ color:var(--gold); animation:pulseText 1.1s ease-in-out infinite; }
 .ai-pill.error{ color:var(--danger); border-color:rgba(var(--danger-rgb),.5); }
 .cost-pill{ color:var(--gold); border-color:rgba(var(--accent2-rgb),.3); }
+.tension-pill{ font-weight:800; }
+.tension-calm{ color:var(--success); border-color:rgba(127,206,156,.35); }
+.tension-uneasy{ color:var(--sub); border-color:var(--border-soft); }
+.tension-tense{ color:var(--gold); border-color:rgba(var(--gold-rgb,230,200,119),.4); }
+.tension-critical{ color:var(--danger); border-color:rgba(var(--danger-rgb),.5); animation:pulseText 1.1s ease-in-out infinite; }
 .usage-summary{ margin-top:6px; }
 .icon-btn{
   width:32px;height:32px;border-radius:50%;
@@ -191,8 +206,6 @@ input,select,textarea{ font-family:inherit; }
   background:
     linear-gradient(165deg, rgba(255,255,255,.05), rgba(255,255,255,0) 35%),
     rgba(var(--glass-rgb),var(--glass-alpha));
-  backdrop-filter:blur(var(--glass-blur)) saturate(150%);
-  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(150%);
   border:1px solid rgba(255,255,255,.09);
   border-radius:var(--radius);
   box-shadow:var(--shadow-soft), inset 0 1px 0 rgba(255,255,255,.06), inset 0 0 0 1px rgba(var(--accent2-rgb),.04);
@@ -262,6 +275,12 @@ input,select,textarea{ font-family:inherit; }
 .portrait-image{ position:absolute; inset:0; z-index:1; width:100%; height:100%; object-fit:cover; object-position:center 28%; display:block; opacity:0; transition:opacity .55s ease; }
 .portrait-image.loaded{ opacity:1; }
 .character-ambient{ position:absolute; inset:0; z-index:2; width:100%; height:100%; pointer-events:none; opacity:.6; mix-blend-mode:screen; }
+/* A Godot-rendered ambient layer, same slot/blend as the canvas version
+   above — swapped in per world once a themed export exists for it (see
+   applyGodotAmbient in app.js). border:none/background:transparent keep
+   the iframe itself invisible; only whatever the embedded scene draws
+   shows through. */
+.portrait-godot-ambient{ position:absolute; inset:0; z-index:2; width:100%; height:100%; pointer-events:none; opacity:.6; mix-blend-mode:screen; border:none; background:transparent; }
 .portrait-shade{ position:absolute; inset:0; z-index:3; pointer-events:none; background:linear-gradient(180deg, rgba(0,0,0,.03) 48%, rgba(0,0,0,.88) 100%); }
 .portrait-caption{ position:absolute; z-index:4; left:14px; bottom:12px; right:14px; }
 .portrait-loading{ position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; background:rgba(5,8,13,.72); backdrop-filter:blur(3px); color:var(--gold); font-size:10px; letter-spacing:.12em; }
@@ -290,6 +309,9 @@ input,select,textarea{ font-family:inherit; }
 .stat-summary.narrative-progression .xp-row{ opacity:.4; transform:scale(.92); transform-origin:left center; }
 .portrait-name{ font-family:var(--font-display); font-size:20px; font-weight:700; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.6); }
 .portrait-class{ font-size:12px; font-weight:700; color:var(--accent2); letter-spacing:.03em; }
+.portrait-location{ margin-top:3px; font-size:11px; font-weight:600; color:var(--sub); text-shadow:0 1px 4px rgba(0,0,0,.6); }
+.portrait-location[hidden]{ display:none; }
+#stat-tower-timer.tower-timer-critical{ color:var(--danger); font-weight:800; animation:pulseText 1.6s ease-in-out infinite; }
 
 /* stat summary */
 .row-between{ display:flex; justify-content:space-between; font-weight:700; margin-bottom:10px; font-size:13px; }
@@ -304,6 +326,15 @@ input,select,textarea{ font-family:inherit; }
 .bar-value{ width:64px; text-align:right; font-size:10.5px; color:var(--sub); font-variant-numeric:tabular-nums; }
 .xp-row{ margin-top:2px; margin-bottom:10px; }
 .xp-row .bar-track{ height:6px; }
+.currency-row{
+  display:flex; align-items:center; gap:8px; margin:2px 0 12px; padding:7px 11px; border-radius:10px;
+  background:linear-gradient(135deg, rgba(var(--gold-rgb,230,200,119),.16), rgba(var(--gold-rgb,230,200,119),.04));
+  border:1px solid rgba(var(--gold-rgb,230,200,119),.3);
+}
+.currency-icon{ display:inline-flex; width:18px; height:18px; color:var(--gold); flex-shrink:0; }
+.currency-icon svg{ width:100%; height:100%; }
+.currency-amount{ font-family:var(--font-display); font-weight:700; font-size:16px; color:var(--gold); font-variant-numeric:tabular-nums; }
+.currency-name{ font-size:11px; font-weight:700; color:var(--sub); letter-spacing:.03em; text-transform:uppercase; }
 .kv{ display:grid; grid-template-columns:auto 1fr; gap:4px 10px; margin:10px 0 0; font-size:12px; }
 .kv dt{ color:var(--muted); font-weight:700; }
 .kv dd{ margin:0; color:var(--sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -366,6 +397,15 @@ input,select,textarea{ font-family:inherit; }
 .skill-journal-card p{ margin:8px 0 0; color:var(--sub); line-height:1.55; }
 .skill-chips{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; }
 .skill-chips span{ padding:3px 7px; border:1px solid rgba(var(--accent-rgb),.4); border-radius:999px; color:var(--accent2); font:700 9.5px var(--font-mono); white-space:nowrap; }
+.achievement-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px; margin-bottom:18px; }
+.achievement-card{ display:flex; gap:10px; align-items:flex-start; padding:12px 13px; border-radius:10px; border:1px solid rgba(var(--gold-rgb,230,200,119),.35); background:linear-gradient(135deg, rgba(var(--gold-rgb,230,200,119),.12), rgba(0,0,0,.2)); cursor:pointer; transition:transform .15s ease, box-shadow .15s ease; }
+.achievement-card:hover{ transform:translateY(-1px); box-shadow:0 6px 18px rgba(0,0,0,.3); }
+.achievement-card.title-card{ cursor:default; }
+.achievement-card.title-card:hover{ transform:none; box-shadow:none; }
+.achievement-icon{ font-size:20px; flex-shrink:0; filter:drop-shadow(0 0 4px rgba(var(--gold-rgb,230,200,119),.4)); }
+.achievement-copy b{ display:block; color:var(--gold); font-size:13px; margin-bottom:2px; }
+.achievement-copy p{ margin:0 0 4px; color:var(--sub); font-size:12px; line-height:1.45; }
+.achievement-copy small{ color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
 .skill-detail{ display:grid; grid-template-columns:100px minmax(0,1fr); gap:9px; padding-top:8px; margin-top:8px; border-top:1px solid rgba(255,255,255,.05); color:var(--sub); font-size:11.5px; line-height:1.45; }
 .skill-detail b{ color:var(--accent2); font-size:10px; text-transform:uppercase; letter-spacing:.05em; }
 
@@ -395,20 +435,13 @@ input,select,textarea{ font-family:inherit; }
 }
 .scene-img.loaded{ opacity:1; transform:scale(1.035); }
 .scene-img.kenburns{ transform:scale(1.06); }
-.scene-fx{ position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
+/* Godot-rendered scene ambience: one layer covering both what the old
+   canvas particle/glow system (#scene-fx) and the CSS weather overlay
+   (.scene-weather) used to do separately — see applyGodotSceneFx in
+   app.js. border:none/background:transparent keep the iframe itself
+   invisible; only whatever the embedded scene draws shows through. */
+.scene-godot-fx{ position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; border:none; background:transparent; }
 .scene-shade{ position:absolute; inset:0; z-index:3; background:linear-gradient(180deg, rgba(0,0,0,.05) 55%, rgba(0,0,0,.72) 100%); pointer-events:none; }
-
-/* Weather — tracked in state, previously shown nowhere. A quiet overlay
-   confined to the scene box, not a full particle system. */
-.scene-weather{ position:absolute; inset:0; z-index:3; pointer-events:none; opacity:0; transition:opacity .8s ease; }
-.scene-weather.active{ opacity:1; }
-.scene-weather.rain{ background-image:repeating-linear-gradient(112deg, transparent 0 6px, rgba(200,220,255,.16) 6px 7px, transparent 7px 16px); background-size:100% 220%; animation:weatherRainFall .35s linear infinite; }
-.scene-weather.storm{ background-image:repeating-linear-gradient(112deg, transparent 0 5px, rgba(210,225,255,.28) 5px 6px, transparent 6px 13px); background-size:100% 220%; animation:weatherRainFall .2s linear infinite; filter:brightness(.82) contrast(1.1); }
-.scene-weather.snow{ background-image:radial-gradient(circle, rgba(255,255,255,.85) 1px, transparent 1.6px); background-size:34px 34px; animation:weatherSnowFall 7s linear infinite; opacity:.5; }
-.scene-weather.fog{ background:linear-gradient(180deg, rgba(215,220,230,.04), rgba(215,220,230,.26) 60%, rgba(215,220,230,.1)); animation:weatherFogDrift 16s ease-in-out infinite alternate; }
-@keyframes weatherRainFall{ from{ background-position:0 0; } to{ background-position:-42px 220%; } }
-@keyframes weatherSnowFall{ from{ background-position:0 0; } to{ background-position:44px 360px; } }
-@keyframes weatherFogDrift{ from{ transform:translateX(-2.5%) scale(1.03); } to{ transform:translateX(2.5%) scale(1.03); } }
 
 /* Location transition — confined entirely to the scene box above the
    Chronicle, a quick cut-to-black-and-back rather than a hard swap. */
@@ -494,6 +527,31 @@ input,select,textarea{ font-family:inherit; }
 .combat-enemy{ background:rgba(0,0,0,.18); border:1px solid var(--border-soft); border-radius:10px; padding:8px 10px; margin-bottom:10px; }
 .combat-mercy-row{ display:flex; align-items:center; gap:7px; color:var(--sub); font-weight:600; font-size:11.5px; margin:-2px 0 10px; cursor:pointer; }
 .combat-mercy-row input{ accent-color:var(--accent2); width:14px; height:14px; flex-shrink:0; }
+
+/* ==========================================================================
+   Major Event window — a dedicated, self-contained scene for personally
+   engaging a major canon event: narrated beats, choices, freeform response,
+   and (via relocated real panels, not duplicates) the same intervention and
+   combat controls used everywhere else in the game.
+   ========================================================================== */
+.event-window-modal{ width:820px; max-width:94vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+#btn-event-window-leave{ background:transparent; border:none; color:var(--sub); font-size:16px; cursor:pointer; }
+#btn-event-window-leave:hover{ color:var(--danger); }
+.event-window-banner{ width:100%; max-height:220px; object-fit:cover; display:block; border-bottom:1px solid var(--border-soft); }
+.event-window-feed{ flex:1 1 auto; min-height:120px; max-height:38vh; overflow-y:auto; padding:14px 20px; display:flex; flex-direction:column; gap:10px; }
+.event-window-entry{ font-size:13px; line-height:1.55; white-space:pre-wrap; color:var(--text); padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,.04); }
+.event-window-entry:last-child{ border-bottom:none; }
+.event-window-entry.system, .event-window-entry.danger{ color:var(--sub); font-size:12px; }
+.event-window-entry.canon_event{ color:var(--gold); font-weight:600; }
+.event-window-combat-slot{ padding:0 20px 6px; }
+.event-window-combat-slot .combat-panel{ border:1px solid var(--border-soft); }
+.event-window-choices{ display:flex; flex-direction:column; gap:8px; padding:4px 20px; }
+.event-window-choices button{ text-align:left; background:rgba(255,255,255,.04); border:1px solid var(--border-soft); color:var(--text); border-radius:10px; padding:10px 14px; font-size:13px; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+.event-window-choices button:hover{ background:rgba(var(--accent-rgb),.12); border-color:rgba(var(--accent-rgb),.4); }
+.event-window-respond-row{ display:flex; gap:10px; padding:12px 20px 18px; border-top:1px solid var(--border-soft); align-items:flex-end; }
+.event-window-respond-row textarea{ flex:1 1 auto; resize:vertical; background:rgba(0,0,0,.28); border:1px solid var(--border-soft); color:var(--text); border-radius:8px; padding:9px 11px; font-size:13px; }
+.event-window-concluded{ padding:16px 20px 20px; text-align:center; }
+.event-window-concluded p{ color:var(--sub); margin:0 0 12px; }
 .combat-enemy.dead{ opacity:.45; }
 .combat-enemy-head{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
 .combat-enemy-head b{ color:var(--accent2); }
@@ -531,8 +589,20 @@ input,select,textarea{ font-family:inherit; }
 .combat-log .combat-log-row.player{ color:var(--accent2); }
 .story-entry .typing-caret{ display:inline-block; width:8px; height:14px; background:var(--accent2); margin-left:2px; animation:caretBlink 1s steps(1) infinite; vertical-align:-2px; }
 .story-beat:last-child{ margin-bottom:10px; }
-.inline-intervention{ flex:0 0 auto; max-height:42%; overflow-y:auto; margin:0 14px 12px; padding:13px 14px; border:1px solid rgba(var(--accent-rgb),.62); border-radius:11px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.16),rgba(0,0,0,.2)); box-shadow:0 8px 24px rgba(0,0,0,.24); }
+/* A genuine popup, not inline content the player has to scroll the
+   Chronicle to find — same fixed full-viewport treatment as every other
+   decision modal (.modal-backdrop), just kept as its own element since a
+   lot of existing logic toggles it via [hidden] rather than the open-class
+   modal system. Sits at the same z-index and relies on DOM order (it's
+   declared early, near the top of <body>) so every real .modal-backdrop —
+   lethal confirm, the difficulty gate, challenge minigames, the event
+   window — still correctly paints on top of it when both are open. */
+.inline-intervention{
+  position:fixed; inset:0; z-index:5000; display:flex; align-items:center; justify-content:center;
+  padding:20px; background:rgba(4,8,12,.86);
+}
 .inline-intervention[hidden]{ display:none; }
+.intervention-card{ width:560px; max-width:100%; max-height:88vh; overflow-y:auto; padding:16px 18px; border:1px solid rgba(var(--accent-rgb),.62); border-radius:14px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.16),rgba(20,14,10,.92)); box-shadow:0 30px 80px rgba(0,0,0,.6); }
 .canon-event-banner{ display:block; width:100%; max-height:160px; object-fit:cover; border-radius:8px; margin-bottom:10px; border:1px solid rgba(255,190,80,.5); box-shadow:0 0 24px rgba(255,170,60,.18); }
 .canon-event-banner[hidden]{ display:none; }
 .intervention-copy>span{ color:var(--accent2); font-size:9px; font-weight:900; letter-spacing:.12em; }
@@ -699,7 +769,11 @@ input,select,textarea{ font-family:inherit; }
    Modals
    ========================================================================== */
 .modal-backdrop{
-  position:fixed; inset:0; background:rgba(4,8,12,.72); backdrop-filter:blur(3px);
+  /* This covers the full viewport behind every modal — the single largest
+     possible blur surface in the app, and the same window-size-scaling
+     compositing cost already fixed on .panel/.topbar, just bigger. A flat,
+     slightly darker backdrop reads almost the same without it. */
+  position:fixed; inset:0; background:rgba(4,8,12,.86);
   display:flex; align-items:center; justify-content:center; z-index:5000;
   opacity:0; visibility:hidden; transition:opacity .2s ease;
 }
@@ -708,8 +782,7 @@ input,select,textarea{ font-family:inherit; }
   width:520px; max-width:92vw; max-height:88vh; overflow-y:auto;
   background:
     linear-gradient(165deg, rgba(255,255,255,.06), rgba(255,255,255,0) 30%),
-    rgba(var(--glass-rgb),.72);
-  backdrop-filter:blur(24px) saturate(160%); -webkit-backdrop-filter:blur(24px) saturate(160%);
+    rgba(var(--glass-rgb),.94);
   border:1px solid rgba(255,255,255,.1); border-radius:16px;
   box-shadow:0 30px 80px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.07);
   transform:scale(.94) translateY(10px); transition:transform .25s cubic-bezier(.2,.8,.25,1);
@@ -844,6 +917,10 @@ input,select,textarea{ font-family:inherit; }
 .journal-advanced-toggle{ background:transparent; border:1px dashed var(--border-soft); color:var(--sub); }
 .journal-panel{ min-height:300px; padding-bottom:28px; font-size:13px; }
 .journal-panel .jrow{ background:rgba(0,0,0,.18); border:1px solid var(--border-soft); border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+.journal-panel .jrow.currency-jrow{ display:flex; align-items:center; gap:8px; background:linear-gradient(135deg, rgba(var(--gold-rgb,230,200,119),.16), rgba(var(--gold-rgb,230,200,119),.04)); border-color:rgba(var(--gold-rgb,230,200,119),.3); }
+.journal-panel .jrow.currency-jrow .currency-icon{ display:inline-flex; width:16px; height:16px; color:var(--gold); flex-shrink:0; }
+.journal-panel .jrow.currency-jrow .currency-icon svg{ width:100%; height:100%; }
+.journal-panel .jrow.currency-jrow b{ color:var(--gold); font-size:14px; }
 .journal-panel .jrow b{ color:var(--accent2); }
 .system-summary{ display:flex; justify-content:space-between; gap:18px; align-items:center; padding:13px 15px; margin-bottom:12px; border:1px solid rgba(var(--accent-rgb),.45); border-radius:10px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.14),rgba(0,0,0,.16)); }
 .system-summary b{ color:var(--gold); font-family:var(--font-display); letter-spacing:.06em; }
@@ -862,8 +939,13 @@ input,select,textarea{ font-family:inherit; }
 .clock-row small,.health-issue small,.relationship-card summary span{ color:var(--muted); font-size:10px; }
 .clock-track{ height:7px; overflow:hidden; margin:8px 0 5px; border-radius:999px; background:rgba(255,255,255,.07); }
 .clock-track i{ display:block; height:100%; background:linear-gradient(90deg,var(--accent2),var(--gold)); border-radius:inherit; }
+.clock-status{ text-transform:uppercase; letter-spacing:.04em; }
+.clock-status.turning_point{ color:var(--gold); font-weight:700; }
+.clock-status.destroyed,.clock-status.defeated{ color:var(--danger); font-weight:700; }
 .relationship-card summary{ cursor:pointer; }
 .relationship-card>div{ padding-top:6px; }
+.nemesis-card{ border-color:rgba(var(--danger-rgb),.45); background:rgba(var(--danger-rgb),.06); }
+.nemesis-card summary{ color:var(--danger); }
 .prereq-status{ text-transform:uppercase; letter-spacing:.06em; }
 .prereq-status.ready,.prereq-status.complete{ color:#8be3a6; }
 .prereq-status.blocked{ color:#ff9b88; }
@@ -892,6 +974,11 @@ input,select,textarea{ font-family:inherit; }
 .map-wrap.dragging{ cursor:grabbing; }
 .map-canvas{ position:absolute; inset:0; width:100%; height:100%; background-image:linear-gradient(rgba(3,7,12,.18),rgba(3,7,12,.25)),var(--map-image); background-size:cover; background-position:center; transform-origin:0 0; will-change:transform; }
 .map-territories{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+/* Godot-rendered map ambience (drifting cloud-shadows, a pulsing glow on
+   critical-danger landmarks) — sits above the territory coloring but below
+   the clickable pins (z-index:2), and inside #map-canvas so it pans/zooms
+   for free along with everything else already parented there. */
+.map-godot-fx{ position:absolute; inset:0; width:100%; height:100%; z-index:1; pointer-events:none; border:none; background:transparent; }
 .territory-legend{ display:flex; gap:8px; flex-wrap:wrap; margin:0 2px 8px; }
 .territory-chip{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--sub); padding:2px 8px; border-radius:999px; background:color-mix(in srgb, var(--tc) 18%, transparent); border:1px solid color-mix(in srgb, var(--tc) 50%, transparent); }
 .map-zoom-controls{ position:absolute; right:8px; bottom:8px; z-index:3; display:flex; flex-direction:column; gap:4px; }
@@ -905,6 +992,13 @@ input,select,textarea{ font-family:inherit; }
 .map-node .map-label{ position:absolute; left:9px; top:-8px; padding:2px 5px; border-radius:4px; background:rgba(4,8,12,.72); border:1px solid rgba(255,255,255,.12); font-size:9px; line-height:1.15; white-space:nowrap; color:#f2efe7; text-shadow:0 1px 2px #000; box-shadow:0 1px 4px rgba(0,0,0,.35); }
 .map-node.unknown .map-label{ color:#d6d9dc; opacity:.72; }
 .map-node.here .map-label{ color:#fff4c8; border-color:rgba(var(--accent-rgb),.7); font-weight:800; }
+.map-node.danger-tense:not(.here) .map-pip{ box-shadow:0 0 10px var(--gold); border-color:rgba(var(--gold-rgb,230,200,119),.8); }
+.map-node.danger-critical:not(.here) .map-pip{ background:var(--danger); box-shadow:0 0 12px var(--danger); animation:mapPulse 1.4s ease-in-out infinite; }
+.danger-label{ font-weight:700; }
+.danger-label.danger-calm{ color:var(--success); }
+.danger-label.danger-uneasy{ color:var(--sub); }
+.danger-label.danger-tense{ color:var(--gold); }
+.danger-label.danger-critical{ color:var(--danger); }
 .map-detail{ min-height:200px; padding:13px; border:1px solid var(--border-soft); border-radius:10px; background:rgba(0,0,0,.2); }
 .map-detail>b{ display:block; color:var(--gold); font:700 16px var(--font-display); }
 .map-detail>small{ color:var(--accent2); }
@@ -920,6 +1014,10 @@ input,select,textarea{ font-family:inherit; }
 .tuning-row>span{ display:flex; justify-content:space-between; gap:8px; }
 .tuning-row small{ color:var(--accent2); }
 .tuning-row input{ width:100%; }
+.tuning-notes-row{ display:flex; flex-direction:column; gap:8px; padding:10px 12px; border:1px solid var(--border-soft); border-radius:9px; }
+.tuning-notes-row>span{ display:flex; flex-direction:column; gap:2px; }
+.tuning-notes-row small{ color:var(--accent2); }
+.tuning-notes-row textarea{ width:100%; min-height:64px; resize:vertical; font:inherit; padding:8px 10px; border-radius:7px; border:1px solid var(--border-soft); background:rgba(0,0,0,.2); color:var(--text); }
 .health-score{ display:flex; align-items:center; gap:14px; padding:16px; border:1px solid var(--border-soft); border-radius:11px; }
 .health-score strong{ font:700 34px var(--font-display); color:#8be3a6; }
 .health-score.warn strong{ color:var(--gold); }.health-score.bad strong{ color:#ff9b88; }
@@ -1033,8 +1131,15 @@ input,select,textarea{ font-family:inherit; }
   .topbar-center{ max-width:64%; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .topbar-right{ margin-left:auto; gap:5px; }
   .col{ overflow:visible; min-height:0; padding:0; }
-  .col-center{ order:1; height:auto!important; overflow:visible!important; }
-  .col-right{ order:2; }
+  /* Action Chat + Time Control (col-right) come first on mobile, right
+     after the topbar — on a phone, reaching them used to mean scrolling
+     past the scene art and the full-height Chronicle first (roughly
+     800-900px on a typical phone) on every single turn. The Chronicle
+     still scrolls internally at a bounded height either way, so nothing
+     about reading the story is lost — it's just no longer the thing
+     blocking the controls you actually need to act. */
+  .col-right{ order:1; }
+  .col-center{ order:2; height:auto!important; overflow:visible!important; }
   .col-left{ order:3; }
   .scene-viewport{ aspect-ratio:16/8; min-height:180px; max-height:260px; }
   .story-card{ flex:none; min-height:66dvh; }
@@ -1104,20 +1209,70 @@ body[data-world="One Piece"]{
 body[data-world="One Piece"] .panel-head{ letter-spacing:.08em; text-transform:uppercase; }
 body[data-world="One Piece"] .brand{ letter-spacing:.22em; }
 
-/* Naruto — ink / scroll */
+/* Naruto — ink / scroll. Palette follows the approved "Konoha Interface"
+   direction: warm ink-brown base, seal-red for authority/rank accents,
+   leaf-green for skills/affiliation accents, gold for headings — rather
+   than a single flat accent doing all three jobs. */
 body[data-world="Naruto"]{
   --bg:#1b1210; --bg-2:#160d0b; --panel:#2b1a15; --panel-soft:#33201a; --header:#3a2419;
   --border:#5a3a28; --border-soft:#42281c; --accent:#c96d3f; --accent-rgb:201,109,63;
   --accent2:#d5a45a; --accent2-rgb:213,164,90; --text:#f3e6d6; --sub:#c3ae9a; --gold:#e2954f;
-  --font-display:'Yuji Syuku', 'Cinzel', serif; --radius:6px; --glass-rgb:40,27,22;
+  --font-display:'Yuji Syuku', 'Cinzel', serif; --font-label:'Zen Kaku Gothic New', sans-serif;
+  --radius:6px; --glass-rgb:40,27,22;
+  --nrt-seal:#b23c3c; --nrt-leaf:#5c7a4a; --nrt-leaf-bright:#8ab36a;
 }
 body[data-world="Naruto"] .panel{ border-radius:4px 16px 4px 16px; }
-body[data-world="Naruto"] .panel-head{ background:linear-gradient(180deg, rgba(201,109,63,.22), rgba(201,109,63,.04)); }
+body[data-world="Naruto"] .panel-head{
+  background:linear-gradient(180deg, rgba(201,109,63,.22), rgba(201,109,63,.04));
+  border-bottom:2px solid var(--nrt-seal);
+  font-family:var(--font-label); text-transform:uppercase; letter-spacing:.06em; font-size:12px;
+}
 /* The ink-seal glyph is a signature touch — kept to the two panels the
    player actually looks at most, so it reads as deliberate rather than
    repeating identically down a whole stacked column of panels. */
 body[data-world="Naruto"] .story-card .panel-head > span:first-child::after{
   content:"印"; margin-left:8px; font-size:13px; opacity:.45; color:var(--danger); vertical-align:middle;
+}
+/* A real forehead protector across the top of the portrait — the single
+   most recognizable prop in the franchise, so it gets actual visual weight
+   instead of living only as a small corner glyph. Bleeds past both edges
+   of the frame (clipped by its own overflow:hidden) to read as a metal
+   plate stitched to a strap, not a flat colored bar. Reuses ::after since
+   ::before on this element already carries the pre-portrait watermark. The
+   horizontal gradient layer darkens both ends toward near-black, reading
+   as the strap fading into shadow at the edges rather than a flat band. */
+body[data-world="Naruto"] .portrait-frame::after{
+  content:"葉"; position:absolute; top:0; left:-16px; right:-16px; z-index:5; height:26px;
+  display:flex; align-items:center; justify-content:center;
+  background:
+    linear-gradient(90deg, rgba(23,20,15,.92), transparent 14%, transparent 86%, rgba(23,20,15,.92)),
+    linear-gradient(180deg,#d4dbe0,#8b95a0 45%,#68727c);
+  border-bottom:4px solid #17140f;
+  box-shadow:inset 0 2px 3px rgba(255,255,255,.45), inset 0 -3px 6px rgba(0,0,0,.4);
+  font:700 13px/1 'Yuji Syuku', serif; color:#20221f; opacity:.85; text-shadow:0 1px 0 rgba(255,255,255,.5);
+}
+/* Pushed down to clear the plate above instead of sitting under it. */
+body[data-world="Naruto"] #portrait-status{ top:44px; }
+body[data-world="Naruto"] #btn-portrait-regenerate{ top:41px; }
+body[data-world="Naruto"] #btn-portrait-manage{ top:80px; }
+/* A small hanko (name-seal) badge next to Status — the closest real field
+   to "rank" — echoing the forehead-protector plate as a second, smaller
+   signature touch rather than a one-off. */
+body[data-world="Naruto"] #stat-status::after{
+  content:"忍"; display:inline-flex; align-items:center; justify-content:center;
+  width:16px; height:16px; margin-left:6px; background:var(--nrt-seal); color:#f3e6d6;
+  font-family:'Yuji Syuku',serif; font-size:10px; border-radius:2px; transform:rotate(-6deg);
+  box-shadow:0 2px 4px rgba(0,0,0,.35); vertical-align:middle;
+}
+/* Skills & Titles read as scroll entries — a leaf-green left rule instead
+   of the generic flat card border every other world shares. */
+body[data-world="Naruto"] .tag-list li{ border-left:3px solid var(--nrt-leaf-bright); }
+/* A segmented "dowel" border under the Chronicle head, echoing a scroll's
+   wooden roller — separates the story feed from the scene banner above
+   with something more specific than a plain rule. */
+body[data-world="Naruto"] .story-feed{
+  border-top:6px solid transparent;
+  border-image:repeating-linear-gradient(90deg,#4a3a26 0 4px,#3a2d1c 4px 8px) 6;
 }
 
 /* Hunter x Hunter — license / modern adventurer */
@@ -1290,7 +1445,7 @@ body[data-world="Reincarnated as a Slime"] .quick-nav button:active, body[data-w
    moment instead of only living quietly in a journal tab.
    ========================================================================== */
 #modal-chapter-recap .modal{ background:transparent; border:none; box-shadow:none; backdrop-filter:none; -webkit-backdrop-filter:none; padding:0; width:auto; max-width:96vw; }
-#modal-chapter-recap.open{ background:rgba(2,3,6,.88); backdrop-filter:blur(6px); }
+#modal-chapter-recap.open{ background:rgba(2,3,6,.94); }
 .recap-frame{
   width:620px; max-width:92vw; max-height:88vh; overflow-y:auto;
   padding:38px 40px 34px; text-align:center; position:relative;

@@ -14,7 +14,7 @@ from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks)
+                     update_chapter_memory, tick_world_clocks, tension_level)
 
 
 DEFAULT_SETTINGS = {
@@ -217,4 +217,8 @@ class JournalMixin:
         s["_gear_style"] = gear_style_for(self.state.get("world", "Custom World"))
         s["_app_version"] = APP_VERSION
         s["_last_autosave"] = self.state.get("last_autosave", self.last_autosave)
+        deadline = self.state.get("tower_floor_deadline_day")
+        if self.state.get("world") == "Solo Max-Level Newbie" and isinstance(deadline, (int, float)) and not self.state.get("tower_over"):
+            s["_tower_days_left"] = max(0, int(deadline - self.state.get("canon_day", 0)))
+        s["_tension"] = tension_level(self.state)
         return s

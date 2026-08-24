@@ -30,6 +30,11 @@ APP_OWNED = {
     # own (BASE_STATE's default is None), so a model that echoes it back
     # from context could silently corrupt every date in the campaign.
     "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event",
+    # Deterministic pacing bookkeeping (systems.tick_world_clocks/pacing_guidance)
+    # and the player's own standing preference field — both set only through
+    # their own dedicated mechanism/endpoint, never through the GM's own
+    # narrated state_patch.
+    "last_major_beat_day", "director_notes",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}

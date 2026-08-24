@@ -401,16 +401,75 @@ class CampaignMixin:
             },
         }
 
-    def infer_starting_profile(self, world, origin, archetype, background, stats):
+    def infer_starting_wealth(self, world, origin, archetype, background, boost):
+        """How much starting currency a character plausibly has, from their
+        stated background rather than one flat number for every campaign.
+        Two independent signals: this world's own economic scale (a Berries
+        economy and a Ryo economy aren't the same order of magnitude), and
+        this specific background's wealth relative to an ordinary local
+        (a runaway noble starts richer than a street orphan even if neither
+        is a strong fighter — wealth and combat power are different axes,
+        so this stays separate from the power `boost` above, with only a
+        light additive nudge from it for a genuinely major starting figure)."""
+        baseline = int(expansion_for(world).get("currency_baseline", 250))
+        text = f"{origin} {archetype} {background}".lower()
+        multiplier = 1.0
+        if any(k in text for k in ("noble", "royal", "prince", "princess", "heir", "aristocrat", "wealthy", "rich merchant", "merchant family", "clan heir")):
+            multiplier = 5.0
+        elif any(k in text for k in ("merchant", "shopkeeper", "trader", "blacksmith", "crafter", "landowner")):
+            multiplier = 2.0
+        elif any(k in text for k in ("soldier", "recruit", "academy graduate", "guild", "hunter", "mercenary", "military")):
+            multiplier = 1.3
+        elif any(k in text for k in ("orphan", "street", "runaway", "poor", "impoverished", "homeless", "beggar", "survivor", "refugee")):
+            multiplier = 0.35
+        elif any(k in text for k in ("bandit", "smuggler", "black market", "criminal", "thief")):
+            multiplier = 1.6
+        amount = baseline * multiplier + boost * (baseline / 50.0)
+        # +/-15% so two characters with the same background text don't start
+        # with the exact identical number down to the last coin.
+        amount *= random.uniform(0.85, 1.15)
+        return max(1, int(round(amount / 5.0)) * 5)
+
+    @staticmethod
+    def naruto_identity_title(origin, start_location):
+        """Naruto's ongoing character identity is rank and affiliation, not
+        a combat-focus archetype like "Ninjutsu Student" — that only ever
+        mattered at character creation. "Leaf - Chunin", "Sand - Genin",
+        "Akatsuki - Member" is what actually reads as a shinobi's standing
+        to another shinobi, so that's what the title chip should show."""
+        village = {
+            "Konohagakure": "Leaf", "Sunagakure": "Sand", "Kirigakure": "Mist",
+            "Kumogakure": "Cloud", "Iwagakure": "Stone", "Iron Country": "Iron Country",
+        }.get(str(start_location).strip(), "")
+        text = f"{origin}".lower()
+        if str(start_location).strip() == "Amegakure" or "akatsuki" in text:
+            return "Akatsuki - Member"
+        if "jonin" in text:
+            rank = "Jonin"
+        elif "chunin" in text:
+            rank = "Chunin"
+        elif "anbu" in text or "root" in text:
+            rank = "Anbu"
+        elif "rogue" in text or "missing-nin" in text:
+            return "Rogue - Missing-nin"
+        elif "samurai" in text:
+            rank = "Samurai"
+        elif "graduate" in text:
+            rank = "Genin"
+        else:
+            rank = "Academy Student"
+        return f"{village or 'Unaffiliated'} - {rank}"
+
+    def infer_starting_profile(self, world, origin, archetype, background, stats, start_location=""):
         text = f"{origin} {archetype} {background}".lower()
         boost, band = 0, "Average beginner"
         if any(k in text for k in ("omnipotent", "godlike", "six paths", "demon lord", "yonko", "emperor of the sea")):
             boost, band = 100, "World-shaking"
         elif any(k in text for k in ("hokage", "kage", "admiral", "master assassin", "legendary", "s-rank")):
             boost, band = 55, "Elite / major power"
-        elif any(k in text for k in ("veteran", "prodigy", "genius", "bloodline", "elite", "champion")):
+        elif any(k in text for k in ("veteran", "prodigy", "genius", "bloodline", "elite", "champion", "jonin", "notorious", "renowned")):
             boost, band = 20, "Exceptional starter"
-        elif any(k in text for k in ("trained", "graduate", "martial artist", "soldier", "hunter")):
+        elif any(k in text for k in ("trained", "graduate", "martial artist", "soldier", "hunter", "chunin", "samurai")):
             boost, band = 8, "Trained starter"
         primary = primary_stats_for(world, archetype)
         background_profile = self.build_background_profile(world, origin, archetype, background, boost, primary)
@@ -421,7 +480,7 @@ class CampaignMixin:
         if "uchiha" in text: skill_name = "Uchiha Fire and Dōjutsu Foundations"
         elif "medic" in text or "healer" in text: skill_name = f"{archetype or 'Field'} Healing Fundamentals"
         elif archetype: skill_name = f"{archetype} Fundamentals"
-        title = f"{origin or 'Local'} {archetype or 'Adventurer'}".strip()
+        title = self.naruto_identity_title(origin, start_location) if world == "Naruto" else f"{origin or 'Local'} {archetype or 'Adventurer'}".strip()
         skills = {skill_name: {"rank": "Trained" if boost < 20 else "Exceptional", "bonus": 4 + boost // 10,
                                "description": "Generated from the character's stated background and starting role."}}
         generated_ability = None
@@ -436,9 +495,11 @@ class CampaignMixin:
             notice = (f"This background creates an {band.lower()} character who begins far above an average local starter. "
                       "The campaign allows it; rivals, factions and consequences will respond at the same scale.")
         race = infer_race_from_background(world, background, origin, archetype) if world_supports_races(world) else ""
+        starting_currency = self.infer_starting_wealth(world, origin, archetype, background, boost)
         return {"stats": adjusted, "skills": skills, "titles": [title], "equipment": equipment,
                 "hp_max": hp_max, "resource_max": resource_max, "power_band": band, "power_notice": notice,
                 "primary_stats": primary, "generated_ability": generated_ability, "race": race,
+                "starting_currency": starting_currency,
                 **background_profile}
 
     def canon_character_scenario(self, world, scenario_id):
@@ -460,7 +521,7 @@ class CampaignMixin:
         era = None if scenario else starting_era_by_id(world, starting_era_id)
         start = str(start_location or wd["start"]).strip()
         rolled = self.roll_starting_stats(world, archetype, stats or {})
-        profile = self.infer_starting_profile(world, origin, archetype, background, rolled)
+        profile = self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start)
         if scenario:
             start_day, canon_anchor = int(scenario.get("start_day")), scenario.get("background")
         elif era:
@@ -484,7 +545,7 @@ class CampaignMixin:
             "starting_era": era, "starting_era_options": starting_eras_for(world),
         }
 
-    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id=""):
+    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age=""):
         wd = WORLD_DATA[world]
         scenario = self.canon_character_scenario(world, canon_character_id) if canon_character_id else None
         era = None if scenario else starting_era_by_id(world, starting_era_id)
@@ -493,7 +554,7 @@ class CampaignMixin:
             origin, archetype, start_location = scenario.get("origin", origin), scenario.get("archetype", archetype), scenario.get("location", start_location)
         start = start_location.strip() or wd["start"]
         rolled = copy.deepcopy(preview_stats) if isinstance(preview_stats, dict) else self.roll_starting_stats(world, archetype, stats)
-        profile = copy.deepcopy(preview_profile) if isinstance(preview_profile, dict) else self.infer_starting_profile(world, origin, archetype, background, rolled)
+        profile = copy.deepcopy(preview_profile) if isinstance(preview_profile, dict) else self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start)
         profile_stats = profile.get("stats") if isinstance(profile.get("stats"), dict) else rolled
         hp_max, resource_max = self.derive_pools(world, profile_stats)
         with self.lock:
@@ -521,7 +582,7 @@ class CampaignMixin:
             if start_note.strip():
                 prefix += start_note.strip() + "\n"
             self.state["background"] = (prefix + self.state.get("background", "")).strip()
-            self.state["currency"] = {"name": ex["currency"], "amount": 250}
+            self.state["currency"] = {"name": ex["currency"], "amount": profile.get("starting_currency", ex.get("currency_baseline", 250))}
             self.state["special"]["Origin"] = origin
             self.state["special"]["Archetype"] = archetype
             self.state["special"]["Background Details"] = copy.deepcopy(profile.get("background_details", {}))
@@ -553,6 +614,16 @@ class CampaignMixin:
             if scenario:
                 self.state["age"] = scenario.get("age", "")
                 self.state["campaign_canon"] = [{"turn": 0, "type": "canon_character_start", "text": f"The player assumes full control of {scenario['name']} at {scenario['label']}."}]
+            # An explicit typed age always wins, even over a canon scenario's
+            # own default — the player is deliberately choosing an unusual
+            # combination on purpose (see the "odd combos for fun" note in
+            # the UI), not making a mistake to be corrected. Left blank, the
+            # existing opening() needs_age path already asks the AI to
+            # invent a plausible age fitting the origin/archetype/background,
+            # which is a better fit for "match the closest age" than a fixed
+            # rule table would be.
+            if str(age).strip():
+                self.state["age"] = str(age).strip()
             self.state["codex"] = [{"name": start, "type": "Location", "notes": "Starting location."}]
             # Major world polities/groups are contactable from day one, not
             # only after the story happens to introduce them — the player can

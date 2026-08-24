@@ -369,6 +369,109 @@ class TurnsMixin:
         result["status"] = "resolved"
         return result
 
+    def event_window_rules(self):
+        """Scoped GM instructions for one beat inside an already-active major
+        event — the player still needs the full world/ability/combat rules
+        to narrate consistently, but the SCENE must stay sealed to this
+        event: no wider-world advancement, no unrelated locations, and
+        critically, no time/calendar movement at all (this is a single
+        in-the-moment exchange, resolved exactly like any ordinary action)."""
+        title = str(self.state.get("active_canon_event") or "this event").strip()
+        context = str(self.state.get("interruption_context") or "").strip()
+        return self.gm_context(f"the ongoing major event: {title}") + f"""
+
+YOU ARE CURRENTLY RESOLVING A LIVE MAJOR EVENT SCENE, ONE BEAT AT A TIME — NOT A TIME SKIP.
+EVENT: {title}
+EVENT CONTEXT: {context or 'The player is directly engaged in this unfolding event.'}
+- Stay entirely inside this event's scene — its location, its immediate participants, its unfolding action. Do not narrate unrelated locations, unrelated threads, or the wider world advancing; the rest of the world resumes only once this event concludes.
+- This is a real choose-your-own-adventure exchange: present what is happening concretely, react directly and specifically to exactly what the player just said or did, and always offer real, situation-specific suggested_actions — never generic filler.
+- Resolve the player's stated action as something that actually happens this beat, not something merely attempted or prepared — a fast-moving live scene like this one is exactly where hedging ("you prepare to...", "you move to try...") reads worst. If it can plausibly succeed outright, it does; if something genuinely stops it, say concretely what happened instead. Never end a beat with the player's clear action left unresolved.
+- This should read as a substantial scene, not a one-shot — expect several back-and-forth exchanges before it naturally concludes. Do not set event_concluded after a single beat unless the player's own action genuinely ends it right there.
+- If the player's stated action itself declares an intent to carry through to this event's actual end — "I do X until the attack is over," "I keep helping until things settle," "I hold this position for the rest of the fight" — that is explicit authorization to advance straight through the scene's remaining beats and resolve it to its real conclusion in THIS response, not one more incremental check-in. Narrate the intervening span at a summary pace (what they did, what changed, how it wound down) the same way a time skip would, then land on the actual ending and set event_concluded=true. Manufacturing another "what do you do now?" prompt when the player already told you to keep going until a specific endpoint is a failure to honor their input, not thoroughness.
+- Never repeat or lightly reword a beat the player has already been given — if their input doesn't change anything material, that itself is a reason to move the scene forward (time passing, the situation shifting, a new development) rather than re-presenting the same moment.
+- Set event_concluded=true only when: (a) the scene has genuinely reached its real conclusion (the confrontation/moment is resolved, one way or another), or (b) the player's stated action clearly disengages from the event — fleeing, leaving the area, refusing to get involved, hiding, or similar. For (b), event_conclusion_summary must plainly state that the player left or avoided the event and how, so the very next turn picks up from exactly that reality (they were not present for whatever happened next, and only learn of the outcome secondhand later, if at all).
+- If the scene turns physical, use structured combat (state_patch.combat) exactly as you normally would — the player can also flee a fight via the combat controls, which should likewise end the event.
+- Never advance world_time, world_clock_minutes, canon_day, or the calendar here — the application does not permit it for this exchange regardless of what you write.
+Return ONLY valid JSON."""
+
+    @staticmethod
+    def _wants_event_resolution(action_text):
+        """Detects a player explicitly signaling they want to keep acting
+        all the way through to this event's actual conclusion ("I help
+        people until the attack is over") rather than getting one more
+        incremental beat. A general instruction buried in event_window_rules
+        proved unreliable on its own — the same lesson already learned from
+        _same_place and the power-goal mechanic — so this drives an
+        explicit, unambiguous per-turn directive instead of hoping the
+        model notices a general rule on its own."""
+        text = str(action_text or "").lower()
+        if "until" not in text and "till" not in text and "for the rest of" not in text:
+            return False
+        endpoint_words = ("over", "done", "end", "ends", "ended", "settle", "settled", "resolved",
+                           "resolves", "safe", "clear", "clears", "passes", "subsides", "finished", "through")
+        return "for the rest of" in text or any(w in text for w in endpoint_words)
+
+    def respond_to_event(self, action):
+        """Resolve one beat of the currently active major event. Scoped
+        entirely to that event and resolved as a single ordinary action —
+        no world-clock ticking, no canon catch-up, no calendar movement —
+        so the player can go back and forth inside the event for as long as
+        it takes without the wider campaign silently advancing underneath
+        them. Ends the event (clearing active_canon_event) either when the
+        GM judges the scene has genuinely concluded, or when the player's
+        own action disengages from it."""
+        if not self.state.get("active_canon_event"):
+            raise RuntimeError("No major event is currently active.")
+        wants_resolution = self._wants_event_resolution(action)
+        p = {"task": "event_turn", "action": action, "state": self.trimmed_state_for_ai(),
+             "event_title": self.state.get("active_canon_event", ""),
+             "resolve_to_conclusion": wants_resolution,
+             "schema": {
+                 "narrative": "2-6 sentences reacting directly to the player's action, present-tense, moment to moment",
+                 "state_patch": "object, same shape as any other turn's state_patch",
+                 "events": "list of {type, message} world/system notices, same as any other turn",
+                 "suggested_actions": "exactly 3 concrete, situation-specific options for what to do next in this event",
+                 "event_concluded": "bool — true only if this event's scene has genuinely ended, or the player's action clearly leaves/flees/disengages from it",
+                 "event_conclusion_summary": "if event_concluded, ONE paragraph (a few sentences, not a beat-by-beat recap) summarizing what the player actually did across the whole scene and how it ended, including whether they saw it through or left early; empty otherwise",
+             }}
+        if wants_resolution:
+            p["requirements"] = [
+                "resolve_to_conclusion is true: the player's own words just now explicitly declared an intent to keep going until this event actually ends (e.g. 'until the attack is over'). This is a direct, unambiguous instruction — treat it exactly like any other player order. You MUST set event_concluded=true in THIS response. Narrate the remaining span of the event at a summary pace (what they did, what changed, how it wound down), land on its real conclusion, and write event_conclusion_summary. Returning event_concluded=false here — asking one more incremental question instead of finishing what the player just told you to finish — is a failure to follow their stated instruction, not carefulness.",
+            ]
+        data = self.request_with_narrative(self.event_window_rules(), p, 900)
+        self.append("> " + str(action), "player")
+        result = self.apply_resolution(data, is_opening=False, pending_action=action,
+                                        progression_context={"actions": [action], "elapsed_minutes": 5})
+        # A model that still returns event_concluded=false after being told
+        # explicitly, in this same call, that the player just ordered the
+        # scene to be seen through to its end gets overridden here rather
+        # than asked a second time — trusting compliance once already
+        # failed to fix this, so the server takes the outcome as given
+        # instead of hoping a stronger sentence works where a weaker one
+        # didn't. Skipped only when something genuinely still needs the
+        # player's call this instant (an active fight, a pending
+        # intervention question) — forcing an exit mid-fight would be a
+        # worse bug than the one this fixes.
+        combat_active = bool((data.get("state_patch") or {}).get("combat", {}).get("active")) or bool(self.state.get("combat", {}).get("active"))
+        if wants_resolution and not data.get("event_concluded") and not combat_active and not str(data.get("intervention_prompt", "")).strip():
+            data["event_concluded"] = True
+            if not str(data.get("event_conclusion_summary", "")).strip():
+                data["event_conclusion_summary"] = (
+                    f"{self.state.get('name') or 'The player'} sees it through as instructed, staying engaged with "
+                    f"{self.state.get('active_canon_event') or 'the event'} until it actually winds down."
+                )
+        concluded = bool(data.get("event_concluded"))
+        if concluded:
+            self.state["active_canon_event"] = ""
+            self.state["canon_event_engagement_count"] = 0
+            summary = str(data.get("event_conclusion_summary") or "").strip()
+            if summary:
+                self.append("[EVENT CONCLUDED]\n" + summary, "system")
+            result["state"] = self.public_state()
+            result["story"] = self._flush_story()
+        result["event_concluded"] = concluded
+        return result
+
     def upsert_prerequisite_track(self, track):
         if not isinstance(track, dict) or not str(track.get("name", "")).strip():
             return

@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.0"
+APP_VERSION = "2.6.30"
 APP_NAME = "Worldwalker RPG"
 
 DIFFICULTIES = {
@@ -18,6 +18,97 @@ DIFFICULTIES = {
     "Nightmare": {"difficulty_shift": 15, "dc_shift": 6, "enemy_edge": 4, "death": "severe", "freedom": "total",
                   "description": "Brutal simulation. Contextual difficulties are much higher and fatal mistakes are common."},
 }
+
+# The Tower of Trials — Solo Max-Level Newbie's 50-floor structure, sourced
+# from a canon-inspired floor map the user supplied. Each entry is the
+# floor's real internal name/theme, used to keep the GM's choice of
+# monsters/factions per floor canon-consistent (murim floors get martial
+# sects, workshop floors get golems and empires, and so on) — but the
+# PLAYER only ever sees "Floor N" (see tower_floor_display / map below);
+# the theme is GM-context only, never surfaced as the location label.
+TOWER_FLOOR_THEMES = [
+    ("Hapjeong Station", "Opening Survival"), ("Mangrove, Tree of Greed", "Carnivorous Forest"),
+    ("Goblin Warrens", "First Hunt"), ("Poison Swamp", "Venom and Traps"),
+    ("Ruined Temple", "Relic Puzzle"), ("Underground Aqueduct", "Water Beasts"),
+    ("Beast Colosseum", "Strength Trial"), ("Cursed Catacombs", "Undead Ambush"),
+    ("Mirror Passage", "Illusion Trial"), ("Orc Stronghold", "Siege Test"),
+    ("Desecrated Chapel", "Curse Rite"), ("Frozen Rift", "Endurance Trial"),
+    ("Lava Crossing", "Flames of Trial"), ("Alchemist's Lab", "Mutant Experiments"),
+    ("Library of Records", "Knowledge Trial"), ("Assassin's Alley", "Silent Killers"),
+    ("Phantom Ballroom", "Hallucination Zone"), ("Clockwork Workshop", "Golems and Gears"),
+    ("Hidden Place", "Ruined Cave Labyrinth"), ("Murim Gate", "Jianghu Opens"),
+    ("Beggar Sect Streets", "Espionage Web"), ("Poison Valley", "Venom Masters"),
+    ("Shaolin Grounds", "Discipline Trial"), ("Mount Hua Paths", "Sword Sect Ordeal"),
+    ("Namgung Arena", "Duel of Clans"), ("Demonic Cult Border", "Blood and Ambush"),
+    ("Black Market of Jianghu", "Schemes and Trade"), ("Murim Battlefield", "Clash of Sects"),
+    ("Heavenly Demon Ascent", "Murim Endgame"), ("Workshop Battle", "Tournament of Relics"),
+    ("Imperial Frontier", "War on the March"), ("Arcane Academy", "Magic Examination"),
+    ("Noble District", "Court Conspiracy"), ("Spirit Catacombs", "Ancient Capital Depths"),
+    ("Knight Order Barracks", "Chivalric Trial"), ("Imperial Palace", "Audience with the Throne"),
+    ("Magic Tower", "High Sorcery"), ("Rebellion Front", "Empire in Flames"),
+    ("Abyssal Gate", "Rift to the Lower Dark"), ("Ancient Throne", "Demon Monarch's Court"),
+    ("Ancient Archive", "Forgotten Histories"), ("Titan Graveyard", "Colossi of the Past"),
+    ("Celestial Observatory", "Stars and Prophecy"), ("World Tree Canopy", "Ancient Spirit Realm"),
+    ("Void Corridor", "Nothingness Trial"), ("Guardian Sanctuary", "Keepers of the Summit"),
+    ("Divine Mechanism Chamber", "Clockwork Heaven"), ("Administrator's Garden", "Realm of the Overseers"),
+    ("Final Ascent", "Path to the Apex"), ("Top of the Tower", "Destia and the Last Trial"),
+]
+TOWER_FLOOR_COUNT = len(TOWER_FLOOR_THEMES)
+
+
+def tower_floor_theme(floor):
+    """The internal canon name/theme for a floor (GM context only, 1-indexed)."""
+    idx = max(1, min(TOWER_FLOOR_COUNT, int(floor or 1))) - 1
+    name, theme = TOWER_FLOOR_THEMES[idx]
+    return f"{name} — {theme}"
+
+
+def _tower_tier(floor):
+    if floor <= 19: return 2 + floor // 7
+    if floor <= 29: return 5
+    if floor <= 40: return 6 if floor <= 35 else 7
+    if floor <= 45: return 8
+    return 9 if floor <= 49 else 10
+
+
+# Ecological "band" identity per tier — each is a distinct, internally
+# consistent biome of threat logic and environmental behavior that must not
+# bleed into neighboring bands. Compressed from an 11-band/100+-floor
+# generic Tower framework down to this Tower's real 9-tier/50-floor
+# structure (floor 50 is the canon-established top of THIS Tower), so the
+# escalation curve still completes by the true final floor instead of
+# treating floor 50 as merely "mid-tier" the way the uncompressed framework
+# would.
+_TOWER_BANDS = {
+    2: ("Initial Survival", "unstable, partially degraded systems; low-level anomalies and reactive hazards that respond directly to presence and noise"),
+    3: ("Adaptive Response", "more structured, semi-self-regulating surroundings; coordinated threats and environmental traps that begin predicting simple behavior patterns"),
+    4: ("Structured Hunting", "organized predators with group intelligence and territorial systems; survival requires strategy, not just reaction"),
+    5: ("Systemic Complexity", "layered, multi-condition hazards; engineered systems and hybrid threats where the environment itself turns adversarial"),
+    6: ("Predictive Ecosystem", "a responsive, semi-adaptive layout where entities learn and counter the player's own patterns across repeated encounters"),
+    7: ("Fractured Reality", "localized, bounded instability in physical law and perception — logic bends but every shift must stay traceable within Tower rules, never arbitrary"),
+    8: ("Pre-Transition / High Ecosystem", "elite variants of earlier threats and multi-domain coordination; cross-system interaction and layered, sometimes indirect conflict"),
+    9: ("Advanced Anomaly", "high-tier anomalies bound by specific, discoverable rules; exceptions exist but are never lawless, and system-breaking attempts are contained and structured"),
+    10: ("Final Ascent / Upper System", "apex, overseer-caliber entities operating with near-complete awareness of the Tower's own rules; foundational Tower logic is partially exposed here but never fully broken"),
+}
+
+
+def tower_band(floor):
+    """(band_name, ecology_summary) for the ecological band this floor's
+    tier belongs to — GM context only, same non-player-facing status as
+    tower_floor_theme()."""
+    return _TOWER_BANDS.get(_tower_tier(max(1, min(TOWER_FLOOR_COUNT, int(floor or 1)))), _TOWER_BANDS[2])
+
+
+def _tower_map_nodes():
+    """Player-facing map nodes for all 50 floors — deliberately just 'Floor
+    N', never the internal theme name (see TOWER_FLOOR_THEMES)."""
+    nodes = [("Earth — Tower Entrance", 50, 96, "hub", 1)]
+    for floor in range(1, TOWER_FLOOR_COUNT + 1):
+        x = 42 if floor % 2 == 0 else 58
+        y = round(90 - (floor - 1) * (86 / (TOWER_FLOOR_COUNT - 1)), 1)
+        nodes.append((f"Floor {floor}", x, y, "floor", _tower_tier(floor)))
+    return nodes
+
 
 WORLD_DATA = {
     "One Piece": {
@@ -87,13 +178,7 @@ WORLD_DATA = {
         "rules": "Use Tower-progression logic inspired by Solo Max-Level Newbie. Floors have scenarios, administrators, hidden conditions, achievements, monsters, bosses and secret rewards. Clever foreknowledge can create enormous advantages when the player actually possesses or discovers it. System rewards must be explicit.",
         "start": "Earth — Tower Entrance",
         "factions": {"Players":0,"Major Guilds":0,"Tower Administrators":0,"Demons":0},
-        "map": [
-            ("Earth — Tower Entrance",15,72,"hub",1), ("Floor 1",26,67,"floor",2),
-            ("Floor 2",38,61,"floor",3), ("Floor 3",50,55,"floor",4),
-            ("Floor 5",62,49,"floor",6), ("Floor 10",74,42,"floor",8),
-            ("Floor 20",82,31,"floor",11), ("Floor 30",68,20,"floor",14),
-            ("Floor 40",50,15,"floor",17), ("Floor 50+",30,22,"floor",20)
-        ],
+        "map": _tower_map_nodes(),
         "special": {"Unspent Stat Points":0,"Copied Abilities":[],"Achievements":[],"Floor":0,"Hidden Conditions Found":0}
     },
     "Overgeared": {
@@ -240,7 +325,7 @@ CANON_TIMELINES = {
         {"major": False, "historical_only": True, "day": -6641, "title": "Sakumo Hatake's death", "location": "Konohagakure", "summary": "The White Fang of Konoha takes his own life after being condemned for choosing to save his comrades over completing a mission — a shadow that will hang over his son Kakashi for years."},
         {"day": -4857, "title": "The Kannabi Bridge mission", "location": "Kannabi Bridge", "summary": "Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief."},
         {"day": -4856, "title": "Yahiko's death and the founding of Akatsuki", "location": "Amegakure", "summary": "Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki."},
-        {"day": -4380, "title": "Naruto's birth and the Nine-Tails attack", "location": "Konohagakure", "banner": "nine_tails_attack_on_konoha", "summary": "Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival."},
+        {"day": -4380, "title": "Naruto's birth and the Nine-Tails attack", "location": "Konohagakure", "banner": "nine_tails_attack_on_konoha", "scope": "wide", "summary": "Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival."},
         {"major": False, "day": -4233, "title": "Might Duy's sacrifice", "location": "Land of Fire", "summary": "Might Duy rescues Guy, Ebisu, and Genma from the Seven Swordsmen of the Mist, killing two of them before dying from opening the Eight Gates."},
         {"major": False, "day": -3233, "title": "The Hyūga Affair", "location": "Konohagakure", "summary": "After Hiashi Hyūga kills a Kumogakure envoy in retaliation for an attempted kidnapping, his twin brother Hizashi sacrifices his own life under the branch seal to satisfy the peace treaty."},
         {"day": -1603, "title": "The Uchiha Massacre", "location": "Konohagakure — Uchiha District", "banner": "uchiha_massacre", "summary": "Itachi Uchiha kills nearly his entire clan in a single night under Konoha's own order to prevent a coup, sparing only his younger brother Sasuke. The truth behind why is hidden from the village for years."},
@@ -260,7 +345,7 @@ CANON_TIMELINES = {
         {"major": False, "day": 166, "title": "Chūnin Exam preliminaries", "location": "Konohagakure", "summary": "One-on-one preliminary matches thin the surviving genin ahead of the final tournament, revealing hidden strength and rivalries; Naruto meets Jiraiya the same night."},
         {"major": False, "day": 175, "title": "One month of final-round training", "location": "Konohagakure", "summary": "Finalists scatter to train intensively before the Chūnin Exam finals — Naruto with Jiraiya, Sasuke with Kakashi — each seeking an edge from a mentor or hidden technique."},
         {"major": False, "day": 185, "title": "The curse mark's temptation", "location": "Konohagakure", "summary": "Sasuke wrestles with the cursed seal's promised power as Kakashi works out a way to counter it before the finals."},
-        {"day": 190, "title": "Chūnin Exam finals and the Konoha Crush", "location": "Konohagakure", "summary": "The exam finals become the cover for a coordinated invasion by Sunagakure and Otogakure; the Third Hokage, Hiruzen Sarutobi, dies sealing away Orochimaru's arms — unless prior divergences alter the outcome."},
+        {"day": 190, "title": "Chūnin Exam finals and the Konoha Crush", "location": "Konohagakure", "scope": "wide", "summary": "The exam finals become the cover for a coordinated invasion by Sunagakure and Otogakure; the Third Hokage, Hiruzen Sarutobi, dies sealing away Orochimaru's arms — unless prior divergences alter the outcome."},
         {"day": 192, "title": "The search for Tsunade begins", "location": "Konohagakure", "banner": "search_for_tsunade", "summary": "With Itachi and Kisame sighted entering the village, Jiraiya and Naruto set out to track down the Sannin Tsunade and convince her to become the Fifth Hokage."},
         {"major": False, "day": 229, "title": "Tsunade becomes Fifth Hokage", "location": "Konohagakure", "summary": "Tsunade returns to Konoha with Naruto and Jiraiya and formally accepts the title of Fifth Hokage."},
         {"day": 238, "title": "Sasuke's Departure", "location": "Konohagakure", "banner": "sasukes_departure", "summary": "Consumed by the pull of Orochimaru's power, Sasuke abandons Konoha in the night after clashing with Naruto on the hospital rooftop."},
@@ -272,17 +357,17 @@ CANON_TIMELINES = {
         {"day": 1360, "title": "Jiraiya's death in Amegakure", "location": "Amegakure", "summary": "Jiraiya infiltrates Amegakure to learn the truth behind Pain, fights Pain and Konan, and dies delivering crucial intelligence back to Konoha with his final moments."},
         {"day": 1361, "title": "Itachi Uchiha's death", "location": "Land of Fire border", "summary": "Sasuke finally confronts and kills Itachi in single combat; Itachi, already dying of illness, ensures his brother survives the fight."},
         {"day": 1400, "title": "Itachi's Truth", "location": "Various", "banner": "itachis_truth", "summary": "In the aftermath of Itachi's death, the truth of the Uchiha Massacre comes to light: Itachi acted under Konoha's own order to prevent a coup, sacrificing his name and his brother's hatred to protect the village he loved."},
-        {"day": 1409, "title": "Pain's Assault on Konoha", "location": "Konohagakure", "banner": "pains_assault_on_konoha", "summary": "Pain launches a full assault on Konohagakure in pursuit of Naruto, leveling much of the village within minutes."},
+        {"day": 1409, "title": "Pain's Assault on Konoha", "location": "Konohagakure", "banner": "pains_assault_on_konoha", "scope": "wide", "summary": "Pain launches a full assault on Konohagakure in pursuit of Naruto, leveling much of the village within minutes."},
         {"day": 1409, "title": "Naruto vs. Pain", "location": "Konohagakure", "banner": "naruto_vs_pain", "summary": "Naruto confronts Pain directly, ultimately learning Nagato's true identity and choosing to spare him — a choice that reshapes the Akatsuki leader's own resolve as he sacrifices himself to revive the villagers he killed."},
         {"major": False, "day": 1410, "title": "The Five Kage Summit", "location": "Land of Iron", "summary": "The Five Kage meet to decide how to respond to Akatsuki, only for Sasuke to attack the summit himself; the masked Akatsuki leader declares the Fourth Shinobi World War in the chaos that follows."},
         {"day": 1420, "title": "Obito's Reveal", "location": "War Front", "banner": "obitos_reveal", "summary": "The masked man behind Akatsuki's true plan is revealed to be Obito Uchiha, Kakashi's presumed-dead teammate, radically reframing the entire war's cause."},
-        {"day": 1684, "title": "The Fourth Shinobi World War begins", "location": "Allied Shinobi Forces Camp", "summary": "The Allied Shinobi Forces mobilize against Akatsuki's reanimated army, opening the war that will decide the future of the shinobi world."},
+        {"day": 1684, "title": "The Fourth Shinobi World War begins", "location": "Allied Shinobi Forces Camp", "scope": "wide", "summary": "The Allied Shinobi Forces mobilize against Akatsuki's reanimated army, opening the war that will decide the future of the shinobi world."},
         {"day": 1685, "title": "Kaguya's Appearance", "location": "Kaguya's Dimension", "banner": "kaguyas_appearance", "summary": "Obito casts the Infinite Tsukuyomi, but Black Zetsu's betrayal uses him to revive Kaguya Ōtsutsuki instead — a threat beyond anything the shinobi world has faced, who kills Obito himself moments later."},
         {"day": 1686, "title": "Naruto and Sasuke vs. Kaguya", "location": "Kaguya's Dimension", "banner": "naruto_and_sasuke_vs_kaguya", "summary": "Naruto and a reconciled Sasuke seal Kaguya away for good, ending the Fourth Shinobi World War and the immediate threat to the entire world; Madara dies as the Ten-Tails is removed from him."},
         {"day": 1687, "title": "Naruto vs. Sasuke — Final Valley", "location": "Valley of the End", "banner": "naruto_vs_sasuke_final_valley", "summary": "With the war won, Naruto and Sasuke settle their own long rivalry in a final, defining battle at the Valley of the End, each losing an arm before finally reconciling."},
         {"major": False, "day": 2064, "title": "Kakashi becomes Sixth Hokage", "location": "Konohagakure", "summary": "Kakashi Hatake is named the Sixth Hokage in the war's aftermath, the same month Sasuke leaves the village once more to atone for the past on his own terms."},
         {"major": False, "day": 2553, "title": "Naruto and Hinata marry", "location": "Konohagakure", "summary": "Naruto Uzumaki and Hinata Hyūga marry in Konohagakure, years after the war's end."},
-        {"day": 4413, "title": "Naruto Becomes Hokage", "location": "Konohagakure", "banner": "naruto_becomes_hokage", "summary": "Naruto is formally named the Seventh Hokage, fulfilling his childhood dream and the village's recognition of everything he sacrificed to earn it."},
+        {"day": 4413, "title": "Naruto Becomes Hokage", "location": "Konohagakure", "banner": "naruto_becomes_hokage", "scope": "wide", "summary": "Naruto is formally named the Seventh Hokage, fulfilling his childhood dream and the village's recognition of everything he sacrificed to earn it."},
         {"major": False, "day": 6910, "title": "Momoshiki and Kinshiki's attack", "location": "Konohagakure", "summary": "During the Chūnin Exams hosted in Konoha, the Ōtsutsuki invaders Momoshiki and Kinshiki attack the village, forcing the next generation of shinobi into their first real crisis."},
     ]},
     "Solo Max-Level Newbie": {"start_day": -3, "anchor": "Three days before the Tower appears", "events": [
@@ -370,6 +455,8 @@ WORLD_STARTING_ERAS = {
     "One Piece": [
         {"id": "east_blue_departure", "label": "East Blue Departure (default)", "start_day": -7,
          "anchor": "Seven days before Luffy leaves Foosha Village."},
+        {"id": "year_before_departure", "label": "One year before Luffy's departure", "start_day": -367,
+         "anchor": "One year before Luffy leaves Foosha Village — still growing up there, well before the East Blue voyage begins."},
         {"id": "rogers_execution", "label": "Gold Roger's execution", "start_day": -7920,
          "anchor": "Twenty-two years before Luffy sets sail, on the day Gold Roger is executed at Loguetown and the Great Pirate Era begins."},
     ],
@@ -394,17 +481,14 @@ def starting_era_by_id(world, era_id):
 # tracks internally (state.calendar). Solo Max-Level Newbie is contemporary
 # real-world Earth and gets an actual Gregorian date instead — see
 # format_calendar_date.
+_REAL_MONTHS = ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"]
 WORLD_CALENDARS = {
-    "One Piece": ["Tidewake", "Squallmarch", "Driftmoon", "Highwater", "Sunreach", "Calmtide",
-                  "Stormrise", "Harborfall", "Windward", "Deepcurrent", "Frostcoast", "Yearsend"],
-    "Naruto": ["Frostmoon", "Thawmoon", "Bloomtide", "Leafshade", "Sunhigh", "Emberfall",
-               "Harvestmoon", "Duskwane", "Stormtide", "Redleaf", "Snowveil", "Yearsend"],
-    "Hunter x Hunter": ["Wanderrise", "Trailmarch", "Huntmoon", "Greenreach", "Suncrest", "Wildtide",
-                        "Stormward", "Amberfall", "Driftmoon", "Duskfall", "Frosthunt", "Yearsend"],
-    "Overgeared": ["Foundersmoon", "Craftmoon", "Bloomreach", "Tradewind", "Sunforge", "Highsummer",
-                   "Ironmoon", "Harvestforge", "Guildmoon", "Duskforge", "Frostforge", "Yearsend"],
-    "Reincarnated as a Slime": ["Thawmoon", "Bloomrise", "Greenreach", "Sunhigh", "Magiculetide", "Stormveil",
-                                "Harvestmoon", "Duskfall", "Frostveil", "Snowrest", "Starfall", "Yearsend"],
+    "One Piece": _REAL_MONTHS,
+    "Naruto": _REAL_MONTHS,
+    "Hunter x Hunter": _REAL_MONTHS,
+    "Overgeared": _REAL_MONTHS,
+    "Reincarnated as a Slime": _REAL_MONTHS,
 }
 _CAL_DAYS_PER_MONTH = 30
 _CAL_MONTHS_PER_YEAR = 12
@@ -644,6 +728,7 @@ WORLD_START_OPTIONS = {
         {"label": "Kumogakure", "location": "Kumogakure", "note": "A shinobi of Kumogakure, the Hidden Cloud Village."},
         {"label": "Iwagakure", "location": "Iwagakure", "note": "A shinobi of Iwagakure, the Hidden Stone Village."},
         {"label": "Akatsuki (Amegakure)", "location": "Amegakure", "note": "Starting already recruited into the Akatsuki, an international criminal organization operating out of Amegakure — not affiliated with any Hidden Village."},
+        {"label": "Iron Country", "location": "Iron Country", "note": "A samurai-in-training of Iron Country — chakra plays little part in daily life here; skill is earned through the blade and discipline, not jutsu."},
     ],
 }
 
@@ -657,15 +742,18 @@ BASE_STATE = {
     "level":1,"xp":0,"xp_next":100,"hp":100,"hp_max":100,"resource_name":"Energy","resource":100,"resource_max":100,
     "stats":{"Strength":10,"Dexterity":10,"Constitution":10,"Intelligence":10,"Wisdom":10,"Charisma":10},"hidden_stats":{},
     "skills":{},"titles":[],"inventory":[],"equipment":{},"quests":[],"relationships":{},"reputation":{},
-    "factions":{},"affiliations":[],"companions":[],"codex":[],"location":"Starting Region","discovered_locations":[],
+    "factions":{},"affiliations":[],"companions":[],"codex":[],"location":"Starting Region","discovered_locations":[],"custom_locations":[],
+    "tower_floor":1,"tower_floor_deadline_day":None,"tower_over":False,"canon_event_engagement_count":0,"background_world_feed":[],
+    "last_major_beat_day":None,"director_notes":"","simulation_scale":"Individual",
     "world_time":"Day 1 — Morning","status":[],"alive":True,"turn":0,"timeline":[],"special":{},
     "canon_divergences":[],"campaign_canon":[],"world_events":[],"currency":{"name":"Currency","amount":250},"currencies":{},"npc_memories":{},"shops":[],"known_recipes":[],"training_log":[],"combat":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":6,"world_pack_id":"builtin","last_autosave":"","suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[]
 }
 
 WORLD_EXPANSIONS = {
     "One Piece": {
-        "currency":"Berries",
-        "origins":["East Blue Civilian","Island Martial Artist","Dockworker","Bounty-Hunter Trainee","Runaway Noble","Aspiring Pirate","Marine Recruit"],
+        "currency":"Berries", "currency_baseline":5000,
+        "origins":["East Blue Civilian","Island Martial Artist","Dockworker","Bounty-Hunter Trainee","Runaway Noble","Aspiring Pirate","Marine Recruit",
+                   "Veteran Crew Member","Notorious Bounty-Head"],
         "archetypes":["Brawler","Swordsman","Marksman","Navigator","Shipwright","Medic","Roguish Fighter"],
         "training":["Physical Conditioning","Weapon Mastery","Observation Drills","Armament Conditioning","Navigation","Seamanship"],
         "shop_types":["General Store","Weapon Shop","Ship Supply","Tavern","Black Market"],
@@ -674,8 +762,9 @@ WORLD_EXPANSIONS = {
         "systems":["Bounty","Haki","Devil Fruit","Crew","Ship","Wanted Status"]
     },
     "Hunter x Hunter": {
-        "currency":"Jenny",
-        "origins":["Yorknew Local","Rural Prodigy","Martial-Arts Student","Street Survivor","Merchant Family","Exam Aspirant"],
+        "currency":"Jenny", "currency_baseline":3000,
+        "origins":["Yorknew Local","Rural Prodigy","Martial-Arts Student","Street Survivor","Merchant Family","Exam Aspirant",
+                   "Licensed Hunter","Veteran Hunter"],
         "archetypes":["Martial Artist","Tracker","Strategist","Infiltrator","Medic","Treasure Hunter","Information Broker"],
         "training":["Ten Practice","Zetsu Practice","Ren Endurance","Gyo Focus","Combat Conditioning","Hatsu Theory"],
         "shop_types":["General Market","Auction Contact","Martial-Arts Supplier","Information Broker","Hunter Shop"],
@@ -684,9 +773,11 @@ WORLD_EXPANSIONS = {
         "systems":["Nen Category","Aura","Ten","Zetsu","Ren","Hatsu","Hunter License"]
     },
     "Naruto": {
-        "currency":"Ryo",
-        "origins":["Civilian Academy Hopeful","Shinobi Clan Child","Orphan Trainee","Merchant Family","Border-Village Youth","Academy Graduate"],
-        "archetypes":["Taijutsu Specialist","Ninjutsu Student","Genjutsu Student","Scout","Medic","Weapon Specialist","Tactician"],
+        "currency":"Ryo", "currency_baseline":500,
+        "origins":["Civilian Academy Hopeful","Shinobi Clan Child","Orphan Trainee","Merchant Family","Border-Village Youth","Academy Graduate",
+                   "Uchiha Clan Child","Iron Country Samurai-in-Training","Rogue Ninja (Missing-nin)","Anbu Root Recruit",
+                   "Chunin on Active Duty","Jonin Squad Leader"],
+        "archetypes":["Taijutsu Specialist","Ninjutsu Student","Genjutsu Student","Scout","Medic","Weapon Specialist","Tactician","Samurai"],
         "training":["Chakra Control","Tree Walking","Water Walking","Taijutsu Drills","Shurikenjutsu","Nature Transformation"],
         "shop_types":["Ninja Tools","General Store","Medic Supplies","Scroll Shop","Black Market"],
         "loot":["Ryo","Kunai","Shuriken","Explosive Tags","Medic Supplies","Technique Notes"],
@@ -694,8 +785,8 @@ WORLD_EXPANSIONS = {
         "systems":["Chakra","Nature Affinity","Jutsu","Rank","Village Standing","Mission Record"]
     },
     "Solo Max-Level Newbie": {
-        "currency":"Coins",
-        "origins":["Veteran Gamer","Competitive Raider","Puzzle Specialist","Martial Artist","Streamer","Ordinary Survivor"],
+        "currency":"Coins", "currency_baseline":300,
+        "origins":["Veteran Gamer","Competitive Raider","Puzzle Specialist","Martial Artist","Streamer","Ordinary Survivor","Elite Ranker"],
         "archetypes":["All-Rounder","Melee","Ranged","Caster","Assassin","Tank","Support"],
         "training":["Stat Optimization","Weapon Mastery","Mana Control","Skill Repetition","Boss Pattern Study","Hidden-Condition Research"],
         "shop_types":["Tower Shop","Player Market","Artifact Broker","Potion Merchant","Secret Merchant"],
@@ -704,8 +795,8 @@ WORLD_EXPANSIONS = {
         "systems":["Floor","Stats","Skills","Copied Abilities","Achievements","Hidden Conditions","Artifacts"]
     },
     "Overgeared": {
-        "currency":"Gold",
-        "origins":["New Player","Crafter","Mercenary Player","Merchant","Blacksmith Apprentice","Quest Hunter"],
+        "currency":"Gold", "currency_baseline":200,
+        "origins":["New Player","Crafter","Mercenary Player","Merchant","Blacksmith Apprentice","Quest Hunter","Veteran Adventurer","Renowned Craftsman"],
         "archetypes":["Warrior","Swordsman","Archer","Mage","Assassin","Blacksmith","Support"],
         "training":["Weapon Proficiency","Blacksmithing","Crafting","Skill Grinding","Stat Training","NPC Affinity"],
         "shop_types":["Smithy","General Store","Auction House","Potion Shop","Guild Market"],
@@ -714,7 +805,7 @@ WORLD_EXPANSIONS = {
         "systems":["Class","Crafting","Item Rating","Guild","NPC Affinity","Reputation"]
     },
     "Custom World": {
-        "currency":"Currency",
+        "currency":"Currency", "currency_baseline":250,
         "origins":["Local","Traveler","Soldier","Scholar","Outcast","Artisan"],
         "archetypes":["Warrior","Scout","Scholar","Mage","Rogue","Healer"],
         "training":["Physical Training","Weapon Training","Study","Meditation","Crafting","Social Practice"],
@@ -724,8 +815,9 @@ WORLD_EXPANSIONS = {
         "systems":["Level","Skills","Reputation","Titles"]
     },
     "Reincarnated as a Slime": {
-        "currency":"Gold Coin",
-        "origins":["Reincarnated Otherworlder","Native Monster","Isekai'd Human","Orphaned Demi-Human","Failed Hero Candidate","Displaced Noble"],
+        "currency":"Gold Coin", "currency_baseline":150,
+        "origins":["Reincarnated Otherworlder","Native Monster","Isekai'd Human","Orphaned Demi-Human","Failed Hero Candidate","Displaced Noble",
+                   "Veteran Tempest Officer","Named Monster of Renown"],
         "archetypes":["Brawler Monster","Skill Analyst","Elementalist","Beast-kin Warrior","Diplomat/Leader","Support/Healer","Assassin-type Monster"],
         "training":["Magicule Circulation","Skill Synthesis Practice","Combat Instinct Drills","Insight Meditation","Leadership & Diplomacy","Elemental Control"],
         "shop_types":["Goblin Village Market","Dwarven Craftsmen","Blumund Trade Post","Black Market Artifacts","Tempest Bazaar"],

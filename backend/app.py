@@ -75,9 +75,25 @@ def err(e, code=500):
 
 
 # ---------- static / frontend ----------
+def _render_index():
+    """Serve index.html with its CSS/JS hrefs tagged to APP_VERSION.
+
+    A desktop build's own no-store headers only stop the plain HTTP cache —
+    they do nothing about a browser engine's Cache Storage / service-worker
+    cache, which can keep answering with a snapshot from a much older
+    version indefinitely. A version-stamped URL sidesteps the question of
+    which cache layer is misbehaving: every cache treats it as a brand new
+    resource it has never seen, so there is nothing stale left to serve.
+    """
+    html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
+    html = html.replace('href="/css/style.css"', f'href="/css/style.css?v={APP_VERSION}"')
+    html = html.replace('src="/js/app.js"', f'src="/js/app.js?v={APP_VERSION}"')
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
 @app.route("/")
 def index():
-    return send_from_directory(FRONTEND_DIR, "index.html")
+    return _render_index()
 
 
 @app.route("/<path:path>")
@@ -85,7 +101,7 @@ def frontend_files(path):
     full = FRONTEND_DIR / path
     if full.exists() and full.is_file():
         return send_from_directory(FRONTEND_DIR, path)
-    return send_from_directory(FRONTEND_DIR, "index.html")
+    return _render_index()
 
 
 @app.route("/assets/<path:path>")
@@ -141,6 +157,7 @@ def api_campaign_new():
             preview_profile=d.get("preview_profile"),
             canon_character_id=d.get("canon_character_id", ""),
             starting_era_id=d.get("starting_era_id", ""),
+            age=d.get("age", ""),
         )
         return jsonify({"state": state, "story": game._flush_story()})
     except Exception as e:
@@ -198,6 +215,24 @@ def api_action_submit():
         # strict: submitting plans only queues them. Advance is the sole
         # resolution/time/world-response endpoint.
         return jsonify({"status": "queued", "queued_actions": game.queue_action(action), "state": game.public_state()})
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/event/respond", methods=["POST"])
+def api_event_respond():
+    """One beat of an already-active major event — resolved as a scoped,
+    ordinary action (no time/calendar movement, no world-clock ticking),
+    so the player can go back and forth inside the event for as long as it
+    takes without the wider campaign silently simulating forward."""
+    d = request.get_json(force=True)
+    action = (d.get("action") or "").strip()
+    if not action:
+        return jsonify({"error": "No action given."}), 400
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    try:
+        return jsonify(game.respond_to_event(action))
     except Exception as e:
         return err(e, 400)
 
@@ -346,7 +381,9 @@ def api_time_resolve():
     try:
         result = game.run_time_skip(d.get("amount", 1), d.get("unit", "moment"), d.get("orders", []),
                                      d.get("intensity", "normal"), d.get("assessment", {}),
-                                     confirmed_lethal=bool(d.get("confirmed_lethal")), manual_rolls=d.get("manual_rolls", {}),
+                                     confirmed_lethal=bool(d.get("confirmed_lethal")),
+                                     confirmed_power_goal=bool(d.get("confirmed_power_goal")),
+                                     manual_rolls=d.get("manual_rolls", {}),
                                      challenge_modes=d.get("challenge_modes", {}))
         return jsonify(result)
     except Exception as e:
@@ -488,6 +525,7 @@ def api_panels():
         "combat": s.get("combat", {}),
         "world_events": s.get("world_events", []),
         "timeline": s.get("timeline", []),
+        "background_world_feed": s.get("background_world_feed", []),
         "achievements": s.get("achievements", []),
         "map": world_map,
         "map_data": map_snapshot(s, world_map, world),
@@ -510,6 +548,7 @@ def api_panels():
         "relationships_view": relationship_snapshot(s),
         "progression_preset": progression_preset_for(world), "difficulty_controls": normalize_tuning(s),
         "campaign_health": campaign_health(s), "lore_sources": list_lore_sources(),
+        "director_notes": s.get("director_notes", ""),
     })
 
 
@@ -519,6 +558,8 @@ def api_campaign_tuning():
     controls = game.state.setdefault("difficulty_controls", {})
     for key in ("check_warning_threshold", "xp_rate", "training_rate", "breakthrough_rate", "combat_danger", "resource_pressure"):
         if key in d: controls[key] = d[key]
+    if "director_notes" in d:
+        game.state["director_notes"] = str(d["director_notes"] or "")[:500]
     clean = normalize_tuning(game.state)
     game.autosave()
     return jsonify({"difficulty_controls": clean, "state": game.public_state()})

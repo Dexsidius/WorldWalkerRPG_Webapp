@@ -8,6 +8,17 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+const CURRENCY_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 14.8c.4 1 1.5 1.7 2.8 1.7 1.7 0 2.8-.9 2.8-2s-1.1-1.7-2.8-2c-1.7-.3-2.8-.9-2.8-2s1.1-2 2.8-2c1.3 0 2.4.7 2.8 1.7"/><path d="M12 7.2v1.1M12 15.7v1.1"/></svg>';
+function currencyRowHtml(name, amount) {
+  return `<div class="jrow currency-jrow"><i class="currency-icon">${CURRENCY_ICON_SVG}</i><b>${escapeHtml(amount)}</b> ${escapeHtml(name)}</div>`;
+}
+// A title is USUALLY a plain string, but a model that mimics the shape of
+// its own context occasionally hands one back as {name/title: "..."} —
+// naive escapeHtml(title) on that renders literal "[object Object]".
+function titleLabel(t) {
+  return (t && typeof t === "object" ? compactReadable(t.name || t.title) : "") || compactReadable(t) || "Title";
+}
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -36,8 +47,21 @@ function initPhoneMode() {
       catch (_) { window.prompt("Copy this address:", phoneUrl); }
     });
   }
+  // The pywebview desktop shell always talks to its own same-machine Flask
+  // server, so there is no offline scenario for it to guard against — only
+  // register for a real browser tab (e.g. a phone connecting over LAN),
+  // where `window.pywebview` (injected by pywebview itself) is absent.
   if ("serviceWorker" in navigator && window.isSecureContext) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (window.pywebview) {
+      // Tear down any worker a previous desktop build left registered —
+      // an already-active one keeps controlling this page (and serving
+      // whatever it cached) indefinitely, even after the page itself
+      // stops calling register(). This is a one-time cleanup, not a
+      // recurring cost: once nothing is registered, this is a no-op.
+      navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {});
+    } else {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
   }
 }
 initPhoneMode();
@@ -57,11 +81,13 @@ const APP = {
   musicVolume: 0.35,
   activeChatThread: null,
   pendingLethal: null,   // {kind:'action'|'timeskip', action, assessment, timeskip:{...}}
+  pendingPowerGoal: null, // the time-skip payload awaiting confirmed_power_goal
   pendingAdvance: null,
   pendingManualRoll: null,
   pendingIntervention: null,
   pendingDifficulty: null,
   challenge: null,
+  eventWindow: null,   // {} while the dedicated Major Event window is open, else null
   pendingCampaign: null,
   journalTab: "party",
   portraitAttempted: new Set(),
@@ -280,14 +306,11 @@ const WORLD_START_DAY = {
   "One Piece": -7, "Hunter x Hunter": -7, "Naruto": -7, "Solo Max-Level Newbie": -3,
   "Overgeared": -3, "Reincarnated as a Slime": -7, "Custom World": -7,
 };
-const WORLD_CALENDAR_MONTHS = {
-  "One Piece": ["Tidewake", "Squallmarch", "Driftmoon", "Highwater", "Sunreach", "Calmtide", "Stormrise", "Harborfall", "Windward", "Deepcurrent", "Frostcoast", "Yearsend"],
-  "Naruto": ["Frostmoon", "Thawmoon", "Bloomtide", "Leafshade", "Sunhigh", "Emberfall", "Harvestmoon", "Duskwane", "Stormtide", "Redleaf", "Snowveil", "Yearsend"],
-  "Hunter x Hunter": ["Wanderrise", "Trailmarch", "Huntmoon", "Greenreach", "Suncrest", "Wildtide", "Stormward", "Amberfall", "Driftmoon", "Duskfall", "Frosthunt", "Yearsend"],
-  "Overgeared": ["Foundersmoon", "Craftmoon", "Bloomreach", "Tradewind", "Sunforge", "Highsummer", "Ironmoon", "Harvestforge", "Guildmoon", "Duskforge", "Frostforge", "Yearsend"],
-  "Reincarnated as a Slime": ["Thawmoon", "Bloomrise", "Greenreach", "Sunhigh", "Magiculetide", "Stormveil", "Harvestmoon", "Duskfall", "Frostveil", "Snowrest", "Starfall", "Yearsend"],
-};
 const REAL_MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const WORLD_CALENDAR_MONTHS = {
+  "One Piece": REAL_MONTH_NAMES, "Naruto": REAL_MONTH_NAMES, "Hunter x Hunter": REAL_MONTH_NAMES,
+  "Overgeared": REAL_MONTH_NAMES, "Reincarnated as a Slime": REAL_MONTH_NAMES,
+};
 
 function formatCalendarDate(world, canonDay, calendarEpoch, anchorDay) {
   const startDay = (anchorDay !== undefined && anchorDay !== null) ? anchorDay : (WORLD_START_DAY[world] ?? -7);
@@ -314,6 +337,26 @@ function dayLabel(canonDay) {
   if (!Number.isFinite(n)) return "";
   const world = (APP.state && APP.state.world) || "Custom World";
   return formatCalendarDate(world, n, APP.state && APP.state.calendar_epoch, APP.state && APP.state.calendar_anchor_day);
+}
+
+// The Chronicle only ever grew by appending — nothing ever removed an old
+// entry, so a long single play session (the normal way to use this app —
+// nobody restarts mid-campaign) built up an ever-larger DOM tree over time.
+// That's what actually made the app feel sluggish: more nodes for the
+// browser to lay out and repaint on every scroll and re-render, not AI
+// latency. Trimming old beats once the feed gets long keeps recent
+// scrollback intact while capping how much the live DOM can grow — the
+// full history still lives in the save file and Journal -> Chapters either
+// way, this only bounds what stays mounted on screen.
+const STORY_FEED_MAX_ENTRIES = 300;
+function pruneStoryFeed(feed, maxEntries = STORY_FEED_MAX_ENTRIES) {
+  let count = feed.querySelectorAll(".story-entry").length;
+  while (count > maxEntries && feed.children.length > 1) {
+    const oldest = feed.firstElementChild;
+    if (!oldest) break;
+    count -= oldest.querySelectorAll(".story-entry").length;
+    oldest.remove();
+  }
 }
 
 function appendStoryEntries(entries) {
@@ -386,6 +429,7 @@ function appendStoryEntries(entries) {
     });
     feed.appendChild(beat);
   });
+  pruneStoryFeed(feed);
   feed.scrollTop = feed.scrollHeight + 400;
 }
 
@@ -598,10 +642,18 @@ function renderState(state) {
   APP.state = state;
   const s = state;
   document.body.setAttribute("data-world", s.world || "Custom World");
+  applyGodotAmbient(s.world || "Custom World");
 
   $("#hdr-world").textContent = s.world || "Custom World";
   $("#hdr-location").textContent = s.location || "Unknown";
   $("#hdr-turn").textContent = "Turn " + (s.turn || 0);
+  const tension = s._tension || { score: 0, label: "Calm", reasons: [] };
+  const tensionPill = $("#hdr-tension");
+  tensionPill.textContent = "● " + tension.label;
+  tensionPill.className = "pill tension-pill tension-" + tension.label.toLowerCase();
+  tensionPill.title = tension.reasons && tension.reasons.length
+    ? "How dangerous your current situation is: " + tension.reasons.join(", ") + "."
+    : "How dangerous your current situation is, at a glance.";
   const saved = s._last_autosave || s.last_autosave || "";
   $("#hdr-autosave").textContent = saved ? `Saved ${String(saved).replace("T", " ").slice(0, 16)}` : "Not saved";
   renderQueuedActions(s.queued_actions || []);
@@ -611,6 +663,10 @@ function renderState(state) {
   renderAiPortrait(s);
   $("#portrait-name").textContent = s.name || "Traveler";
   $("#portrait-class").textContent = (s.special && s.special.Archetype) || "Adventurer";
+  const locationEl = $("#portrait-location");
+  const locationText = (s.location || "").trim();
+  if (locationText) { $("#portrait-location-text").textContent = locationText; locationEl.hidden = false; }
+  else locationEl.hidden = true;
   const posBadge = $("#position-badge");
   if (s.position && s.position.trim()) { posBadge.textContent = "★ " + s.position; posBadge.style.display = ""; }
   else posBadge.style.display = "none";
@@ -636,6 +692,14 @@ function renderState(state) {
   $("#stat-age").textContent = s.age ? String(s.age) : "Unknown";
   $("#stat-status").textContent = (s.status && s.status.length) ? s.status.join(", ") : "Normal";
   $("#stat-time").textContent = s.world_time || "Day 1 — Morning";
+  const towerLabel = $("#stat-tower-timer-label"), towerTimer = $("#stat-tower-timer");
+  if (typeof s._tower_days_left === "number") {
+    towerLabel.hidden = false; towerTimer.hidden = false;
+    towerTimer.textContent = `${s._tower_days_left} day${s._tower_days_left === 1 ? "" : "s"} left`;
+    towerTimer.classList.toggle("tower-timer-critical", s._tower_days_left <= 14);
+  } else {
+    towerLabel.hidden = true; towerTimer.hidden = true;
+  }
   const currency = s.currency || {};
   $("#stat-currency-label").textContent = currency.name || "Currency";
   $("#stat-currency").textContent = currency.amount !== undefined ? Number(currency.amount).toLocaleString() : "0";
@@ -672,7 +736,7 @@ function renderState(state) {
 
   // skills & titles
   const skillItems = Object.keys(s.skills || {}).map((k) => `✦ ${escapeHtml(k)}`);
-  const titleItems = (s.titles || []).map((t) => `🏅 ${escapeHtml(t)}`);
+  const titleItems = (s.titles || []).map((t) => `🏅 ${escapeHtml(titleLabel(t))}`);
   renderTagListHtml("#skills-list", [...titleItems, ...skillItems], "None");
 
   // affiliations — formal membership + rank in any group/kingdom/hierarchy,
@@ -777,7 +841,7 @@ function renderStatusWindow(s) {
     `<div class="status-window-attr"><i class="a-icon">${abilityIcon(k)}</i><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`
   ).join("") || '<div class="hint">None recorded.</div>';
   const skillItems = Object.keys(s.skills || {}).map((k) => `<li>✦ ${escapeHtml(k)}</li>`);
-  const titleItems = (s.titles || []).map((t) => `<li>🏅 ${escapeHtml(t)}</li>`);
+  const titleItems = (s.titles || []).map((t) => `<li>🏅 ${escapeHtml(titleLabel(t))}</li>`);
   $("#sw-skills").innerHTML = [...titleItems, ...skillItems].join("") || '<li class="hint">None yet.</li>';
   const currency = s.currency || {};
   const misc = [
@@ -962,19 +1026,72 @@ function updateWorldSystemIcons(s) {
 // ---------------------------------------------------------------------------
 // Scene image + ambient FX
 // ---------------------------------------------------------------------------
-let sceneFx = { mode: null, particles: [], glows: [], raf: null, canvas: null, ctx: null, w: 0, h: 0 };
 let scenePaint = { canvas: null, ctx: null, w: 0, h: 0, lastKey: null };
 
-// Weather is tracked in state but was never actually shown anywhere — a
-// light CSS overlay on the scene box is enough to make it register without
-// touching the (already complex, per-category) procedural scene painter.
-function weatherClassFor(weather) {
+// Weather is tracked in state — normalized to the handful of keys the
+// Godot scene_ambient theme actually recognizes (see WEATHER_THEMES in
+// scene_theme.gd) rather than passing the raw AI-written phrase through.
+function weatherKeyFor(weather) {
   const w = String(weather || "").toLowerCase();
   if (/storm|thunder|typhoon|hurricane/.test(w)) return "storm";
   if (/rain|drizzle|monsoon/.test(w)) return "rain";
   if (/snow|blizzard|sleet/.test(w)) return "snow";
   if (/fog|mist|haze/.test(w)) return "fog";
   return "";
+}
+
+// Godot-rendered scene ambience test: a small HTML5 export sitting in
+// frontend/godot/scene_ambient/, embedded as an iframe in the scene
+// viewport. Replaces the old canvas particle/glow system (seedParticles/
+// tickSceneFx) and the CSS .scene-weather overlay with one layered effect
+// that reads both the scene category and the current weather at once.
+let godotSceneFxKey = null;
+let godotSceneFxLoaded = false;
+function applyGodotSceneFx(category, weather) {
+  const frame = $("#scene-godot-fx");
+  if (!frame) return;
+  const weatherKey = weatherKeyFor(weather);
+  const key = category + "::" + weatherKey;
+  if (godotSceneFxKey === key) return;
+  godotSceneFxKey = key;
+  if (!godotSceneFxLoaded) {
+    // First paint only: a real load, carrying the initial values as query
+    // params for scene_theme.gd's _ready() to read.
+    frame.addEventListener("load", () => { godotSceneFxLoaded = true; }, { once: true });
+    const params = new URLSearchParams({ category, weather: weatherKey });
+    frame.src = `/godot/scene_ambient/index.html?${params.toString()}`;
+    frame.hidden = false;
+    return;
+  }
+  // Every later change re-themes the already-running instance in place —
+  // reloading the iframe here would mean a multi-second WASM reload on
+  // nearly every turn, since the scene banner's category/weather can
+  // change that often. scene_theme.gd polls this variable a few times a
+  // second (see its _process) rather than the page calling a Godot-exposed
+  // function directly — JavaScriptBridge.create_callback()/get_interface()
+  // proved unreliable in testing (calls landed nowhere, no error), while
+  // polling a plain JS global reuses the same eval() primitive the
+  // initial query-string read already does successfully.
+  try { frame.contentWindow.sceneThemeParams = key; } catch (e) { /* not ready yet */ }
+}
+
+// Godot-rendered map ambience: gentle drifting cloud-shadows plus a
+// pulsing glow at any landmark whose danger_level is "critical" — a
+// stronger atmospheric complement to the pin's own existing pulse
+// animation, reading as "this whole area is dangerous" rather than just
+// highlighting one dot. #map-wrap (and everything in it, including this
+// iframe) is a fresh DOM element every time the Map tab renders, so unlike
+// the scene/portrait effects there's no persistent instance to re-theme in
+// place — a fresh load is correct here, not a workaround.
+function applyGodotMapFx(nodes) {
+  const frame = $("#map-godot-fx");
+  if (!frame) return;
+  const dangerNodes = (nodes || [])
+    .filter((n) => String(n.danger_level || "").toLowerCase() === "critical")
+    .map((n) => ({ x: n.x, y: n.y }));
+  const params = new URLSearchParams({ danger: JSON.stringify(dangerNodes) });
+  frame.src = `/godot/map_ambient/index.html?${params.toString()}`;
+  frame.hidden = false;
 }
 
 function updateScene(s) {
@@ -986,9 +1103,7 @@ function updateScene(s) {
   $("#scene-location").textContent = s.location || "Unknown";
   $("#scene-world").textContent = s.world || "Custom World";
 
-  const weatherCls = weatherClassFor(s.weather);
-  const weatherEl = $("#scene-weather");
-  weatherEl.className = "scene-weather" + (weatherCls ? " active " + weatherCls : "");
+  applyGodotSceneFx(cat, s.weather);
 
   // A location change gets a quick cut-to-black-and-back in the scene box
   // only — deliberately not anywhere else in the UI — so travel reads as a
@@ -1018,7 +1133,6 @@ function updateScene(s) {
     img.removeAttribute("data-src");
     img.classList.remove("loaded");
   }
-  startSceneFx(cat);
   paintScene(cat, s.world || "Custom World");
   startCharacterAmbient(cat);
 }
@@ -1055,6 +1169,27 @@ function startCharacterAmbient(mode) {
     x: rand(0, w), y: rand(0, h), r: rand(.8, 2.6), phase: rand(0, Math.PI * 2), speed: rand(.01, .03),
   }));
   if (!charAmbient.raf) charAmbient.raf = requestAnimationFrame(tickCharAmbient);
+}
+// Godot-rendered ambient test: a small HTML5 export sitting in
+// frontend/godot/portrait_ambient/, embedded as an iframe in the same
+// slot as the canvas ambient above. Only worlds actually listed here have
+// an export to show; everyone else keeps the existing canvas effect. This
+// is deliberately additive — a proof that the export/embed pipeline
+// works, not a replacement for the canvas system yet.
+const GODOT_AMBIENT_WORLDS = new Set(["Naruto", "One Piece", "Hunter x Hunter", "Solo Max-Level Newbie", "Overgeared", "Reincarnated as a Slime"]);
+let godotAmbientWorld = null;
+function applyGodotAmbient(world) {
+  const frame = $("#portrait-godot-ambient");
+  if (!frame) return;
+  if (!GODOT_AMBIENT_WORLDS.has(world)) {
+    frame.hidden = true;
+    godotAmbientWorld = null;
+    return;
+  }
+  if (godotAmbientWorld === world) return;
+  godotAmbientWorld = world;
+  frame.src = `/godot/portrait_ambient/index.html?world=${encodeURIComponent(world)}`;
+  frame.hidden = false;
 }
 function tickCharAmbient() {
   charAmbient.raf = requestAnimationFrame(tickCharAmbient);
@@ -1273,163 +1408,8 @@ function mixHex(hexA, hexB, t) {
   return `rgb(${r},${g},${bl})`;
 }
 
-function startSceneFx(mode) {
-  if (!sceneFx.canvas) {
-    sceneFx.canvas = $("#scene-fx");
-    sceneFx.ctx = sceneFx.canvas.getContext("2d");
-  }
-  if (sceneFx.mode === mode) return;
-  sceneFx.mode = mode;
-  sceneFx.particles = [];
-  sceneFx.glows = [];
-  resizeSceneFx();
-  seedParticles(mode);
-  seedSceneGlows(mode);
-  if (!sceneFx.raf) sceneFx.raf = requestAnimationFrame(tickSceneFx);
-}
-
-function resizeSceneFx() {
-  const c = sceneFx.canvas;
-  if (!c) return;
-  const rect = c.parentElement.getBoundingClientRect();
-  sceneFx.w = c.width = rect.width;
-  sceneFx.h = c.height = rect.height;
-}
-window.addEventListener("resize", () => { if (APP.animationsEnabled) resizeSceneFx(); });
-
 function rand(a, b) { return a + Math.random() * (b - a); }
 
-function seedParticles(mode) {
-  const { w, h } = sceneFx;
-  const p = sceneFx.particles;
-  if (mode === "town_square" || mode === "kingdom" || mode === "arena_floor") {
-    for (let i = 0; i < 18; i++) p.push({ x: rand(0, w), y: rand(h * .7, h * .92), phase: rand(0, 6), speed: rand(.012, .035), scale: rand(.6, 1.15), hue: rand(0, 1) });
-  } else if (mode === "duel") {
-    for (let i = 0; i < 24; i++) p.push({ x: w / 2, y: h * .55, vx: rand(-1.6, 1.6), vy: rand(-1.1, 1.1), r: rand(.8, 2.2), life: rand(25, 80), age: rand(0, 60) });
-  } else if (mode === "forest_path") {
-    for (let i = 0; i < 26; i++) p.push({ x: rand(0, w), y: rand(0, h), vx: rand(-0.3, -1.1), vy: rand(0.3, 0.9), r: rand(2, 4), rot: rand(0, 6), vr: rand(-0.03, 0.03), a: rand(.4, .9) });
-  } else if (mode === "starry_sky") {
-    for (let i = 0; i < 60; i++) p.push({ x: rand(0, w), y: rand(0, h * 0.65), r: rand(0.5, 1.8), tw: rand(0, Math.PI * 2), speed: rand(.02, .06) });
-  } else if (mode === "night_wilderness" || mode === "merchant_shop" || mode === "tavern_inn" || mode === "academy_classroom") {
-    for (let i = 0; i < 28; i++) p.push({ x: rand(0, w), y: rand(h * .35, h * .9), vx: rand(-.18, .18), vy: rand(-.12, .12), r: rand(.7, 1.8), tw: rand(0, Math.PI * 2), speed: rand(.025, .07) });
-  } else if (mode === "battlefield_dusk" || mode === "monster_battlefield" || mode === "monster_lair") {
-    for (let i = 0; i < 34; i++) p.push({ x: rand(0, w), y: rand(h * 0.5, h), vx: rand(-0.3, 0.3), vy: rand(-1.4, -0.5), r: rand(1.5, 3.5), a: rand(.3, .8), life: rand(60, 160), age: 0 });
-  } else if (mode === "harbor_port" || mode === "ship_deck") {
-    for (let i = 0; i < 5; i++) p.push({ y: rand(h * 0.55, h * 0.9), amp: rand(2, 6), speed: rand(.01, .03), phase: rand(0, 6), width: w });
-  } else if (mode === "dungeon_cave") {
-    for (let i = 0; i < 16; i++) p.push({ x: rand(0, w), y: rand(-40, 0), vy: rand(1.2, 2.6), life: rand(40, 140), age: 0 });
-  } else if (mode === "tower_hub") {
-    for (let i = 0; i < 10; i++) p.push({ x: rand(0, w), y: rand(0, h), r: rand(1, 2.4), phase: rand(0, 6), speed: rand(.02, .05) });
-  }
-}
-
-function seedSceneGlows(mode) {
-  const glowMap = {
-    indoor_grandhall: [[.13, .38, 30], [.87, .38, 30], [.31, .56, 20], [.69, .56, 20], [.50, .17, 20]],
-    dungeon_cave: [[.12, .44, 27], [.83, .49, 25], [.37, .58, 16]],
-    monster_lair: [[.08, .64, 23], [.89, .64, 23]],
-    battlefield_dusk: [[.28, .73, 14], [.66, .68, 12]],
-    monster_battlefield: [[.25, .76, 13], [.72, .71, 14]],
-    merchant_shop: [[.36, .28, 18], [.62, .30, 14]],
-    tavern_inn: [[.12, .48, 30], [.84, .31, 15], [.55, .24, 12]],
-    arena_floor: [[.08, .67, 13], [.92, .67, 13]],
-  };
-  sceneFx.glows = (glowMap[mode] || []).map(([x, y, r]) => ({ x, y, r, phase: rand(0, Math.PI * 2), speed: rand(.045, .085) }));
-}
-
-function tickSceneFx() {
-  sceneFx.raf = requestAnimationFrame(tickSceneFx);
-  const { ctx, w, h, mode, particles, glows } = sceneFx;
-  if (!ctx || !w || !h) return;
-  ctx.clearRect(0, 0, w, h);
-  if (!APP.animationsEnabled) return;
-
-  glows.forEach((g) => {
-    g.phase += g.speed;
-    const flicker = .86 + Math.sin(g.phase) * .09 + Math.sin(g.phase * 2.7) * .05;
-    const x = g.x * w, y = g.y * h, radius = g.r * flicker;
-    const halo = ctx.createRadialGradient(x, y, 0, x, y, radius * 3.2);
-    halo.addColorStop(0, "rgba(255,232,145,.55)");
-    halo.addColorStop(.23, "rgba(255,145,48,.28)");
-    halo.addColorStop(1, "rgba(255,85,18,0)");
-    ctx.fillStyle = halo; ctx.fillRect(x - radius * 3.2, y - radius * 3.2, radius * 6.4, radius * 6.4);
-    ctx.fillStyle = "rgba(255,226,133,.78)";
-    ctx.beginPath(); ctx.ellipse(x, y, Math.max(1.5, radius * .09), Math.max(4, radius * .26), Math.sin(g.phase) * .08, 0, Math.PI * 2); ctx.fill();
-  });
-
-  if (mode === "town_square" || mode === "kingdom" || mode === "arena_floor") {
-    particles.forEach((p) => {
-      p.phase += p.speed; const bob = Math.sin(p.phase) * 2; const s = p.scale;
-      ctx.fillStyle = p.hue > .5 ? "rgba(10,10,14,.52)" : "rgba(35,20,16,.48)";
-      ctx.fillRect(Math.round(p.x - 3 * s), Math.round(p.y + bob), Math.round(6 * s), Math.round(14 * s));
-      ctx.beginPath(); ctx.arc(Math.round(p.x), Math.round(p.y - 4 * s + bob), 4 * s, 0, 7); ctx.fill();
-      p.x += Math.sin(p.phase * .4) * .08;
-    });
-  } else if (mode === "duel") {
-    particles.forEach((p) => {
-      p.x += p.vx; p.y += p.vy; p.age++;
-      if (p.age > p.life) { p.x = w / 2 + rand(-20, 20); p.y = h * .55; p.age = 0; }
-      ctx.globalAlpha = 1 - p.age / p.life; ctx.fillStyle = "#ffd36a"; ctx.fillRect(p.x, p.y, p.r * 2, p.r);
-    }); ctx.globalAlpha = 1;
-  } else if (mode === "forest_path") {
-    ctx.save();
-    particles.forEach((p) => {
-      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
-      if (p.y > h + 10 || p.x < -10) { p.x = rand(0, w); p.y = -10; }
-      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = p.a;
-      ctx.fillStyle = "#b98a3f"; ctx.beginPath(); ctx.ellipse(0, 0, p.r, p.r * 0.5, 0, 0, 7); ctx.fill(); ctx.restore();
-    });
-    ctx.restore();
-  } else if (mode === "starry_sky") {
-    particles.forEach((p) => {
-      p.tw += p.speed;
-      const a = 0.4 + Math.abs(Math.sin(p.tw)) * 0.6;
-      ctx.globalAlpha = a; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-  } else if (mode === "night_wilderness" || mode === "merchant_shop" || mode === "tavern_inn" || mode === "academy_classroom") {
-    particles.forEach((p) => {
-      p.tw += p.speed; p.x += p.vx + Math.sin(p.tw) * .08; p.y += p.vy + Math.cos(p.tw * .7) * .05;
-      if (p.x < -5) p.x = w + 5; if (p.x > w + 5) p.x = -5;
-      if (p.y < h * .3) p.y = h * .9; if (p.y > h * .94) p.y = h * .35;
-      const a = .15 + Math.pow(Math.abs(Math.sin(p.tw)), 3) * .8;
-      ctx.globalAlpha = a; ctx.fillStyle = mode === "night_wilderness" ? "#dfff8a" : "#ffe3a2"; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-  } else if (mode === "battlefield_dusk" || mode === "monster_battlefield" || mode === "monster_lair") {
-    particles.forEach((p) => {
-      p.x += p.vx; p.y += p.vy; p.age++;
-      if (p.age > p.life) { p.x = rand(0, w); p.y = rand(h * 0.6, h); p.age = 0; }
-      const fade = 1 - p.age / p.life;
-      ctx.globalAlpha = p.a * fade;
-      ctx.fillStyle = mode === "battlefield_dusk" ? "#ff8a3d" : "#7fffb0";
-      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7); ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-  } else if (mode === "harbor_port" || mode === "ship_deck") {
-    ctx.strokeStyle = "rgba(180,220,235,.35)"; ctx.lineWidth = 1;
-    particles.forEach((p) => {
-      p.phase += p.speed; ctx.beginPath();
-      for (let x = 0; x <= p.width; x += 8) ctx.lineTo(x, p.y + Math.sin(x * 0.03 + p.phase) * p.amp);
-      ctx.stroke();
-    });
-  } else if (mode === "dungeon_cave") {
-    ctx.fillStyle = "rgba(180,220,255,.5)";
-    particles.forEach((p) => {
-      p.y += p.vy; p.age++;
-      if (p.age > p.life) { p.y = rand(-40, 0); p.x = rand(0, w); p.age = 0; }
-      ctx.fillRect(p.x, p.y, 1.4, 6);
-    });
-  } else if (mode === "tower_hub") {
-    ctx.strokeStyle = "rgba(120,220,255,.5)";
-    particles.forEach((p) => {
-      p.phase += p.speed;
-      const a = 0.3 + Math.abs(Math.sin(p.phase)) * 0.7;
-      ctx.globalAlpha = a; ctx.beginPath(); ctx.arc(p.x, p.y, p.r * 4, 0, 7); ctx.stroke();
-    });
-    ctx.globalAlpha = 1;
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Modals
@@ -1444,9 +1424,143 @@ function closeModal(id) {
 }
 $$(".modal-close").forEach((b) => b.addEventListener("click", () => closeModal(b.getAttribute("data-close"))));
 $$(".modal-backdrop").forEach((m) => m.addEventListener("click", (e) => {
-  const locked = new Set(["modal-welcome", "modal-difficult-check", "modal-timing-challenge", "modal-tactical-challenge", "modal-major-roll", "modal-lethal"]);
+  const locked = new Set(["modal-welcome", "modal-difficult-check", "modal-timing-challenge", "modal-tactical-challenge", "modal-major-roll", "modal-lethal", "modal-power-goal", "modal-event-window"]);
   if (e.target === m && !locked.has(m.id)) closeModal(m.id);
 }));
+
+// ---------------------------------------------------------------------------
+// Major Event window — a dedicated, self-contained scene for personally
+// engaging a canon event. It relocates the REAL intervention bar and combat
+// panel into itself while open (rather than duplicating their markup/logic)
+// so every existing mechanic — danger follow-ups, the difficulty gate,
+// Timing Clash/Tactical Approach, lethal confirmation, structured combat —
+// keeps working completely unchanged; this window is just where the player
+// watches and drives that same pipeline while it's scoped to one event.
+// ---------------------------------------------------------------------------
+const INTERVENTION_BAR_HOME = $("#intervention-bar").parentElement;
+const COMBAT_PANEL_HOME = $("#combat-panel").parentElement;
+
+function openEventWindow(title, bannerUrl) {
+  // storyBuffer holds every beat/combat-round narrated while this window is
+  // open — the Chronicle behind it must stay untouched during the scene
+  // (the player reads it all live, right here, not duplicated in two
+  // places at once) and gets the complete record in one shot on close.
+  APP.eventWindow = { storyBuffer: [] };
+  $("#event-window-title").textContent = title || "MAJOR EVENT";
+  const banner = $("#event-window-banner");
+  if (bannerUrl) { banner.src = bannerUrl; banner.hidden = false; } else { banner.removeAttribute("src"); banner.hidden = true; }
+  $("#event-window-feed").innerHTML = "";
+  $("#event-window-choices").innerHTML = "";
+  $("#event-window-input").value = "";
+  $("#event-window-concluded").hidden = true;
+  $("#event-window-combat-slot").hidden = true;
+  $("#event-window-respond-row").hidden = false;
+  $("#btn-event-window-wait").hidden = false;
+  openModal("modal-event-window");
+}
+
+function closeEventWindow() {
+  const bar = $("#intervention-bar");
+  if (bar.parentElement !== INTERVENTION_BAR_HOME) INTERVENTION_BAR_HOME.appendChild(bar);
+  const panel = $("#combat-panel");
+  if (panel.parentElement !== COMBAT_PANEL_HOME) COMBAT_PANEL_HOME.appendChild(panel);
+  // The Chronicle gets a short summary of what happened, not the full
+  // buffered beat-by-beat log — respond_to_event already writes an
+  // "[EVENT CONCLUDED]" entry with exactly that summary once the scene
+  // ends, so find and keep only that (the rest of the buffer already
+  // exists in server-side state regardless; it just isn't worth showing
+  // twice at full length here).
+  const buffer = (APP.eventWindow && APP.eventWindow.storyBuffer) || [];
+  const summary = [...buffer].reverse().find((e) => e && String(e.text || "").startsWith("[EVENT CONCLUDED]"));
+  const title = $("#event-window-title").textContent || "the event";
+  appendStoryEntries([summary || { text: `[EVENT CONCLUDED]\nYou step back from ${title}.`, tag: "system" }]);
+  APP.eventWindow = null;
+  closeModal("modal-event-window");
+}
+$("#btn-event-window-leave").addEventListener("click", closeEventWindow);
+$("#btn-event-window-continue").addEventListener("click", closeEventWindow);
+
+function appendEventWindowEntries(entries) {
+  const feed = $("#event-window-feed");
+  (entries || []).forEach((entry) => {
+    if (!entry || !String(entry.text || "").trim()) return;
+    const div = document.createElement("div");
+    div.className = "event-window-entry" + (entry.tag ? " " + entry.tag : "");
+    div.textContent = entry.text;
+    feed.appendChild(div);
+  });
+  while (feed.children.length > 150) feed.firstElementChild.remove();
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function updateEventWindowAfterResult(result) {
+  if (!APP.eventWindow) return;
+  appendEventWindowEntries(result.story);
+  const combatActive = !!result.state?.combat?.active;
+  const combatSlot = $("#event-window-combat-slot");
+  const panel = $("#combat-panel");
+  if (combatActive) {
+    combatSlot.hidden = false;
+    if (panel.parentElement !== combatSlot) combatSlot.appendChild(panel);
+  } else if (panel.parentElement === combatSlot) {
+    combatSlot.hidden = true;
+    COMBAT_PANEL_HOME.appendChild(panel);
+  }
+  // While a sub-interruption inside the scene (a danger follow-up, most
+  // often) needs the player's call, hide the freeform choices/response row
+  // so there's exactly one decision on screen at a time — handleTimeSkipResult
+  // already relocates #intervention-bar in here when that happens.
+  const hasSubIntervention = !$("#intervention-bar").hidden && $("#event-window-intervention-slot").contains($("#intervention-bar"));
+  $("#event-window-choices").hidden = combatActive || hasSubIntervention;
+  $("#event-window-respond-row").hidden = combatActive || hasSubIntervention;
+  $("#btn-event-window-wait").hidden = combatActive || hasSubIntervention;
+  const choices = $("#event-window-choices");
+  choices.innerHTML = "";
+  (result.suggested_actions || []).forEach((action) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = action;
+    btn.addEventListener("click", () => submitEventWindowAction(action));
+    choices.appendChild(btn);
+  });
+  const stillUnfolding = !!(result.state?.active_canon_event) || combatActive || hasSubIntervention;
+  $("#event-window-concluded").hidden = stillUnfolding;
+}
+
+async function submitEventWindowAction(text) {
+  if (APP.busy) return;
+  $("#event-window-input").value = "";
+  setBusy(true);
+  try {
+    const result = await apiPost("/api/event/respond", { action: text });
+    await handleTurnResult(result, text);
+  } catch (e) {
+    showToast(e.message, "danger"); playSfx("error");
+  } finally { setBusy(false); }
+}
+$("#btn-event-window-respond").addEventListener("click", () => {
+  const text = $("#event-window-input").value.trim();
+  if (!text) { showToast("Type what you do or say first.", "system"); return; }
+  if (APP.eventWindow) APP.eventWindow.lastAction = text;
+  submitEventWindowAction(text);
+});
+$("#event-window-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#btn-event-window-respond").click(); }
+});
+$("#btn-event-window-wait").addEventListener("click", () => {
+  // "Continue" means keep doing whatever the player was already doing, not
+  // a separate passive-watching mode — falls back to actually passive
+  // watching only when there's no prior action yet (the very first beat)
+  // or when that action stops making sense, which the prompt itself asks
+  // the model to judge. Deliberately does NOT update lastAction, so
+  // clicking this repeatedly keeps referencing the same real last action
+  // instead of drifting into referencing its own prior "continue" text.
+  const last = APP.eventWindow && APP.eventWindow.lastAction;
+  const text = last
+    ? `Continue doing what I was already doing ("${last}") for as long as that still makes sense here — if it no longer applies to what's happening now, simply have me wait and observe instead. Move the scene forward; don't just restate where things already stood.`
+    : "Hold position and watch this moment continue to unfold without personally stepping in.";
+  submitEventWindowAction(text);
+});
 
 // ---------------------------------------------------------------------------
 // Turn submission
@@ -1486,7 +1600,11 @@ async function handleTurnResult(result, action) {
     appendStoryEntries([{ text: "[ACTION NOT POSSIBLE]\n" + result.reason, tag: "system" }]);
     return;
   }
-  appendStoryEntries(result.story);
+  // While the event window is open, its own feed is the only place this
+  // turn's narrative should appear live — the Chronicle gets the full
+  // record in one shot when the window closes (see closeEventWindow).
+  if (APP.eventWindow) APP.eventWindow.storyBuffer.push(...(result.story || []));
+  else appendStoryEntries(result.story);
   if (result.roll) {
     playSfx("dice");
     if (result.roll.breakthrough) flashScreen("success");
@@ -1499,6 +1617,11 @@ async function handleTurnResult(result, action) {
     openModal("modal-death");
   }
   refreshUsagePill();
+  // Reached when combat inside the event window just concluded and was
+  // narrated (see submitCombatAction) — the same update path the moment-mode
+  // narrative loop uses, so the window drops the combat slot and goes back
+  // to showing the scene's narrative and choices.
+  if (APP.eventWindow) updateEventWindowAfterResult(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -1652,9 +1775,16 @@ function appendCombatLogEntries(entries) {
   log.scrollTop = log.scrollHeight;
   // Mirror the same lines into the main Chronicle, styled like a dice check,
   // so combat rounds are visible where the player is already looking —
-  // purely a local render, no server round trip or AI cost involved.
+  // purely a local render, no server round trip or AI cost involved. When
+  // this fight is happening inside an event window, the combat log above
+  // is already visible right there, so the mirror goes into the event's
+  // own buffer instead of leaking live into the Chronicle behind it.
   const chronicleLines = (entries || []).map((e) => combatLogLine(e).text).join("\n");
-  if (chronicleLines) appendStoryEntries([{ text: "[COMBAT]\n" + chronicleLines, tag: "roll" }]);
+  if (chronicleLines) {
+    const entry = { text: "[COMBAT]\n" + chronicleLines, tag: "roll" };
+    if (APP.eventWindow) APP.eventWindow.storyBuffer.push(entry);
+    else appendStoryEntries([entry]);
+  }
 }
 
 let combatRoundBusy = false;
@@ -1741,6 +1871,23 @@ $("#btn-lethal-cancel").addEventListener("click", () => {
   APP.pendingLethal = null;
 });
 
+$("#btn-power-goal-confirm").addEventListener("click", async () => {
+  closeModal("modal-power-goal");
+  const pending = APP.pendingPowerGoal;
+  if (!pending) return;
+  setBusy(true);
+  try {
+    const payload = { ...pending, confirmed_power_goal: true };
+    const result = await apiPost("/api/time/resolve", payload);
+    await processTimeSkipResolution(result, payload);
+  } catch (e) { showToast(e.message, "danger"); playSfx("error"); }
+  finally { setBusy(false); APP.pendingPowerGoal = null; runBackgroundCheck(); }
+});
+$("#btn-power-goal-cancel").addEventListener("click", () => {
+  closeModal("modal-power-goal");
+  APP.pendingPowerGoal = null;
+});
+
 $("#btn-death-rewind").addEventListener("click", async () => {
   closeModal("modal-death");
   try {
@@ -1780,6 +1927,15 @@ async function runBackgroundCheck() {
 async function pollBackground() {
   try {
     const r = await apiGet("/api/background/poll");
+    // A background job can still be in flight from the Advance that led up
+    // to the major event (kicked off before the event window ever opened,
+    // landing ~1.5s later via this poll) — injecting an unrelated
+    // "[WORLD REACTION]"/message into the Chronicle while that modal's
+    // opaque backdrop covers it just reads as unreadable noise behind the
+    // blur. The data is already safely recorded server-side either way
+    // (it'll surface normally on the next turn's story flush) — this only
+    // defers the visible toast/Chronicle append until the event concludes.
+    if (APP.eventWindow) return;
     (r.events || []).forEach((ev) => {
       if (ev.type === "chat") {
         showToast(`${ev.sender}: ${ev.message}`, "message"); playSfx("message");
@@ -2066,6 +2222,12 @@ async function processTimeSkipResolution(result, payload) {
     openModal("modal-lethal");
     return;
   }
+  if (result.status === "power_goal_confirm_required") {
+    APP.pendingPowerGoal = payload;
+    $("#power-goal-warning").textContent = result.warning || "This path may lead somewhere far beyond where you are now.";
+    openModal("modal-power-goal");
+    return;
+  }
   if (result.status === "manual_roll_required") {
     APP.pendingManualRoll = { payload, checkId: result.check_id, check: result.check };
     $("#major-roll-reason").textContent = result.check.major_reason || result.check.reason || "A major turning point hangs in the balance.";
@@ -2115,7 +2277,14 @@ function handleTimeSkipResult(result, payload) {
   appendStoryEntries(result.story);
   renderState(result.state);
   handleNotifications(result.notifications);
-  if (result.major_event_reached) {
+  if (result.died) {
+    // A time skip can end in death too (an extreme roll, the Tower's floor
+    // countdown) — same death/rewind modal every other death path already
+    // uses, just reached from a different resolution pipeline.
+    playSfx("danger"); shakeApp();
+    openModal("modal-death");
+  }
+  if (result.major_event_reached && !APP.eventWindow) {
     showToast(`Major event reached: ${result.major_event_title || "campaign turning point"}.`, "world");
   }
   const majorStop = ["canon_event", "danger", "world_event"].includes(result.interruption_kind);
@@ -2140,15 +2309,45 @@ function handleTimeSkipResult(result, payload) {
       banner.removeAttribute("src"); banner.hidden = true;
     }
     APP.pendingIntervention = { result, payload };
-    $("#intervention-bar").hidden = false;
+    const bar = $("#intervention-bar");
+    // A sub-interruption surfacing WHILE the Major Event window is already
+    // open (a danger follow-up mid-battle is the common case) has to be
+    // decided from inside that window — it sits on top of and hides
+    // everything behind it, so the bar in its normal spot would be
+    // unreachable. Relocate the real element in rather than duplicating it,
+    // so every existing handler on it keeps working untouched.
+    if (APP.eventWindow) {
+      const slot = $("#event-window-intervention-slot");
+      if (bar.parentElement !== slot) slot.appendChild(bar);
+    } else if (bar.parentElement !== INTERVENTION_BAR_HOME) {
+      INTERVENTION_BAR_HOME.appendChild(bar);
+    }
+    bar.hidden = false;
   } else if (result.interrupted && result.interruption_reason) {
     showToast(result.interruption_reason, result.interruption_kind === "goal_complete" ? "notify" : "system");
   }
+  if (APP.eventWindow) updateEventWindowAfterResult(result);
 }
 
-$("#btn-canon-intervene").addEventListener("click", () => {
+$("#btn-canon-intervene").addEventListener("click", async () => {
+  const pending = APP.pendingIntervention;
   $("#intervention-bar").hidden = true;
   APP.pendingIntervention = null;
+  const isCanonEvent = pending?.result?.interruption_kind === "canon_event";
+  if (isCanonEvent && !APP.eventWindow) {
+    const bannerEl = $("#canon-event-banner");
+    const bannerUrl = !bannerEl.hidden ? bannerEl.src : "";
+    const title = pending?.result?.state?.active_canon_event || $("#canon-event-heading").textContent || "Major Event";
+    openEventWindow(title, bannerUrl);
+    await submitEventWindowAction("Engage directly and personally experience this moment as it unfolds.");
+    return;
+  }
+  if (APP.eventWindow) {
+    // A sub-interruption inside an already-open event window — just move
+    // focus to the window's own response box instead of the main screen's.
+    $("#event-window-input").focus();
+    return;
+  }
   $("#time-unit").value = "moment";
   syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
   $("#action-input").focus();
@@ -2360,9 +2559,37 @@ async function openJournal(tab) {
       ? skills.map(([name, detail]) => renderSkillCard(name, detail)).join("")
       : '<div class="jrow">No learned skills yet.</div>';
     const titleRows = titles.length
-      ? titles.map((title) => `<div class="jrow">🏅 ${escapeHtml(title)}</div>`).join("")
+      ? titles.map((title) => `<div class="jrow">🏅 ${escapeHtml(titleLabel(title))}</div>`).join("")
       : '<div class="jrow hint">No titles earned yet.</div>';
     panel.innerHTML = `<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+  } else if (tab === "achievements") {
+    const achievements = data.achievements || [];
+    const titles = data.titles || [];
+    const achievementView = (entry, index) => {
+      const obj = entry && typeof entry === "object" ? entry : {};
+      const name = compactReadable(obj.name || obj.title) || (typeof entry === "string" ? entry : `Achievement ${index + 1}`);
+      const description = compactReadable(obj.description || obj.notes || obj.summary);
+      const when = obj.turn !== undefined && obj.turn !== null ? `Turn ${compactReadable(obj.turn)}` : compactReadable(obj.date);
+      return { name, description, when };
+    };
+    const achievementCards = achievements.length
+      ? achievements.map((entry, i) => {
+          const v = achievementView(entry, i);
+          return `<article class="achievement-card" data-achievement-replay="${escapeHtml(v.name)}" title="Click to replay the unlock moment">
+            <span class="achievement-icon">🏆</span>
+            <div class="achievement-copy"><b>${escapeHtml(v.name)}</b>${v.description ? `<p>${escapeHtml(v.description)}</p>` : ""}${v.when ? `<small>${escapeHtml(v.when)}</small>` : ""}</div>
+          </article>`;
+        }).join("")
+      : '<div class="jrow hint">No achievements unlocked yet.</div>';
+    const titleCards = titles.length
+      ? titles.map((t) => `<article class="achievement-card title-card"><span class="achievement-icon">🎖</span><div class="achievement-copy"><b>${escapeHtml(titleLabel(t))}</b></div></article>`).join("")
+      : '<div class="jrow hint">No titles earned yet.</div>';
+    panel.innerHTML = `<h3>Achievements</h3><div class="achievement-grid">${achievementCards}</div><h3>Titles Earned</h3><div class="achievement-grid">${titleCards}</div>`;
+    $$("[data-achievement-replay]").forEach((card) => card.addEventListener("click", () => {
+      const name = card.getAttribute("data-achievement-replay");
+      showCinematic("achievement", "ACHIEVEMENT UNLOCKED: " + name);
+      playSfx("achievement");
+    }));
   } else if (tab === "progression") {
     const logs = (data.progression_log || []).slice(-40).reverse();
     const rows = logs.map((entry) => {
@@ -2385,7 +2612,7 @@ async function openJournal(tab) {
     panel.innerHTML = `<div class="system-summary"><b>CHAPTER MEMORY</b><span>${chapters.length} consolidated chapters · ${daysIntoChapter}/90 days toward the next</span></div>` +
       (chapters.length ? chapters.map((chapter, index) => `<details class="quest-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(chapter.title || `Chapter ${chapter.number}`)} <small>— turns ${escapeHtml((chapter.turns || []).join("–"))}</small></summary><div class="quest-details"><p>${escapeHtml(chapter.summary || "")}</p><div class="quest-detail-label">Key decisions</div><ul>${(chapter.key_decisions || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul><div class="quest-detail-label">Lasting changes</div><ul>${(chapter.lasting_changes || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul><small>${escapeHtml(chapter.time_span || "")}</small></div></details>`).join("") : '<div class="jrow">A chapter is consolidated roughly every 3 in-game months, or sooner if a long stretch passes without much time advancing.</div>');
   } else if (tab === "clocks") {
-    const renderClocks = (title, clocks) => `<h3>${title}</h3>` + (Object.values(clocks || {}).length ? Object.values(clocks).map((clock) => `<article class="clock-row"><header><b>${escapeHtml(clock.name || "Unknown")}</b><span>${escapeHtml(clock.status || "active")}</span></header><p>${escapeHtml(clock.goal || "Private agenda")}</p><div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(clock.progress || 0)))}%"></i></div><small>${escapeHtml(clock.progress || 0)} / ${escapeHtml(clock.threshold || 100)} · last moved ${escapeHtml(clock.last_update || "not yet")}</small></article>`).join("") : '<div class="jrow hint">No visible clocks yet. Important NPCs and factions gain clocks as they enter the campaign.</div>');
+    const renderClocks = (title, clocks) => `<h3>${title}</h3>` + (Object.values(clocks || {}).length ? Object.values(clocks).map((clock) => `<article class="clock-row"><header><b>${escapeHtml(clock.name || "Unknown")}</b><span class="clock-status ${escapeHtml(clock.status || "active")}">${escapeHtml((clock.status || "active").replace(/_/g, " "))}</span></header><p>${escapeHtml(clock.goal || "Private agenda")}</p><div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(clock.progress || 0)))}%"></i></div><small>${escapeHtml(clock.progress || 0)} / ${escapeHtml(clock.threshold || 100)} · last moved ${escapeHtml(clock.last_update || "not yet")}</small>${clock.opponent ? `<small>⚔ Power ${escapeHtml(clock.power ?? 50)} vs ${escapeHtml(clock.opponent)}${clock.contested_location ? ` over ${escapeHtml(clock.contested_location)}` : ""}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No visible clocks yet. Important NPCs and factions gain clocks as they enter the campaign.</div>');
     panel.innerHTML = renderClocks("Faction agendas", data.faction_clocks) + renderClocks("NPC agendas", data.npc_clocks);
   } else if (tab === "relationships") {
     const people = data.relationships_view?.people || [];
@@ -2393,7 +2620,7 @@ async function openJournal(tab) {
     const affiliations = data.relationships_view?.affiliations || [];
     panel.innerHTML = `<div class="system-summary"><b>RELATIONSHIPS &amp; FACTIONS</b><span>Trust is evidence, not automatic obedience.</span></div>` +
       `<h3>Affiliations — your rank and standing</h3>` + (affiliations.length ? affiliations.map((a) => `<div class="jrow affiliation-row${a.status && a.status !== "active" ? ` ${escapeHtml(a.status)}` : ""}"><b>${escapeHtml(a.rank || "Member")}</b> — ${escapeHtml(a.faction)}${a.status && a.status !== "active" ? `<span class="affiliation-status">${escapeHtml(a.status)}</span>` : ""}${a.joined ? `<br><small>Joined: ${escapeHtml(a.joined)}</small>` : ""}${a.notes ? `<br><small>${escapeHtml(a.notes)}</small>` : ""}</div>`).join("") : '<div class="jrow hint">Not formally affiliated with any group, alliance, or hierarchy yet.</div>') +
-      `<h3>People</h3>` + (people.length ? people.map((person) => `<details class="relationship-card"><summary><b>${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p><p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}</div></details>`).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
+      `<h3>People</h3>` + (people.length ? people.map((person) => `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p><p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}</div></details>`).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
       `<h3>Faction standing</h3>` + (factions.length ? factions.map((f) => `<div class="jrow"><b>${escapeHtml(f.name)}</b><br>${escapeHtml(typeof f.standing === "object" ? compactReadable(f.standing.label || f.standing.status || f.standing.score) : f.standing)}</div>`).join("") : '<div class="jrow hint">No faction reputation has been recorded.</div>');
   } else if (tab === "prerequisites") {
     const tracks = data.prerequisite_tracks || [];
@@ -2423,21 +2650,39 @@ async function openJournal(tab) {
     const section = (title, values) => `<h3>${title}</h3>${(values || []).length ? values.slice(-30).reverse().map((x) => `<div class="jrow">${escapeHtml(typeof x === "object" ? x.text || x.description || JSON.stringify(x) : x)}</div>`).join("") : '<div class="jrow hint">Nothing recorded.</div>'}`;
     panel.innerHTML = section("Campaign canon", canon) + section("Location changes", facts.filter((x) => x.type === "location")) + section("Appearance changes", facts.filter((x) => x.type === "appearance")) + section("Quest changes", facts.filter((x) => x.type === "quest")) + section("Warnings", ledger.warnings);
   } else if (tab === "world-feed") {
-    const feed = [...(data.world_events || []), ...(data.timeline || [])].slice(-40).reverse();
-    panel.innerHTML = feed.length
-      ? feed.map((entry) => {
-          const text = typeof entry === "object" ? (entry.text || entry.summary || JSON.stringify(entry)) : entry;
-          const kind = typeof entry === "object" ? (entry.type || entry.tag || "World update") : "World update";
-          return `<div class="jrow"><b>${escapeHtml(String(kind).replace(/_/g, " "))}</b><br>${escapeHtml(text)}</div>`;
-        }).join("")
-      : '<div class="jrow">No major world updates have reached you yet.</div>';
+    // Split into what the player actually experienced vs. the world moving
+    // on its own (NPC/faction clocks, canon beats delivered as background
+    // texture rather than lived through) — background_world_feed mirrors
+    // the exact same text those specific entries already carry in
+    // world_events/timeline, so matching on content is enough to tell them
+    // apart without changing the shape either list has always had.
+    const entryText = (entry) => typeof entry === "object" ? (entry.text || entry.summary || JSON.stringify(entry)) : entry;
+    const renderFeedEntry = (entry) => {
+      const text = entryText(entry);
+      const kind = typeof entry === "object" ? (entry.type || entry.tag || "World update") : "World update";
+      return `<div class="jrow"><b>${escapeHtml(String(kind).replace(/_/g, " "))}</b><br>${escapeHtml(text)}</div>`;
+    };
+    const backgroundTexts = new Set((data.background_world_feed || []).map(entryText));
+    const seen = new Set();
+    const personal = [];
+    [...(data.world_events || []), ...(data.timeline || [])].forEach((entry) => {
+      const text = entryText(entry);
+      if (seen.has(text)) return;
+      seen.add(text);
+      if (!backgroundTexts.has(text)) personal.push(entry);
+    });
+    const personalRows = personal.slice(-40).reverse().map(renderFeedEntry).join("")
+      || '<div class="jrow">No major world updates have reached you yet.</div>';
+    const backgroundRows = (data.background_world_feed || []).slice(-40).reverse().map(renderFeedEntry).join("")
+      || '<div class="jrow hint">Nothing else has moved independently yet.</div>';
+    panel.innerHTML = `<h3>Your Story</h3>${personalRows}<h3>The Wider World</h3><p class="hint">Things happening on their own, whether or not you were there for them.</p>${backgroundRows}`;
   } else if (tab === "codex") {
     const codex = data.codex || [];
     panel.innerHTML = codex.length ? codex.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Entry")}</b> <i>${escapeHtml(c.type || "")}</i><br/>${escapeHtml(c.notes || "")}</div>`).join("") : `<div class="jrow">No codex entries yet.</div>`;
   } else if (tab === "inventory") {
     const inv = data.inventory || [];
     const eq = data.equipment || {};
-    const currencyRows = [`<div class="jrow"><b>${escapeHtml(data.currency.name)}:</b> ${escapeHtml(data.currency.amount)}</div>`]
+    const currencyRows = [currencyRowHtml(data.currency.name, data.currency.amount)]
       .concat(Object.entries(data.currencies || {}).map(([k, v]) => `<div class="jrow"><b>${escapeHtml(k)}:</b> ${escapeHtml(v)}</div>`));
     const bagRows = inv.length ? inv.map((i) => `<div class="jrow">${escapeHtml(typeof i === "object" ? i.name || JSON.stringify(i) : i)}</div>`).join("") : `<div class="jrow">Bag is empty.</div>`;
     if (data.gear_style === "full") {
@@ -2449,7 +2694,7 @@ async function openJournal(tab) {
     }
   } else if (tab === "shops") {
     const shops = data.shops || [];
-    panel.innerHTML = `<div class="jrow"><b>${escapeHtml(data.currency.name)}:</b> ${escapeHtml(data.currency.amount)}</div>` +
+    panel.innerHTML = currencyRowHtml(data.currency.name, data.currency.amount) +
       `<div class="jrow"><b>Local Commerce</b><br/>` + (shops.length ? shops.map((sh) => escapeHtml(typeof sh === "object" ? `${sh.name || "Shop"} — ${sh.type || "Merchant"}` : sh)).join("<br/>") : data.shop_types.map((t) => "? " + t).join("<br/>")) + `</div>` +
       `<div class="jrow"><b>Training Focus</b><br/>${data.training_options.map(escapeHtml).join(", ")}</div>` +
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
@@ -2459,15 +2704,16 @@ async function openJournal(tab) {
     const legendChips = groupNodesByController(nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}">${escapeHtml(t.controller)}</span>`).join("");
     panel.innerHTML = `<div class="map-heading"><div><b>${escapeHtml(data.world || s.world || "World")} Atlas</b><small>${nodes.length} important landmarks · ${knownCount} visited/discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
       (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
-      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>A reference atlas — click a landmark for what's known about it, who's tied to it, and who controls it. Drag to pan, scroll or use the buttons to zoom.</p></aside></div>`;
+      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><iframe id="map-godot-fx" class="map-godot-fx" aria-hidden="true" tabindex="-1" hidden></iframe></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>A reference atlas — click a landmark for what's known about it, who's tied to it, and who controls it. Drag to pan, scroll or use the buttons to zoom.</p></aside></div>`;
     const canvas = $("#map-canvas");
     paintMapTerritories($("#map-territory-canvas"), nodes);
+    applyGodotMapFx(nodes);
     nodes.forEach((node) => {
       const dot = document.createElement("button");
       dot.type = "button";
-      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown");
+      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "");
       dot.style.left = node.x + "%"; dot.style.top = node.y + "%";
-      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}`;
+      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}`;
       dot.setAttribute("data-map-node", node.name);
       dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.name)}</span>`;
       canvas.appendChild(dot);
@@ -2482,7 +2728,7 @@ async function openJournal(tab) {
     const t = data.difficulty_controls || {};
     const preset = data.progression_preset || {};
     const slider = (key, label, min, max, step, value, suffix = "×") => `<label class="tuning-row"><span><b>${label}</b><small id="${key}-value">${escapeHtml(value)}${suffix}</small></span><input type="range" id="${key}" min="${min}" max="${max}" step="${step}" value="${escapeHtml(value)}"></label>`;
-    panel.innerHTML = `<div class="system-summary"><b>${escapeHtml(preset.label || "WORLD PROGRESSION")}</b><span>Separate controls change pacing and danger without rewriting lore.</span></div><form id="tuning-form" class="tuning-form">${slider("check_warning_threshold", "Difficult-check warning threshold", 40, 95, 1, t.check_warning_threshold || 65, "/100")}${slider("xp_rate", "XP rate", .5, 2, .05, t.xp_rate || 1)}${slider("training_rate", "Training rate", .5, 2, .05, t.training_rate || 1)}${slider("breakthrough_rate", "Breakthrough frequency", .5, 2, .05, t.breakthrough_rate || 1)}${slider("combat_danger", "Combat danger", .5, 2, .05, t.combat_danger || 1)}${slider("resource_pressure", "Resource pressure", .5, 2, .05, t.resource_pressure || 1)}<button class="btn-primary" type="submit">SAVE TUNING</button></form>`;
+    panel.innerHTML = `<div class="system-summary"><b>${escapeHtml(preset.label || "WORLD PROGRESSION")}</b><span>Separate controls change pacing and danger without rewriting lore.</span></div><form id="tuning-form" class="tuning-form">${slider("check_warning_threshold", "Difficult-check warning threshold", 40, 95, 1, t.check_warning_threshold || 65, "/100")}${slider("xp_rate", "XP rate", .5, 2, .05, t.xp_rate || 1)}${slider("training_rate", "Training rate", .5, 2, .05, t.training_rate || 1)}${slider("breakthrough_rate", "Breakthrough frequency", .5, 2, .05, t.breakthrough_rate || 1)}${slider("combat_danger", "Combat danger", .5, 2, .05, t.combat_danger || 1)}${slider("resource_pressure", "Resource pressure", .5, 2, .05, t.resource_pressure || 1)}<label class="tuning-notes-row"><span><b>Director's Notes</b><small>A standing note to the GM — tone, pacing, what to lean into or away from.</small></span><textarea id="director_notes" maxlength="500" placeholder="e.g. more politics and less combat; slow down on romance subplots">${escapeHtml(data.director_notes || "")}</textarea></label><button class="btn-primary" type="submit">SAVE TUNING</button></form>`;
   } else if (tab === "health") {
     const health = data.campaign_health || { score: 100, status: "Healthy", issues: [], counts: {} };
     panel.innerHTML = `<div class="health-score ${health.score < 60 ? "bad" : health.score < 85 ? "warn" : "good"}"><strong>${escapeHtml(health.score)}</strong><div><b>${escapeHtml(health.status)}</b><span>Campaign structure and continuity check</span></div></div><div class="health-counts">${Object.entries(health.counts || {}).map(([key, value]) => `<span><b>${escapeHtml(value)}</b>${escapeHtml(humanLabel(key))}</span>`).join("")}</div>` +
@@ -2626,6 +2872,7 @@ $("#journal-panel").addEventListener("submit", async (event) => {
     event.preventDefault();
     const keys = ["check_warning_threshold", "xp_rate", "training_rate", "breakthrough_rate", "combat_danger", "resource_pressure"];
     const payload = Object.fromEntries(keys.map((key) => [key, Number(document.getElementById(key).value)]));
+    payload.director_notes = document.getElementById("director_notes").value;
     try { const result = await apiPost("/api/campaign/tuning", payload); APP.state = result.state; showToast("Campaign tuning saved.", "notify"); }
     catch (error) { showToast(error.message, "danger"); }
   } else if (event.target.id === "lore-import-form") {
@@ -2654,7 +2901,7 @@ $("#journal-panel").addEventListener("click", async (event) => {
     if (!node) return;
     const detail = $("#map-detail");
     const people = node.notable_individuals || [];
-    detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")} · tier ${escapeHtml(node.tier || 1)}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes)}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller)}</dd><dt>Notable individuals</dt><dd>${people.length ? people.map(escapeHtml).join(", ") : "None recorded yet"}</dd><dt>Quest links</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "None known"}</dd></dl>`;
+    detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")} · tier ${escapeHtml(node.tier || 1)}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes)}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller)}</dd>${node.danger_level ? `<dt>Danger</dt><dd class="danger-label danger-${escapeHtml(node.danger_level.toLowerCase())}">${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Notable individuals</dt><dd>${people.length ? people.map(escapeHtml).join(", ") : "None recorded yet"}</dd><dt>Quest links</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "None known"}</dd></dl>`;
     return;
   }
 });
@@ -2733,6 +2980,7 @@ function collectCampaignPayload() {
     difficulty: $("#nc-difficulty").value, background: $("#nc-background").value,
     appearance: $("#nc-appearance").value, custom_world: $("#nc-custom").value,
     origin: $("#nc-origin").value, archetype: $("#nc-archetype").value, stats,
+    age: $("#nc-age").value.trim(),
     start_location: chosenStart ? chosenStart.location : "", start_note: chosenStart ? chosenStart.note : "",
     canon_character_id: $("#nc-character-mode").value,
     starting_era_id: $("#nc-era-row").hidden ? "" : ($("#nc-starting-era").value || ""),
@@ -2770,6 +3018,7 @@ $("#nc-character-mode").addEventListener("change", () => {
       $("#nc-appearance").value = ncCharacterStash.appearance;
       $("#nc-origin").value = ncCharacterStash.origin;
       $("#nc-archetype").value = ncCharacterStash.archetype;
+      $("#nc-age").value = ncCharacterStash.age;
       $("#nc-character-note").textContent = ncCharacterStash.note;
       ncCharacterStash = null;
     }
@@ -2779,11 +3028,13 @@ $("#nc-character-mode").addEventListener("change", () => {
     ncCharacterStash = {
       name: $("#nc-name").value, background: $("#nc-background").value, appearance: $("#nc-appearance").value,
       origin: $("#nc-origin").value, archetype: $("#nc-archetype").value, note: $("#nc-character-note").textContent,
+      age: $("#nc-age").value,
     };
   }
   $("#nc-name").value = c.name || "Traveler";
   $("#nc-background").value = c.background || "";
   $("#nc-appearance").value = c.appearance || "";
+  $("#nc-age").value = (c.age ?? "") === "" ? "" : String(c.age);
   if (Array.from($("#nc-origin").options).some((o) => o.value === c.origin)) $("#nc-origin").value = c.origin;
   if (Array.from($("#nc-archetype").options).some((o) => o.value === c.archetype)) $("#nc-archetype").value = c.archetype;
   $("#nc-character-note").textContent = `${c.name} begins at ${c.location}, ${formatCalendarDate($("#nc-world").value, c.start_day, null, c.start_day)}. You control every decision; canon events remain pressures that can change naturally.`;

@@ -9,7 +9,7 @@
 <link rel="icon" type="image/png" href="/assets/branding/worldwalker-emblem.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cinzel+Decorative:wght@700;900&family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Yuji+Syuku&family=Pirata+One&family=MedievalSharp&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cinzel+Decorative:wght@700;900&family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Yuji+Syuku&family=Pirata+One&family=MedievalSharp&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body data-world="Custom World" data-scene="starry_sky">
@@ -65,6 +65,7 @@
       <span id="hdr-location">Starting Region</span>
     </div>
     <div class="topbar-right">
+      <span id="hdr-tension" class="pill tension-pill tension-calm" title="How dangerous your current situation is, at a glance.">● Calm</span>
       <span id="hdr-turn" class="pill">Turn 0</span>
       <span id="hdr-autosave" class="pill save-pill" title="Last autosave">Not saved</span>
       <span id="hdr-ai" class="pill ai-pill">AI: READY TO TEST</span>
@@ -78,6 +79,7 @@
       <div class="portrait-frame">
         <img id="portrait-img" class="portrait-image" alt="AI-generated character portrait" />
         <canvas id="character-ambient" class="character-ambient" aria-hidden="true"></canvas>
+        <iframe id="portrait-godot-ambient" class="portrait-godot-ambient" aria-hidden="true" tabindex="-1" hidden></iframe>
         <div id="portrait-loading" class="portrait-loading" hidden><span></span><b>CREATING PORTRAIT…</b></div>
         <button id="btn-portrait-regenerate" class="portrait-regenerate" type="button" title="Regenerate AI portrait">↻</button>
         <button id="btn-portrait-manage" class="portrait-manage" type="button" title="Manage portrait identity">✦</button>
@@ -87,6 +89,7 @@
         <div class="portrait-caption">
           <div id="portrait-name" class="portrait-name">Traveler</div>
           <div id="portrait-class" class="portrait-class">Adventurer</div>
+          <div id="portrait-location" class="portrait-location" hidden>📍 <span id="portrait-location-text"></span></div>
         </div>
       </div>
     </section>
@@ -109,12 +112,17 @@
           <span class="bar-label">XP</span>
           <div class="bar-track"><div id="bar-xp" class="bar-fill bar-xp" style="width:0%"></div></div>
         </div>
+        <div class="currency-row" id="currency-row">
+          <i class="currency-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 14.8c.4 1 1.5 1.7 2.8 1.7 1.7 0 2.8-.9 2.8-2s-1.1-1.7-2.8-2c-1.7-.3-2.8-.9-2.8-2s1.1-2 2.8-2c1.3 0 2.4.7 2.8 1.7"/><path d="M12 7.2v1.1M12 15.7v1.1"/></svg></i>
+          <span class="currency-amount" id="stat-currency">0</span>
+          <span class="currency-name" id="stat-currency-label">Currency</span>
+        </div>
         <dl class="kv">
           <dt id="stat-race-label" hidden>Race</dt><dd id="stat-race" hidden>Human</dd>
           <dt>Age</dt><dd id="stat-age">Unknown</dd>
           <dt>Status</dt><dd id="stat-status">Normal</dd>
           <dt>Time</dt><dd id="stat-time">Day 1 — Morning</dd>
-          <dt id="stat-currency-label">Currency</dt><dd id="stat-currency">—</dd>
+          <dt id="stat-tower-timer-label" hidden>Floor Timer</dt><dd id="stat-tower-timer" hidden>—</dd>
         </dl>
       </div>
     </section>
@@ -170,10 +178,9 @@
       </header>
       <div class="scene-viewport" id="scene-viewport">
         <canvas id="scene-paint" class="scene-paint"></canvas>
-        <canvas id="scene-fx" class="scene-fx"></canvas>
+        <iframe id="scene-godot-fx" class="scene-godot-fx" aria-hidden="true" tabindex="-1" hidden></iframe>
         <img id="scene-img" class="scene-img" alt="" />
         <div class="scene-shade"></div>
-        <div class="scene-weather" id="scene-weather"></div>
         <div class="scene-transition" id="scene-transition"></div>
         <div class="scene-badge" id="scene-category-badge">STARRY SKY</div>
         <div class="scene-loc"><span id="scene-location">Starting Region</span></div>
@@ -188,16 +195,18 @@
       </header>
       <div class="panel-body story-feed" id="story-feed"></div>
       <section id="intervention-bar" class="inline-intervention" hidden>
-        <img id="canon-event-banner" class="canon-event-banner" alt="" hidden />
-        <div class="intervention-copy">
-          <span id="canon-event-heading">MAJOR EVENT</span>
-          <h3 id="canon-intervention-text">The simulation reached an important decision.</h3>
-          <p id="canon-event-context"></p>
-          <strong id="canon-intervention-question">Do you want to intervene?</strong>
-        </div>
-        <div class="intervention-actions">
-          <button id="btn-canon-intervene" class="btn-primary">YES — STOP HERE</button>
-          <button id="btn-canon-later" class="btn-ghost">NO — KEEP SIMULATING</button>
+        <div class="intervention-card">
+          <img id="canon-event-banner" class="canon-event-banner" alt="" hidden />
+          <div class="intervention-copy">
+            <span id="canon-event-heading">MAJOR EVENT</span>
+            <h3 id="canon-intervention-text">The simulation reached an important decision.</h3>
+            <p id="canon-event-context"></p>
+            <strong id="canon-intervention-question">Do you want to intervene?</strong>
+          </div>
+          <div class="intervention-actions">
+            <button id="btn-canon-intervene" class="btn-primary">YES — STOP HERE</button>
+            <button id="btn-canon-later" class="btn-ghost">NO — KEEP SIMULATING</button>
+          </div>
         </div>
       </section>
       <div class="suggestion-dock">
@@ -325,6 +334,10 @@
     <div class="modal-body">
       <label>Character Name</label>
       <input id="nc-name" type="text" value="Traveler" />
+
+      <label>Age (optional)</label>
+      <input id="nc-age" type="number" min="1" max="900" placeholder="Auto — matches your background/origin" />
+      <p class="hint">Leave blank and the game picks an age that fits your origin and background. Type any age you want — the game won't second-guess an unusual combination like a 70-year-old fresh academy graduate.</p>
 
       <label>World</label>
       <select id="nc-world"></select>
@@ -584,6 +597,7 @@
         <button data-tab="party">Party</button>
         <button data-tab="quests">Quests</button>
         <button data-tab="skills">Skills &amp; Titles</button>
+        <button data-tab="achievements">Achievements</button>
         <button data-tab="world-feed">World Feed</button>
         <button data-tab="codex">Codex</button>
         <button data-tab="inventory">Bag</button>
@@ -608,6 +622,32 @@
   </div>
 </div>
 
+<div class="modal-backdrop event-window-backdrop" id="modal-event-window">
+  <div class="modal event-window-modal">
+    <header class="modal-head">
+      <span id="event-window-title">MAJOR EVENT</span>
+      <button type="button" id="btn-event-window-leave" title="Step back — the event keeps unfolding in the background; it'll interrupt you again if it needs a decision.">✕</button>
+    </header>
+    <img id="event-window-banner" class="event-window-banner" alt="" hidden>
+    <div class="event-window-feed" id="event-window-feed"></div>
+    <div class="event-window-intervention-slot" id="event-window-intervention-slot"></div>
+    <div class="event-window-combat-slot" id="event-window-combat-slot" hidden></div>
+    <div class="event-window-choices" id="event-window-choices"></div>
+    <div class="event-window-respond-row" id="event-window-respond-row">
+      <textarea id="event-window-input" rows="2" placeholder="Or type exactly what you do or say..."></textarea>
+      <button id="btn-event-window-respond" class="btn-primary" type="button">RESPOND</button>
+    </div>
+    <button id="btn-event-window-wait" class="btn-ghost full event-window-wait" type="button" title="For a beat that's showing you something rather than asking for a decision — lets the moment continue without you personally acting.">⏭ CONTINUE WATCHING</button>
+    <div class="event-window-concluded" id="event-window-concluded" hidden>
+      <p>This moment has passed — your journey continues.</p>
+      <button id="btn-event-window-continue" class="btn-primary" type="button">CONTINUE YOUR JOURNEY</button>
+    </div>
+  </div>
+</div>
+
+<!-- Decision modals (lethal confirm, fate roll, difficulty gate, challenge
+     minigames) are declared AFTER modal-event-window so they always paint on
+     top of it and stay reachable while the event window is open. -->
 <div class="modal-backdrop" id="modal-lethal">
   <div class="modal">
     <header class="modal-head danger-head"><span>⚠ Potentially Lethal Decision</span></header>
@@ -618,6 +658,20 @@
       <div class="modal-actions">
         <button id="btn-lethal-cancel" class="btn-ghost">Reconsider</button>
         <button id="btn-lethal-confirm" class="btn-danger">Continue Anyway</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-power-goal">
+  <div class="modal">
+    <header class="modal-head"><span>A Path Worth Committing To</span></header>
+    <div class="modal-body">
+      <p id="power-goal-warning">This path may lead somewhere far beyond where you are now.</p>
+      <p class="hint">Committing fully to this over real time can lead to a genuine breakthrough — this is your chance to reconsider first.</p>
+      <div class="modal-actions">
+        <button id="btn-power-goal-cancel" class="btn-ghost">Reconsider</button>
+        <button id="btn-power-goal-confirm" class="btn-primary">Commit to This Path</button>
       </div>
     </div>
   </div>

@@ -6,7 +6,7 @@ import copy, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
-from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_supports_races, WORLD_RACES
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_supports_races, WORLD_RACES, tower_floor_theme, TOWER_FLOOR_COUNT, tower_band
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -14,7 +14,7 @@ from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks)
+                     update_chapter_memory, tick_world_clocks, pacing_guidance, active_nemesis_threats)
 
 
 DEFAULT_SETTINGS = {
@@ -226,7 +226,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day")
 
     def trimmed_state_for_ai(self):
         """The raw state grows without bound over a long campaign —
@@ -289,6 +289,66 @@ class CoreMixin:
             data = self.ai.request(sharper, payload, max_output_tokens=max_output_tokens)
         return data
 
+    def _scale_lock_rule(self):
+        """Shared by gm_rules() and core_rules() so the scale-lock/contact/
+        identity/information-fog block — genuinely relevant to almost any
+        AI call, light or heavy — stays byte-identical in both instead of
+        drifting into two slightly different copies over time."""
+        scale = str(self.state.get("simulation_scale") or "Individual").strip() or "Individual"
+        return (
+            f"\n- SCALE LOCK (current scale: {scale}): the player's simulation_scale is Individual, Organization, Guild, Company, City, "
+            "Nation, or Empire — exactly one at a time, tracked in state_patch.simulation_scale, and it NEVER silently upgrades. It only "
+            "changes when the player has genuinely, deliberately built up to that scale through real in-fiction action (founding and "
+            "growing an organization, being formally installed in a national office, etc.), the same bar as state.position. "
+            + (
+                "The player is currently at INDIVIDUAL scale, which hard-locks the following until they explicitly earn otherwise: the "
+                "player never owns or governs a country, never controls national territory, never appears on the map as a political "
+                "entity, never receives national diplomacy, international summits, embassies, UN-style invitations, unsolicited direct "
+                "contact from a government, or military command. Never invent a country for them, never rename, split, or hand over a "
+                "map region because of them, and never manufacture diplomacy just to involve them in it — if the story wants that scale of "
+                "consequence, it happens among nations and organizations that already exist, and the player experiences it from whatever "
+                "vantage their actual scale allows."
+                if scale == "Individual" else
+                f"The player has earned {scale}-scale standing — the simulation should now actually reflect that reach in what reaches "
+                "them (relevant diplomacy, contact, or authority at that scale becomes plausible), without retroactively pretending they "
+                "were ever bigger than what they actually built."
+            ) +
+            " Regardless of scale: an unidentified individual is never contactable by a government or agency out of nowhere — identity "
+            "must be discovered (video, DNA, financial/electronic/travel traces, surveillance, multiple witnesses, captured allies, "
+            "communications intercepts), then verified, then cleared through a real threat assessment and bureaucratic approval, before any "
+            "direct contact is even possible; agencies investigate and coordinate internally first, they do not immediately call, recruit, "
+            "or negotiate. No single observation ever identifies someone — a power level, aura, or energy reading reveals capability, never "
+            "identity. Information about the player spreads in physical layers with real delay and real loss at each step (direct "
+            "observation -> witness account -> rumor -> local authorities -> regional authorities -> national agencies -> international "
+            "intelligence -> broadly verified fact) — most rumors never make it all the way up that chain, witnesses can be wrong, and "
+            "footage can be faked or disputed."
+        )
+
+    def core_rules(self, extra=""):
+        """A much lighter instruction set for background/side tasks — a side
+        chat reply, the incoming-message check, the background world tick,
+        memory maintenance — that don't touch combat, quests, the Tower, or
+        faction conflict, and don't need the full ~46,000-character turn-
+        resolution rulebook to do their actual job. Modeled on Pax Historia's
+        own approach of giving each distinct AI task its own right-sized
+        prompt instead of reusing one giant shared one everywhere; these
+        calls run far more often than a real turn (the incoming-chat check
+        alone fires every other turn), so the savings compound."""
+        wd = WORLD_DATA[self.state["world"]]
+        return f"""You are the world-consistency layer for Worldwalker RPG's "{self.state['world']}" campaign — not narrating a full scene, just keeping one small piece of the simulation honest.
+WORLD RULES: {wd['rules']}
+CUSTOM SETTING: {self.state.get('custom_world', '')}
+
+CORE PRINCIPLES
+- NPCs, factions and world events continue independently and know only what they could plausibly know.
+- Enforce information fog. Separate objective world changes from what the player can verify, infer, or hear as rumor. News requires a believable route — witness, messenger, broadcast, document, travel, surveillance, or ability — and distance and secrecy cause delay or uncertainty.
+- Contacts are not omnipresent. Distance, access, relationship, danger, technology, secrecy, and availability matter.
+- Communications must use lore-appropriate means. A "chat" can mean phone/text, guild chat, system DM, messenger bird, courier, letter, Den Den Mushi, radio, telepathy, or other setting-appropriate medium.
+- Before proposing or reacting to anything, check campaign_canon (recent turn history) and the relevant npc_memories entry for whether it has already happened, been discussed, or been resolved — never re-raise, act surprised by, or contradict something already settled.
+- Canon is the opening condition, not a railroad. Record meaningful changes as canon_divergences.{self._scale_lock_rule()}
+{extra}
+Return ONLY valid JSON. No markdown fences."""
+
     def gm_rules(self):
         wd = WORLD_DATA[self.state["world"]]
         d = DIFFICULTIES[self.state["difficulty"]]
@@ -330,15 +390,76 @@ class CoreMixin:
         if world_name == "Reincarnated as a Slime":
             voice_rule = (
                 "\n- This world has a signature narrative device: an internal analytical voice (Great Sage/Raphael-style), once the "
-                "character has such a skill. When it speaks, set it off from normal prose with 《...》 brackets inside narrative, e.g. "
-                "《Analysis complete. Recommend evasion.》 Use it sparingly and only once the skill genuinely exists — do not grant or use it prematurely."
+                "character has such a skill. It speaks like the source material's own AI construct actually does — terse, clinical, factual, "
+                "reporting real analysis/calculation/recommendation, never flavor text dressed up to look clinical. Set it off from normal prose "
+                "with 《...》 brackets inside narrative, e.g. 《Analysis complete. Recommend evasion.》 It is the correct voice for reporting a "
+                "concrete skill acquisition, an evolution, or a calculated probability/recommendation — use it for those moments, not idle "
+                "commentary. Use it sparingly and only once the skill genuinely exists — do not grant or use it prematurely."
             )
         elif world_name in ("Overgeared", "Solo Max-Level Newbie"):
             voice_rule = (
-                "\n- This world has an in-fiction game System the character perceives directly. Mechanical events (skill gained, level up, "
-                "quest update, stat change, hidden condition met) should be phrased as literal System messages the character sees/hears — e.g. "
-                "'[System Notification] Skill \"Iron Will\" has reached Level 2.' — inside the events list and, when it fits the moment, in the "
-                "narrative itself. Keep ordinary scene description as normal prose; only mechanical notices get the System voice."
+                "\n- This world has an in-fiction game System the character perceives directly, exactly like the source material's own status "
+                "windows/notifications — never softened into ordinary prose. EVERY mechanical event (skill gained, level up, quest update, stat "
+                "change, item/reward acquired, hidden condition met, achievement unlocked) must be phrased as a literal System message the "
+                "character sees/hears, e.g. '[System Notification] Skill \"Iron Will\" has reached Level 2.' or '[System] Quest Complete — "
+                "Reward: 500 Gold, Potion of Vigor x3.' Put these in the events list AND, whenever the moment allows, quote the System's exact "
+                "wording inside the narrative itself so the player reads it the way the character actually experiences it — not a paraphrase, "
+                "the literal message. Any XP or reward gained this turn must be named explicitly in one of these messages (exact amount, item, "
+                "or title) — never leave the player to infer what they got. Keep ordinary scene description as normal prose; only mechanical "
+                "notices get the System voice."
+            )
+        tower_rule = ""
+        if world_name == "Solo Max-Level Newbie":
+            current_floor = max(1, min(TOWER_FLOOR_COUNT, int(self.state.get("tower_floor", 1) or 1)))
+            band_name, band_ecology = tower_band(current_floor)
+            deadline_day = self.state.get("tower_floor_deadline_day")
+            days_left = None
+            if isinstance(deadline_day, (int, float)):
+                days_left = max(0, int((deadline_day - int(self.state.get("canon_day", 0))) ))
+            tower_rule = (
+                "\nWORLD-FIRST / RULE-FIRST SIMULATION: this world is simulated for its own sake, not staged around the player. The player is "
+                "one autonomous actor among billions, never the default protagonist. If a beat you're about to write would only make sense by "
+                "quietly bending the rules below in the player's favor, simulation consistency wins — regenerate the beat instead. Priority "
+                "order when anything conflicts: simulation consistency, then Tower rules, then world logic, then this campaign's own established "
+                "history (campaign_canon/canon_divergences), then the player's actions, then narrative convenience — never reversed.\n"
+                f"- TOWER STRUCTURE: this world's Tower has exactly {TOWER_FLOOR_COUNT} floors and is a single, singular structure — every Gate "
+                "on Earth (Tokyo, Paris, New York, anywhere) opens into the exact same Tower, sharing the exact same current floor and the exact "
+                "same countdown; there is no such thing as one country ahead of or behind another. The player is currently on Floor "
+                f"{current_floor}, whose real internal identity is '{tower_floor_theme(current_floor)}' in the '{band_name}' ecological band "
+                f"({band_ecology}) — use this to decide what monsters, factions, hazards and administrators canon-appropriately populate it, and "
+                "keep that ecology internally consistent every time this floor is revisited (check campaign_canon/codex for what was already "
+                "established here before inventing something new for it). Never mix a lower band's grounded logic with a higher band's rule-"
+                "bending phenomena, and never let progression jump bands without an earned, gradual, narratively-justified transition — no "
+                "one-turn leaps in floor difficulty or systemic complexity. NEVER reveal this internal name/theme/band to the player directly or "
+                f"use it as state.location or a map label — state.location must always read exactly 'Floor {current_floor}' (e.g. 'Floor 12'), "
+                "with the real flavor expressed only through narration, monsters, and scenery. A floor also holds content nobody has to find — "
+                "secret bosses, hidden paths, rare alternate victories, bonus rewards — track any the player actually stumbles onto as normal "
+                "hidden_quests, discovered like any other hidden content, not handed over for free. When the player actually clears/ascends "
+                "past their current floor, set state_patch.tower_floor to the new floor number (integers only, and only forward, never skip "
+                "floors arbitrarily) — the application resets the floor's own countdown timer automatically the moment this number goes up, and "
+                "that reset applies globally: the instant the shared floor advances, EVERY Gate on Earth reconnects to the new floor at once, "
+                "and the previous floor stays permanently open afterward for training, exactly like the source material."
+                + (f" There are {days_left} day(s) left before this floor's countdown reaches zero — build rising urgency into the narrative "
+                   "as it gets low, but the actual countdown and its consequences are handled by the application; never mention a specific "
+                   "number of days yourself, that's the application's job."
+                   if days_left is not None else "")
+                + " The player does not have to be the one who clears the current floor — humanity as a whole (canon named clearers, rival "
+                "guilds, militaries, companies, other players, any combination) is genuinely racing to clear it, and may succeed on its own "
+                "initiative whether or not the player is directly involved; when appropriate, narrate that collective progress as background "
+                "movement (via the existing faction/NPC clock and World Feed machinery) rather than always waiting on the player's own action. "
+                "The player can fail a floor while humanity still clears it in time, and humanity can fail the countdown while the player "
+                "personally survives — these are not contradictions, they're the whole premise.\n"
+                "- WORLD AUTONOMY & REALISM: countries, guilds, militaries, scientists, religions, corporations and criminal organizations are "
+                "all independently reacting to and racing through the Tower — surface this the same way any other independent world movement "
+                "is surfaced, through faction/NPC clocks and the World Feed, not just told about in passing. New Tower-derived technology, "
+                "weapons, or infrastructure still costs real knowledge, money, materials, engineers, testing and production time — a working "
+                "prototype is not mass deployment, and there is no such thing as a one-week aircraft, a one-day reactor, or an overnight army; "
+                "research, industrial expansion, training, travel, communication and construction all still consume realistic time. "
+                "Administrators, Architects, and other apex Tower entities do not casually seek the player out — they act through intermediaries "
+                "or systemic effects, and a direct meeting requires exceptional, earned justification, not proximity or power level alone. "
+                "Nothing reverts on its own: a defeated floor boss stays defeated, a destroyed area stays destroyed, and established Tower "
+                "facts persist in campaign_canon/codex exactly like any other campaign history — never re-introduce a cleared threat or a "
+                "settled fact as if it were new."
             )
         progression_rule = (
             "\n- This is a status-window/LitRPG world: numbered XP and level-ups are the expected shape of base-stat progress. The application calculates XP, levels, thresholds and level-up stat gains after every meaningful action, so never write xp, xp_next, level, or direct base-stat increases in state_patch. Continue to record earned skills, proficiency, knowledge, items, titles, achievements and other world-specific progress normally."
@@ -351,6 +472,28 @@ class CoreMixin:
             "would recognize as THE holder of that role, not just a strong individual — set it in state_patch.position. Leave state_patch.position "
             "unset otherwise; do not invent a grand title just to fill it. Clear or update it if the position is lost or changes."
         )
+        scale_rule = self._scale_lock_rule()
+        pacing_rule = pacing_guidance(self.state)
+        director_notes = str(self.state.get("director_notes") or "").strip()
+        director_notes_rule = (
+            f"\n- PLAYER DIRECTOR'S NOTES (a standing tone/pacing preference the player set for this campaign — honor it "
+            f"consistently across turns until it changes): {director_notes}"
+            if director_notes else ""
+        )
+        nemesis_threats = active_nemesis_threats(self.state)
+        nemesis_rule = ""
+        if nemesis_threats:
+            names = "; ".join(f"{t['name']} ({t['goal']})" for t in nemesis_threats if t.get("name"))
+            nemesis_rule = (
+                f"\n- NEMESIS AT A BREAKING POINT: {names}. This long-running villain's scheme has been building for a "
+                "long stretch of the campaign and just reached its critical moment — engineer a real confrontation, "
+                "revelation, or major escalation involving them within the next several turns rather than letting it "
+                "fade quietly. Once the confrontation actually plays out, update their npc_memories entry to reflect "
+                "the outcome (a new goal for their next scheme, or drop recurring/nemesis if they're truly finished). "
+                "This is for a confrontation the player will actually be part of — if their scheme is instead something "
+                "that should resolve independently of the player (a war with another faction, a power struggle with a "
+                "rival), give their npc_clock an opponent instead and let it resolve automatically; see FACTION CONFLICT."
+            )
         canon = timeline_for(world_name)
         current_canon_day = int(self.state.get("canon_day", canon.get("start_day", -7)))
         upcoming = [e for e in canon.get("events", []) if int(e.get("day", 0)) >= current_canon_day]
@@ -358,13 +501,95 @@ class CoreMixin:
                       key=lambda e: -int(e.get("day", 0)))
         canon_schedule = "; ".join(f"Day {int(e.get('day', 0)):+d}: {e.get('title')} at {e.get('location')}" for e in upcoming[:5])
         canon_history = "; ".join(f"Day {int(e.get('day', 0)):+d}: {e.get('title')}" for e in past[:5])
+        all_event_days = [int(e.get("day", 0)) for e in canon.get("events", [])]
+        beyond_established_canon = bool(all_event_days) and current_canon_day > max(all_event_days)
+        known_factions = list(self.state.get("factions", {}).keys())
+        faction_conflict_rule = ""
+        if known_factions:
+            faction_conflict_rule = (
+                f"\n- FACTION CONFLICT (this world's real factions: {', '.join(known_factions)}): faction_clocks and npc_clocks "
+                "support optional fields — opponent (the rival faction/NPC name), ally (a faction/NPC who reinforces this side "
+                "if the conflict resolves), power (1-100, their rough current strength), and contested_location (a place "
+                "actually at stake) — and once a clock with an opponent reaches its turning point, the application resolves a "
+                "real strength-weighted outcome automatically: territory can change hands, and a side that loses badly enough "
+                "is genuinely destroyed (a faction, which also vacates its other territory and can cost its tracked leader — "
+                "see npc_memories[name].leads_faction below) or lost (an NPC), off-screen, without needing the player present. "
+                "Only set opponent/ally/power/contested_location when you intend that stake to be real. "
+                + (f"This campaign is {current_canon_day - max(all_event_days)} day(s) beyond this world's last established "
+                   "canon event — there is no more real script to follow here, so extrapolate each faction's next move as a "
+                   "plausible, in-character continuation of their real trajectory and power level, not an arbitrary invention."
+                   if beyond_established_canon else
+                   "While still within the world's known timeline, base opponent/ally/power/contested_location on this "
+                   "world's REAL canon-established relationships and conflicts at the current Canon Day — who is actually "
+                   "at war, rivals, or allied at this point in the real story — unless a recorded canon_divergence has "
+                   "plausibly changed that specific relationship.") +
+                " A conflict the player should experience directly belongs in normal narrative/combat, not this off-screen "
+                "mechanism — reserve it for agendas genuinely meant to resolve independently of the player. The application "
+                "itself may occasionally propose a background skirmish on its own (marked proposed=true) — these always end "
+                "in a stalemate with no real winner, since bare dice should never decide a faction's survival without your "
+                "canon judgment. If the player becomes genuinely involved in one of these, set that clock's player_involved=true "
+                "so it can resolve for real once you're actively narrating it. Track a faction's actual leader via "
+                "npc_memories[name].leads_faction = \"Faction Name\" whenever one is established — it's what lets their "
+                "faction's collapse cost them something real instead of them quietly continuing to exist untouched."
+            )
+        leadership_rule = ""
+        if known_factions:
+            leadership_rule = (
+                "\n- If the player holds the TOP leadership rank of a faction (per state.affiliations or state.position — "
+                "e.g. Hokage of Konoha, Captain of a pirate crew, a Guild Master), they can issue real orders and make "
+                "binding decisions on that faction's behalf — deploying people, setting policy, delegating a mission — not "
+                "just act as an individual member. A named subordinate, officer, or unit the player addresses or gives an "
+                "order to should be tracked as a normal npc_memories entry (set npc_memories[name].faction_role to their "
+                "position, e.g. 'Lieutenant' or 'Squad Captain'), with a goal reflecting the order and recurring=true, "
+                "exactly like any other tracked subplot — this lets their progress carrying it out advance and report back "
+                "independently. The player never needs to list or manage the faction's full membership — invent a "
+                "plausible named subordinate on the spot whenever the fiction calls for one, staying consistent with any "
+                "already named. A player who is only an ordinary member (not the top leader) can request or suggest to "
+                "their faction's leadership, but cannot issue binding orders on its behalf."
+            )
+        espionage_rule = ""
+        if known_factions:
+            espionage_rule = (
+                "\n- ESPIONAGE: when the player assigns someone — themself, a companion, a subordinate, a hired agent — to "
+                "infiltrate, surveil, or spread disinformation against a faction, track that assignment exactly like any "
+                "other delegated task: a named npc_memories entry (or the player's own standing_orders, if they're doing it "
+                "personally) with a concrete goal and recurring=true. This is a standing commitment, not a one-time action — "
+                "once set, keep advancing and reporting on it across time skips without the player having to re-issue the "
+                "order every single time, exactly like standing_orders already work, until it's completed, blown, or the "
+                "player changes it. What actually happens each skip must follow from the player's real orders, the agent's "
+                "actual position and capability, and the current state of the world — never invent progress with nothing "
+                "behind it, and never let it succeed just because it would be convenient. A skip can and should surface "
+                "MULTIPLE distinct updates when multiple real things happened in it — an espionage report is exactly one "
+                "more thing that can appear in the updates list (type npc_reaction or faction_reaction) alongside a "
+                "companion's own subplot beat, a canon catch-up note, or a faction conflict resolution, each on its own "
+                "line with its own canon_day, the same as any other update. A successful infiltration into a faction "
+                "currently mid-conflict (its faction_clock has opponent/power/contested_location set — see FACTION "
+                "CONFLICT) can genuinely reveal those specific details to the player through that update's narrative/"
+                "player_knowledge — real forewarning, not vague flavor. A successful disinformation campaign can likewise "
+                "alter that faction_clock's own power or contested_location in state_patch before it resolves, reflecting "
+                "the sabotage actually landing. Espionage carries real risk: an exposed or captured agent should be "
+                "reflected honestly (npc_memories[name].status can become 'captured', 'exiled', or 'deceased', the same "
+                "vocabulary a fallen faction leader uses), and getting caught can itself trigger consequences — reprisal, "
+                "diplomatic fallout, a burned source — not just a quiet failure."
+            )
+        # Deliberately placed at the very END of the returned prompt, not the
+        # top — canon_day (and everything derived from it) changes on almost
+        # every time skip, while the ~300 lines of NON-NEGOTIABLE RULES below
+        # are near-static turn to turn. Putting the most volatile content
+        # first would break the request's cacheable prefix (what OpenAI's and
+        # local llama.cpp-style servers' automatic prompt caching key off of)
+        # on every single skip, even though the bulk of this prompt hasn't
+        # actually changed. Keeping it at the tail instead lets that long
+        # static bulk stay a stable, cacheable prefix across ordinary turns.
+        canon_clock_block = (
+            f"\nCANON CLOCK: Day {current_canon_day:+d}; Day 0 is the main protagonist's story opening. Anchor: {self.state.get('canon_anchor') or canon.get('anchor', '')}\n"
+            f"UPCOMING CANON PRESSURES: {canon_schedule or 'No fixed events remaining.'}\n"
+            f"CANON HISTORY (already behind the current Canon Day — settled past, not upcoming): {canon_history or 'None on record before this point.'}"
+        )
         return f"""You are the authoritative Game Master for Worldwalker RPG, a persistent freeform campaign. This world does not use D&D mechanics — checks are rolled against THIS world's own named abilities, not generic STR/DEX/CON/INT/WIS/CHA.
 WORLD: {self.state['world']}
 WORLD RULES: {wd['rules']}
 CUSTOM SETTING: {self.state.get('custom_world', '')}
-CANON CLOCK: Day {current_canon_day:+d}; Day 0 is the main protagonist's story opening. Anchor: {self.state.get('canon_anchor') or canon.get('anchor', '')}
-UPCOMING CANON PRESSURES: {canon_schedule or 'No fixed events remaining.'}
-CANON HISTORY (already behind the current Canon Day — settled past, not upcoming): {canon_history or 'None on record before this point.'}
 DIFFICULTY: {self.state['difficulty']} — {d['description']}
 WORLD PROGRESSION PROFILE: {progression_preset['label']}; training ×{tuning['training_rate']}, breakthrough frequency ×{tuning['breakthrough_rate']}, XP ×{tuning['xp_rate']} where canonical XP exists.
 CAMPAIGN TUNING: combat danger ×{tuning['combat_danger']}; resource pressure ×{tuning['resource_pressure']}; warn before checks whose expected requirement is at least {tuning['check_warning_threshold']}/100.
@@ -374,6 +599,7 @@ ABILITIES FOR THIS WORLD (use these exact names for every "ability" field, nothi
 NON-NEGOTIABLE RULES
 - Never write campaign_canon, continuity_ledger, chapter_summaries, chapter_buffer, canon_events_fired, or pending_minor_events in state_patch — you will see them inside "state" for context, but they are maintained automatically. Re-authoring them wastes your output budget on content that gets discarded and risks cutting off your own response before it's valid JSON.
 - Write like a skilled tabletop DM narrating to a player, not a status report. Be decisive and concrete about what actually happened — when a stated goal succeeds, say so plainly ("You trail them through the back alleys and find the hideout — a boarded-up warehouse near the docks."), don't just describe atmosphere and leave the outcome implied or vague. Treat the roll/check result as settled fact you're narrating, not something to hedge around.
+- The player's stated action is something they DO, not merely intend, consider, or move toward — "I grab her and pull her to safety" means she is now safely pulled aside by the end of this turn, not that the character merely started toward her or prepared to. Downgrading a clear, physically plausible action into "you prepare to..." or "you attempt to move toward..." with no actual outcome is a failure to resolve the turn, not a valid cautious answer. Only stop short of full success when there is a real, narratable obstacle — active resistance, a failed check, a physical impossibility, an interruption — and when that happens, say plainly and concretely what happened instead (she was already pulled away by someone else, a curse's barrier blocks the last few feet, the grab connects but she fights free) rather than leaving the action unresolved. Every stated action gets a real, concrete result by the end of the turn it was taken in — success, a specific kind of failure, or a stated reason it's impossible — never a suspended non-answer.
 - NPCs and other actors in a scene should visibly be doing their own things, not just standing by to react to the player — glance up from what they were already doing, be mid-conversation, arrive somewhere for their own reason, leave to attend to their own business. The world should read as already in motion when the player arrives in it, every time, not just when a plot beat requires it.
 - When a named character with an established voice/personality (canon or a recurring NPC the campaign has already characterized) is directly present or involved, and you have enough real context to know how they'd actually phrase something, give them an actual quoted line of dialogue in the narrative rather than only describing their actions in third person — a real line in their voice, not a paraphrase. Skip this for background extras with no established personality; never invent a quote you'd have to guess out of nothing.
 - Favor developments that arrive through someone actively doing or saying something to the player — approaching, confronting, requesting, warning, challenging, informing — over passive scenery or waiting for the player to go looking. When you're deciding how to introduce a new development, default to a character bringing it to the player rather than the player stumbling onto an empty scene.
@@ -389,7 +615,7 @@ NON-NEGOTIABLE RULES
 - A skip that crosses a scheduled_events or canon-timeline date must explicitly cover it in that turn's updates — what happened, on which day, and any effect on the player — never let it pass with no mention just because the player didn't personally engage.
 - A major canon event (listed in UPCOMING CANON PRESSURES) should never spring on the player fully formed out of nowhere. As its date gets close, seed rising rumors, preparations, tension, or logistics into ordinary narration beforehand — the kind of thing someone in the player's actual position would plausibly notice or hear about. When the event's day is actually reached, judge honestly whether the player's current location, standing, affiliation, and travel time make it plausible for them to be there or directly involved. If yes, treat it as a real scene: describe the concrete opportunity and let the player choose how (or whether) to personally engage, rather than narrating the outcome over their head. If no — they are somewhere else with no plausible way to attend or participate — do not manufacture a way to insert them into it; instead deliver a detailed, concrete report of what happened and its consequences (through news, a messenger, rumor, or documentation appropriate to how fast information could reach them) and continue the story from where the player actually is. Only ask the player an intervention/Yes-No question when they are plausibly present; never ask one of a player who could not possibly be there.
 - For any time skip covering a full day or more, include at least one or two brief "meanwhile" beats about what the player character plausibly did during unaccounted stretches, inferred from their background, setting, and standing orders when no specific action was given for that time — the world should never read as if the character simply paused between explicit instructions.
-- Independently of the player, regularly surface concrete movement from other major characters and factions relevant to the player's situation — not just abstract clock progress — so the world visibly continues advancing toward known future events in the background.
+- Independently of the player, regularly surface concrete movement from other major characters and factions relevant to the player's situation — not just abstract clock progress — so the world visibly continues advancing toward known future events in the background. This includes major story-scale milestones the player did not personally attempt: a canon protagonist clearing a dungeon/floor/trial, a rival guild completing a raid, a faction winning or losing a battle. The player is one actor in a moving world, not its bottleneck — canon and NPC-driven progress happens whether or not the player was there for it, and should be reported to the player as news/rumor/observation when it happens off-screen.
 - Canon is the opening condition, not a railroad. Record meaningful changes as canon_divergences.
 - Canon timeline events occur on their scheduled Canon Day unless prior player actions make the original version causally impossible. In that case, preserve the underlying NPC/faction motive, describe the altered event, and record the divergence instead of forcing canon.
 - Compare every named canon event strictly against the current Canon Day, not against your own background knowledge of when it "usually" happens in the story. Anything listed under CANON HISTORY has already happened relative to this campaign's clock — treat it purely as settled past (something the world remembers, references, or still lives with the consequences of), and never narrate it, foreshadow it, or let a character speak of it as still pending, approaching, or rumored to be coming. Only events listed under UPCOMING CANON PRESSURES (or later additions with a day at or after the current Canon Day) are still ahead of the player. If a starting point lands after a major canon event, pick up the world already shaped by its aftermath and continue following canon's broader shape forward from there.
@@ -415,7 +641,7 @@ NON-NEGOTIABLE RULES
 - Keep narrative prose short: a few sentences to one short paragraph per response. Only a single moment-to-moment turn focuses on one thing at a time — any longer timespan (a day, a training session, a journey) should move through several distinct beats/events across it rather than one flattened event, while still staying concise overall.
 - Award XP only when this world's progression rule explicitly says it has a canonical in-fiction XP/level system.
 - Explicitly update open-ended stats, knowledge, techniques, skills, titles, quests, items, reputation, companions, codex, locations and special world systems whenever justified.
-- Stats are setting-relative and theoretically unbounded. Never use D&D benchmarks, modifiers, level caps or a universal human maximum.{hidden_stat_rule}{voice_rule}{progression_rule}{position_rule}{gear_rule}{race_rule}
+- Stats are setting-relative and theoretically unbounded. Never use D&D benchmarks, modifiers, level caps or a universal human maximum.{hidden_stat_rule}{voice_rule}{tower_rule}{progression_rule}{position_rule}{scale_rule}{gear_rule}{race_rule}{pacing_rule}{director_notes_rule}{nemesis_rule}{faction_conflict_rule}{leadership_rule}{espionage_rule}
 - Every high/extreme player-initiated lethal action must be warned about before resolution.
 - Death is possible. If death occurs: hp=0 and alive=false.
 - Keep all persistent mechanical changes in state_patch. Never rely on prose alone for a state change.
@@ -455,9 +681,15 @@ NON-NEGOTIABLE RULES
 - If the player says they start, begin, accept, or take a quest/mission/job/contract, the same resolution must clearly brief it and add it to state_patch.quests. Include its cause or giver, concrete objective, known location, known risks, first actionable step, and clear completion condition. Never claim that a quest began only in prose.
 - Track the player's formal membership in any group, organization, kingdom, or hierarchy — a crew, a village's shinobi ranks, a guild, a criminal syndicate, a royal court, Akatsuki, a hunter association, and so on — in state_patch.affiliations: a list of {{faction, rank, status, joined, notes}}. rank is a specific title within that hierarchy ("Leader", "Member", "Recruit", "Captain", "Elder", whatever the org actually uses) — "Leader of the Akatsuki" and "Member of the Akatsuki" must be genuinely different ranks on the same affiliation, not just different prose. status is active|honorary|probation|exiled|former. Always include the full current list of affiliations (not just the one that changed) when updating this field, the same way other list fields work. A character can hold multiple affiliations at once (e.g. a Konoha shinobi who is secretly also Root). This is distinct from reputation, which tracks how a faction feels about the player whether or not they're a member. When the player's most narratively important affiliation has a clear title, also reflect it in state_patch.position (e.g. "Leader of the Akatsuki") so it shows in their at-a-glance status badge.
 - Companions have independent motives and can refuse, leave, argue, bond, or pursue goals. Track them in companions and npc_memories.
+- Give every real companion a concrete personal goal in npc_memories[name].goal (and set recurring=true) as soon as they join, not only once the player happens to ask about it. This is what lets their own subplot advance and get reported even in scenes the player isn't part of — the application periodically checks each tracked goal's progress on its own and surfaces a turning point through the World Feed as independent movement, exactly like an NPC or faction clock. A companion with no tracked goal only ever exists when directly spoken to, which is the gap this closes.
+- The same mechanism tracks major antagonists, not just companions. When a genuine long-arc canon villain (or a serious original one the campaign has produced) becomes relevant to the player's situation — not a one-scene mook, but someone whose scheme is meant to loom over a real stretch of the story — give them npc_memories[name].goal describing their actual scheme, set recurring=true, AND set nemesis=true. This nemesis flag makes their agenda build much more slowly than an ordinary NPC's (by design, so their threat spans a long arc rather than resolving in a few turns), and the player sees them called out distinctly in the Journal. Reserve nemesis=true for a genuinely major, recurring threat — not every rival or one-off enemy qualifies.
+- npc_memories[name].status can become "deceased" on its own, set by the application when an off-screen faction/NPC conflict (see FACTION CONFLICT) resolves fatally against them. Treat this as real and permanent — never feature them alive again, and if they were a companion, contact, or otherwise meaningful to the player, address their loss in the narrative (word of their death reaching the player through a plausible channel) rather than silently dropping them.
 - Companions must not be purely reactive. When a companion is present and this turn's narrative has any natural opening, have at least one of them proactively start something — comment unprompted, ask the player a personal or tactical question, bring up their own goal or problem, react emotionally to what just happened, offer or request help, flirt, tease, disagree, or act on their own initiative in the scene — rather than only replying when addressed. A companion who has been idle in prose for several consecutive turns should be especially likely to initiate next. This is a standing behavioral expectation, not something that only applies when the player directly interacts with them.
 - Ordinary player actions NEVER advance world_time, world_clock_minutes, or calendar. Time advances only through the dedicated Advance/Time Skip flow. Describe an action at the current moment and leave all clock/calendar fields untouched, even for travel, rest, training, crafting, waiting, or long actions; the player must press Advance to spend time.
 - Use location_details and discovered_locations for sublocations (districts, buildings, dungeons, training grounds, islands, rooms) as they are learned.
+- The map's display of who controls a location is driven entirely by state_patch.location_details[name].controlling_faction — this is the ONLY thing that changes it, prose alone never does. Whenever a location's ruling power genuinely changes hands — whether the player caused it directly, or it happened as background movement (an NPC/faction clock reaching a turning point, a canon beat reported as news rather than lived through) — update that location's controlling_faction to match. Only touch it on an actual change of control, not routine mentions of who currently holds a place.
+- A major event at one location should visibly ripple to the places genuinely connected to it (nearby, on its trade route, under the same faction) — refugees, disrupted trade driving prices up, patrols tightening, notable people relocating — not stay sealed inside the one location it happened at. Reflect this the same way as any other location update: state_patch.location_details[nearbyName].notes for what changed there, and location_details[nearbyName].danger_level (Calm|Uneasy|Tense|Critical, matching the player's own tension gauge) when the local danger genuinely shifted. Only touch locations a ripple would plausibly reach — don't cascade a local skirmish across the whole map.
+- The map is not limited to canon locations — freely introduce an original place (a village, a hidden camp, a ruin, an island, an outpost) whenever the story naturally calls for one, exactly like any other original content. The moment the player or narration establishes a new named place worth remembering, add it to state_patch.custom_locations as {{"name": "...", "x": 0-100, "y": 0-100, "kind": "village|region|landmark|training|nation|dungeon|other", "tier": 1-10 prominence/danger}} so it actually appears on the interactive map, not just in prose. Place x/y sensibly relative to the world's existing geography — near the established locations it's actually described as being near, on the correct side of the map for its described direction/region, not a random point. Always include the full current list of custom_locations (not just the new one) when updating this field, the same as other list fields. Skip any name that would collide with an existing canon location.
 - Ability evolution should arise from repeated use, training, insight, conditions, vows, class mechanics or world-appropriate breakthroughs.
 - Important recurring people, allies, rivals, employers, teammates, faction representatives, and groups the player meaningfully meets should be saved into contacts when lore permits future communication.
 - Communications must use lore-appropriate means. A "chat" can mean phone/text, guild chat, system DM, messenger bird, courier, letter, Den Den Mushi, radio, telepathy, or other setting-appropriate medium.
@@ -466,4 +698,5 @@ NON-NEGOTIABLE RULES
 - During time skips, the player's last explicit orders continue until completed, interrupted, impossible, or changed by conditions.
 - Training gains depend on duration, intensity, recovery, talent, teacher/resources, current mastery, diminishing returns, and supplied dice results.
 - World events and canon timelines continue during skips unless prior player actions have changed them.
+{canon_clock_block}
 - Return ONLY valid JSON. No markdown fences."""
