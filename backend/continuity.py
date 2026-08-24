@@ -20,8 +20,9 @@ def _quest_map(items):
 _CURRENCY_SPEND_RE = re.compile(r"\b(buys?|bought|purchas\w*|pays? for|paid for|hands? over|handed over)\b", re.I)
 _CURRENCY_EARN_RE = re.compile(
     r"\b(gets? paid|is paid|was paid|pays? (?:you|your|him|her|them|the)|receives? payment|"
-    r"collects? (?:the|a|her|his|their) (?:reward|payment|fee|wages?)|"
-    r"earns?|reward of|paid (?:him|her|them)|sells? it for|sold it for)\b", re.I,
+    r"collects? (?:the|a|her|his|their|your) (?:reward|payment|fee|wages?)|"
+    r"earns? (?:you|your|him|her|them)? ?(?:\d+|a (?:hefty|tidy|small|large|handsome)? ?(?:sum|purse|bounty|fee|payment|wage))|"
+    r"paid (?:him|her|them)|sells? it for|sold it for)\b", re.I,
 )
 _CURRENCY_NO_TRANSACTION_RE = re.compile(
     r"\b(declin\w*|refus\w*|can'?t afford|cannot afford|couldn'?t afford|too expensive|"
