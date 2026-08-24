@@ -25,7 +25,7 @@ services:
     ports:
       - "5001:8765"
     volumes:
-      - ./data/player1:/data
+      - ./data/player1:/data:Z,U
     environment:
       # - AUTH_USER=player1
       # - AUTH_PASS=changeme1
@@ -39,7 +39,7 @@ services:
     ports:
       - "5002:8765"
     volumes:
-      - ./data/player2:/data
+      - ./data/player2:/data:Z,U
     environment:
       # - AUTH_USER=player2
       # - AUTH_PASS=changeme2
@@ -53,7 +53,7 @@ services:
     ports:
       - "5003:8765"
     volumes:
-      - ./data/player3:/data
+      - ./data/player3:/data:Z,U
     environment:
       # - AUTH_USER=player3
       # - AUTH_PASS=changeme3
