@@ -35,6 +35,10 @@ APP_OWNED = {
     # their own dedicated mechanism/endpoint, never through the GM's own
     # narrated state_patch.
     "last_major_beat_day", "director_notes",
+    # The permanent "why reputation moved" trail (continuity.py) — the GM
+    # supplies a one-line reason via reputation_chain_events each turn, but
+    # never authors the accumulated faction_chain history directly.
+    "faction_chain",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}

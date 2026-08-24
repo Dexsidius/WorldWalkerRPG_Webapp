@@ -544,6 +544,8 @@ Return ONLY valid JSON."""
             normalize_quest_state_machine(self.state)
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, pending_action or ("campaign opening" if is_opening else ""), data.get("narrative", ""))
+            for note in self.state.pop("_pending_chronicle_notes", []):
+                self.append(note, "meta")
             # apply_time_skip has always acted on these (see its own call to
             # request_continuity_correction below); a regular single-action
             # turn computed the exact same warnings but never did anything

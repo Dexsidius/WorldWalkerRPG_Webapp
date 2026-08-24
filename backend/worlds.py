@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.43"
+APP_VERSION = "2.6.44"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -801,6 +801,14 @@ BASE_STATE = {
     "level":1,"xp":0,"xp_next":100,"hp":100,"hp_max":100,"resource_name":"Energy","resource":100,"resource_max":100,
     "stats":{"Strength":10,"Dexterity":10,"Constitution":10,"Intelligence":10,"Wisdom":10,"Charisma":10},"hidden_stats":{},
     "skills":{},"titles":[],"inventory":[],"equipment":{},"quests":[],"relationships":{},"reputation":{},
+    # faction_chain is mechanically maintained (see continuity.py) — a
+    # {faction: [{event, turn, canon_day}, ...]} trail of why reputation
+    # actually moved, parallel to how npc_memories[name].chain already
+    # works. reputation_chain_events is the transient AI-facing input: a
+    # one-turn {faction: "one-line reason"} the GM writes alongside a
+    # reputation change, consumed and cleared by continuity.py the same
+    # turn it's written.
+    "faction_chain":{}, "reputation_chain_events":{},
     "factions":{},"affiliations":[],"companions":[],"codex":[],"location":"Starting Region","discovered_locations":[],"custom_locations":[],
     "tower_floor":1,"tower_floor_deadline_day":None,"tower_over":False,"canon_event_engagement_count":0,"background_world_feed":[],
     "last_major_beat_day":None,"director_notes":"","simulation_scale":"Individual",

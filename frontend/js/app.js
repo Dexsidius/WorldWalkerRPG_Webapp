@@ -539,6 +539,15 @@ function textList(value) {
   if (value && typeof value === "object") return Object.entries(value).map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`);
   return value ? [String(value)] : [];
 }
+// Consequence chain (continuity.py): a short "why did this relationship end
+// up here" trail attached to an NPC or faction. Most recent first, already
+// capped server-side — this just renders it or omits the section entirely
+// when there's nothing recorded yet.
+function chainHistoryHtml(entries) {
+  if (!Array.isArray(entries) || !entries.length) return "";
+  const rows = entries.map((e) => `<li>${escapeHtml(e.event)}${e.canon_day != null ? ` <small>(Day ${escapeHtml(e.canon_day)})</small>` : ""}</li>`).join("");
+  return `<p><b>History:</b></p><ul class="chain-history">${rows}</ul>`;
+}
 
 function questView(q, index = 0) {
   if (typeof q !== "object" || q === null) {
@@ -2801,7 +2810,7 @@ async function openJournal(tab) {
         // bothered to layer.
         const layers = (person.mid_term_goal ? `<p><b>Building toward:</b> ${escapeHtml(person.mid_term_goal)}</p>` : "") +
           (person.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(person.core_ambition)}</p>` : "");
-        return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}</div></details>`;
+        return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}${chainHistoryHtml(person.chain)}</div></details>`;
       }).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
       // NPCs relating to each other independent of the player — allies,
       // rivals, grudges the GM has established between two named
@@ -2815,7 +2824,7 @@ async function openJournal(tab) {
           ${rel.status && rel.status !== "active" ? `<span class="affiliation-status">${escapeHtml(rel.status)}</span>` : ""}
           ${rel.note ? `<br><small>${escapeHtml(rel.note)}</small>` : ""}</div>`;
       }).join("") : '<div class="jrow hint">No relationships between other characters have been established yet.</div>') +
-      `<h3>Faction standing</h3>` + (factions.length ? factions.map((f) => `<div class="jrow"><b>${escapeHtml(f.name)}</b><br>${escapeHtml(typeof f.standing === "object" ? compactReadable(f.standing.label || f.standing.status || f.standing.score) : f.standing)}</div>`).join("") : '<div class="jrow hint">No faction reputation has been recorded.</div>');
+      `<h3>Faction standing</h3>` + (factions.length ? factions.map((f) => `<div class="jrow"><b>${escapeHtml(f.name)}</b><br>${escapeHtml(typeof f.standing === "object" ? compactReadable(f.standing.label || f.standing.status || f.standing.score) : f.standing)}${chainHistoryHtml(f.chain)}</div>`).join("") : '<div class="jrow hint">No faction reputation has been recorded.</div>');
   } else if (tab === "prerequisites") {
     const tracks = data.prerequisite_tracks || [];
     panel.innerHTML = tracks.length ? tracks.map((track, index) => {

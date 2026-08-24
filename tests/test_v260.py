@@ -18,7 +18,7 @@ from systems import (
     parse_price, resolve_shop_purchase,
 )
 from continuity import update_continuity
-from state_guard import migrate_state
+from state_guard import migrate_state, apply_guarded_patch
 from worlds import BASE_STATE, WORLD_DATA, abilities_for, format_calendar_date, timeline_for, expansion_for, start_options_for, starting_era_by_id, power_tier_reference
 
 
@@ -2399,6 +2399,11 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("Building toward:", js)
         self.assertIn("Deep down wants:", js)
 
+    def test_relationship_card_and_faction_row_show_consequence_chain_history(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("chainHistoryHtml(person.chain)", js)
+        self.assertIn("chainHistoryHtml(f.chain)", js)
+
     def test_continuity_flags_a_purchase_that_never_touched_currency(self):
         # A real player report: buying something in the narrative repeatedly
         # left currency.amount untouched. The GM prompt already said
@@ -2803,6 +2808,85 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertEqual(game.state["currency"]["amount"], 400)
         with self.assertRaises(ValueError):
             game.buy_shop_item("Weapons Stall", "Nonexistent Item")
+
+    def test_continuity_records_an_npc_chain_event_and_pings_the_chronicle_on_attitude_change(self):
+        # The whole point of consequence chains: "why does this NPC feel
+        # this way about me" should have a real, queryable answer instead
+        # of needing to be re-derived from raw narrative every time.
+        before = copy.deepcopy(BASE_STATE)
+        before["npc_memories"] = {"Gato": {"attitude": "Neutral"}}
+        after = copy.deepcopy(before)
+        after["npc_memories"]["Gato"] = {"attitude": "Hostile", "chain_event": "You exposed his smuggling ring to the Marines."}
+        update_continuity(before, after, "Report the smuggling", "You report Gato's smuggling operation.")
+        chain = after["npc_memories"]["Gato"]["chain"]
+        self.assertEqual(len(chain), 1)
+        self.assertIn("smuggling ring", chain[0]["event"])
+        self.assertIn("turn", chain[0])
+        self.assertNotIn("chain_event", after["npc_memories"]["Gato"])
+        notes = after.get("_pending_chronicle_notes", [])
+        self.assertTrue(any("Gato" in n and "smuggling ring" in n for n in notes))
+
+    def test_continuity_records_chain_event_without_chronicle_ping_when_attitude_unchanged(self):
+        # A reinforcing beat (same attitude label, deeper reason) still gets
+        # logged to the permanent trail, just doesn't spam a visible notice.
+        before = copy.deepcopy(BASE_STATE)
+        before["npc_memories"] = {"Gato": {"attitude": "Hostile"}}
+        after = copy.deepcopy(before)
+        after["npc_memories"]["Gato"] = {"attitude": "Hostile", "chain_event": "He tried to have you killed a second time."}
+        update_continuity(before, after, "Survive the ambush", "You survive Gato's second attempt on your life.")
+        self.assertEqual(len(after["npc_memories"]["Gato"]["chain"]), 1)
+        self.assertFalse(after.get("_pending_chronicle_notes"))
+
+    def test_continuity_records_a_faction_chain_event_and_pings_the_chronicle_on_reputation_change(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["reputation"] = {"Sand": 10}
+        after = copy.deepcopy(before)
+        after["reputation"] = {"Sand": -20}
+        after["reputation_chain_events"] = {"Sand": "You were blamed for the border skirmish."}
+        update_continuity(before, after, "Flee the border", "Sand blames you for the skirmish.")
+        chain = after["faction_chain"]["Sand"]
+        self.assertEqual(len(chain), 1)
+        self.assertIn("border skirmish", chain[0]["event"])
+        self.assertNotIn("reputation_chain_events", after)
+        self.assertTrue(any("Sand" in n for n in after.get("_pending_chronicle_notes", [])))
+
+    def test_faction_chain_is_application_owned_and_rejects_direct_ai_authorship(self):
+        state = copy.deepcopy(BASE_STATE)
+        report = apply_guarded_patch(state, {"faction_chain": {"Sand": [{"event": "fabricated", "turn": 1, "canon_day": 1}]}}, allow_time=False, source="turn")
+        self.assertIn("faction_chain", [r["field"] for r in report["rejected"]])
+        self.assertEqual(state["faction_chain"], {})
+
+    def test_relationship_snapshot_surfaces_npc_and_faction_chains(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["npc_memories"] = {"Gato": {"attitude": "Hostile", "chain": [{"event": "Exposed his smuggling ring.", "turn": 5, "canon_day": 2}]}}
+        state["reputation"] = {"Sand": -20}
+        state["faction_chain"] = {"Sand": [{"event": "Blamed for the border skirmish.", "turn": 6, "canon_day": 3}]}
+        snap = relationship_snapshot(state)
+        gato = next(p for p in snap["people"] if p["name"] == "Gato")
+        self.assertEqual(gato["chain"][0]["event"], "Exposed his smuggling ring.")
+        sand = next(f for f in snap["factions"] if f["name"] == "Sand")
+        self.assertEqual(sand["chain"][0]["event"], "Blamed for the border skirmish.")
+
+    def test_apply_resolution_flushes_chain_chronicle_notes_into_the_story(self):
+        game = self.fresh("Naruto")
+        game.state["npc_memories"] = {"Gato": {"attitude": "Neutral"}}
+        data = {
+            "narrative": "You report Gato's smuggling operation to the Marines.",
+            "state_patch": {"npc_memories": {"Gato": {"attitude": "Hostile", "chain_event": "You exposed his smuggling ring to the Marines."}}},
+            "events": [], "suggested_actions": [],
+        }
+        result = game.apply_resolution(data, pending_action="Report the smuggling")
+        self.assertTrue(any("Gato" in e.get("text", "") and e.get("tag") == "meta" for e in result["story"]))
+        self.assertEqual(len(game.state["npc_memories"]["Gato"]["chain"]), 1)
+
+    def test_gm_rules_and_advisor_document_consequence_chains(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("chain_event", rules)
+        self.assertIn("reputation_chain_events", rules)
+        social_src = (ROOT / "backend" / "engine_social.py").read_text(encoding="utf-8")
+        self.assertIn("npc_memories[name].chain", social_src)
+        self.assertIn("faction_chain[name]", social_src)
 
     def test_yonko_crews_are_seeded_live_at_campaign_creation(self):
         stats = {name: 30 for name in abilities_for("One Piece")}

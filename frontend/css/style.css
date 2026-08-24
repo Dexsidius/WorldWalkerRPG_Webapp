@@ -1015,6 +1015,9 @@ input,select,textarea{ font-family:inherit; }
 .clock-row header,.health-issue header,.relationship-card summary{ display:flex; justify-content:space-between; gap:12px; color:var(--accent2); }
 .clock-row p,.health-issue p,.relationship-card p{ margin:6px 0; color:var(--sub); }
 .clock-row small,.health-issue small,.relationship-card summary span{ color:var(--muted); font-size:10px; }
+.chain-history{ margin:4px 0 0; padding-left:16px; color:var(--sub); font-size:12px; }
+.chain-history li{ margin:2px 0; }
+.chain-history small{ color:var(--muted); }
 .clock-track{ height:7px; overflow:hidden; margin:8px 0 5px; border-radius:999px; background:rgba(255,255,255,.07); }
 .clock-track i{ display:block; height:100%; background:linear-gradient(90deg,var(--accent2),var(--gold)); border-radius:inherit; }
 .clock-status{ text-transform:uppercase; letter-spacing:.04em; }

@@ -159,6 +159,45 @@ def update_continuity(before, after, action="", narrative=""):
         if new_loc and new_loc != "Unknown" and new_loc != old_memory.get("last_known_location") and narrative:
             if str(name).lower() not in str(narrative).lower() and str(new_loc).lower() not in str(narrative).lower():
                 warnings.append(f"{name}'s last-known location changed to {new_loc}, but neither is mentioned in the narrative.")
+    # Consequence chains: npc_memories[name].chain_event is a transient,
+    # AI-facing field — one plain sentence explaining why this NPC's
+    # attitude just moved (or deepened). The application turns it into a
+    # permanent {event, turn, canon_day} entry in npc_memories[name].chain
+    # so "why does this NPC feel this way about me" has a real, queryable
+    # answer instead of needing to be re-derived from raw narrative history
+    # every time it's asked (the Advisor does exactly that — see
+    # engine_social.py). Only pings the Chronicle when the attitude label
+    # itself actually changed, so a reinforcing beat still gets recorded
+    # without spamming a visible notice for every minor nudge.
+    for name, memory in after_npc.items():
+        if not isinstance(memory, dict):
+            continue
+        reason = memory.pop("chain_event", None)
+        if not reason:
+            continue
+        old_memory = before_npc.get(name) if isinstance(before_npc.get(name), dict) else {}
+        chain = memory.setdefault("chain", [])
+        chain.append({"event": str(reason)[:300], "turn": turn, "canon_day": after.get("canon_day")})
+        memory["chain"] = chain[-12:]
+        if memory.get("attitude") != old_memory.get("attitude"):
+            after.setdefault("_pending_chronicle_notes", []).append(f"🔗 {name}'s attitude toward you shifted — {reason}")
+    # Same idea for factions: reputation_chain_events is a transient
+    # {faction: "one-line reason"} the GM supplies alongside a reputation
+    # change, folded into the permanent faction_chain[name] trail and then
+    # cleared — mirrors npc_memories[name].chain_event exactly.
+    reputation_events = after.pop("reputation_chain_events", None)
+    if isinstance(reputation_events, dict) and reputation_events:
+        reputation_before = before.get("reputation", {}) if isinstance(before.get("reputation"), dict) else {}
+        reputation_after = after.get("reputation", {}) if isinstance(after.get("reputation"), dict) else {}
+        faction_chain = after.setdefault("faction_chain", {})
+        for fname, reason in reputation_events.items():
+            if not reason:
+                continue
+            entries = faction_chain.setdefault(str(fname), [])
+            entries.append({"event": str(reason)[:300], "turn": turn, "canon_day": after.get("canon_day")})
+            faction_chain[str(fname)] = entries[-12:]
+            if reputation_after.get(fname) != reputation_before.get(fname):
+                after.setdefault("_pending_chronicle_notes", []).append(f"🔗 {fname}'s standing toward you shifted — {reason}")
     currency_before = before.get("currency") if isinstance(before.get("currency"), dict) else {}
     currency_after = after.get("currency") if isinstance(after.get("currency"), dict) else {}
     if narrative and currency_before.get("amount") == currency_after.get("amount") and not _CURRENCY_NO_TRANSACTION_RE.search(narrative):
