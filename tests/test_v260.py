@@ -2706,6 +2706,33 @@ class WorldwalkerV260Tests(unittest.TestCase):
             snap = next(n for n in map_snapshot(BASE_STATE, WORLD_DATA["Naruto"]["map"], "Naruto")["nodes"] if n["name"] == name)
             self.assertNotEqual(snap["controller"], "Unknown")
 
+    def test_faction_turning_point_prefers_immediate_goal_over_the_placeholder(self):
+        # Every faction_clocks entry the application creates on its own
+        # starts with a flat "Advance X's current agenda" placeholder —
+        # once the GM has set a real immediate_goal, the turning-point
+        # message should describe that, not the generic filler forever.
+        state = {"factions": {}, "world_time": "Day 1", "npc_memories": {},
+                 "faction_clocks": {"Guild": {"name": "Guild", "goal": "Advance Guild's current agenda",
+                                                "immediate_goal": "Secure the eastern trade routes",
+                                                "mid_term_goal": "Break the rival cartel's monopoly",
+                                                "progress": 99, "threshold": 100, "status": "active"}},
+                 "npc_clocks": {}}
+        events = tick_world_clocks(state, 1440)
+        self.assertTrue(any("Secure the eastern trade routes" in e["message"] for e in events))
+        self.assertFalse(any("Advance Guild's current agenda" in e["message"] for e in events))
+
+    def test_gm_rules_document_faction_goal_layering(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("faction_clocks[name].immediate_goal", rules)
+        self.assertIn("inert scenery", rules)
+
+    def test_clocks_tab_shows_faction_goal_layers_when_present(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("clock.immediate_goal || clock.goal", js)
+        self.assertIn("clock.mid_term_goal", js)
+        self.assertIn("clock.core_ambition", js)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -208,11 +208,16 @@ def tick_world_clocks(state, elapsed_minutes):
                 # ordinary "nothing to mechanically resolve yet" case.
                 if str(clock.get("opponent") or "").strip():
                     continue
+                # Same field-preference pattern as npc_memories' goal
+                # layering — a faction's immediate_goal (what it's actually
+                # doing right now) is what a turning point should describe,
+                # not the flat placeholder .goal every faction starts with.
+                current_goal = clock.get("immediate_goal") or clock.get("goal")
                 if clock.get("nemesis"):
                     events.append({"type": "world", "nemesis": True,
-                                    "message": f"⚠ Word reaches you that {who}'s scheme has reached a breaking point: {clock.get('goal')}."})
+                                    "message": f"⚠ Word reaches you that {who}'s scheme has reached a breaking point: {current_goal}."})
                 else:
-                    events.append({"type": "world", "message": f"Somewhere beyond your own path, {who} has made real headway: {clock.get('goal')}."})
+                    events.append({"type": "world", "message": f"Somewhere beyond your own path, {who} has made real headway: {current_goal}."})
     events.extend(resolve_clock_conflicts(state))
     return events
 
