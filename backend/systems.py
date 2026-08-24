@@ -613,6 +613,86 @@ def pacing_guidance(state):
     return ""
 
 
+# Shops are only loosely specified in the GM prompt ("populate shops with
+# name/type and plausible inventory/prices") — there's no strict schema, so
+# an inventory item might be a {name, price} dict, use "item"/"cost"/"value"
+# instead, or even just be a free-text string. This has to tolerate all of
+# that rather than assume one shape.
+_PRICE_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def parse_price(value):
+    """Pull a plausible non-negative integer price out of a loosely-typed
+    shop item field — a raw number, or free text like '50 Berries' or
+    'Price: 1,200'. Returns None when nothing usable is present."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    if isinstance(value, str):
+        match = _PRICE_NUMBER_RE.search(value.replace(",", ""))
+        if match:
+            try:
+                return max(0, int(float(match.group(0))))
+            except ValueError:
+                return None
+    return None
+
+
+def _shop_item_name(item):
+    if isinstance(item, dict):
+        return str(item.get("name") or item.get("item") or "").strip()
+    return str(item).strip()
+
+
+def _shop_item_price(item):
+    if isinstance(item, dict):
+        for key in ("price", "cost", "value"):
+            if key in item:
+                price = parse_price(item[key])
+                if price is not None:
+                    return price
+        return None
+    return parse_price(item)
+
+
+def resolve_shop_purchase(state, shop_name, item_name):
+    """Deterministic buy: once a shop item has a real price, the arithmetic
+    of paying for it doesn't need an AI turn at all — this mutates state
+    in place and never touches the model, so there's no way for it to
+    produce the narrated-but-not-patched currency drift the continuity
+    detector (continuity.py) otherwise exists to catch after the fact.
+    Returns (ok, message, price_paid_or_None)."""
+    shops = state.get("shops") if isinstance(state.get("shops"), list) else []
+    shop = next((sh for sh in shops if isinstance(sh, dict)
+                 and str(sh.get("name", "")).strip().lower() == str(shop_name or "").strip().lower()), None)
+    if not shop:
+        return False, f"No shop named '{shop_name}' is known here.", None
+    inventory = shop.get("inventory") if isinstance(shop.get("inventory"), list) else (
+        shop.get("items") if isinstance(shop.get("items"), list) else [])
+    item = next((it for it in inventory if _shop_item_name(it).strip().lower() == str(item_name or "").strip().lower()), None)
+    if item is None:
+        return False, f"'{item_name}' isn't in {shop.get('name', shop_name)}'s current inventory.", None
+    price = _shop_item_price(item)
+    if price is None:
+        return False, f"'{item_name}' doesn't have a clear price and can't be bought this way.", None
+    currency = state.get("currency") if isinstance(state.get("currency"), dict) else {"name": "Currency", "amount": 0}
+    amount = currency.get("amount", 0)
+    if not isinstance(amount, (int, float)):
+        amount = 0
+    if amount < price:
+        return False, f"Not enough {currency.get('name', 'currency')} — {_shop_item_name(item)} costs {price}, you have {amount}.", None
+    currency["amount"] = amount - price
+    state["currency"] = currency
+    display_name = _shop_item_name(item)
+    state.setdefault("inventory", []).append({"name": display_name, "source": f"Bought from {shop.get('name', shop_name)}"})
+    if isinstance(item, dict) and isinstance(item.get("stock"), (int, float)):
+        item["stock"] = item["stock"] - 1
+        if item["stock"] <= 0:
+            inventory.remove(item)
+    return True, f"Bought {display_name} from {shop.get('name', shop_name)} for {price} {currency.get('name', 'currency')}.", price
+
+
 def _notable_individuals_for(state, place_name):
     """Best-effort cross-reference for the map's info panel: named people
     (not locations/factions/items) whose codex notes or last-known location

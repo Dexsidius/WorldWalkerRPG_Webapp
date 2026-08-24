@@ -9,6 +9,18 @@ function escapeHtml(s) {
 }
 
 const CURRENCY_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 14.8c.4 1 1.5 1.7 2.8 1.7 1.7 0 2.8-.9 2.8-2s-1.1-1.7-2.8-2c-1.7-.3-2.8-.9-2.8-2s1.1-2 2.8-2c1.3 0 2.4.7 2.8 1.7"/><path d="M12 7.2v1.1M12 15.7v1.1"/></svg>';
+// Shops are only loosely specified in the GM prompt, so an inventory item's
+// price might be a plain number or free text like "50 Berries" — mirrors
+// backend systems.py's parse_price() so the Buy button only appears/enables
+// when the server-side purchase would actually succeed.
+function parsePriceClient(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
+  if (typeof value === "string") {
+    const m = value.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+    if (m) return Math.max(0, Math.trunc(parseFloat(m[0])));
+  }
+  return null;
+}
 function currencyRowHtml(name, amount) {
   return `<div class="jrow currency-jrow"><i class="currency-icon">${CURRENCY_ICON_SVG}</i><b>${escapeHtml(amount)}</b> ${escapeHtml(name)}</div>`;
 }
@@ -2876,8 +2888,23 @@ async function openJournal(tab) {
     }
   } else if (tab === "shops") {
     const shops = data.shops || [];
-    panel.innerHTML = currencyRowHtml(data.currency.name, data.currency.amount) +
-      `<div class="jrow"><b>Local Commerce</b><br/>` + (shops.length ? shops.map((sh) => escapeHtml(typeof sh === "object" ? `${sh.name || "Shop"} — ${sh.type || "Merchant"}` : sh)).join("<br/>") : data.shop_types.map((t) => "? " + t).join("<br/>")) + `</div>` +
+    const currency = data.currency || { name: "Currency", amount: 0 };
+    const shopBlocks = shops.length ? shops.map((sh) => {
+      if (typeof sh !== "object" || !sh) return `<div class="jrow">${escapeHtml(sh)}</div>`;
+      const inventory = Array.isArray(sh.inventory) ? sh.inventory : (Array.isArray(sh.items) ? sh.items : []);
+      const itemRows = inventory.length ? inventory.map((it) => {
+        const itemObj = (it && typeof it === "object") ? it : { name: it };
+        const name = itemObj.name || itemObj.item || String(it);
+        const price = parsePriceClient(itemObj.price ?? itemObj.cost ?? itemObj.value);
+        const canAfford = price != null && currency.amount >= price;
+        const priceLabel = price != null ? `${price} ${escapeHtml(currency.name)}` : "price unclear";
+        return `<div class="shop-item-row"><span class="shop-item-name">${escapeHtml(name)}</span><span class="shop-item-price">${priceLabel}</span>` +
+          (price != null ? `<button type="button" class="shop-buy-btn" data-shop-buy="${escapeHtml(sh.name || "")}" data-shop-item="${escapeHtml(name)}"${canAfford ? "" : " disabled"}>Buy</button>` : "") +
+          `</div>`;
+      }).join("") : `<div class="shop-item-row muted">No priced inventory listed here yet.</div>`;
+      return `<div class="jrow shop-block"><b>${escapeHtml(sh.name || "Shop")}</b><small>${escapeHtml(sh.type || "Merchant")}</small>${itemRows}</div>`;
+    }).join("") : `<div class="jrow">${data.shop_types.map((t) => "? " + t).join("<br/>")}</div>`;
+    panel.innerHTML = currencyRowHtml(currency.name, currency.amount) + shopBlocks +
       `<div class="jrow"><b>Training Focus</b><br/>${data.training_options.map(escapeHtml).join(", ")}</div>` +
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
   } else if (tab === "map") {
@@ -3075,6 +3102,25 @@ $("#journal-panel").addEventListener("click", async (event) => {
     if (!input?.value.trim()) return;
     try { await apiPost("/api/quests/note", { name, note: input.value.trim() }); input.value = ""; showToast("Quest note saved.", "notify"); }
     catch (error) { showToast(error.message, "danger"); }
+    return;
+  }
+  const buyButton = event.target.closest("[data-shop-buy]");
+  if (buyButton) {
+    if (buyButton.disabled) return;
+    buyButton.disabled = true;
+    const shop = buyButton.getAttribute("data-shop-buy");
+    const item = buyButton.getAttribute("data-shop-item");
+    try {
+      const result = await apiPost("/api/shop/buy", { shop, item });
+      showToast(result.message, "notify");
+      const refreshed = await apiGet("/api/state");
+      APP.campaignActive = refreshed.campaign_active;
+      renderState(refreshed.state);
+      await openJournal("shops");
+    } catch (error) {
+      showToast(error.message, "danger");
+      buyButton.disabled = false;
+    }
     return;
   }
   const nodeButton = event.target.closest("[data-map-node]");

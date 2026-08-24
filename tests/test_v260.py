@@ -15,6 +15,7 @@ from game import GameSession
 from systems import (
     FACTION_DESTROYED_THRESHOLD, _is_canon_protected, campaign_health, map_snapshot, normalize_quest_state_machine,
     normalize_tuning, relationship_snapshot, tick_world_clocks, update_chapter_memory,
+    parse_price, resolve_shop_purchase,
 )
 from continuity import update_continuity
 from state_guard import migrate_state
@@ -2747,6 +2748,61 @@ class WorldwalkerV260Tests(unittest.TestCase):
         territories = WORLD_TERRITORIES["One Piece"]
         self.assertEqual(territories["Marineford"], "Marines")
         self.assertEqual(territories["Impel Down"], "World Government")
+
+    def test_parse_price_handles_numbers_and_loosely_typed_text(self):
+        self.assertEqual(parse_price(50), 50)
+        self.assertEqual(parse_price(50.0), 50)
+        self.assertEqual(parse_price("50 Berries"), 50)
+        self.assertEqual(parse_price("Price: 1,200"), 1200)
+        self.assertIsNone(parse_price("free"))
+        self.assertIsNone(parse_price(True))
+
+    def test_resolve_shop_purchase_deducts_currency_and_adds_inventory_deterministically(self):
+        # This is the whole point: once an item has a real price, paying
+        # for it shouldn't need an AI turn at all, so there's no way for it
+        # to reproduce the narrated-but-not-patched currency drift the
+        # continuity detector otherwise exists to catch after the fact.
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Berries", "amount": 500}
+        state["shops"] = [{"name": "General Store", "type": "Merchant", "inventory": [{"name": "Kunai Pouch", "price": "120 Berries"}]}]
+        ok, message, price = resolve_shop_purchase(state, "General Store", "Kunai Pouch")
+        self.assertTrue(ok)
+        self.assertEqual(price, 120)
+        self.assertEqual(state["currency"]["amount"], 380)
+        self.assertTrue(any(isinstance(i, dict) and i.get("name") == "Kunai Pouch" for i in state["inventory"]))
+
+    def test_resolve_shop_purchase_rejects_when_the_player_cannot_afford_it(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Berries", "amount": 50}
+        state["shops"] = [{"name": "General Store", "inventory": [{"name": "Kunai Pouch", "price": 120}]}]
+        ok, message, price = resolve_shop_purchase(state, "General Store", "Kunai Pouch")
+        self.assertFalse(ok)
+        self.assertIsNone(price)
+        self.assertEqual(state["currency"]["amount"], 50)
+        self.assertEqual(state["inventory"], [])
+
+    def test_resolve_shop_purchase_rejects_unknown_shop_item_or_unclear_price(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Berries", "amount": 500}
+        state["shops"] = [{"name": "General Store", "inventory": [{"name": "Mystery Box", "price": "ask the merchant"}]}]
+        ok, _, _ = resolve_shop_purchase(state, "Nonexistent Shop", "Anything")
+        self.assertFalse(ok)
+        ok2, _, _ = resolve_shop_purchase(state, "General Store", "Not A Real Item")
+        self.assertFalse(ok2)
+        ok3, message3, _ = resolve_shop_purchase(state, "General Store", "Mystery Box")
+        self.assertFalse(ok3)
+        self.assertIn("clear price", message3)
+
+    def test_buy_shop_item_endpoint_is_deterministic_and_never_calls_the_ai(self):
+        game = self.fresh("Naruto")
+        game.state["currency"] = {"name": "Ryo", "amount": 500}
+        game.state["shops"] = [{"name": "Weapons Stall", "inventory": [{"name": "Kunai Set", "price": 100}]}]
+        game.ai.request = lambda *a, **k: (_ for _ in ()).throw(AssertionError("buy_shop_item must not call the AI"))
+        result = game.buy_shop_item("Weapons Stall", "Kunai Set")
+        self.assertEqual(result["price"], 100)
+        self.assertEqual(game.state["currency"]["amount"], 400)
+        with self.assertRaises(ValueError):
+            game.buy_shop_item("Weapons Stall", "Nonexistent Item")
 
     def test_yonko_crews_are_seeded_live_at_campaign_creation(self):
         stats = {name: 30 for name in abilities_for("One Piece")}
