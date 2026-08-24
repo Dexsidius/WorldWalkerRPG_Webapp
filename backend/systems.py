@@ -208,9 +208,9 @@ def tick_world_clocks(state, elapsed_minutes):
                     continue
                 if clock.get("nemesis"):
                     events.append({"type": "world", "nemesis": True,
-                                    "message": f"⚠ {who}'s scheme has reached a breaking point: {clock.get('goal')}."})
+                                    "message": f"⚠ Word reaches you that {who}'s scheme has reached a breaking point: {clock.get('goal')}."})
                 else:
-                    events.append({"type": "world", "message": f"{who}'s agenda reached a turning point: {clock.get('goal')}."})
+                    events.append({"type": "world", "message": f"Somewhere beyond your own path, {who} has made real headway: {clock.get('goal')}."})
     events.extend(resolve_clock_conflicts(state))
     return events
 
@@ -374,17 +374,51 @@ def resolve_clock_conflicts(state):
             if loser_clock is not None and loser_coll is not None:
                 threshold = FACTION_DESTROYED_THRESHOLD if loser_coll == "faction_clocks" else NPC_DEFEATED_THRESHOLD
                 if loser_clock.get("power", 50) <= threshold and loser_clock.get("status") not in ("destroyed", "defeated"):
+                    protected = _is_canon_protected(state, loser_name, loser_coll)
                     if loser_coll == "faction_clocks":
-                        loser_clock["status"] = "destroyed"
-                        events.append({"type": "world", "conflict": True,
-                                        "message": f"[FACTION DESTROYED] {loser_name} has been effectively wiped out by {winner_name}."})
-                        events.extend(_collapse_faction(state, loser_name, winner_name))
+                        if protected:
+                            # A canon-major power can be battered without
+                            # being erased outright — an off-screen dice
+                            # roll destroying Konoha or the World Government
+                            # would break the setting's own premise, not
+                            # just this campaign's continuity. It survives,
+                            # weakened, instead of being wiped out.
+                            loser_clock["power"] = max(loser_clock.get("power", 0), threshold + 1)
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} has been badly weakened by {winner_name}, but holds on."})
+                        else:
+                            loser_clock["status"] = "destroyed"
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} has been effectively wiped out by {winner_name}."})
+                            events.extend(_collapse_faction(state, loser_name, winner_name))
                     else:
-                        loser_clock["status"] = "defeated"
-                        state.setdefault("npc_memories", {}).setdefault(loser_name, {})["status"] = "deceased"
-                        events.append({"type": "world", "conflict": True,
-                                        "message": f"[NPC LOST] {loser_name} has fallen, defeated by {winner_name}."})
+                        if protected:
+                            loser_clock["power"] = max(loser_clock.get("power", 0), threshold + 1)
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} barely survives {winner_name}'s assault, badly shaken."})
+                        else:
+                            loser_clock["status"] = "defeated"
+                            state.setdefault("npc_memories", {}).setdefault(loser_name, {})["status"] = "deceased"
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} has fallen, defeated by {winner_name}."})
     return events
+
+
+def _is_canon_protected(state, name, kind):
+    """A background/GM-declared conflict can weaken or displace a
+    canon-major power, but shouldn't casually erase one outright. Factions
+    are checked against this world's own known canon polities (the same
+    WORLD_TERRITORIES already used to seed the map's starting territory
+    colors) — cheap, reliable, no new authoring needed. NPCs have no
+    equivalent built-in roster reliable enough to check automatically, so
+    they're protected only when the GM has explicitly flagged them via
+    npc_memories[name].canon_protected — a scripted-to-matter-later figure
+    the GM knows about, not a guess this function can make on its own."""
+    if kind == "faction_clocks":
+        world = state.get("world", "")
+        return name in set(WORLD_TERRITORIES.get(world, {}).values())
+    memory = (state.get("npc_memories") or {}).get(name)
+    return isinstance(memory, dict) and bool(memory.get("canon_protected"))
 
 
 _LEADER_FATES = (("deceased", 0.25), ("captured", 0.40), ("exiled", 0.35))

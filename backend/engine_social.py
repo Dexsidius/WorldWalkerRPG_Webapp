@@ -378,6 +378,67 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             self.autosave()
         return {"heard_event": data.get("heard_event", "")}
 
+    # allow_time=False (apply_guarded_patch) only blocks time/calendar
+    # fields — it was never meant to be a general "background-tick-safe"
+    # filter, so a reentry recap needs its own explicit whitelist to
+    # actually guarantee it can't touch the player's own stats, inventory,
+    # currency, or location, matching what the prompt asks for with a real
+    # mechanical backstop instead of trusting the model to comply.
+    REENTRY_RECAP_ALLOWED_PATCH_FIELDS = {"npc_memories", "factions", "canon_divergences", "npc_relationships", "faction_clocks", "npc_clocks"}
+
+    def generate_reentry_recap(self):
+        """A short narrated "since you've been away" paragraph, triggered
+        from load() detecting a real-world gap (see
+        REENTRY_RECAP_THRESHOLD_HOURS) — the one place the world visibly
+        keeps moving purely because time passed for the PLAYER, not because
+        they took any action. Deliberately narrative-only: no canon_day/
+        world_time movement (ordinary player absence can never advance
+        those, same rule as an ordinary turn), and the allowed state_patch
+        is restricted the same way the background world tick's already is,
+        so this can record real off-screen developments (an NPC's goal
+        advancing, a faction's fortunes shifting) without ever touching the
+        player's own stats, inventory, currency, or location."""
+        hours = self._pending_reentry_hours
+        self._pending_reentry_hours = None
+        if not hours or not self.ai_bg_ready() or self.busy:
+            return None
+        payload = {
+            "task": "reentry_recap", "hours_away": hours, "state": self.trimmed_state_for_ai(),
+            "recent_background_feed": (self.state.get("background_world_feed") or [])[-10:],
+            "requirements": [
+                f"The player was away from the app for about {hours:.0f} hours of real time — not in-game time, which has not moved (ordinary absence never advances world_time/canon_day, exactly like an ordinary turn never does).",
+                "Write ONE short narrated paragraph (3-6 sentences) of what plausibly stirred elsewhere while the player wasn't looking, grounded in recent_background_feed and any tracked npc_clocks/faction_clocks/npc_relationships — build on threads already in motion rather than inventing disconnected new ones.",
+                "This is atmosphere reaching the player on return (a messenger, a notice, something a companion mentions), not something that happened TO the player — never move the player's own location, stats, currency, inventory, or HP, and never advance canon_day/world_time/calendar.",
+                "Keep it proportional to the gap — a few hours away is a quiet aside, not a war concluding. Modest off-screen movement (npc_memories, factions, canon_divergences) may still be recorded via state_patch the same way the regular background world tick can, but nothing time- or player-state-related.",
+                "If genuinely nothing worth narrating has moved, return an empty recap rather than manufacturing filler.",
+            ],
+            "schema": {"recap": "the paragraph, or empty", "state_patch": "npc_memories, factions, canon_divergences or other justified non-time, non-player-state changes only"},
+        }
+        rules = self.core_rules(extra="This is a reentry recap, not a scene and not a time skip. Do not resolve a player action. Do not advance time.")
+        try:
+            data = self.ai_bg.request(rules, payload, max_output_tokens=350)
+        except Exception as e:
+            self.log("Reentry recap failed: " + str(e))
+            return None
+        with self.lock:
+            before = copy.deepcopy(self.state)
+            # allow_time=False on its own only blocks time/calendar fields,
+            # not general player-state ones — the requirements above ask
+            # the model nicely not to touch hp/currency/location, but
+            # nothing enforced that until this whitelist. A real turn earns
+            # the right to touch player state; a background recap the
+            # player didn't act to trigger does not.
+            raw_patch = data.get("state_patch", {})
+            safe_patch = {k: v for k, v in raw_patch.items() if k in self.REENTRY_RECAP_ALLOWED_PATCH_FIELDS} if isinstance(raw_patch, dict) else {}
+            apply_guarded_patch(self.state, safe_patch, allow_time=False, source="reentry_recap")
+            recap = str(data.get("recap", "")).strip()
+            if recap:
+                self.append("[WHILE YOU WERE AWAY]\n" + recap, "narrative")
+                self.log("Reentry recap generated.")
+            update_continuity(before, self.state, "Reentry recap", recap)
+            self.autosave()
+        return {"recap": recap, "state": self.public_state(), "story": self._flush_story()}
+
     def run_memory_manager(self):
         if not self.ai_bg_ready() or self.busy:
             return None

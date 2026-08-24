@@ -483,6 +483,18 @@ function appendStoryEntries(entries) {
   feed.scrollTop = feed.scrollHeight + 400;
 }
 
+// Loading a save stays fast on its own — this fires as an unawaited
+// follow-up right after, so the recap (if the real-world gap since the
+// save was written was long enough) lands a moment later instead of
+// blocking the load itself on an AI round trip.
+function maybeFetchReentryRecap(state) {
+  if (!state || !state._reentry_gap_hours) return;
+  apiPost("/api/reentry_recap", {}).then((res) => {
+    if (res.story && res.story.length) appendStoryEntries(res.story);
+    if (res.state) renderState(res.state);
+  }).catch(() => { /* best effort — a missed recap just means the world was silent this time */ });
+}
+
 function typeText(el, text) {
   const caret = document.createElement("span");
   caret.className = "typing-caret";
@@ -3535,10 +3547,11 @@ async function openLoadModal() {
         renderState(res.state);
         closeModal("modal-load");
         showToast(save.kind === "autosave" ? "Autosave recovered." : "Campaign loaded.", "notify");
+        maybeFetchReentryRecap(res.state);
       } catch (err) { showToast(err.message, "danger"); }
     });
     li.querySelector("[data-save-recover]")?.addEventListener("click", async () => {
-      try { const res = await apiPost("/api/save/recover", { name: save.id }); APP.campaignActive = true; $("#story-feed").innerHTML = ""; appendStoryEntries(res.story || []); renderState(res.state); closeModal("modal-load"); showToast("Campaign recovered from its newest autosave.", "notify"); }
+      try { const res = await apiPost("/api/save/recover", { name: save.id }); APP.campaignActive = true; $("#story-feed").innerHTML = ""; appendStoryEntries(res.story || []); renderState(res.state); closeModal("modal-load"); showToast("Campaign recovered from its newest autosave.", "notify"); maybeFetchReentryRecap(res.state); }
       catch (err) { showToast(err.message, "danger"); }
     });
     li.querySelector("[data-save-delete]").addEventListener("click", async () => {

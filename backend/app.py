@@ -779,6 +779,17 @@ def api_load():
         return err(e)
 
 
+@app.route("/api/reentry_recap", methods=["POST"])
+def api_reentry_recap():
+    try:
+        result = game.generate_reentry_recap()
+        if not result:
+            return jsonify({"recap": "", "state": game.public_state(), "story": []})
+        return jsonify(result)
+    except Exception as e:
+        return err(e)
+
+
 @app.route("/api/quests/note", methods=["POST"])
 def api_quest_note():
     d = request.get_json(force=True)

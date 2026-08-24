@@ -1133,7 +1133,16 @@ class TimeSkipMixin:
                 # independently of the player — same background-feed mirror
                 # as the canon catch-up backstop above.
                 self.state.setdefault("background_world_feed", []).append(message)
-                self.append("[WORLD CLOCK]\n" + event.get("message", "A distant agenda advances."), "meta")
+                # These used to sit in the collapsed meta strip, tagged like
+                # an engine notice — but this is the one channel that makes
+                # the world visibly keep moving when the player isn't doing
+                # anything, and hiding it defeated that. Back in the main
+                # Chronicle as a real beat; the underlying message strings in
+                # systems.py were also reworded off "[BRACKETED] status
+                # report" phrasing into something closer to news reaching
+                # the player, since visible-but-still-robotic wouldn't have
+                # actually fixed the original complaint.
+                self.append("[ELSEWHERE]\n" + message, "system")
             for name in completed_quests:
                 self.append(f"[QUEST COMPLETE — {name}]\nAll required objectives have been completed.", "meta")
             notifications = self.notify(before, self.state, list(data.get("events", []) or []) + clock_events)

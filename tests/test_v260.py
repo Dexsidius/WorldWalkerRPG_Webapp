@@ -1,7 +1,11 @@
 import copy
+import json
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,7 +13,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from game import GameSession
 from systems import (
-    campaign_health, map_snapshot, normalize_quest_state_machine,
+    FACTION_DESTROYED_THRESHOLD, campaign_health, map_snapshot, normalize_quest_state_machine,
     normalize_tuning, relationship_snapshot, tick_world_clocks, update_chapter_memory,
 )
 from continuity import update_continuity
@@ -1400,7 +1404,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         game.run_time_skip(assessed["amount"], assessed["unit"], assessed["orders"], "normal", assessed["assessment"])
         feed = game.state.get("background_world_feed", [])
         self.assertEqual(len(feed), 1)
-        self.assertIn("Rival's agenda reached a turning point", feed[0])
+        self.assertIn("Rival has made real headway", feed[0])
         self.assertIn(feed[0], game.state.get("world_events", []))
 
     def test_clock_turning_point_names_fall_back_to_dict_key(self):
@@ -1413,7 +1417,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
                  "npc_memories": {}, "world_time": "Day 1"}
         events = tick_world_clocks(state, 1440)
         self.assertEqual(len(events), 1)
-        self.assertTrue(events[0]["message"].startswith("Rival's agenda"))
+        self.assertIn("Rival has made real headway", events[0]["message"])
 
     def test_tension_level_reads_hp_combat_and_deadlines(self):
         from systems import tension_level
@@ -1521,7 +1525,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
             events = tick_world_clocks(state, 1440)
         messages = [e["message"] for e in events]
         self.assertTrue(any("Leaf has triumphed over Sand" in m for m in messages))
-        self.assertTrue(any(m.startswith("[FACTION DESTROYED] Sand") for m in messages))
+        self.assertTrue(any(m.startswith("Sand has been effectively wiped out") for m in messages))
         self.assertEqual(state["location_details"]["Border Fort"]["controlling_faction"], "Leaf")
         self.assertEqual(state["faction_clocks"]["Sand"]["status"], "destroyed")
         self.assertEqual(state["faction_clocks"]["Leaf"]["status"], "active")
@@ -1539,7 +1543,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         with patch("systems.random.random", return_value=1.0):  # guarantees the actor loses
             events = tick_world_clocks(state, 1440)
         messages = [e["message"] for e in events]
-        self.assertTrue(any(m.startswith("[NPC LOST] Rogue Ninja") for m in messages))
+        self.assertTrue(any(m.startswith("Rogue Ninja has fallen") for m in messages))
         self.assertEqual(state["npc_clocks"]["Rogue Ninja"]["status"], "defeated")
         self.assertEqual(state["npc_memories"]["Rogue Ninja"]["status"], "deceased")
 
@@ -2531,6 +2535,130 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("territory-changed", js)
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         self.assertIn(".map-node.territory-changed", css)
+
+    def test_world_clock_events_are_visible_in_chronicle_not_the_meta_strip(self):
+        # These used to be moved into the collapsed System strip as
+        # mechanical noise, which also made the world visibly moving on
+        # its own the one thing the meta cleanup accidentally hid. Back to
+        # a real Chronicle beat, and the underlying message text no longer
+        # reads like a status report.
+        game = self.fresh("Naruto")
+        game.state["npc_clocks"] = {"Rival": {"name": "Rival", "goal": "Grow stronger", "progress": 99,
+                                                "threshold": 100, "status": "active", "last_update": ""}}
+        game.ai = PlanningAI()
+        assessed = game.assess_time_skip(1, "days", [], "normal")
+        result = game.run_time_skip(assessed["amount"], assessed["unit"], assessed["orders"], "normal", assessed["assessment"])
+        elsewhere = next(e for e in result["story"] if e["text"].startswith("[ELSEWHERE]"))
+        self.assertEqual(elsewhere["tag"], "system")
+        self.assertIn("Rival has made real headway", elsewhere["text"])
+
+    def test_canon_protected_faction_survives_a_conflict_instead_of_being_destroyed(self):
+        # Reuses WORLD_TERRITORIES (already used to seed the map's starting
+        # colors) as the canon-major-polity check — no new authoring
+        # needed. Konohagakure losing badly to a background dice roll
+        # should weaken it, never wipe it off the map outright.
+        state = {"world": "Naruto", "factions": {}, "world_time": "Day 1", "location_details": {}, "npc_memories": {},
+                 "faction_clocks": {
+                     "Attacker": {"name": "Attacker", "goal": "Conquer", "progress": 99, "threshold": 100,
+                                  "status": "active", "power": 80, "opponent": "Konohagakure"},
+                     "Konohagakure": {"name": "Konohagakure", "goal": "Defend", "progress": 0, "threshold": 100,
+                                      "status": "active", "power": 10},
+                 },
+                 "npc_clocks": {}}
+        with patch("systems.random.random", return_value=0.0):
+            events = tick_world_clocks(state, 1440)
+        messages = [e["message"] for e in events]
+        self.assertTrue(any("badly weakened" in m and "holds on" in m for m in messages))
+        self.assertNotEqual(state["faction_clocks"]["Konohagakure"]["status"], "destroyed")
+        self.assertGreater(state["faction_clocks"]["Konohagakure"]["power"], FACTION_DESTROYED_THRESHOLD)
+
+    def test_canon_protected_npc_survives_a_conflict_instead_of_dying(self):
+        state = {"world": "Naruto", "factions": {}, "world_time": "Day 1", "location_details": {},
+                 "npc_memories": {"Future Hokage": {"goal": "Prove themselves", "recurring": True, "canon_protected": True}},
+                 "npc_clocks": {"Future Hokage": {"name": "Future Hokage", "goal": "Prove themselves",
+                                                    "progress": 99, "threshold": 100, "status": "active",
+                                                    "power": 10, "opponent": "Rival Clan"}},
+                 "faction_clocks": {}}
+        with patch("systems.random.random", return_value=1.0):
+            events = tick_world_clocks(state, 1440)
+        messages = [e["message"] for e in events]
+        self.assertTrue(any("barely survives" in m for m in messages))
+        self.assertNotEqual(state["npc_clocks"]["Future Hokage"]["status"], "defeated")
+        self.assertNotEqual(state["npc_memories"]["Future Hokage"].get("status"), "deceased")
+
+    def test_gm_rules_nudge_referencing_background_world_feed(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("background_world_feed", rules)
+        self.assertIn("one continuous story", rules)
+
+    def test_load_flags_a_long_real_world_gap_for_reentry_recap(self):
+        import game as game_module
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(game_module, "SAVE_DIR", Path(tmp)):
+                session = GameSession()
+                session.state = copy.deepcopy(BASE_STATE)
+                session.state.update(name="Ari", world="Naruto")
+                old_time = (datetime.now() - timedelta(hours=10)).isoformat(timespec="seconds")
+                bundle = session.save_bundle("manual")
+                bundle["saved_at"] = old_time
+                path = session.savepath()
+                path.write_text(json.dumps(bundle), encoding="utf-8")
+
+                fresh_session = GameSession()
+                result = fresh_session.load(path.stem)
+                self.assertIsNotNone(result["_reentry_gap_hours"])
+                self.assertGreaterEqual(result["_reentry_gap_hours"], 9.9)
+
+    def test_load_does_not_flag_a_short_gap(self):
+        import game as game_module
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(game_module, "SAVE_DIR", Path(tmp)):
+                session = GameSession()
+                session.state = copy.deepcopy(BASE_STATE)
+                session.state.update(name="Ari", world="Naruto")
+                path = session.savepath()
+                path.write_text(json.dumps(session.save_bundle("manual")), encoding="utf-8")
+
+                fresh_session = GameSession()
+                result = fresh_session.load(path.stem)
+                self.assertIsNone(result["_reentry_gap_hours"])
+
+    def test_generate_reentry_recap_is_narrative_tagged_and_time_locked(self):
+        class RecapAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                self.payload = payload
+                return {"recap": "Word trickles in of a rival guild's climb through the tower.",
+                        "state_patch": {"canon_day": 99999, "world_time": "Never", "hp": 1}}
+
+        game = self.fresh("Solo Max-Level Newbie")
+        game.settings["model"] = "test-model"
+        ai = RecapAI()
+        game.ai_bg = ai
+        game._pending_reentry_hours = 12.0
+        result = game.generate_reentry_recap()
+        self.assertIsNotNone(result)
+        self.assertTrue(result["recap"].startswith("Word trickles in"))
+        entry = next(e for e in result["story"] if e["text"].startswith("[WHILE YOU WERE AWAY]"))
+        self.assertEqual(entry["tag"], "narrative")
+        # allow_time=False must have blocked the (deliberately malicious in
+        # this test) attempt to sneak in a canon_day/world_time change via
+        # the recap's own state_patch, and hp is player-state, not world
+        # movement, so it must be blocked too.
+        self.assertNotEqual(game.state.get("canon_day"), 99999)
+        self.assertNotEqual(game.state.get("world_time"), "Never")
+        self.assertNotEqual(game.state.get("hp"), 1)
+        # Consumed — a second call with nothing pending does nothing.
+        self.assertIsNone(game._pending_reentry_hours)
+        game.ai_bg = ai
+        self.assertIsNone(game.generate_reentry_recap())
+
+    def test_reentry_recap_is_wired_into_the_frontend_load_flow(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("maybeFetchReentryRecap", js)
+        self.assertIn("/api/reentry_recap", js)
+        app_py = (ROOT / "backend" / "app.py").read_text(encoding="utf-8")
+        self.assertIn('"/api/reentry_recap"', app_py)
 
 
 if __name__ == "__main__":
