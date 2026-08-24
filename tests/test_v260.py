@@ -2501,6 +2501,32 @@ class WorldwalkerV260Tests(unittest.TestCase):
         warnings = update_continuity(before, after, "Complete the escort mission", "The client thanks you and pays your fee in full before you part ways.")
         self.assertTrue(any("did not increase" in w for w in warnings))
 
+    def test_continuity_does_not_flag_earning_trust_or_a_title_as_a_currency_mismatch(self):
+        # A real user report: the AI seemed to be taking much longer to
+        # respond after the currency-mismatch retry landed (v2.6.45). Root
+        # cause: _CURRENCY_EARN_RE's bare "earns?" alternative matched ANY
+        # use of the word — "earns you a reward" of trust/respect/a title,
+        # nothing to do with money — and every false-positive warning was
+        # now also triggering a full extra AI round-trip, not just a
+        # silent post-hoc patch. This is exactly the sentence shape that
+        # was firing on ordinary, frequent, non-monetary narration.
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Talk to Iruka", "Your patience with Iruka earns you a small reward: his growing trust in your judgment.")
+        self.assertFalse(any("did not increase" in w for w in warnings))
+
+    def test_continuity_still_flags_a_real_currency_earn_with_a_number_or_named_reward(self):
+        # The fix above must not just suppress the false positive — it has
+        # to still catch the real bug this detector exists for.
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        warnings1 = update_continuity(before, after, "Complete job", "The client is pleased with your work and the job earns you 200 Ryo.")
+        self.assertTrue(any("did not increase" in w for w in warnings1))
+        warnings2 = update_continuity(before, after, "Turn in bounty", "You collect your reward for the bounty.")
+        self.assertTrue(any("did not increase" in w for w in warnings2))
+
     def test_continuity_does_not_flag_a_declined_or_unrelated_purchase(self):
         before = copy.deepcopy(BASE_STATE)
         before["currency"] = {"name": "Ryo", "amount": 500}
