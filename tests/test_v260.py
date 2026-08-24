@@ -1989,19 +1989,93 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertGreater(shared / len(before), 0.9,
                             "canon_day-dependent content leaked into the stable prefix — keep it at the tail of gm_rules()")
 
+    def test_combat_example_toggle_also_stays_cache_friendly(self):
+        # The worked combat example is itself now conditional on the
+        # player's action (see _combat_relevant) — a second source of
+        # per-turn volatility introduced after the canon_day fix above. It
+        # has to obey the same rule: live at the tail, not leak upstream.
+        game = self.fresh("Naruto")
+        game.state["factions"] = dict(WORLD_DATA["Naruto"]["factions"])
+        neutral = game.gm_rules("I browse the market stalls.")
+        combat = game.gm_rules("I draw my blade and attack the bandit.")
+        shared = 0
+        for a, b in zip(neutral, combat):
+            if a != b: break
+            shared += 1
+        self.assertGreater(shared / len(neutral), 0.9,
+                            "combat_example_rule leaked into the stable prefix — keep it at the tail of gm_rules()")
+
+    def test_combat_relevant_detects_active_combat_or_action_signal_words(self):
+        game = self.fresh("Naruto")
+        self.assertFalse(game._combat_relevant("I browse the market stalls."))
+        self.assertTrue(game._combat_relevant("I attack the bandit."))
+        self.assertTrue(game._combat_relevant("I draw my sword and charge at him."))
+        game.state["combat"] = {"active": True}
+        self.assertTrue(game._combat_relevant("I ask him a question."))
+
+    def test_worked_combat_example_only_appears_when_combat_relevant(self):
+        game = self.fresh("Naruto")
+        self.assertNotIn("WORKED EXAMPLE of starting structured combat", game.gm_rules("I browse the market stalls."))
+        self.assertIn("WORKED EXAMPLE of starting structured combat", game.gm_rules("I attack the bandit."))
+
+    def test_resolve_passes_the_players_action_as_the_combat_hint(self):
+        # gm_context(query) already receives the raw action in the
+        # resolve() call path (used for lore retrieval) — reused as the
+        # combat hint rather than plumbing a whole new parameter through.
+        game = self.fresh("Naruto")
+        self.assertIn("WORKED EXAMPLE of starting structured combat", game.gm_context("I attack the bandit."))
+        self.assertNotIn("WORKED EXAMPLE of starting structured combat", game.gm_context("I browse the market stalls."))
+
+    def test_shop_schema_documents_the_location_field(self):
+        game = self.fresh("Naruto")
+        self.assertIn('populate shops with name/type/location', game.gm_rules())
+
+    def test_trimmed_state_for_ai_gives_full_detail_only_to_shops_at_the_current_location(self):
+        game = self.fresh("Naruto")
+        game.state["location"] = "Konohagakure"
+        game.state["shops"] = [{"name": f"Shop {i}", "type": "General", "location": "Elsewhere",
+                                 "inventory": [{"name": "Bulk Item", "price": 10}]} for i in range(6)]
+        game.state["shops"].append({"name": "Local Stall", "type": "General", "location": "Konohagakure",
+                                     "inventory": [{"name": "Kunai Set", "price": 100}]})
+        snapshot = game.trimmed_state_for_ai()
+        local = next(s for s in snapshot["shops"] if s["name"] == "Local Stall")
+        self.assertIn("inventory", local)
+        elsewhere = next(s for s in snapshot["shops"] if s["name"] == "Shop 0")
+        self.assertNotIn("inventory", elsewhere)
+        self.assertEqual(elsewhere["location"], "Elsewhere")
+
+    def test_trimmed_state_for_ai_leaves_a_small_shop_list_untouched(self):
+        game = self.fresh("Naruto")
+        game.state["location"] = "Konohagakure"
+        game.state["shops"] = [{"name": "Far Shop", "type": "General", "location": "Elsewhere", "inventory": [{"name": "Item", "price": 5}]}]
+        snapshot = game.trimmed_state_for_ai()
+        self.assertIn("inventory", snapshot["shops"][0])
+
+    def test_trimmed_state_for_ai_gives_full_detail_only_to_the_current_location(self):
+        game = self.fresh("Naruto")
+        game.state["location"] = "Konohagakure"
+        details = {f"Place {i}": {"controlling_faction": "Neutral", "danger_level": "Calm", "notes": "Long free-text detail."} for i in range(11)}
+        details["Konohagakure"] = {"controlling_faction": "Konohagakure", "danger_level": "Calm", "notes": "Home base, lots of detail."}
+        game.state["location_details"] = details
+        snapshot = game.trimmed_state_for_ai()
+        self.assertIn("notes", snapshot["location_details"]["Konohagakure"])
+        self.assertNotIn("notes", snapshot["location_details"]["Place 0"])
+        self.assertEqual(snapshot["location_details"]["Place 0"]["controlling_faction"], "Neutral")
+
     def test_gm_rules_has_not_silently_ballooned(self):
         # Not a hard ceiling on writing new rules — a tripwire so a future
         # addition that meaningfully bloats every single AI call (this
         # session alone added several thousand characters across a handful
         # of features) gets a deliberate look before it ships, not a silent
         # creep someone only notices later as "the game feels laggy."
-        # Raised 60000 -> 64000 deliberately: a full worked combat example
-        # (the strongest lever in prompt engineering, per the user's own
-        # explicit ask) plus three restraint EDGE CASE examples pushed this
-        # past the old ceiling. Real cost, consciously accepted, not creep.
+        # Raised 60000 -> 64000 when the worked combat example first landed
+        # unconditionally; the example is now conditional on _combat_relevant
+        # (only paid for on a turn plausibly about to touch state_patch.combat),
+        # so a normal non-combat turn sits back around ~60600 again — this
+        # checks the worst case (combat-relevant) with headroom for growth.
         game = self.fresh("Naruto")
         game.state["factions"] = dict(WORLD_DATA["Naruto"]["factions"])
-        self.assertLess(len(game.gm_rules()), 64000)
+        self.assertLess(len(game.gm_rules("I attack the bandit.")), 63000)
 
     def test_starting_currency_scales_with_world_and_background(self):
         # Every campaign used to start with a flat 250 regardless of world
@@ -2924,8 +2998,11 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertNotIn("50 Ryo", one_piece_rules)
 
     def test_combat_schema_has_a_full_worked_example(self):
+        # Conditional now (see test_worked_combat_example_only_appears_when_
+        # combat_relevant) — pass a combat-flavored hint so this checks the
+        # example's actual content once it's included.
         game = self.fresh("Naruto")
-        rules = game.gm_rules()
+        rules = game.gm_rules("I attack the bandit.")
         self.assertIn("WORKED EXAMPLE of starting structured combat", rules)
         self.assertIn('"name": "Bandit"', rules)
         self.assertIn('"non_lethal": false', rules)
