@@ -29,6 +29,40 @@ _CURRENCY_NO_TRANSACTION_RE = re.compile(
 )
 _CURRENCY_GENERIC_RE = re.compile(r"\b(coins?|gold|money|payment|reward|fee|wages?)\b", re.I)
 
+# Same shape of bug as currency: the model narrates a clear wound and just
+# forgets to patch hp to match. Tied to "you" specifically (this game
+# narrates the player in second person — see gm_rules) rather than any
+# wound language in the scene, since combat narration wounds NPCs and
+# enemies constantly and those never touch the player's own hp.
+_WOUND_RE = re.compile(
+    r"\b(cuts? (?:deep )?into you|stabs? you|slashes? (?:you|across you|into you)|"
+    r"you(?:'re| are) (?:cut|stabbed|slashed|wounded|gashed|pierced|struck down|badly hurt)|"
+    r"wounds? you|pierces? you|you(?:'re| are)? bleed\w*|you collapse\w*,? bleeding|"
+    r"blood (?:pours?|pools?|runs?) (?:from|down) you|"
+    r"knocks? you out|you(?:'re| are) knocked out|"
+    r"breaks? your (?:arm|leg|ribs?|bones?|nose)|"
+    r"burns? you (?:badly|deeply|severely)|"
+    r"you take (?:a|the) (?:heavy|brutal|serious|grievous|solid) (?:hit|blow|wound)|"
+    r"the blade (?:bites|sinks) into you|"
+    r"tears? into your (?:flesh|skin)|"
+    r"leaves? you (?:bleeding|wounded|gashed|badly hurt))\b", re.I,
+)
+_WOUND_AVOIDED_RE = re.compile(
+    r"\b(you (?:dodge|block|parry|parries|deflect|sidestep|narrowly avoid)\w*|"
+    r"(?:the (?:blow|blade|strike|hit|attack)) (?:misses|goes wide)|"
+    r"leaves? you (?:unharmed|unscathed)|you(?:'re| are) (?:unharmed|unscathed)|"
+    r"barely (?:a scratch|grazes? you)|you shrug\w* (?:it|them )?off)\b", re.I,
+)
+
+# Mirror of the quest-regression check further down: the model says the
+# quest is done but never flips its status field to match.
+_QUEST_COMPLETE_RE = re.compile(
+    r"\b(quest (?:is |has been |'s )?(?:complete|completed|done|finished)|"
+    r"(?:complet\w+|finish\w+|accomplish\w+) (?:the |your )?(?:quest|delivery|task|job|mission|errand)|"
+    r"mission (?:is |)accomplished|"
+    r"(?:the )?(?:task|delivery|job) (?:is |)(?:complete|completed|done|finished|delivered))\b", re.I,
+)
+
 
 def update_continuity(before, after, action="", narrative=""):
     ledger = after.setdefault("continuity_ledger", {"facts": [], "warnings": [], "last_checked_turn": 0})
@@ -88,6 +122,24 @@ def update_continuity(before, after, action="", narrative=""):
         old_status, new_status = str(old.get("status", "")).lower(), str(quest.get("status", "")).lower()
         if old_status in ("complete", "completed", "failed") and new_status not in (old_status, ""):
             warnings.append(f"Quest '{quest.get('name')}' regressed from {old_status} to {new_status} without explanation.")
+    # The mirror case: the narrative declares a quest finished, but the
+    # quest's own status field never actually flipped to complete. Only
+    # fires when the target is unambiguous — the quest is named outright,
+    # or it's the only quest still active and the narrative uses the
+    # generic "the quest is done" phrasing — so a passing mention of some
+    # other completed job doesn't get misattributed.
+    if narrative and _QUEST_COMPLETE_RE.search(narrative):
+        active = [(k, q) for k, q in new_quests.items() if str(q.get("status", "")).lower() not in ("complete", "completed", "failed")]
+        for key, quest in active:
+            old = old_quests.get(key)
+            old_status = str(old.get("status", "")).lower() if old else ""
+            if old_status in ("complete", "completed", "failed"):
+                continue
+            quest_name = str(quest.get("name", ""))
+            name_mentioned = bool(quest_name) and quest_name.lower() in narrative.lower()
+            generic_singular = len(active) == 1 and re.search(r"\bquest\b", narrative, re.I)
+            if name_mentioned or generic_singular:
+                warnings.append(f"The narrative describes '{quest_name}' as finished, but its status is still '{quest.get('status')}'.")
     # A location that changed without the narrative ever naming the new place
     # is the clearest sign the AI moved the player mechanically (or forgot
     # where they were) rather than actually narrating travel.
@@ -116,6 +168,10 @@ def update_continuity(before, after, action="", narrative=""):
             warnings.append(f"The narrative describes a purchase or payment being made, but currency.amount ({currency_after.get('amount')} {currency_name}) did not decrease.")
         elif currency_mentioned and _CURRENCY_EARN_RE.search(narrative):
             warnings.append(f"The narrative describes the player being paid, rewarded, or earning {currency_name or 'money'}, but currency.amount did not increase.")
+    hp_before, hp_after = before.get("hp"), after.get("hp")
+    if narrative and isinstance(hp_before, (int, float)) and isinstance(hp_after, (int, float)):
+        if hp_after >= hp_before and _WOUND_RE.search(narrative) and not _WOUND_AVOIDED_RE.search(narrative):
+            warnings.append(f"The narrative describes the player being wounded, but hp ({hp_after}) did not decrease from {hp_before}.")
     if action:
         after.setdefault("campaign_canon", []).append({**stamp, "action": str(action)[:500], "outcome": str(narrative)[:1200]})
         after["campaign_canon"] = after["campaign_canon"][-250:]

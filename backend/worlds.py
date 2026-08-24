@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.41"
+APP_VERSION = "2.6.42"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -159,18 +159,28 @@ WORLD_DATA = {
         # entry, same as Marines/World Government already are.
         "factions": {"Marines": 0, "World Government": 0, "Revolutionary Army": 0, "Pirates": 0,
                      "Whitebeard Pirates": 0, "Big Mom Pirates": 0, "Kaido's Beasts Pirates": 0, "Shanks' Red Hair Pirates": 0},
+        # Coordinates calibrated against a labeled canon-geography reference
+        # map (player-supplied, in assets/generated_maps/One_Piece.*) now
+        # used as this world's map background, the same treatment Naruto's
+        # map already got. Also fills in several major canon locations that
+        # UPCOMING CANON PRESSURES / CANON_TIMELINES already reference by
+        # name (Marineford, Impel Down, Drum Island, Thriller Bark, Zou) but
+        # that had no map node at all before — the vague catch-all "New
+        # World" region node is retired in favor of these concrete ones.
         "map": [
-            ("Foosha Village",12,70,"settlement",1), ("Goa Kingdom",20,64,"kingdom",2),
-            ("Shells Town",30,74,"marine",2), ("Orange Town",38,65,"settlement",2),
-            ("Syrup Village",46,73,"settlement",2), ("Baratie",56,63,"sea",3),
-            ("Arlong Park",68,72,"enemy",4), ("Loguetown",78,61,"city",4),
-            ("Reverse Mountain",86,51,"landmark",5), ("Whiskey Peak",72,42,"island",5),
-            ("Little Garden",61,35,"island",6), ("Alabasta",50,44,"kingdom",7),
-            ("Jaya",41,31,"island",7), ("Skypiea",38,17,"sky",8),
-            ("Water 7",29,32,"city",8), ("Enies Lobby",20,24,"government",9),
-            ("Sabaody",15,13,"archipelago",10), ("New World",78,17,"region",12),
-            ("Fishman Island",68,25,"island",11), ("Totto Land",87,23,"island",13),
-            ("Wano Country",92,11,"nation",14)
+            ("Foosha Village",83,34,"settlement",1), ("Goa Kingdom",72,21,"kingdom",2),
+            ("Shells Town",87,31,"marine",2), ("Orange Town",66,24,"settlement",2),
+            ("Syrup Village",65,28,"settlement",2), ("Baratie",65,31,"sea",3),
+            ("Arlong Park",80,31,"enemy",4), ("Loguetown",57,37,"city",4),
+            ("Reverse Mountain",51,48,"landmark",5), ("Whiskey Peak",56,49,"island",5),
+            ("Little Garden",59,48,"island",6), ("Drum Island",66,48,"island",6),
+            ("Alabasta",69,50,"kingdom",7), ("Jaya",35,22,"island",7),
+            ("Skypiea",33,10,"sky",8), ("Water 7",75,49,"city",8),
+            ("Enies Lobby",81,48,"government",9), ("Thriller Bark",89,49,"island",9),
+            ("Sabaody",93,49,"archipelago",10), ("Zou",96,50,"island",10),
+            ("Fishman Island",51,62,"island",11), ("Impel Down",41,56,"prison",12),
+            ("Totto Land",15,49,"island",13), ("Marineford",45,54,"marine",13),
+            ("Wano Country",6,51,"nation",14)
         ],
         "special": {"Haki":{"Observation":0,"Armament":0,"Conqueror":0}, "Bounty":0, "Devil Fruit":"None", "Crew":"None"}
     },

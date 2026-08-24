@@ -2430,6 +2430,59 @@ class WorldwalkerV260Tests(unittest.TestCase):
         warnings2 = update_continuity(before, after2, "Buy kunai", "You buy a fresh set of kunai, handing over a stack of Ryo.")
         self.assertFalse(any("currency.amount" in w for w in warnings2))
 
+    def test_continuity_flags_a_described_wound_that_never_touched_hp(self):
+        # Same shape of bug as the currency one: the narrative clearly
+        # wounds the player but hp is left untouched.
+        before = copy.deepcopy(BASE_STATE)
+        before["hp"], before["hp_max"] = 80, 100
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Press the attack", "The blade cuts into you before you can react, and you stagger back bleeding.")
+        self.assertTrue(any("hp" in w and "did not decrease" in w for w in warnings))
+
+    def test_continuity_does_not_flag_a_dodged_or_npc_wound(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["hp"], before["hp_max"] = 80, 100
+        after = copy.deepcopy(before)
+        # Wound language present ("wounds you") but paired with a clean deflection: no warning.
+        warnings = update_continuity(before, after, "Deflect the strike", "The strike wounds you at first glance, but you shrug it off completely, barely a scratch.")
+        self.assertFalse(any("did not decrease" in w for w in warnings))
+        # Wound language describing an NPC, not the player: no warning.
+        after2 = copy.deepcopy(before)
+        warnings2 = update_continuity(before, after2, "Attack the bandit", "Your blade cuts deep into the bandit's arm and he collapses, bleeding.")
+        self.assertFalse(any("did not decrease" in w for w in warnings2))
+        # hp actually dropped: nothing to flag.
+        after3 = copy.deepcopy(before)
+        after3["hp"] = 60
+        warnings3 = update_continuity(before, after3, "Press the attack", "The blade cuts into you and you stagger back bleeding.")
+        self.assertFalse(any("did not decrease" in w for w in warnings3))
+
+    def test_continuity_flags_a_quest_declared_finished_that_never_flipped_status(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["quests"] = [{"name": "Deliver the Package", "status": "active"}]
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Deliver the package", "You hand over the package to the client. You complete the delivery, the quest is done.")
+        self.assertTrue(any("Deliver the Package" in w and "finished" in w for w in warnings))
+
+    def test_continuity_does_not_flag_completion_language_for_an_unrelated_or_already_complete_quest(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["quests"] = [{"name": "Deliver the Package", "status": "active"}, {"name": "Find the Lost Cat", "status": "active"}]
+        after = copy.deepcopy(before)
+        # Completion language present but this specific quest isn't named.
+        warnings = update_continuity(before, after, "Chat with a merchant", "The merchant mentions a courier nearby finishing his delivery, the job done.")
+        self.assertFalse(any("Deliver the Package" in w for w in warnings))
+        self.assertFalse(any("Find the Lost Cat" in w for w in warnings))
+        # Quest's status already flipped to complete: nothing to flag.
+        after2 = copy.deepcopy(before)
+        after2["quests"][0]["status"] = "complete"
+        warnings2 = update_continuity(before, after2, "Deliver the package", "You hand over the package. You complete the delivery, the quest is done.")
+        self.assertFalse(any("Deliver the Package" in w for w in warnings2))
+
+    def test_gm_rules_document_hp_and_quest_completion_mirrors(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("hp MUST change", rules)
+        self.assertIn("status field must flip to \"complete\"", rules)
+
     def test_regular_turn_now_triggers_continuity_correction_like_time_skip_does(self):
         # apply_resolution (an ordinary single-action turn — the far more
         # common turn type, and the one a simple "I buy X" almost always
@@ -2678,6 +2731,22 @@ class WorldwalkerV260Tests(unittest.TestCase):
             self.assertEqual(snap["controller"], expected_controller)
         for faction in ("Whitebeard Pirates", "Big Mom Pirates", "Kaido's Beasts Pirates", "Shanks' Red Hair Pirates"):
             self.assertIn(faction, WORLD_DATA["One Piece"]["factions"])
+
+    def test_one_piece_map_covers_major_canon_locations_referenced_in_the_timeline(self):
+        # CANON_TIMELINES already narrates real events at Marineford, Impel
+        # Down, Drum Island, Thriller Bark, and Zou, but none of them had an
+        # actual clickable map node before — the map was recalibrated
+        # against a labeled canon-geography reference image, and the vague
+        # catch-all "New World" region node was retired in favor of these
+        # concrete ones.
+        map_names = {n[0] for n in WORLD_DATA["One Piece"]["map"]}
+        for name in ("Marineford", "Impel Down", "Drum Island", "Thriller Bark", "Zou"):
+            self.assertIn(name, map_names)
+        self.assertNotIn("New World", map_names)
+        from systems import WORLD_TERRITORIES
+        territories = WORLD_TERRITORIES["One Piece"]
+        self.assertEqual(territories["Marineford"], "Marines")
+        self.assertEqual(territories["Impel Down"], "World Government")
 
     def test_yonko_crews_are_seeded_live_at_campaign_creation(self):
         stats = {name: 30 for name in abilities_for("One Piece")}

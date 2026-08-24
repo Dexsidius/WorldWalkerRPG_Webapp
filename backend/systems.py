@@ -35,7 +35,8 @@ WORLD_PROGRESSION_PRESETS = {
 
 WORLD_TERRITORIES = {
     "One Piece": {"Shells Town": "Marines", "Loguetown": "Marines", "Enies Lobby": "World Government", "Sabaody": "World Government", "Arlong Park": "Pirates",
-                  "Fishman Island": "Whitebeard Pirates", "Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates"},
+                  "Fishman Island": "Whitebeard Pirates", "Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates",
+                  "Marineford": "Marines", "Impel Down": "World Government"},
     "Hunter x Hunter": {"Hunter Exam Site": "Hunter Association", "Hunter Association HQ": "Hunter Association", "Meteor City": "Phantom Troupe", "Kukuroo Mountain": "Zoldyck Family", "Yorknew City": "Yorknew Mafia"},
     "Naruto": {"Konohagakure": "Konohagakure", "Sunagakure": "Sunagakure", "Kirigakure": "Kirigakure", "Kumogakure": "Kumogakure", "Iwagakure": "Iwagakure",
                "Amegakure": "Amegakure", "Iron Country": "Iron Country"},
