@@ -229,6 +229,33 @@ class CoreMixin:
     # temptation at all rather than trust it to resist one it can see.
     AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day")
 
+    def _relevant_npc_names(self):
+        """Best-effort 'who's actually in play right now': present at the
+        current location, a companion, a marked nemesis, or named in the
+        last few turns' narrative. Used only to decide which npc_memories
+        entries get full detail vs. a compact stub in trimmed_state_for_ai
+        — never to drop an NPC from context entirely, so an off-screen
+        character the player asks about is still there, just lighter."""
+        names = set()
+        location = str(self.state.get("location") or "").strip().lower()
+        memories = self.state.get("npc_memories") or {}
+        for name, memory in memories.items():
+            if not isinstance(memory, dict):
+                continue
+            if location and str(memory.get("last_known_location") or "").strip().lower() == location:
+                names.add(name)
+            if memory.get("nemesis"):
+                names.add(name)
+        for c in self.state.get("companions") or []:
+            cname = c.get("name") if isinstance(c, dict) else c
+            if cname:
+                names.add(str(cname))
+        recent_text = " ".join(str(entry.get("outcome", "")) for entry in (self.state.get("campaign_canon") or [])[-5:]).lower()
+        for name in memories:
+            if str(name).lower() in recent_text:
+                names.add(name)
+        return names
+
     def trimmed_state_for_ai(self):
         """The raw state grows without bound over a long campaign —
         campaign_canon alone can hold up to 250 full turn records. Once a
@@ -242,6 +269,30 @@ class CoreMixin:
         snapshot = dict(self.state)
         for key in self.AI_HIDDEN_FIELDS:
             snapshot.pop(key, None)
+        # A long campaign can accumulate a large npc_memories roster where
+        # most entries are nobody currently relevant — full detail (chain,
+        # promises, debts, knowledge) for every one of them is pure noise
+        # competing with the handful of NPCs actually in this scene for the
+        # model's attention. Only trims detail, never drops an entry.
+        memories = snapshot.get("npc_memories")
+        if isinstance(memories, dict) and len(memories) > 8:
+            relevant = self._relevant_npc_names()
+            # The stub still keeps attitude/chain/goal/promises/debts — the
+            # exact fields "why does X feel this way" or "what do they
+            # want/owe" get answered from — and only drops the bulkier,
+            # lower-value stuff (raw knowledge/witness lists, deeper goal
+            # layers, suspicions) for an NPC nowhere near this scene.
+            snapshot["npc_memories"] = {
+                name: (mem if name in relevant or not isinstance(mem, dict) else {
+                    "attitude": mem.get("attitude", "Unknown"),
+                    "last_known_location": mem.get("last_known_location", "Unknown"),
+                    "chain": (mem.get("chain") or [])[-4:],
+                    "goal": mem.get("immediate_goal") or mem.get("goal") or mem.get("current_goal") or "",
+                    "promises": (mem.get("promises") or [])[:3],
+                    "debts": (mem.get("debts") or [])[:3],
+                })
+                for name, mem in memories.items()
+            }
         canon = self.state.get("campaign_canon") or []
         if not canon:
             snapshot.pop("campaign_canon", None)
@@ -279,15 +330,46 @@ class CoreMixin:
         self.last_lore_context = lore
         return self.gm_rules() + (("\n\n" + lore) if lore else "")
 
+    # Only high-confidence, mechanically-verified mismatches are worth
+    # spending a retry on — matched against the exact phrasing continuity.py
+    # actually uses for these three checks. Fuzzier warnings (a quest
+    # regression that might be an intentional twist, a location change the
+    # narrative didn't name) stay in the after-the-fact correction pass
+    # only, since a retry risks "fixing" something that wasn't a mistake.
+    _RETRYABLE_WARNING_MARKERS = ("currency.amount", "being wounded, but hp", "status is still")
+
+    def _simulate_continuity_violations(self, payload, data):
+        """Applies data's state_patch to a throwaway copy of state (never
+        the real one) and runs the same continuity checks apply_resolution
+        runs for real afterward, so a currency/hp/quest-completion mismatch
+        can be caught and named BEFORE this turn is ever finalized, not
+        only silently patched after the player has already seen it."""
+        patch = data.get("state_patch")
+        if not isinstance(patch, dict) or not patch:
+            return []
+        scratch = copy.deepcopy(self.state)
+        apply_guarded_patch(scratch, patch, allow_time=False, source="preflight")
+        warnings = update_continuity(self.state, scratch, str(payload.get("action") or ""), data.get("narrative", ""))
+        return [w for w in warnings if any(marker in w for marker in self._RETRYABLE_WARNING_MARKERS)]
+
     def request_with_narrative(self, instructions, payload, max_output_tokens):
         """Some models (smaller/cheaper ones especially) occasionally fill in
         state_patch correctly but leave narrative blank under attention
         pressure. That's a failed response, not a usable one — retry once
-        with a sharper reminder before accepting it."""
+        with a sharper reminder before accepting it. Also retries once when
+        the response would trip a high-confidence continuity check (see
+        _simulate_continuity_violations) — same one-retry discipline, named
+        specifically so the model isn't just asked to "try again" blind."""
         data = self.ai.request(instructions, payload, max_output_tokens=max_output_tokens)
-        if not (data.get("narrative") or "").strip():
-            sharper = instructions + "\n\nREMINDER: your previous attempt left \"narrative\" empty. Write 2-5 sentences of narrative FIRST, then the rest."
-            data = self.ai.request(sharper, payload, max_output_tokens=max_output_tokens)
+        narrative_missing = not (data.get("narrative") or "").strip()
+        violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
+        if narrative_missing or violations:
+            reminder = ""
+            if narrative_missing:
+                reminder += "\n\nREMINDER: your previous attempt left \"narrative\" empty. Write 2-5 sentences of narrative FIRST, then the rest."
+            if violations:
+                reminder += "\n\nREMINDER: your previous attempt has a specific problem that must be fixed in this response: " + " ".join(violations)
+            data = self.ai.request(instructions + reminder, payload, max_output_tokens=max_output_tokens)
         return data
 
     def _scale_lock_rule(self):
@@ -639,7 +721,7 @@ NON-NEGOTIABLE RULES
 - Impossible actions are not rollable.
 - The world never arbitrarily scales to the player.
 - NPCs, allies, rivals and enemies must have varied capability levels appropriate to their role and this world's power scale — a random background character, a seasoned specialist, and a named rival should feel meaningfully different in competence. Do not make everyone equally skilled.
-- Track every currency the player obtains. The primary currency lives in state_patch.currency ({{name, amount}}) and MUST change in the SAME state_patch as any turn whose narrative describes a purchase, sale, payment, reward, bribe, fine, debt, or loss — if the prose says money changed hands, the number changes in the same response, never "implied" and left for later. If the player obtains a genuinely distinct second currency (guild points, faction tokens, foreign coin, event currency, arena tickets, etc.), track it separately in state_patch.currencies as {{"CurrencyName": amount}} — never conflate it with the primary currency or silently drop it.
+- Track every currency the player obtains. The primary currency lives in state_patch.currency ({{name, amount}}) and MUST change in the SAME state_patch as any turn whose narrative describes a purchase, sale, payment, reward, bribe, fine, debt, or loss — if the prose says money changed hands, the number changes in the same response, never "implied" and left for later. BAD: narrative says "you hand over 50 Berries for the kunai" but state_patch.currency.amount is unchanged from last turn. GOOD: the same narrative, with currency.amount reduced by 50 in this same state_patch. If the player obtains a genuinely distinct second currency (guild points, faction tokens, foreign coin, event currency, arena tickets, etc.), track it separately in state_patch.currencies as {{"CurrencyName": amount}} — never conflate it with the primary currency or silently drop it.
 - Currency is a tracked resource like XP, not an afterthought: award it whenever the fiction would obviously produce it — a completed job/quest/mission with pay, a bounty claimed, loot sold, wages earned, a bet won — sized realistically for this world's economy and the character's current standing. Deduct it just as reliably for purchases, bribes, fines, debts, and losses. A character who has clearly been working, adventuring, or trading for a stretch of time should not still be sitting on an unchanged amount.{(chr(10) + "- " + ex["economy_notes"]) if ex.get("economy_notes") else ""}
 - Any gear, weapon, or item the player starts with, finds, or is given must be a specific, concrete, world-appropriate named thing ("a rusted shortsword", "a Kunai pouch") — never a vague placeholder like "a weapon" or "travel supplies". Fit it to the character's actual background, archetype, and station, not a generic default.
 - Keep narrative prose short: a few sentences to one short paragraph per response. Only a single moment-to-moment turn focuses on one thing at a time — any longer timespan (a day, a training session, a journey) should move through several distinct beats/events across it rather than one flattened event, while still staying concise overall.
@@ -648,7 +730,7 @@ NON-NEGOTIABLE RULES
 - Stats are setting-relative and theoretically unbounded. Never use D&D benchmarks, modifiers, level caps or a universal human maximum.{hidden_stat_rule}{voice_rule}{tower_rule}{progression_rule}{position_rule}{scale_rule}{gear_rule}{race_rule}{pacing_rule}{director_notes_rule}{nemesis_rule}{faction_conflict_rule}{leadership_rule}{espionage_rule}
 - Every high/extreme player-initiated lethal action must be warned about before resolution.
 - Death is possible. If death occurs: hp=0 and alive=false.
-- hp MUST change in the SAME state_patch as any turn whose narrative describes the player taking a real wound — cut, stabbed, burned, bleeding, knocked out, a solid hit landed — never implied in prose and left for a later turn to catch up on. Conversely, don't drop hp for a blow the player dodged, blocked, or shrugged off with no real wound described.
+- hp MUST change in the SAME state_patch as any turn whose narrative describes the player taking a real wound — cut, stabbed, burned, bleeding, knocked out, a solid hit landed — never implied in prose and left for a later turn to catch up on. BAD: narrative says "the blade cuts into you and you stagger back bleeding" but state_patch.hp is unchanged. GOOD: the same narrative, with hp reduced in this same state_patch. Conversely, don't drop hp for a blow the player dodged, blocked, or shrugged off with no real wound described.
 - Keep all persistent mechanical changes in state_patch. Never rely on prose alone for a state change.
 - The "narrative" field is never empty. Write it first, before working out state_patch — a turn with a populated state_patch but blank narrative is a failed response.
 - New named NPCs/locations/factions the player meaningfully learns should be added to codex.
@@ -685,7 +767,7 @@ NON-NEGOTIABLE RULES
 - Every active quest must be a structured object with at least name, status, explanation, current_knowledge (list), and clear_conditions (list). Keep unknown conditions hidden by omitting them or describing only what the player currently knows; update these fields as clues are learned.
 - Active quests also use objectives: [{{id, text, status active|complete|failed|locked, optional, progress 0-100}}], branch_state, consequences, locations, and deadline when applicable. Update only objectives affected by this result and preserve optional or divergent branches.
 - If the player says they start, begin, accept, or take a quest/mission/job/contract, the same resolution must clearly brief it and add it to state_patch.quests. Include its cause or giver, concrete objective, known location, known risks, first actionable step, and clear completion condition. Never claim that a quest began only in prose.
-- The same rule applies in reverse when a quest finishes: if the narrative says the quest/delivery/task/mission is done, complete, or turned in, that quest's status field must flip to "complete" (and its objectives to "complete") in the SAME state_patch — never leave the prose saying it's finished while the structured quest object still reads active.
+- The same rule applies in reverse when a quest finishes: if the narrative says the quest/delivery/task/mission is done, complete, or turned in, that quest's status field must flip to "complete" (and its objectives to "complete") in the SAME state_patch — never leave the prose saying it's finished while the structured quest object still reads active. BAD: narrative says "you hand over the package — the delivery is done" but the quest's status field is still "active" in state_patch. GOOD: the same narrative, with that quest's status set to "complete" in this same state_patch.
 - Track the player's formal membership in any group, organization, kingdom, or hierarchy — a crew, a village's shinobi ranks, a guild, a criminal syndicate, a royal court, Akatsuki, a hunter association, and so on — in state_patch.affiliations: a list of {{faction, rank, status, joined, notes}}. rank is a specific title within that hierarchy ("Leader", "Member", "Recruit", "Captain", "Elder", whatever the org actually uses) — "Leader of the Akatsuki" and "Member of the Akatsuki" must be genuinely different ranks on the same affiliation, not just different prose. status is active|honorary|probation|exiled|former. Always include the full current list of affiliations (not just the one that changed) when updating this field, the same way other list fields work. A character can hold multiple affiliations at once (e.g. a Konoha shinobi who is secretly also Root). This is distinct from reputation, which tracks how a faction feels about the player whether or not they're a member. When the player's most narratively important affiliation has a clear title, also reflect it in state_patch.position (e.g. "Leader of the Akatsuki") so it shows in their at-a-glance status badge.
 - Companions have independent motives and can refuse, leave, argue, bond, or pursue goals. Track them in companions and npc_memories.
 - Give every real companion a concrete personal goal in npc_memories[name].goal (and set recurring=true) as soon as they join, not only once the player happens to ask about it. This is what lets their own subplot advance and get reported even in scenes the player isn't part of — the application periodically checks each tracked goal's progress on its own and surfaces a turning point through the World Feed as independent movement, exactly like an NPC or faction clock. A companion with no tracked goal only ever exists when directly spoken to, which is the gap this closes.
@@ -711,4 +793,9 @@ NON-NEGOTIABLE RULES
 - Training gains depend on duration, intensity, recovery, talent, teacher/resources, current mastery, diminishing returns, and supplied dice results.
 - World events and canon timelines continue during skips unless prior player actions have changed them.
 {canon_clock_block}
+
+FINAL REMINDERS — the details most often missed under attention pressure earlier in this same list. Check these last, right before you finalize state_patch:
+- If the narrative describes money changing hands, currency.amount changed in this state_patch.
+- If the narrative describes the player taking a real wound, hp decreased in this state_patch.
+- If the narrative declares a quest/delivery/task finished, that quest's status is "complete" in this state_patch.
 - Return ONLY valid JSON. No markdown fences."""
