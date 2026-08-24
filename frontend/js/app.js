@@ -9,6 +9,18 @@ function escapeHtml(s) {
 }
 
 const CURRENCY_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.2 14.8c.4 1 1.5 1.7 2.8 1.7 1.7 0 2.8-.9 2.8-2s-1.1-1.7-2.8-2c-1.7-.3-2.8-.9-2.8-2s1.1-2 2.8-2c1.3 0 2.4.7 2.8 1.7"/><path d="M12 7.2v1.1M12 15.7v1.1"/></svg>';
+// Shops are only loosely specified in the GM prompt, so an inventory item's
+// price might be a plain number or free text like "50 Berries" — mirrors
+// backend systems.py's parse_price() so the Buy button only appears/enables
+// when the server-side purchase would actually succeed.
+function parsePriceClient(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
+  if (typeof value === "string") {
+    const m = value.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
+    if (m) return Math.max(0, Math.trunc(parseFloat(m[0])));
+  }
+  return null;
+}
 function currencyRowHtml(name, amount) {
   return `<div class="jrow currency-jrow"><i class="currency-icon">${CURRENCY_ICON_SVG}</i><b>${escapeHtml(amount)}</b> ${escapeHtml(name)}</div>`;
 }
@@ -393,8 +405,19 @@ function appendStoryEntries(entries) {
     // its own visible label — otherwise it silently reads as a continuation
     // of the previous event instead of a separate one.
     let lastWasUntitledNarrative = false;
+    // Purely mechanical/administrative notices (an undo confirmation, a
+    // stat-delta readout, "quest complete" bookkeeping) don't belong in the
+    // middle of the story being told — collected here and rendered as one
+    // collapsed strip at the end of the beat instead of a normal row, same
+    // idea as the roll pill below but for things with no single narrative
+    // line to attach to.
+    const metaEntries = [];
     run.entries.forEach((entry) => {
       const part = storyEntryParts(entry);
+      if (part.tag === "meta") {
+        metaEntries.push(part);
+        return;
+      }
       // A roll's numbers belong right next to the action they resolved, not
       // as their own separate row — attach as a compact inline pill onto
       // whatever action line immediately preceded it in this beat.
@@ -414,9 +437,17 @@ function appendStoryEntries(entries) {
       const label = document.createElement("div");
       label.className = "story-entry-label";
       label.textContent = part.label;
+      // bodyWrap (not body itself) is the grid's 2nd column — body keeps its
+      // exact class/role as the typeText/renderBoldedText target either way,
+      // but any richer beat extras below live as normal stacked children of
+      // bodyWrap instead of extra grid siblings, so they can never fight the
+      // label/body column placement no matter how many of them there are.
+      const bodyWrap = document.createElement("div");
+      bodyWrap.className = "story-entry-body";
       const body = document.createElement("div");
       body.className = "story-entry-copy";
-      div.append(label, body);
+      bodyWrap.appendChild(body);
+      div.append(label, bodyWrap);
       entriesWrap.appendChild(div);
       if (part.tag === "narrative" && APP.animationsEnabled) {
         typeText(body, part.body);
@@ -425,12 +456,55 @@ function appendStoryEntries(entries) {
       } else {
         body.textContent = part.body;
       }
+      // Only a dated multi-beat update carries this — a plain moment-to-
+      // moment turn's entry.detail (if any) is the roll-tooltip string
+      // handled above, never an object, so this can't misfire on those.
+      if (entry.detail && typeof entry.detail === "object") {
+        if (entry.detail.entities && entry.detail.entities.length) {
+          const chips = document.createElement("div");
+          chips.className = "story-entry-chips";
+          chips.innerHTML = entry.detail.entities.map((name) => `<span>${escapeHtml(name)}</span>`).join("");
+          bodyWrap.insertBefore(chips, body);
+        }
+        if (entry.detail.quote && entry.detail.quote.text) {
+          const quote = document.createElement("blockquote");
+          quote.className = "story-entry-quote";
+          quote.innerHTML = `<p>${escapeHtml(entry.detail.quote.text)}</p>` + (entry.detail.quote.speaker ? `<cite>— ${escapeHtml(entry.detail.quote.speaker)}</cite>` : "");
+          bodyWrap.appendChild(quote);
+        }
+        if (entry.detail.map_changes && entry.detail.map_changes.length) {
+          const details = document.createElement("details");
+          details.className = "story-entry-map-changes";
+          const n = entry.detail.map_changes.length;
+          details.innerHTML = `<summary>${n} Map Change${n === 1 ? "" : "s"}</summary><ul>${entry.detail.map_changes.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ul>`;
+          bodyWrap.appendChild(details);
+        }
+      }
       lastRow = div;
     });
+    if (metaEntries.length) {
+      const strip = document.createElement("details");
+      strip.className = "story-beat-system";
+      strip.innerHTML = `<summary>System (${metaEntries.length})</summary>` +
+        metaEntries.map((part) => `<div class="story-beat-system-row"><b>${escapeHtml(part.label)}</b><span>${escapeHtml(part.body)}</span></div>`).join("");
+      entriesWrap.appendChild(strip);
+    }
     feed.appendChild(beat);
   });
   pruneStoryFeed(feed);
   feed.scrollTop = feed.scrollHeight + 400;
+}
+
+// Loading a save stays fast on its own — this fires as an unawaited
+// follow-up right after, so the recap (if the real-world gap since the
+// save was written was long enough) lands a moment later instead of
+// blocking the load itself on an AI round trip.
+function maybeFetchReentryRecap(state) {
+  if (!state || !state._reentry_gap_hours) return;
+  apiPost("/api/reentry_recap", {}).then((res) => {
+    if (res.story && res.story.length) appendStoryEntries(res.story);
+    if (res.state) renderState(res.state);
+  }).catch(() => { /* best effort — a missed recap just means the world was silent this time */ });
 }
 
 function typeText(el, text) {
@@ -1597,7 +1671,7 @@ async function handleTurnResult(result, action) {
     return;
   }
   if (result.status === "impossible") {
-    appendStoryEntries([{ text: "[ACTION NOT POSSIBLE]\n" + result.reason, tag: "system" }]);
+    appendStoryEntries([{ text: "[ACTION NOT POSSIBLE]\n" + result.reason, tag: "meta" }]);
     return;
   }
   // While the event window is open, its own feed is the only place this
@@ -1867,7 +1941,7 @@ $("#btn-lethal-confirm").addEventListener("click", async () => {
 });
 $("#btn-lethal-cancel").addEventListener("click", () => {
   closeModal("modal-lethal");
-  appendStoryEntries([{ text: "[ACTION REVERTED]\nYou stop before committing to the lethal decision.", tag: "danger" }]);
+  appendStoryEntries([{ text: "[ACTION REVERTED]\nYou stop before committing to the lethal decision.", tag: "meta" }]);
   APP.pendingLethal = null;
 });
 
@@ -2083,21 +2157,27 @@ $("#btn-difficult-cancel").addEventListener("click", () => {
 $("#btn-difficult-timing").addEventListener("click", () => startChallenge("timing"));
 $("#btn-difficult-tactical").addEventListener("click", () => startChallenge("tactical"));
 
+// Each stage is a risk-tolerance choice, not a specific action — the check
+// title above these options already names the actual action (a jutsu, a
+// negotiation, a lockpick, whatever it is), so the options themselves stay
+// domain-neutral instead of forcing combat phrasing ("technique", "feint")
+// onto checks that aren't a fight at all, which used to read as a total
+// non sequitur against a social or stealth check.
 const TACTICAL_STAGES = [
-  { title: "Stage 1 — Read the situation", help: "Choose how to create an opening.", options: [
-    { label: "Study the opening", detail: "Steady information, modest payoff.", points: 18, volatility: 3 },
-    { label: "Exploit the environment", detail: "Better payoff if circumstances cooperate.", points: 22, volatility: 8 },
-    { label: "Seize the initiative", detail: "High reward with a serious swing.", points: 27, volatility: 17 },
+  { title: "Stage 1 — Opening", help: "Choose how cautiously to open.", options: [
+    { label: "Play it safe", detail: "Steady footing, modest payoff.", points: 18, volatility: 3 },
+    { label: "Take a calculated risk", detail: "Better payoff if it pans out.", points: 22, volatility: 8 },
+    { label: "Go all in", detail: "High reward with a serious swing.", points: 27, volatility: 17 },
   ]},
-  { title: "Stage 2 — Execute", help: "Choose how to commit your technique.", options: [
-    { label: "Precise technique", detail: "Reliable and resource-conscious.", points: 20, volatility: 4 },
-    { label: "Adaptive feint", detail: "Strong but dependent on reading the opposition.", points: 24, volatility: 10 },
-    { label: "Maximum output", detail: "Powerful, costly, and unstable.", points: 29, volatility: 19 },
+  { title: "Stage 2 — Commitment", help: "Choose how hard to commit.", options: [
+    { label: "Stay measured", detail: "Reliable and resource-conscious.", points: 20, volatility: 4 },
+    { label: "Push harder", detail: "Strong but dependent on things breaking your way.", points: 24, volatility: 10 },
+    { label: "Full commitment", detail: "Powerful, costly, and unstable.", points: 29, volatility: 19 },
   ]},
-  { title: "Stage 3 — Finish", help: "Decide how much certainty to trade for impact.", options: [
-    { label: "Secure the result", detail: "Protect what you have gained.", points: 17, volatility: 2 },
-    { label: "Press the advantage", detail: "Balanced risk and reward.", points: 23, volatility: 9 },
-    { label: "All or nothing", detail: "The largest possible swing.", points: 31, volatility: 24 },
+  { title: "Stage 3 — Close it out", help: "Decide how much certainty to trade for impact.", options: [
+    { label: "Lock in what you have", detail: "Protect what you've gained.", points: 17, volatility: 2 },
+    { label: "Press for more", detail: "Balanced risk and reward.", points: 23, volatility: 9 },
+    { label: "Everything on this", detail: "The largest possible swing.", points: 31, volatility: 24 },
   ]},
 ];
 
@@ -2445,18 +2525,103 @@ $("#btn-chat-send").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Power Summary — an instant, no-AI-call read of the character's current
+// standing: an estimated tier (mirrors worlds.py's POWER_TIERS, the same
+// ladder the Advisor anchors its own power comparisons to, so the two never
+// contradict each other), key stats, and titles. Deliberately does NOT
+// fabricate a comparison against named rivals — Worldwalker has no tracked
+// per-NPC power data to draw that from honestly, so that judgment call is
+// handed off to the Advisor instead, which has real campaign context.
+// ---------------------------------------------------------------------------
+const POWER_TIERS = [
+  [0, "Mundane", "An ordinary person with no combat training."],
+  [1, "Trained", "A capable fighter or specialist."],
+  [2, "Skilled", "A seasoned professional."],
+  [3, "Elite", "Among the best in a city or region."],
+  [4, "Exceptional", "A nationally recognized talent."],
+  [5, "Powerhouse", "Capable of single-handedly turning a battle."],
+  [6, "Superhuman", "Clearly beyond ordinary human limits."],
+  [7, "Legendary", "A living legend."],
+  [8, "World-Class", "Among the strongest beings in the setting."],
+  [9, "Cataclysmic", "Can reshape a region or end a war single-handedly."],
+  [10, "Reality-Bending", "Power that strains or breaks the setting's normal rules entirely."],
+];
+const POWER_TIER_THRESHOLDS = [20, 35, 50, 65, 80, 95, 110, 130, 160, 200];
+
+function estimatePowerTier(stats) {
+  const values = Object.values(stats || {}).map(Number).filter((n) => Number.isFinite(n));
+  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+  let index = 0;
+  for (const threshold of POWER_TIER_THRESHOLDS) { if (avg >= threshold) index++; else break; }
+  const [, name, description] = POWER_TIERS[index];
+  return { index, name, description, avg };
+}
+
+function openPowerSummary() {
+  const s = APP.state || {};
+  const tier = estimatePowerTier(s.stats);
+  const statRows = Object.entries(s.stats || {})
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .map(([name, value]) => {
+      const pct = Math.max(2, Math.min(100, Number(value) || 0));
+      return `<div class="power-stat-row"><i class="a-icon">${abilityIcon(name)}</i><span>${escapeHtml(name)}</span>
+        <div class="clock-track"><i style="width:${pct}%"></i></div><b>${escapeHtml(value)}</b></div>`;
+    }).join("") || '<div class="hint">No stats recorded yet.</div>';
+  const titles = (s.titles || []).map((t) => `<span class="power-title-chip">🏅 ${escapeHtml(titleLabel(t))}</span>`).join("");
+  $("#power-summary-body").innerHTML = `
+    <div class="power-summary-head">
+      <div><b>${escapeHtml(s.name || "Traveler")}</b><span>${escapeHtml(s.world || "")}${s.position ? ` · ${escapeHtml(s.position)}` : ""}</span></div>
+    </div>
+    <div class="power-tier-card">
+      <div class="power-tier-badge">Tier ${tier.index} · ${escapeHtml(tier.name)}</div>
+      <p>${escapeHtml(tier.description)}</p>
+      <small>Estimated from current stats, not an official ranking — ask the Advisor for a real read grounded in the campaign.</small>
+    </div>
+    <div class="power-stat-list">${statRows}</div>
+    ${titles ? `<div class="power-title-list">${titles}</div>` : ""}
+    <button id="btn-power-summary-ask-advisor" class="btn-ghost full">⚖ Ask the Advisor how you compare</button>
+  `;
+  $("#btn-power-summary-ask-advisor").addEventListener("click", () => {
+    closeModal("modal-power-summary");
+    closeModal("modal-journal");
+    openModal("modal-advisor");
+    askAdvisor("How strong am I compared to the threats and rivals around me right now?");
+  });
+  openModal("modal-power-summary");
+}
+
+// ---------------------------------------------------------------------------
 // Advisor — Pax Historia-style meta guide: power levels, world state, advice.
 // Out-of-character, no turn cost, no state changes. Responses are structured
 // (summary + bullet points + suggested follow-ups) rather than a text blob.
 // ---------------------------------------------------------------------------
+function renderAdvisorChart(chart) {
+  if (!chart || !chart.items || !chart.items.length) return "";
+  const max = Math.max(...chart.items.map((it) => Math.abs(it.value)), 1e-9);
+  const rows = chart.items.map((it) => {
+    const pct = Math.max(2, Math.abs(it.value) / max * 100);
+    const valueLabel = Number.isFinite(it.value) ? (Math.abs(it.value) >= 1000 ? it.value.toLocaleString() : String(it.value)) : "";
+    return `<div class="advisor-chart-row">
+      <div class="advisor-chart-label">${escapeHtml(it.label)}</div>
+      <div class="advisor-chart-track"><div class="advisor-chart-bar" style="width:${pct}%"></div></div>
+      <div class="advisor-chart-value">${escapeHtml(valueLabel)}</div>
+    </div>`;
+  }).join("");
+  return `<div class="advisor-chart">
+    <div class="advisor-chart-title">${escapeHtml(chart.title || "Comparison")}${chart.unit ? ` <span>(${escapeHtml(chart.unit)})</span>` : ""}</div>
+    ${rows}
+  </div>`;
+}
+
 function renderAdvisorMessage(m) {
   if (m.role === "player") {
     return `<div class="chat-msg outgoing"><div class="meta">You</div>${escapeHtml(m.text)}</div>`;
   }
   const points = (m.points || []).map((p) => `<li>${escapeHtml(p)}</li>`).join("");
   const countdown = m.canon_countdown?.label ? `<div class="advisor-countdown">⏳ ${escapeHtml(m.canon_countdown.label)}</div>` : "";
-  return `<div class="chat-msg incoming"><div class="meta">Advisor${m.fourth_wall ? " · FOURTH-WALL" : ""}</div>
+  return `<div class="chat-msg incoming advisor-msg"><div class="meta">Advisor${m.fourth_wall ? " · FOURTH-WALL" : ""}</div>
     <div class="advisor-msg-summary">${escapeHtml(m.summary || m.text || "...")}</div>
+    ${renderAdvisorChart(m.chart)}
     ${countdown}${points ? `<ul class="advisor-msg-points">${points}</ul>` : ""}
   </div>`;
 }
@@ -2561,7 +2726,8 @@ async function openJournal(tab) {
     const titleRows = titles.length
       ? titles.map((title) => `<div class="jrow">🏅 ${escapeHtml(titleLabel(title))}</div>`).join("")
       : '<div class="jrow hint">No titles earned yet.</div>';
-    panel.innerHTML = `<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+    panel.innerHTML = `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button><h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+    $("#btn-open-power-summary").addEventListener("click", openPowerSummary);
   } else if (tab === "achievements") {
     const achievements = data.achievements || [];
     const titles = data.titles || [];
@@ -2612,15 +2778,43 @@ async function openJournal(tab) {
     panel.innerHTML = `<div class="system-summary"><b>CHAPTER MEMORY</b><span>${chapters.length} consolidated chapters · ${daysIntoChapter}/90 days toward the next</span></div>` +
       (chapters.length ? chapters.map((chapter, index) => `<details class="quest-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(chapter.title || `Chapter ${chapter.number}`)} <small>— turns ${escapeHtml((chapter.turns || []).join("–"))}</small></summary><div class="quest-details"><p>${escapeHtml(chapter.summary || "")}</p><div class="quest-detail-label">Key decisions</div><ul>${(chapter.key_decisions || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul><div class="quest-detail-label">Lasting changes</div><ul>${(chapter.lasting_changes || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul><small>${escapeHtml(chapter.time_span || "")}</small></div></details>`).join("") : '<div class="jrow">A chapter is consolidated roughly every 3 in-game months, or sooner if a long stretch passes without much time advancing.</div>');
   } else if (tab === "clocks") {
-    const renderClocks = (title, clocks) => `<h3>${title}</h3>` + (Object.values(clocks || {}).length ? Object.values(clocks).map((clock) => `<article class="clock-row"><header><b>${escapeHtml(clock.name || "Unknown")}</b><span class="clock-status ${escapeHtml(clock.status || "active")}">${escapeHtml((clock.status || "active").replace(/_/g, " "))}</span></header><p>${escapeHtml(clock.goal || "Private agenda")}</p><div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(clock.progress || 0)))}%"></i></div><small>${escapeHtml(clock.progress || 0)} / ${escapeHtml(clock.threshold || 100)} · last moved ${escapeHtml(clock.last_update || "not yet")}</small>${clock.opponent ? `<small>⚔ Power ${escapeHtml(clock.power ?? 50)} vs ${escapeHtml(clock.opponent)}${clock.contested_location ? ` over ${escapeHtml(clock.contested_location)}` : ""}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No visible clocks yet. Important NPCs and factions gain clocks as they enter the campaign.</div>');
+    const renderClocks = (title, clocks) => `<h3>${title}</h3>` + (Object.values(clocks || {}).length ? Object.values(clocks).map((clock) => {
+      // mid_term_goal/core_ambition are optional depth beyond the one
+      // immediate_goal/goal line every clock already gets — most won't
+      // have them, same as the NPC relationship cards.
+      const layers = (clock.mid_term_goal ? `<p><b>Building toward:</b> ${escapeHtml(clock.mid_term_goal)}</p>` : "") +
+        (clock.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(clock.core_ambition)}</p>` : "");
+      return `<article class="clock-row"><header><b>${escapeHtml(clock.name || "Unknown")}</b><span class="clock-status ${escapeHtml(clock.status || "active")}">${escapeHtml((clock.status || "active").replace(/_/g, " "))}</span></header><p>${escapeHtml(clock.immediate_goal || clock.goal || "Private agenda")}</p>${layers}<div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(clock.progress || 0)))}%"></i></div><small>${escapeHtml(clock.progress || 0)} / ${escapeHtml(clock.threshold || 100)} · last moved ${escapeHtml(clock.last_update || "not yet")}</small>${clock.opponent ? `<small>⚔ Power ${escapeHtml(clock.power ?? 50)} vs ${escapeHtml(clock.opponent)}${clock.contested_location ? ` over ${escapeHtml(clock.contested_location)}` : ""}</small>` : ""}</article>`;
+    }).join("") : '<div class="jrow hint">No visible clocks yet. Important NPCs and factions gain clocks as they enter the campaign.</div>');
     panel.innerHTML = renderClocks("Faction agendas", data.faction_clocks) + renderClocks("NPC agendas", data.npc_clocks);
   } else if (tab === "relationships") {
     const people = data.relationships_view?.people || [];
     const factions = data.relationships_view?.factions || [];
     const affiliations = data.relationships_view?.affiliations || [];
+    const npcNetwork = data.relationships_view?.npc_network || [];
     panel.innerHTML = `<div class="system-summary"><b>RELATIONSHIPS &amp; FACTIONS</b><span>Trust is evidence, not automatic obedience.</span></div>` +
       `<h3>Affiliations — your rank and standing</h3>` + (affiliations.length ? affiliations.map((a) => `<div class="jrow affiliation-row${a.status && a.status !== "active" ? ` ${escapeHtml(a.status)}` : ""}"><b>${escapeHtml(a.rank || "Member")}</b> — ${escapeHtml(a.faction)}${a.status && a.status !== "active" ? `<span class="affiliation-status">${escapeHtml(a.status)}</span>` : ""}${a.joined ? `<br><small>Joined: ${escapeHtml(a.joined)}</small>` : ""}${a.notes ? `<br><small>${escapeHtml(a.notes)}</small>` : ""}</div>`).join("") : '<div class="jrow hint">Not formally affiliated with any group, alliance, or hierarchy yet.</div>') +
-      `<h3>People</h3>` + (people.length ? people.map((person) => `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p><p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}</div></details>`).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
+      `<h3>People</h3>` + (people.length ? people.map((person) => {
+        // mid_term_goal/core_ambition are optional depth beyond the one
+        // goal line every tracked NPC already gets — most won't have them,
+        // so the extra rows only render for characters the GM actually
+        // bothered to layer.
+        const layers = (person.mid_term_goal ? `<p><b>Building toward:</b> ${escapeHtml(person.mid_term_goal)}</p>` : "") +
+          (person.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(person.core_ambition)}</p>` : "");
+        return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}</div></details>`;
+      }).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
+      // NPCs relating to each other independent of the player — allies,
+      // rivals, grudges the GM has established between two named
+      // characters. This is the only place that data is actually visible;
+      // without it, tracked NPC-to-NPC dynamics would just be invisible
+      // bookkeeping the player has no way to see or reason about.
+      `<h3>NPC Network — how they relate to each other</h3>` + (npcNetwork.length ? npcNetwork.map((rel) => {
+        const negative = rel.strength < 0;
+        return `<div class="jrow npc-network-row"><b>${escapeHtml(rel.a)}</b> <span class="npc-network-type">${escapeHtml(rel.type)}</span> <b>${escapeHtml(rel.b)}</b>
+          <span class="npc-network-strength ${negative ? "negative" : "positive"}">${rel.strength > 0 ? "+" : ""}${escapeHtml(rel.strength)}</span>
+          ${rel.status && rel.status !== "active" ? `<span class="affiliation-status">${escapeHtml(rel.status)}</span>` : ""}
+          ${rel.note ? `<br><small>${escapeHtml(rel.note)}</small>` : ""}</div>`;
+      }).join("") : '<div class="jrow hint">No relationships between other characters have been established yet.</div>') +
       `<h3>Faction standing</h3>` + (factions.length ? factions.map((f) => `<div class="jrow"><b>${escapeHtml(f.name)}</b><br>${escapeHtml(typeof f.standing === "object" ? compactReadable(f.standing.label || f.standing.status || f.standing.score) : f.standing)}</div>`).join("") : '<div class="jrow hint">No faction reputation has been recorded.</div>');
   } else if (tab === "prerequisites") {
     const tracks = data.prerequisite_tracks || [];
@@ -2694,8 +2888,23 @@ async function openJournal(tab) {
     }
   } else if (tab === "shops") {
     const shops = data.shops || [];
-    panel.innerHTML = currencyRowHtml(data.currency.name, data.currency.amount) +
-      `<div class="jrow"><b>Local Commerce</b><br/>` + (shops.length ? shops.map((sh) => escapeHtml(typeof sh === "object" ? `${sh.name || "Shop"} — ${sh.type || "Merchant"}` : sh)).join("<br/>") : data.shop_types.map((t) => "? " + t).join("<br/>")) + `</div>` +
+    const currency = data.currency || { name: "Currency", amount: 0 };
+    const shopBlocks = shops.length ? shops.map((sh) => {
+      if (typeof sh !== "object" || !sh) return `<div class="jrow">${escapeHtml(sh)}</div>`;
+      const inventory = Array.isArray(sh.inventory) ? sh.inventory : (Array.isArray(sh.items) ? sh.items : []);
+      const itemRows = inventory.length ? inventory.map((it) => {
+        const itemObj = (it && typeof it === "object") ? it : { name: it };
+        const name = itemObj.name || itemObj.item || String(it);
+        const price = parsePriceClient(itemObj.price ?? itemObj.cost ?? itemObj.value);
+        const canAfford = price != null && currency.amount >= price;
+        const priceLabel = price != null ? `${price} ${escapeHtml(currency.name)}` : "price unclear";
+        return `<div class="shop-item-row"><span class="shop-item-name">${escapeHtml(name)}</span><span class="shop-item-price">${priceLabel}</span>` +
+          (price != null ? `<button type="button" class="shop-buy-btn" data-shop-buy="${escapeHtml(sh.name || "")}" data-shop-item="${escapeHtml(name)}"${canAfford ? "" : " disabled"}>Buy</button>` : "") +
+          `</div>`;
+      }).join("") : `<div class="shop-item-row muted">No priced inventory listed here yet.</div>`;
+      return `<div class="jrow shop-block"><b>${escapeHtml(sh.name || "Shop")}</b><small>${escapeHtml(sh.type || "Merchant")}</small>${itemRows}</div>`;
+    }).join("") : `<div class="jrow">${data.shop_types.map((t) => "? " + t).join("<br/>")}</div>`;
+    panel.innerHTML = currencyRowHtml(currency.name, currency.amount) + shopBlocks +
       `<div class="jrow"><b>Training Focus</b><br/>${data.training_options.map(escapeHtml).join(", ")}</div>` +
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
   } else if (tab === "map") {
@@ -2711,9 +2920,9 @@ async function openJournal(tab) {
     nodes.forEach((node) => {
       const dot = document.createElement("button");
       dot.type = "button";
-      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "");
+      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
       dot.style.left = node.x + "%"; dot.style.top = node.y + "%";
-      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}`;
+      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}${node.recently_changed ? " · Control recently changed" : ""}`;
       dot.setAttribute("data-map-node", node.name);
       dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.name)}</span>`;
       canvas.appendChild(dot);
@@ -2893,6 +3102,25 @@ $("#journal-panel").addEventListener("click", async (event) => {
     if (!input?.value.trim()) return;
     try { await apiPost("/api/quests/note", { name, note: input.value.trim() }); input.value = ""; showToast("Quest note saved.", "notify"); }
     catch (error) { showToast(error.message, "danger"); }
+    return;
+  }
+  const buyButton = event.target.closest("[data-shop-buy]");
+  if (buyButton) {
+    if (buyButton.disabled) return;
+    buyButton.disabled = true;
+    const shop = buyButton.getAttribute("data-shop-buy");
+    const item = buyButton.getAttribute("data-shop-item");
+    try {
+      const result = await apiPost("/api/shop/buy", { shop, item });
+      showToast(result.message, "notify");
+      const refreshed = await apiGet("/api/state");
+      APP.campaignActive = refreshed.campaign_active;
+      renderState(refreshed.state);
+      await openJournal("shops");
+    } catch (error) {
+      showToast(error.message, "danger");
+      buyButton.disabled = false;
+    }
     return;
   }
   const nodeButton = event.target.closest("[data-map-node]");
@@ -3372,10 +3600,11 @@ async function openLoadModal() {
         renderState(res.state);
         closeModal("modal-load");
         showToast(save.kind === "autosave" ? "Autosave recovered." : "Campaign loaded.", "notify");
+        maybeFetchReentryRecap(res.state);
       } catch (err) { showToast(err.message, "danger"); }
     });
     li.querySelector("[data-save-recover]")?.addEventListener("click", async () => {
-      try { const res = await apiPost("/api/save/recover", { name: save.id }); APP.campaignActive = true; $("#story-feed").innerHTML = ""; appendStoryEntries(res.story || []); renderState(res.state); closeModal("modal-load"); showToast("Campaign recovered from its newest autosave.", "notify"); }
+      try { const res = await apiPost("/api/save/recover", { name: save.id }); APP.campaignActive = true; $("#story-feed").innerHTML = ""; appendStoryEntries(res.story || []); renderState(res.state); closeModal("modal-load"); showToast("Campaign recovered from its newest autosave.", "notify"); maybeFetchReentryRecap(res.state); }
       catch (err) { showToast(err.message, "danger"); }
     });
     li.querySelector("[data-save-delete]").addEventListener("click", async () => {

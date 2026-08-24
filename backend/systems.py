@@ -34,9 +34,12 @@ WORLD_PROGRESSION_PRESETS = {
 
 
 WORLD_TERRITORIES = {
-    "One Piece": {"Shells Town": "Marines", "Loguetown": "Marines", "Enies Lobby": "World Government", "Sabaody": "World Government", "Arlong Park": "Pirates"},
+    "One Piece": {"Shells Town": "Marines", "Loguetown": "Marines", "Enies Lobby": "World Government", "Sabaody": "World Government", "Arlong Park": "Pirates",
+                  "Fishman Island": "Whitebeard Pirates", "Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates",
+                  "Marineford": "Marines", "Impel Down": "World Government"},
     "Hunter x Hunter": {"Hunter Exam Site": "Hunter Association", "Hunter Association HQ": "Hunter Association", "Meteor City": "Phantom Troupe", "Kukuroo Mountain": "Zoldyck Family", "Yorknew City": "Yorknew Mafia"},
-    "Naruto": {"Konohagakure": "Konohagakure", "Sunagakure": "Sunagakure", "Kirigakure": "Kirigakure", "Kumogakure": "Kumogakure", "Iwagakure": "Iwagakure"},
+    "Naruto": {"Konohagakure": "Konohagakure", "Sunagakure": "Sunagakure", "Kirigakure": "Kirigakure", "Kumogakure": "Kumogakure", "Iwagakure": "Iwagakure",
+               "Amegakure": "Amegakure", "Iron Country": "Iron Country"},
     "Solo Max-Level Newbie": {"Earth — Tower Entrance": "Players", "Floor 10": "Tower Administrators", "Floor 20": "Tower Administrators", "Floor 30": "Tower Administrators", "Floor 40": "Tower Administrators", "Floor 50+": "Tower Administrators"},
     "Overgeared": {"Winston": "Local Lords", "Titan": "Kingdom", "Saharan Empire": "Kingdom", "Reidan": "Guilds"},
     "Reincarnated as a Slime": {"Great Jura Forest": "Jura Forest Monsters", "Goblin Village": "Jura Forest Monsters", "Tempest": "Jura Forest Monsters", "Kingdom of Falmuth": "Kingdom of Falmuth", "Demon Lord's Domain": "Demon Lords"},
@@ -175,7 +178,7 @@ def tick_world_clocks(state, elapsed_minutes):
     npc_clocks = state.setdefault("npc_clocks", {})
     for name, memory in state.get("npc_memories", {}).items():
         if not isinstance(memory, dict): continue
-        goal = memory.get("goal") or memory.get("current_goal")
+        goal = memory.get("immediate_goal") or memory.get("goal") or memory.get("current_goal")
         nemesis = bool(memory.get("nemesis"))
         important = memory.get("recurring") or nemesis or str(memory.get("importance", "")).lower() in {"important", "major", "high"}
         if goal or important:
@@ -206,11 +209,16 @@ def tick_world_clocks(state, elapsed_minutes):
                 # ordinary "nothing to mechanically resolve yet" case.
                 if str(clock.get("opponent") or "").strip():
                     continue
+                # Same field-preference pattern as npc_memories' goal
+                # layering — a faction's immediate_goal (what it's actually
+                # doing right now) is what a turning point should describe,
+                # not the flat placeholder .goal every faction starts with.
+                current_goal = clock.get("immediate_goal") or clock.get("goal")
                 if clock.get("nemesis"):
                     events.append({"type": "world", "nemesis": True,
-                                    "message": f"⚠ {who}'s scheme has reached a breaking point: {clock.get('goal')}."})
+                                    "message": f"⚠ Word reaches you that {who}'s scheme has reached a breaking point: {current_goal}."})
                 else:
-                    events.append({"type": "world", "message": f"{who}'s agenda reached a turning point: {clock.get('goal')}."})
+                    events.append({"type": "world", "message": f"Somewhere beyond your own path, {who} has made real headway: {current_goal}."})
     events.extend(resolve_clock_conflicts(state))
     return events
 
@@ -374,17 +382,51 @@ def resolve_clock_conflicts(state):
             if loser_clock is not None and loser_coll is not None:
                 threshold = FACTION_DESTROYED_THRESHOLD if loser_coll == "faction_clocks" else NPC_DEFEATED_THRESHOLD
                 if loser_clock.get("power", 50) <= threshold and loser_clock.get("status") not in ("destroyed", "defeated"):
+                    protected = _is_canon_protected(state, loser_name, loser_coll)
                     if loser_coll == "faction_clocks":
-                        loser_clock["status"] = "destroyed"
-                        events.append({"type": "world", "conflict": True,
-                                        "message": f"[FACTION DESTROYED] {loser_name} has been effectively wiped out by {winner_name}."})
-                        events.extend(_collapse_faction(state, loser_name, winner_name))
+                        if protected:
+                            # A canon-major power can be battered without
+                            # being erased outright — an off-screen dice
+                            # roll destroying Konoha or the World Government
+                            # would break the setting's own premise, not
+                            # just this campaign's continuity. It survives,
+                            # weakened, instead of being wiped out.
+                            loser_clock["power"] = max(loser_clock.get("power", 0), threshold + 1)
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} has been badly weakened by {winner_name}, but holds on."})
+                        else:
+                            loser_clock["status"] = "destroyed"
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} has been effectively wiped out by {winner_name}."})
+                            events.extend(_collapse_faction(state, loser_name, winner_name))
                     else:
-                        loser_clock["status"] = "defeated"
-                        state.setdefault("npc_memories", {}).setdefault(loser_name, {})["status"] = "deceased"
-                        events.append({"type": "world", "conflict": True,
-                                        "message": f"[NPC LOST] {loser_name} has fallen, defeated by {winner_name}."})
+                        if protected:
+                            loser_clock["power"] = max(loser_clock.get("power", 0), threshold + 1)
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} barely survives {winner_name}'s assault, badly shaken."})
+                        else:
+                            loser_clock["status"] = "defeated"
+                            state.setdefault("npc_memories", {}).setdefault(loser_name, {})["status"] = "deceased"
+                            events.append({"type": "world", "conflict": True,
+                                            "message": f"{loser_name} has fallen, defeated by {winner_name}."})
     return events
+
+
+def _is_canon_protected(state, name, kind):
+    """A background/GM-declared conflict can weaken or displace a
+    canon-major power, but shouldn't casually erase one outright. Factions
+    are checked against this world's own known canon polities (the same
+    WORLD_TERRITORIES already used to seed the map's starting territory
+    colors) — cheap, reliable, no new authoring needed. NPCs have no
+    equivalent built-in roster reliable enough to check automatically, so
+    they're protected only when the GM has explicitly flagged them via
+    npc_memories[name].canon_protected — a scripted-to-matter-later figure
+    the GM knows about, not a guess this function can make on its own."""
+    if kind == "faction_clocks":
+        world = state.get("world", "")
+        return name in set(WORLD_TERRITORIES.get(world, {}).values())
+    memory = (state.get("npc_memories") or {}).get(name)
+    return isinstance(memory, dict) and bool(memory.get("canon_protected"))
 
 
 _LEADER_FATES = (("deceased", 0.25), ("captured", 0.40), ("exiled", 0.35))
@@ -442,7 +484,12 @@ def relationship_snapshot(state):
         rows.append({"name": name, "score": max(-100, min(100, score)), "label": str(label or "Unknown"),
                      "last_known_location": mem.get("last_known_location", "Unknown"), "knowledge": _list(mem.get("knows") or mem.get("knowledge")),
                      "promises": list(dict.fromkeys(map(str, promises)))[:20], "debts": list(dict.fromkeys(map(str, debts)))[:20],
-                     "goal": mem.get("goal") or mem.get("current_goal") or "Unknown", "contact": contacts.get(name, {}),
+                     "goal": mem.get("immediate_goal") or mem.get("goal") or mem.get("current_goal") or "Unknown", "contact": contacts.get(name, {}),
+                     # mid_term_goal/core_ambition are optional depth beyond the
+                     # single goal line every NPC already gets — only present
+                     # once the GM has actually bothered laying out this NPC's
+                     # longer arc, not backfilled for every minor character.
+                     "mid_term_goal": mem.get("mid_term_goal") or "", "core_ambition": mem.get("core_ambition") or "",
                      "nemesis": bool(mem.get("nemesis"))})
     affiliations = []
     for aff in state.get("affiliations", []):
@@ -453,8 +500,26 @@ def relationship_snapshot(state):
             "status": str(aff.get("status", "active") or "active"), "joined": str(aff.get("joined", "")),
             "notes": str(aff.get("notes", "")),
         })
+    npc_network = []
+    for key, rel in (state.get("npc_relationships") or {}).items():
+        if not isinstance(rel, dict):
+            continue
+        a, b = str(rel.get("a") or "").strip(), str(rel.get("b") or "").strip()
+        if not a or not b:
+            parts = str(key).split("::", 1)
+            a = a or (parts[0] if parts else "")
+            b = b or (parts[1] if len(parts) > 1 else "")
+        if not a or not b:
+            continue
+        try:
+            strength = max(-100, min(100, int(rel.get("strength", 0) or 0)))
+        except (TypeError, ValueError):
+            strength = 0
+        npc_network.append({"a": a, "b": b, "type": str(rel.get("type") or "unknown"),
+                             "strength": strength, "status": str(rel.get("status") or "active"),
+                             "note": str(rel.get("note") or "")})
     return {"people": rows, "factions": [{"name": name, "standing": value} for name, value in state.get("reputation", {}).items()],
-            "affiliations": affiliations}
+            "affiliations": affiliations, "npc_network": npc_network}
 
 
 def campaign_health(state):
@@ -548,6 +613,86 @@ def pacing_guidance(state):
     return ""
 
 
+# Shops are only loosely specified in the GM prompt ("populate shops with
+# name/type and plausible inventory/prices") — there's no strict schema, so
+# an inventory item might be a {name, price} dict, use "item"/"cost"/"value"
+# instead, or even just be a free-text string. This has to tolerate all of
+# that rather than assume one shape.
+_PRICE_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def parse_price(value):
+    """Pull a plausible non-negative integer price out of a loosely-typed
+    shop item field — a raw number, or free text like '50 Berries' or
+    'Price: 1,200'. Returns None when nothing usable is present."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return max(0, int(value))
+    if isinstance(value, str):
+        match = _PRICE_NUMBER_RE.search(value.replace(",", ""))
+        if match:
+            try:
+                return max(0, int(float(match.group(0))))
+            except ValueError:
+                return None
+    return None
+
+
+def _shop_item_name(item):
+    if isinstance(item, dict):
+        return str(item.get("name") or item.get("item") or "").strip()
+    return str(item).strip()
+
+
+def _shop_item_price(item):
+    if isinstance(item, dict):
+        for key in ("price", "cost", "value"):
+            if key in item:
+                price = parse_price(item[key])
+                if price is not None:
+                    return price
+        return None
+    return parse_price(item)
+
+
+def resolve_shop_purchase(state, shop_name, item_name):
+    """Deterministic buy: once a shop item has a real price, the arithmetic
+    of paying for it doesn't need an AI turn at all — this mutates state
+    in place and never touches the model, so there's no way for it to
+    produce the narrated-but-not-patched currency drift the continuity
+    detector (continuity.py) otherwise exists to catch after the fact.
+    Returns (ok, message, price_paid_or_None)."""
+    shops = state.get("shops") if isinstance(state.get("shops"), list) else []
+    shop = next((sh for sh in shops if isinstance(sh, dict)
+                 and str(sh.get("name", "")).strip().lower() == str(shop_name or "").strip().lower()), None)
+    if not shop:
+        return False, f"No shop named '{shop_name}' is known here.", None
+    inventory = shop.get("inventory") if isinstance(shop.get("inventory"), list) else (
+        shop.get("items") if isinstance(shop.get("items"), list) else [])
+    item = next((it for it in inventory if _shop_item_name(it).strip().lower() == str(item_name or "").strip().lower()), None)
+    if item is None:
+        return False, f"'{item_name}' isn't in {shop.get('name', shop_name)}'s current inventory.", None
+    price = _shop_item_price(item)
+    if price is None:
+        return False, f"'{item_name}' doesn't have a clear price and can't be bought this way.", None
+    currency = state.get("currency") if isinstance(state.get("currency"), dict) else {"name": "Currency", "amount": 0}
+    amount = currency.get("amount", 0)
+    if not isinstance(amount, (int, float)):
+        amount = 0
+    if amount < price:
+        return False, f"Not enough {currency.get('name', 'currency')} — {_shop_item_name(item)} costs {price}, you have {amount}.", None
+    currency["amount"] = amount - price
+    state["currency"] = currency
+    display_name = _shop_item_name(item)
+    state.setdefault("inventory", []).append({"name": display_name, "source": f"Bought from {shop.get('name', shop_name)}"})
+    if isinstance(item, dict) and isinstance(item.get("stock"), (int, float)):
+        item["stock"] = item["stock"] - 1
+        if item["stock"] <= 0:
+            inventory.remove(item)
+    return True, f"Bought {display_name} from {shop.get('name', shop_name)} for {price} {currency.get('name', 'currency')}.", price
+
+
 def _notable_individuals_for(state, place_name):
     """Best-effort cross-reference for the map's info panel: named people
     (not locations/factions/items) whose codex notes or last-known location
@@ -603,6 +748,7 @@ def map_snapshot(state, world_map, world):
         for location in _list(quest.get("locations")):
             quest_locations.setdefault(str(location).lower(), []).append(quest.get("name", "Quest"))
     scale = progression_preset_for(world).get("travel_scale", 1.0)
+    current_turn = int(state.get("turn", 0) or 0)
     nodes = []
     for name, x, y, kind, tier in full_map:
         distance = math.dist((float(current_node[1]), float(current_node[2])), (float(x), float(y)))
@@ -611,9 +757,15 @@ def map_snapshot(state, world_map, world):
         for loc, names in quest_locations.items():
             if loc in str(name).lower() or str(name).lower() in loc: quests.extend(names)
         detail = state.get("location_details", {}).get(name, {}) if isinstance(state.get("location_details", {}).get(name), dict) else {}
+        changed_turn = detail.get("controller_changed_turn")
+        # A window, not a one-shot flag, so the highlight survives across a
+        # couple of turns of the player just not happening to open the map
+        # the instant it changed — see update_continuity's territory diff.
+        recently_changed = isinstance(changed_turn, (int, float)) and (current_turn - int(changed_turn)) <= 3
         nodes.append({"name": name, "x": x, "y": y, "kind": kind, "tier": tier, "current": name == current_node[0],
                       "discovered": name in discovered or name == current_node[0], "travel_minutes": travel_minutes,
                       "controller": detail.get("controlling_faction") or detail.get("faction") or territories.get(name, "Unknown"),
                       "quests": list(dict.fromkeys(quests)), "notes": detail.get("notes") or detail.get("description") or "No additional local notes recorded.",
-                      "notable_individuals": _notable_individuals_for(state, name), "danger_level": str(detail.get("danger_level") or "")})
+                      "notable_individuals": _notable_individuals_for(state, name), "danger_level": str(detail.get("danger_level") or ""),
+                      "recently_changed": recently_changed})
     return {"nodes": nodes}

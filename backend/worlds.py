@@ -5,8 +5,34 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.30"
+APP_VERSION = "2.6.43"
 APP_NAME = "Worldwalker RPG"
+
+# A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
+# worlds natively use a numeric power scale (Naruto has jutsu/rank, One Piece
+# has bounty/Haki, Overgeared has level/class...), so this isn't shown to the
+# player or injected into any world's own fiction — it exists purely so the
+# Advisor's own power comparisons stay internally consistent turn to turn
+# instead of improvising a different ad-hoc scale every time it's asked,
+# and so a player-requested framing (DBZ power levels, whatever) has a
+# stable internal reference to translate from.
+POWER_TIERS = [
+    (0, "Mundane", "An ordinary person with no combat training."),
+    (1, "Trained", "A capable fighter or specialist — early-career adventurer, soldier, low-rank professional."),
+    (2, "Skilled", "A seasoned professional — veteran soldier, competent mage, respected local talent."),
+    (3, "Elite", "Among the best in a city or region — elite unit member, a minor noble house's champion."),
+    (4, "Exceptional", "A nationally recognized talent — famous hero, high-ranking officer, renowned specialist."),
+    (5, "Powerhouse", "Capable of single-handedly turning a battle — feared commander, master of their craft."),
+    (6, "Superhuman", "Clearly beyond ordinary human limits — genuinely supernatural strength, speed, or power."),
+    (7, "Legendary", "A living legend — decides the fate of nations, feared across a continent."),
+    (8, "World-Class", "Among the strongest beings in the setting — can threaten a nation alone."),
+    (9, "Cataclysmic", "Can reshape a region or end a war single-handedly."),
+    (10, "Reality-Bending", "Power that strains or breaks the setting's normal rules entirely."),
+]
+
+
+def power_tier_reference():
+    return "\n".join(f"{n}. {name} — {desc}" for n, name, desc in POWER_TIERS)
 
 DIFFICULTIES = {
     "Story": {"difficulty_shift": -15, "dc_shift": -3, "enemy_edge": -2, "death": "rare", "freedom": "very high",
@@ -117,17 +143,44 @@ WORLD_DATA = {
         "progression": ["Level","XP","Haki","Combat Style","Bounty","Crew","Reputation","Titles"],
         "rules": "Honor One Piece world logic. Islands and seas matter. Marines, pirates, kingdoms and crews pursue their own motives. Devil Fruits are unique. Haki requires plausible awakening/training. Bounties respond to notoriety and government threat assessment. Canon may diverge permanently.",
         "start": "Foosha Village",
-        "factions": {"Marines": 0, "World Government": 0, "Revolutionary Army": 0, "Pirates": 0},
+        # Yonko crews are this world's real polities, not just powerful
+        # individuals — canon-confirmed territory each: Big Mom rules Totto
+        # Land, Kaido conquered and rules Wano, Whitebeard formally placed
+        # Fishman Island under his protection. Seeded here (not just added
+        # to WORLD_TERRITORIES below) so they're live, tracked factions
+        # with their own clock from turn one — contactable, able to gain or
+        # lose ground, and protected from being casually wiped out by an
+        # off-screen dice roll — the same as Marines/World Government
+        # already were. The default campaign start (seven days before
+        # Foosha) is well before Marineford, so Whitebeard is alive and at
+        # full strength here, not a stale reference to a dead Yonko. Shanks
+        # has no single canon-confirmed home territory the way the other
+        # three do, so he's tracked as a faction without a matching map
+        # entry, same as Marines/World Government already are.
+        "factions": {"Marines": 0, "World Government": 0, "Revolutionary Army": 0, "Pirates": 0,
+                     "Whitebeard Pirates": 0, "Big Mom Pirates": 0, "Kaido's Beasts Pirates": 0, "Shanks' Red Hair Pirates": 0},
+        # Coordinates calibrated against a labeled canon-geography reference
+        # map (player-supplied, in assets/generated_maps/One_Piece.*) now
+        # used as this world's map background, the same treatment Naruto's
+        # map already got. Also fills in several major canon locations that
+        # UPCOMING CANON PRESSURES / CANON_TIMELINES already reference by
+        # name (Marineford, Impel Down, Drum Island, Thriller Bark, Zou) but
+        # that had no map node at all before — the vague catch-all "New
+        # World" region node is retired in favor of these concrete ones.
         "map": [
-            ("Foosha Village",12,70,"settlement",1), ("Goa Kingdom",20,64,"kingdom",2),
-            ("Shells Town",30,74,"marine",2), ("Orange Town",38,65,"settlement",2),
-            ("Syrup Village",46,73,"settlement",2), ("Baratie",56,63,"sea",3),
-            ("Arlong Park",68,72,"enemy",4), ("Loguetown",78,61,"city",4),
-            ("Reverse Mountain",86,51,"landmark",5), ("Whiskey Peak",72,42,"island",5),
-            ("Little Garden",61,35,"island",6), ("Alabasta",50,44,"kingdom",7),
-            ("Jaya",41,31,"island",7), ("Skypiea",38,17,"sky",8),
-            ("Water 7",29,32,"city",8), ("Enies Lobby",20,24,"government",9),
-            ("Sabaody",15,13,"archipelago",10), ("New World",78,17,"region",12)
+            ("Foosha Village",83,34,"settlement",1), ("Goa Kingdom",72,21,"kingdom",2),
+            ("Shells Town",87,31,"marine",2), ("Orange Town",66,24,"settlement",2),
+            ("Syrup Village",65,28,"settlement",2), ("Baratie",65,31,"sea",3),
+            ("Arlong Park",80,31,"enemy",4), ("Loguetown",57,37,"city",4),
+            ("Reverse Mountain",51,48,"landmark",5), ("Whiskey Peak",56,49,"island",5),
+            ("Little Garden",59,48,"island",6), ("Drum Island",66,48,"island",6),
+            ("Alabasta",69,50,"kingdom",7), ("Jaya",35,22,"island",7),
+            ("Skypiea",33,10,"sky",8), ("Water 7",75,49,"city",8),
+            ("Enies Lobby",81,48,"government",9), ("Thriller Bark",89,49,"island",9),
+            ("Sabaody",93,49,"archipelago",10), ("Zou",96,50,"island",10),
+            ("Fishman Island",51,62,"island",11), ("Impel Down",41,56,"prison",12),
+            ("Totto Land",15,49,"island",13), ("Marineford",45,54,"marine",13),
+            ("Wano Country",6,51,"nation",14)
         ],
         "special": {"Haki":{"Observation":0,"Armament":0,"Conqueror":0}, "Bounty":0, "Devil Fruit":"None", "Crew":"None"}
     },
@@ -154,7 +207,13 @@ WORLD_DATA = {
         "progression": ["Level","XP","Chakra","Jutsu","Rank","Village Reputation","Titles"],
         "rules": "Honor Naruto world logic. Chakra, elemental affinities, clan techniques, ranks, missions and village politics matter. Jutsu require training, inheritance, instruction or legitimate copying conditions. Powerful bloodlines are rare. Villages remember betrayal, service and classified knowledge.",
         "start": "Konohagakure",
-        "factions": {"Konohagakure":0,"Sunagakure":0,"Kirigakure":0,"Kumogakure":0,"Iwagakure":0},
+        # Amegakure and Iron Country are already on this world's own map
+        # below with their own sovereign governance in canon (Amegakure,
+        # Land of Iron's samurai under Mifune) — tracked the same as the
+        # five great villages instead of defaulting to "Unknown" on the map
+        # and being invisible as factions until the story happened to
+        # introduce them.
+        "factions": {"Konohagakure":0,"Sunagakure":0,"Kirigakure":0,"Kumogakure":0,"Iwagakure":0,"Amegakure":0,"Iron Country":0},
         # Coordinates calibrated against a manga-sourced "Naruto World" map
         # (player-supplied) now used as this world's map background — most
         # placements are the confirmed canon locations from that reference,
@@ -746,12 +805,13 @@ BASE_STATE = {
     "tower_floor":1,"tower_floor_deadline_day":None,"tower_over":False,"canon_event_engagement_count":0,"background_world_feed":[],
     "last_major_beat_day":None,"director_notes":"","simulation_scale":"Individual",
     "world_time":"Day 1 — Morning","status":[],"alive":True,"turn":0,"timeline":[],"special":{},
-    "canon_divergences":[],"campaign_canon":[],"world_events":[],"currency":{"name":"Currency","amount":250},"currencies":{},"npc_memories":{},"shops":[],"known_recipes":[],"training_log":[],"combat":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":6,"world_pack_id":"builtin","last_autosave":"","suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[]
+    "canon_divergences":[],"campaign_canon":[],"world_events":[],"currency":{"name":"Currency","amount":250},"currencies":{},"npc_memories":{},"npc_relationships":{},"shops":[],"known_recipes":[],"training_log":[],"combat":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":6,"world_pack_id":"builtin","last_autosave":"","suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[]
 }
 
 WORLD_EXPANSIONS = {
     "One Piece": {
         "currency":"Berries", "currency_baseline":5000,
+        "economy_notes":"Canon reference scale: a cheap meal or basic supplies run tens to low hundreds of Berries; a decent weapon or a few days' lodging is in the low thousands; a serious ship upgrade or rare item reaches the tens of thousands to low millions. Bounties (not liquid cash, but the setting's main power/wealth signal) scale from ~30,000,000 for a newly-dangerous rookie into the hundreds of millions for known threats, and Yonko-tier figures sit at 4,000,000,000+ Berries. A Yonko or a World Government-backed noble's actual liquid wealth is billions; an ordinary adventurer's is not — keep the player's own numbers grounded in their actual station even as the setting's upper end is enormous.",
         "origins":["East Blue Civilian","Island Martial Artist","Dockworker","Bounty-Hunter Trainee","Runaway Noble","Aspiring Pirate","Marine Recruit",
                    "Veteran Crew Member","Notorious Bounty-Head"],
         "archetypes":["Brawler","Swordsman","Marksman","Navigator","Shipwright","Medic","Roguish Fighter"],
@@ -763,6 +823,7 @@ WORLD_EXPANSIONS = {
     },
     "Hunter x Hunter": {
         "currency":"Jenny", "currency_baseline":3000,
+        "economy_notes":"Canon reference scale: Jenny tracks roughly 1:1 with real-world yen, so treat amounts like everyday yen prices — a meal or simple supplies run hundreds to a few thousand Jenny, ordinary lodging or gear in the low thousands to tens of thousands. Licensed Hunters receive major government stipends and access, worth a lifetime total in the billions — becoming a Hunter is itself treated as a life-changing financial event, not just a title. High-stakes rewards, auction items, and major bounties can reach into the hundreds of millions to billions of Jenny for the setting's biggest names.",
         "origins":["Yorknew Local","Rural Prodigy","Martial-Arts Student","Street Survivor","Merchant Family","Exam Aspirant",
                    "Licensed Hunter","Veteran Hunter"],
         "archetypes":["Martial Artist","Tracker","Strategist","Infiltrator","Medic","Treasure Hunter","Information Broker"],
@@ -774,6 +835,7 @@ WORLD_EXPANSIONS = {
     },
     "Naruto": {
         "currency":"Ryo", "currency_baseline":500,
+        "economy_notes":"Canon reference scale (databook mission pay): D-rank missions pay 5,000-50,000 Ryo, C-rank 30,000-100,000 Ryo, B-rank 80,000-200,000 Ryo — A-rank and S-rank scale well beyond that, into the hundreds of thousands to low millions for a village's most sensitive work. Everyday purchases (a meal, basic supplies, kunai/shuriken restock) run tens to a few hundred Ryo. A shinobi actively taking missions should see their Ryo move with real frequency; a genin's finances and a jonin's or a clan head's are entirely different scales.",
         "origins":["Civilian Academy Hopeful","Shinobi Clan Child","Orphan Trainee","Merchant Family","Border-Village Youth","Academy Graduate",
                    "Uchiha Clan Child","Iron Country Samurai-in-Training","Rogue Ninja (Missing-nin)","Anbu Root Recruit",
                    "Chunin on Active Duty","Jonin Squad Leader"],
@@ -786,6 +848,7 @@ WORLD_EXPANSIONS = {
     },
     "Solo Max-Level Newbie": {
         "currency":"Coins", "currency_baseline":300,
+        "economy_notes":"Tower/gamer-fiction economy: nominal numbers run much higher than a real-world equivalent — early floors deal in tens to low hundreds of Coins for basic gear and potions, but drops, clears, and player-market trades scale fast, reaching the thousands to tens of thousands by mid-tower and far beyond at high floors and for named/unique gear. A player actively clearing floors, selling drops, or completing floor quests should see Coins move often and in escalating amounts as they climb, not stay flat.",
         "origins":["Veteran Gamer","Competitive Raider","Puzzle Specialist","Martial Artist","Streamer","Ordinary Survivor","Elite Ranker"],
         "archetypes":["All-Rounder","Melee","Ranged","Caster","Assassin","Tank","Support"],
         "training":["Stat Optimization","Weapon Mastery","Mana Control","Skill Repetition","Boss Pattern Study","Hidden-Condition Research"],
@@ -796,6 +859,7 @@ WORLD_EXPANSIONS = {
     },
     "Overgeared": {
         "currency":"Gold", "currency_baseline":200,
+        "economy_notes":"Canon reference scale: this is a VRMMO economy with real, large numbers — basic potions/repairs/travel run single-to-low-double-digit Gold, decent crafted gear reaches the hundreds to low thousands, and a genuinely notable item or a solid raid/dungeon haul can be worth millions of Gold (canon examples: a single named weapon valued around 8,000,000 Gold; a guild's raid haul around 21,000,000 Gold). A crafter, trader, or active dungeon-clearer should see Gold swing by real, escalating amounts — a beginning adventurer's numbers and a renowned blacksmith's or top guild's are different orders of magnitude entirely.",
         "origins":["New Player","Crafter","Mercenary Player","Merchant","Blacksmith Apprentice","Quest Hunter","Veteran Adventurer","Renowned Craftsman"],
         "archetypes":["Warrior","Swordsman","Archer","Mage","Assassin","Blacksmith","Support"],
         "training":["Weapon Proficiency","Blacksmithing","Crafting","Skill Grinding","Stat Training","NPC Affinity"],
@@ -816,6 +880,7 @@ WORLD_EXPANSIONS = {
     },
     "Reincarnated as a Slime": {
         "currency":"Gold Coin", "currency_baseline":150,
+        "economy_notes":"Canon reference scale: one Gold Coin is worth roughly $1000 — most ordinary people never handle one directly, transacting instead in smaller silver/copper-equivalent amounts for daily life. Treat routine purchases (a meal, simple supplies, a night's lodging) as costing a small fraction of a Gold Coin or a handful at most; only real purchases — good gear, trade goods, services from a named merchant or nation — should move whole Gold Coins, and a large transaction (a guild/nation-level deal, rare materials, a significant commission) can run into the hundreds or thousands.",
         "origins":["Reincarnated Otherworlder","Native Monster","Isekai'd Human","Orphaned Demi-Human","Failed Hero Candidate","Displaced Noble",
                    "Veteran Tempest Officer","Named Monster of Renown"],
         "archetypes":["Brawler Monster","Skill Analyst","Elementalist","Beast-kin Warrior","Diplomat/Leader","Support/Healer","Assassin-type Monster"],

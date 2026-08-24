@@ -298,6 +298,12 @@ class PersistenceMixin:
             raise FileNotFoundError("No autosave recovery snapshot exists for that campaign.")
         return self.load("autosave/" + candidates[0].name)
 
+    # How long the player has to have actually been away before a "since you
+    # left" recap is worth generating — short reload-mid-session gaps (a
+    # crash recovery, switching saves to check something) shouldn't trigger
+    # an AI call just because the exact save timestamp is a few minutes old.
+    REENTRY_RECAP_THRESHOLD_HOURS = 4
+
     def load(self, name):
         p = self.save_path_for_id(name)
         b = json.loads(p.read_text(encoding="utf-8"))
@@ -315,4 +321,21 @@ class PersistenceMixin:
                 self.state["canon_time_minutes"] = day * 1440 + 480
                 self.state["canon_anchor"] = canon.get("anchor", "Before the main story")
             self.campaign_active = True
-        return self.public_state()
+            # Purely a real-world-clock signal, not in-game time — ordinary
+            # player inaction can never advance world_time/canon_day (that's
+            # a hard rule elsewhere), so "the world moves while I'm doing
+            # nothing" can only ever mean "while I was away from the app."
+            # Flagged here, generated on demand via generate_reentry_recap()
+            # so a plain load stays fast instead of blocking on an AI call.
+            saved_at = str(b.get("saved_at") or "").strip()
+            self._pending_reentry_hours = None
+            if saved_at:
+                try:
+                    gap_hours = (datetime.now() - datetime.fromisoformat(saved_at)).total_seconds() / 3600.0
+                    if gap_hours >= self.REENTRY_RECAP_THRESHOLD_HOURS:
+                        self._pending_reentry_hours = round(gap_hours, 1)
+                except ValueError:
+                    pass
+        result = self.public_state()
+        result["_reentry_gap_hours"] = self._pending_reentry_hours
+        return result

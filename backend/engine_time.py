@@ -506,11 +506,12 @@ class TimeSkipMixin:
                 "Each update should be decently detailed: normally 2-5 sentences with cause, immediate reaction, consequence, and any unresolved pressure.",
                 "Give every update its own canon_day so multi-day skips read as a dated sequence of beats, not one undated blob — like a history feed, not a single diary entry. A single day may reasonably contain more than one update when multiple things happen.",
                 "Bold the proper names of every character, faction, and named location the first time each appears within an update's narrative (e.g. **Kaito Moriyama**, **Hueco Mundo**), the way a wiki or timeline entry would — this is for readability, not emphasis of importance.",
+                "Fill in each update's map_changes only on the rare beat that actually shifts who controls a territory/settlement/map node, and quote only on the rare beat with a real, attributable spoken line worth surfacing on its own — both are empty on most updates, and forcing either in when nothing warrants it is worse than leaving them empty.",
                 "If simulating this period would put the player character in real physical danger — a fight, ambush, hazard, or confrontation with a real chance of injury or worse — always stop the skip immediately BEFORE that danger resolves, even if standing orders said to keep going; danger is never auto-resolved silently. Set interrupted=true, interruption_kind='danger', and phrase intervention_prompt as a choice between taking personal control of it now (dropping out of the skip to handle it turn by turn) or letting it be decided by a roll so the simulation can continue."
                 ,"End at a clear decision point. Preserve or reveal at least one actionable journey lead and return exactly 3 optional suggested actions grounded in current knowledge."
             ],
             "schema": {
-                "narrative": "brief overall summary used only as fallback", "updates": [{"sequence":"number", "type":"action|npc_reaction|faction_reaction|world_event|canon_event|interruption|consequence", "title":"specific short heading", "canon_day":"integer canon day this beat occurred on", "related_action":"queued action or empty", "narrative":"2-5 substantive sentences, proper nouns bolded with **double asterisks** on first mention", "why_it_matters":"one short plain sentence on the stakes, phrased the way a narrator would actually say it out loud, not a labeled report line", "player_knowledge":"one short plain sentence on what the character can verify, infer, or only heard as rumor, phrased the same natural way, or empty if nothing new", "next_pressure":"one short plain sentence naming the unresolved pressure, phrased the same natural way, or empty"}], "state_patch": "ALL persistent changes",
+                "narrative": "brief overall summary used only as fallback", "updates": [{"sequence":"number", "type":"action|npc_reaction|faction_reaction|world_event|canon_event|interruption|consequence", "title":"specific short heading", "canon_day":"integer canon day this beat occurred on", "related_action":"queued action or empty", "narrative":"2-5 substantive sentences, proper nouns bolded with **double asterisks** on first mention", "why_it_matters":"one short plain sentence on the stakes, phrased the way a narrator would actually say it out loud, not a labeled report line", "player_knowledge":"one short plain sentence on what the character can verify, infer, or only heard as rumor, phrased the same natural way, or empty if nothing new", "next_pressure":"one short plain sentence naming the unresolved pressure, phrased the same natural way, or empty", "map_changes": "empty list unless this SPECIFIC beat changed who controls/holds a territory, settlement, or map node — then a short list of what changed, e.g. 'The Empire of the End gains control of the Rift Node'. Most beats have none.", "quote": "empty unless this beat naturally includes one short, genuinely quotable spoken line — then {\"text\": the line, \"speaker\": who said it}. Use sparingly, only when a line actually lands; never invent dialogue just to fill this in."}], "state_patch": "ALL persistent changes",
                 "events": "system notifications", "timeline_events": "list of major events",
                 "elapsed": {"amount": "number", "unit": "same or sensible normalized unit"},
                 "interrupted": "boolean", "interruption_kind": "canon_event|goal_complete|world_event|danger|other or empty", "interruption_reason": "string or empty",
@@ -1002,9 +1003,36 @@ class TimeSkipMixin:
             apply_guarded_patch(self.state, patch, allow_time=False, source="continuity_correction")
         addendum = str(data.get("addendum", "")).strip()
         if addendum:
-            self.append("[CONTINUITY NOTE]\n" + addendum, "system")
+            self.append("[CONTINUITY NOTE]\n" + addendum, "meta")
         self.log("Continuity correction applied: " + "; ".join(new_warnings))
         return {"addendum": addendum, "patched": bool(patch)}
+
+    @staticmethod
+    def _beat_detail(update, narrative_text):
+        """Structured extras for a dated time-skip beat, riding along on the
+        story entry's existing free-form `detail` field: the entities the
+        GM already bolded (same convention the Codex-linking already reads),
+        plus the AI's own rare map_changes/quote flags — sanitized here so a
+        malformed or overzealous response can't reach the Chronicle UI. A
+        moment-to-moment single action never has canon_day set and never
+        reaches this at all, so richer per-day cards fall out naturally from
+        longer skips instead of needing a separate length check."""
+        entities = []
+        for name in re.findall(r"\*\*(.+?)\*\*", narrative_text):
+            name = name.strip()
+            if name and name not in entities:
+                entities.append(name)
+        map_changes = [ai_text(m) for m in (update.get("map_changes") or []) if ai_text(m)][:4]
+        quote = update.get("quote")
+        clean_quote = None
+        if isinstance(quote, dict):
+            text = ai_text(quote.get("text") or "")
+            speaker = ai_text(quote.get("speaker") or "")
+            if text:
+                clean_quote = {"text": text, "speaker": speaker}
+        if not entities and not map_changes and not clean_quote:
+            return None
+        return {"entities": entities[:6], "map_changes": map_changes, "quote": clean_quote}
 
     def apply_time_skip(self, data, requested_amount, requested_unit, progression_context=None):
         with self.lock:
@@ -1066,7 +1094,9 @@ class TimeSkipMixin:
                     canon_day = update.get("canon_day")
                     try: canon_day = int(canon_day) if canon_day is not None else None
                     except (TypeError, ValueError): canon_day = None
-                    self.append(f"[{title}]\n" + "\n\n".join(sections), "system" if update.get("type") != "action" else "narrative", canon_day=canon_day)
+                    body = "\n\n".join(sections)
+                    self.append(f"[{title}]\n" + body, "system" if update.get("type") != "action" else "narrative",
+                                canon_day=canon_day, detail=self._beat_detail(update, body))
             else:
                 self.append("[TIME SKIP]\n" + data.get("narrative", "Time passes."), "system")
             self.append_growth_deltas(before)
@@ -1103,9 +1133,18 @@ class TimeSkipMixin:
                 # independently of the player — same background-feed mirror
                 # as the canon catch-up backstop above.
                 self.state.setdefault("background_world_feed", []).append(message)
-                self.append("[WORLD CLOCK]\n" + event.get("message", "A distant agenda advances."), "system")
+                # These used to sit in the collapsed meta strip, tagged like
+                # an engine notice — but this is the one channel that makes
+                # the world visibly keep moving when the player isn't doing
+                # anything, and hiding it defeated that. Back in the main
+                # Chronicle as a real beat; the underlying message strings in
+                # systems.py were also reworded off "[BRACKETED] status
+                # report" phrasing into something closer to news reaching
+                # the player, since visible-but-still-robotic wouldn't have
+                # actually fixed the original complaint.
+                self.append("[ELSEWHERE]\n" + message, "system")
             for name in completed_quests:
-                self.append(f"[QUEST COMPLETE — {name}]\nAll required objectives have been completed.", "system")
+                self.append(f"[QUEST COMPLETE — {name}]\nAll required objectives have been completed.", "meta")
             notifications = self.notify(before, self.state, list(data.get("events", []) or []) + clock_events)
             if interrupted and data.get("interruption_kind") == "canon_event":
                 notifications.append({"message": "MAJOR CANON EVENT: " + data.get("interruption_reason", "A major canon event is unfolding."),
@@ -1125,7 +1164,7 @@ class TimeSkipMixin:
                 self.request_continuity_correction(new_warnings, data.get("narrative", ""))
             chapter = update_chapter_memory(before, self.state, "Advance: " + "; ".join(context.get("actions", [])), data.get("narrative", ""))
             if chapter:
-                self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "system")
+                self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
             self.archive_finished_quests()
             # A time skip can end the character's life just as surely as a
             # single action or a combat round can (a failed extreme-danger
@@ -1173,7 +1212,7 @@ class TimeSkipMixin:
             return
         if elapsed_minutes >= 1440:
             days_left = max(0, int(deadline - self.state.get("canon_day", 0)))
-            self.append(f"[TOWER COUNTDOWN]\n{days_left} day(s) remain before this floor's countdown reaches zero.", "system")
+            self.append(f"[TOWER COUNTDOWN]\n{days_left} day(s) remain before this floor's countdown reaches zero.", "meta")
         if self.state.get("canon_day", 0) >= deadline:
             self.state["tower_over"] = True
             self.state["alive"] = False

@@ -343,7 +343,7 @@ class TurnsMixin:
         self.upsert_prerequisite_track(assessment.get("prerequisite_track"))
         if assessment.get("impossible"):
             self.append("> " + str(action), "player")
-            self.append("[ACTION NOT POSSIBLE]\n" + assessment.get("reason", "Impossible under current conditions."), "system")
+            self.append("[ACTION NOT POSSIBLE]\n" + assessment.get("reason", "Impossible under current conditions."), "meta")
             self.autosave()
             return {"status": "impossible", "reason": assessment.get("reason", ""),
                     "action_explanation": self.action_explanation(action, assessment), "story": self._flush_story()}
@@ -516,7 +516,7 @@ Return ONLY valid JSON."""
                 continue
             lines.append(f"{label} {fmt(prior)}→{fmt(after_val)} (+{fmt(after_val - prior)})")
         if lines:
-            self.append("[GROWTH]\n" + "\n".join(lines), "growth")
+            self.append("[GROWTH]\n" + "\n".join(lines), "meta")
 
     def apply_resolution(self, data, is_opening=False, pending_action=None, progression_context=None):
         with self.lock:
@@ -542,14 +542,27 @@ Return ONLY valid JSON."""
                 self.append_growth_deltas(before)
             self.ensure_quest_briefings(before, pending_action or "")
             normalize_quest_state_machine(self.state)
+            prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, pending_action or ("campaign opening" if is_opening else ""), data.get("narrative", ""))
+            # apply_time_skip has always acted on these (see its own call to
+            # request_continuity_correction below); a regular single-action
+            # turn computed the exact same warnings but never did anything
+            # with them beyond returning them in the response, which nothing
+            # on the frontend even reads — a real transaction/state slip on
+            # an ordinary turn (the far more common turn type) silently went
+            # uncorrected forever. Same new-warnings-only diff as the skip
+            # path, so an already-known, still-unresolved warning doesn't
+            # trigger a fresh correction call on every subsequent turn.
+            new_warnings = [w for w in continuity_warnings if w not in prior_warnings]
+            if new_warnings:
+                self.request_continuity_correction(new_warnings, data.get("narrative", ""))
             self.archive_finished_quests()
             notifications = self.notify(before, self.state, data.get("events", []))
             if not is_opening:
                 self.history.append({"turn": self.state["turn"], "action": pending_action, "time": datetime.now().isoformat(timespec="seconds")})
                 chapter = update_chapter_memory(before, self.state, pending_action, data.get("narrative", ""))
                 if chapter:
-                    self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "system")
+                    self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
             self.autosave()
             died = False
             if self.state.get("hp", 1) <= 0 or not self.state.get("alive", True):
@@ -852,7 +865,7 @@ Return ONLY valid JSON."""
             msgs.append(position_msg)
         out = []
         for m in msgs:
-            tag = "danger" if "death" in m.lower() else "system"
+            tag = "danger" if "death" in m.lower() else "meta"
             self.append("[SYSTEM]\n" + m, tag)
             self.log(m)
             ml = m.lower()
@@ -880,7 +893,7 @@ Return ONLY valid JSON."""
                 return None
             self.state = self.checkpoints.pop()
             self.state["alive"] = True
-            self.append("[TIMELINE REWOUND]\nThe lethal action has been undone. You are back at the decision point.", "system")
+            self.append("[TIMELINE REWOUND]\nThe lethal action has been undone. You are back at the decision point.", "meta")
             self.autosave()
         return {"state": self.public_state(), "story": self._flush_story()}
 
@@ -890,7 +903,7 @@ Return ONLY valid JSON."""
                 return None
             self.state = self.checkpoints.pop()
             self.state["alive"] = True
-            self.append("[TURN REVERTED]\nThe last action has been undone.", "system")
+            self.append("[TURN REVERTED]\nThe last action has been undone.", "meta")
             self.autosave()
         return {"state": self.public_state(), "story": self._flush_story()}
 

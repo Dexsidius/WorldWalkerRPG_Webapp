@@ -1,7 +1,11 @@
 import copy
+import json
 import sys
+import tempfile
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -9,12 +13,13 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from game import GameSession
 from systems import (
-    campaign_health, map_snapshot, normalize_quest_state_machine,
-    normalize_tuning, tick_world_clocks, update_chapter_memory,
+    FACTION_DESTROYED_THRESHOLD, _is_canon_protected, campaign_health, map_snapshot, normalize_quest_state_machine,
+    normalize_tuning, relationship_snapshot, tick_world_clocks, update_chapter_memory,
+    parse_price, resolve_shop_purchase,
 )
 from continuity import update_continuity
 from state_guard import migrate_state
-from worlds import BASE_STATE, WORLD_DATA, abilities_for, format_calendar_date, timeline_for, expansion_for, start_options_for, starting_era_by_id
+from worlds import BASE_STATE, WORLD_DATA, abilities_for, format_calendar_date, timeline_for, expansion_for, start_options_for, starting_era_by_id, power_tier_reference
 
 
 class PlanningAI:
@@ -67,6 +72,54 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertTrue(result["major_event_reached"])
         self.assertFalse(result["interrupted"])
         self.assertEqual(result["intervention_prompt"], "")
+
+    def test_time_skip_beats_carry_chip_map_change_and_quote_detail(self):
+        # Pax Historia-style dense feed: a multi-day skip's dated beats
+        # should carry enough structured extra to render as a rich card
+        # (entity chips, a rare map-control change, a rare pull-quote)
+        # instead of a plain paragraph — but only when the AI actually
+        # supplied them, and derived from the same **bolded** convention
+        # already used for Codex linking, not a separate AI field, so it
+        # can never drift out of sync with what the prose actually bolds.
+        class RichBeatAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                if payload["task"] == "assess_time_skip":
+                    return {"checks": [], "reachable_actions": payload["planned_actions"], "deferred_actions": []}
+                return {
+                    "narrative": "The week unfolds.",
+                    "updates": [
+                        {"sequence": 1, "type": "faction_reaction", "title": "Dawn of the Shadow Multiverse",
+                         "canon_day": 3, "narrative": "**Shizuno** stands with the **Empire of the End** as the **Spire of Infinity** stabilizes a bridge to **Reality-701**.",
+                         "why_it_matters": "", "player_knowledge": "", "next_pressure": "",
+                         "map_changes": ["The Empire of the End gains a foothold in Reality-701", "  "],
+                         "quote": {"text": "The first bridge is stable.", "speaker": "Solomon"}},
+                        {"sequence": 2, "type": "world_event", "title": "Quiet Day", "canon_day": 4,
+                         "narrative": "Little of note happens.", "why_it_matters": "", "player_knowledge": "", "next_pressure": ""},
+                    ],
+                    "state_patch": {}, "events": [], "timeline_events": [], "elapsed": {"amount": 7, "unit": "days"},
+                    "interrupted": False, "completed_actions": [], "deferred_actions": [],
+                    "major_event_reached": False, "major_event_kind": "", "major_event_title": "",
+                    "suggested_actions": ["Continue", "Rest", "Investigate"],
+                }
+
+        game = self.fresh("Reincarnated as a Slime")
+        game.ai = RichBeatAI()
+        assessed = game.assess_time_skip(7, "days", "Let the week play out", "normal")
+        result = game.run_time_skip(assessed["amount"], assessed["unit"], assessed["orders"], "normal", assessed["assessment"])
+        story = result["story"]
+
+        rich = next(e for e in story if "DAWN OF THE SHADOW MULTIVERSE" in e["text"])
+        self.assertEqual(rich["canon_day"], 3)
+        self.assertEqual(set(rich["detail"]["entities"]), {"Shizuno", "Empire of the End", "Spire of Infinity", "Reality-701"})
+        # A blank/whitespace-only entry is dropped rather than showing up as
+        # an empty line in the map-changes list.
+        self.assertEqual(rich["detail"]["map_changes"], ["The Empire of the End gains a foothold in Reality-701"])
+        self.assertEqual(rich["detail"]["quote"], {"text": "The first bridge is stable.", "speaker": "Solomon"})
+
+        # A beat with no bolded names, no map change, and no quote carries
+        # no detail at all — the plain-paragraph rendering it already had.
+        quiet = next(e for e in story if "QUIET DAY" in e["text"])
+        self.assertIsNone(quiet.get("detail"))
 
     def test_minigame_roll_can_replace_a_regular_check(self):
         game = self.fresh()
@@ -742,6 +795,23 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn('.col-center{ order:2;', css)
         self.assertIn('LAN_MODE = "--lan" in sys.argv', launcher)
         self.assertIn('url.pathname.startsWith("/api/")', service_worker)
+        # webview.start(debug=True) was only ever meant to be temporary, for
+        # diagnosing the Godot black-square bug with real console access —
+        # that bug is fixed and confirmed (v2.6.29+), so DevTools access
+        # should not still be exposed in a shipped build.
+        self.assertIn("webview.start()", launcher)
+        self.assertNotIn("debug=True", launcher)
+
+    def test_sidebar_time_row_wraps_instead_of_clipping_the_advance_button(self):
+        # A real report: selecting days/weeks/months reveals the amount
+        # input alongside the unit dropdown and ADVANCE button in the same
+        # narrow sidebar row — three items' combined min-content width
+        # exceeds the column's width at plenty of ordinary desktop sizes
+        # (not just the small-screen breakpoint), and flex items refuse to
+        # shrink past their own min-content by default, so the row silently
+        # overflowed and clipped the button instead of ever squeezing it.
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".time-row{ display:flex; flex-wrap:wrap;", css)
 
     def test_service_worker_clones_the_response_before_any_async_gap(self):
         # Cloning a Response inside a `caches.open(...).then(...)` callback
@@ -1335,7 +1405,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         game.run_time_skip(assessed["amount"], assessed["unit"], assessed["orders"], "normal", assessed["assessment"])
         feed = game.state.get("background_world_feed", [])
         self.assertEqual(len(feed), 1)
-        self.assertIn("Rival's agenda reached a turning point", feed[0])
+        self.assertIn("Rival has made real headway", feed[0])
         self.assertIn(feed[0], game.state.get("world_events", []))
 
     def test_clock_turning_point_names_fall_back_to_dict_key(self):
@@ -1348,7 +1418,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
                  "npc_memories": {}, "world_time": "Day 1"}
         events = tick_world_clocks(state, 1440)
         self.assertEqual(len(events), 1)
-        self.assertTrue(events[0]["message"].startswith("Rival's agenda"))
+        self.assertIn("Rival has made real headway", events[0]["message"])
 
     def test_tension_level_reads_hp_combat_and_deadlines(self):
         from systems import tension_level
@@ -1456,7 +1526,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
             events = tick_world_clocks(state, 1440)
         messages = [e["message"] for e in events]
         self.assertTrue(any("Leaf has triumphed over Sand" in m for m in messages))
-        self.assertTrue(any(m.startswith("[FACTION DESTROYED] Sand") for m in messages))
+        self.assertTrue(any(m.startswith("Sand has been effectively wiped out") for m in messages))
         self.assertEqual(state["location_details"]["Border Fort"]["controlling_faction"], "Leaf")
         self.assertEqual(state["faction_clocks"]["Sand"]["status"], "destroyed")
         self.assertEqual(state["faction_clocks"]["Leaf"]["status"], "active")
@@ -1474,7 +1544,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         with patch("systems.random.random", return_value=1.0):  # guarantees the actor loses
             events = tick_world_clocks(state, 1440)
         messages = [e["message"] for e in events]
-        self.assertTrue(any(m.startswith("[NPC LOST] Rogue Ninja") for m in messages))
+        self.assertTrue(any(m.startswith("Rogue Ninja has fallen") for m in messages))
         self.assertEqual(state["npc_clocks"]["Rogue Ninja"]["status"], "defeated")
         self.assertEqual(state["npc_memories"]["Rogue Ninja"]["status"], "deceased")
 
@@ -1813,6 +1883,91 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertEqual(long_call["max_output_tokens"], 1000)
         self.assertNotEqual(long_call["schema"]["points"], [])
 
+    def test_advisor_speaks_like_a_dm_and_resolves_untracked_questions_from_canon(self):
+        # The Advisor used to default to a dry "Pax-Historia-style briefing"
+        # report voice for anything but rules questions, and hedged on
+        # anything not explicitly in tracked state instead of reasoning from
+        # this world's canon at the current timeline point — a real
+        # complaint, since most interesting questions ("what's Itachi up to
+        # right now?") are about things the player hasn't personally tracked.
+        class RecordingAdvisorAI:
+            def __init__(self):
+                self.payload = None
+                self.rules = None
+
+            def request(self, rules, payload, max_output_tokens=0):
+                self.rules = rules
+                self.payload = payload
+                return {"summary": "Test.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = RecordingAdvisorAI()
+        game.state["canon_divergences"] = [{"turn": 3, "text": "Mizuki was arrested before he could steal the scroll."}]
+
+        game.ask_advisor("What's Itachi been doing lately, and is that still true given how my campaign has gone?")
+
+        self.assertIn("like a DM answering a question at the table", game.ai.rules)
+        self.assertIn("don't deflect", game.ai.rules)
+        self.assertIn("canon_divergences", game.ai.rules)
+        self.assertEqual(game.ai.payload["canon_divergences"], game.state["canon_divergences"])
+
+    def test_advisor_chart_is_sanitized_and_capped(self):
+        class ChartAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                return {
+                    "summary": "Here's how you compare.",
+                    "points": [], "follow_ups": [],
+                    "chart": {
+                        "title": "Power Levels", "unit": "DBZ Power Level",
+                        "items": [
+                            {"label": "You", "value": 9001},
+                            {"label": "Rival", "value": "not a number"},
+                            {"label": "", "value": 500},
+                            {"label": "Bystander", "value": 12},
+                        ] + [{"label": f"Extra {i}", "value": i} for i in range(10)],
+                    },
+                }
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = ChartAI()
+        result = game.ask_advisor("Graph my power level against the others in DBZ terms.")
+        chart = result["entry"]["chart"]
+        self.assertEqual(chart["title"], "Power Levels")
+        self.assertEqual(chart["unit"], "DBZ Power Level")
+        # The non-numeric and empty-label entries are dropped, and the list
+        # is capped at 8 even though the model sent more.
+        self.assertLessEqual(len(chart["items"]), 8)
+        self.assertIn({"label": "You", "value": 9001.0}, chart["items"])
+        self.assertNotIn("Rival", [it["label"] for it in chart["items"]])
+
+    def test_advisor_chart_absent_when_ai_returns_nothing_or_garbage(self):
+        class NoChartAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                return {"summary": "Plain answer, no chart.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = NoChartAI()
+        result = game.ask_advisor("How strong am I?")
+        self.assertIsNone(result["entry"]["chart"])
+
+    def test_advisor_wording_requesting_a_graph_flags_the_ai_call(self):
+        class RecordingAdvisorAI:
+            def __init__(self):
+                self.rules = None
+
+            def request(self, rules, payload, max_output_tokens=0):
+                self.rules = rules
+                return {"summary": "Test.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        game.ai = RecordingAdvisorAI()
+        game.ask_advisor("Can you chart my power level versus the others?")
+        self.assertIn("WORDING SUGGESTS THEY WANT A VISUAL", game.ai.rules)
+
     def test_gm_rules_stays_cache_friendly_across_a_canon_day_change(self):
         # gm_rules() is resent in full on every single AI call. canon_day
         # changes on nearly every time skip, so if anything volatile sits
@@ -2106,6 +2261,602 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # generated text instead of the real last action.
         self.assertNotIn("lastAction = text", wait_handler)
         self.assertNotIn("lastAction =", wait_handler)
+
+    def test_administrative_notices_are_tagged_meta_not_system(self):
+        # A real complaint: the Chronicle mixed real story prose with
+        # bracket-labeled bookkeeping (stat deltas, undo confirmations,
+        # "quest complete" notices) that reads as pure UI chrome, not
+        # narration. Those specific notices now use a distinct "meta" tag
+        # so the frontend can collapse them into a separate strip instead
+        # of interrupting the story — while genuinely narrative content
+        # that merely happens to carry a "system"-styled label (a dated
+        # time-skip beat, a canon-timeline note, a quest briefing) is
+        # untouched and stays tagged "system", not swept up by mistake.
+        game = self.fresh("Naruto")
+
+        # Stat growth: a real story delta but a purely mechanical readout.
+        before = copy.deepcopy(game.state)
+        game.state["stats"]["Taijutsu"] += 2
+        game.append_growth_deltas(before)
+        self.assertEqual(game.story_log[-1]["tag"], "meta")
+        self.assertTrue(game.story_log[-1]["text"].startswith("[GROWTH]"))
+
+        # notify(): a non-death mechanical readout goes to meta, but a
+        # death-related one keeps its "danger" tag — that one is a real,
+        # urgent story beat, not administrative noise.
+        b, a = copy.deepcopy(game.state), copy.deepcopy(game.state)
+        a["xp"] = b.get("xp", 0) + 1
+        game.notify(b, a, [])
+        self.assertEqual(game.story_log[-1]["tag"], "meta")
+        game.notify(b, a, [{"message": "A quiet death passes unnoticed nearby."}])
+        self.assertEqual(game.story_log[-1]["tag"], "danger")
+
+        # These next three flush story_log as part of their own return
+        # value (the same mechanism the API layer relies on), so the tag
+        # has to be checked on what they returned, not on story_log after
+        # the call — it's already been drained back to empty by then.
+        result = game.take_turn("Fly to the moon barehanded", cached_assessment={"impossible": True, "reason": "No known ability grants flight."})
+        self.assertEqual(result["story"][-1]["tag"], "meta")
+        self.assertTrue(result["story"][-1]["text"].startswith("[ACTION NOT POSSIBLE]"))
+
+        game.checkpoints.append(copy.deepcopy(game.state))
+        result = game.undo()
+        self.assertEqual(result["story"][-1]["tag"], "meta")
+        self.assertTrue(result["story"][-1]["text"].startswith("[TURN REVERTED]"))
+
+        game.checkpoints.append(copy.deepcopy(game.state))
+        result = game.rewind_death()
+        self.assertEqual(result["story"][-1]["tag"], "meta")
+        self.assertTrue(result["story"][-1]["text"].startswith("[TIMELINE REWOUND]"))
+
+    def test_quest_briefing_and_canon_notes_keep_their_system_tag(self):
+        # These carry real, actionable narrative content (a quest's actual
+        # objective/first step, a canon-timeline event's description) —
+        # unlike the bookkeeping notices above, hiding these in a collapsed
+        # strip would risk the player missing something they need, so they
+        # must NOT have been swept into the "meta" retagging.
+        source = (ROOT / "backend" / "engine_time.py").read_text(encoding="utf-8")
+        self.assertIn('"tag": "canon_event" if major else "system"', source)
+        self.assertIn('pending_appends.append({"text": "[SCHEDULED EVENT]\\n" + detail, "tag": "system"', source)
+        turns_source = (ROOT / "backend" / "engine_turns.py").read_text(encoding="utf-8")
+        start = turns_source.index("[QUEST STARTED")
+        self.assertIn('"system"', turns_source[start:start + 500])
+
+    def test_chronicle_collapses_meta_entries_into_a_system_strip(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('if (part.tag === "meta") {', js)
+        self.assertIn("metaEntries.push(part)", js)
+        self.assertIn('strip.className = "story-beat-system"', js)
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".story-beat-system{", css)
+
+    def test_advisor_anchors_power_comparisons_to_a_stable_tier_reference(self):
+        # Without a fixed reference, the Advisor previously improvised a
+        # different power scale every time it was asked — fine for a single
+        # answer, but inconsistent across a conversation (a rival placed at
+        # "elite" one question could read as "legendary" the next with
+        # nothing in the world having changed). The ladder is baked into
+        # every advisor call so its own sense of "how strong is strong"
+        # stays fixed for a given campaign.
+        class RecordingAdvisorAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                self.rules = rules
+                return {"summary": "Test.", "points": [], "follow_ups": []}
+
+        game = self.fresh("Naruto")
+        game.settings["model"] = "test-model"
+        ai = RecordingAdvisorAI()
+        game.ai = ai
+        game.ask_advisor("How strong am I compared to the Akatsuki?")
+        self.assertIn("Mundane", ai.rules)
+        self.assertIn("Reality-Bending", ai.rules)
+        self.assertIn("stay consistent with that placement", ai.rules)
+
+    def test_npc_goal_layers_feed_clocks_and_relationship_view(self):
+        # Optional depth beyond the single .goal line every tracked NPC
+        # already gets: immediate/mid-term/core-ambition. The clock
+        # mechanism should prefer the concrete immediate_goal over the
+        # older single-field goal when both are present (it's the more
+        # specific, more actionable one), and the relationship view should
+        # surface all three layers so the player can actually see them.
+        game = self.fresh("Naruto")
+        game.state["npc_memories"]["Itachi"] = {
+            "goal": "Watch over the village from the shadows",
+            "immediate_goal": "Recover a stolen scroll before it reaches Orochimaru",
+            "mid_term_goal": "Dismantle the Akatsuki from within",
+            "core_ambition": "Protect Sasuke without him ever knowing",
+            "recurring": True,
+        }
+        tick_world_clocks(game.state, 1440)
+        self.assertIn("Recover a stolen scroll before it reaches Orochimaru", game.state["npc_clocks"]["Itachi"]["goal"])
+
+        view = relationship_snapshot(game.state)
+        itachi = next(p for p in view["people"] if p["name"] == "Itachi")
+        self.assertEqual(itachi["goal"], "Recover a stolen scroll before it reaches Orochimaru")
+        self.assertEqual(itachi["mid_term_goal"], "Dismantle the Akatsuki from within")
+        self.assertEqual(itachi["core_ambition"], "Protect Sasuke without him ever knowing")
+
+        # An NPC with only the legacy single goal field still works exactly
+        # as before — the new layers are additive, not required.
+        game.state["npc_memories"]["Iruka"] = {"goal": "Keep the Academy running smoothly", "recurring": True}
+        view2 = relationship_snapshot(game.state)
+        iruka = next(p for p in view2["people"] if p["name"] == "Iruka")
+        self.assertEqual(iruka["goal"], "Keep the Academy running smoothly")
+        self.assertEqual(iruka["mid_term_goal"], "")
+        self.assertEqual(iruka["core_ambition"], "")
+
+    def test_gm_rules_document_the_optional_goal_layers(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("immediate_goal", rules)
+        self.assertIn("mid_term_goal", rules)
+        self.assertIn("core_ambition", rules)
+
+    def test_relationship_card_shows_goal_layers_when_present(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("person.mid_term_goal", js)
+        self.assertIn("person.core_ambition", js)
+        self.assertIn("Building toward:", js)
+        self.assertIn("Deep down wants:", js)
+
+    def test_continuity_flags_a_purchase_that_never_touched_currency(self):
+        # A real player report: buying something in the narrative repeatedly
+        # left currency.amount untouched. The GM prompt already said
+        # currency "must change with every transaction" — prose alone
+        # wasn't enough, so this catches the mismatch mechanically after
+        # the fact instead of just trusting the instruction was followed.
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Buy kunai", "You buy a fresh set of kunai from the weapons shop, handing over a stack of Ryo to the merchant.")
+        self.assertTrue(any("currency.amount" in w and "did not decrease" in w for w in warnings))
+
+    def test_continuity_flags_a_payment_that_never_touched_currency(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Complete the escort mission", "The client thanks you and pays your fee in full before you part ways.")
+        self.assertTrue(any("did not increase" in w for w in warnings))
+
+    def test_continuity_does_not_flag_a_declined_or_unrelated_purchase(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["currency"] = {"name": "Ryo", "amount": 500}
+        after = copy.deepcopy(before)
+        # Declined purchase: no real transaction happened, so no warning.
+        warnings = update_continuity(before, after, "Browse the shop", "You look over the shop's wares but decide the asking price in Ryo is too expensive and walk away.")
+        self.assertFalse(any("currency.amount" in w for w in warnings))
+        # An actual currency change present: nothing to flag either way.
+        after2 = copy.deepcopy(before)
+        after2["currency"]["amount"] = 400
+        warnings2 = update_continuity(before, after2, "Buy kunai", "You buy a fresh set of kunai, handing over a stack of Ryo.")
+        self.assertFalse(any("currency.amount" in w for w in warnings2))
+
+    def test_continuity_flags_a_described_wound_that_never_touched_hp(self):
+        # Same shape of bug as the currency one: the narrative clearly
+        # wounds the player but hp is left untouched.
+        before = copy.deepcopy(BASE_STATE)
+        before["hp"], before["hp_max"] = 80, 100
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Press the attack", "The blade cuts into you before you can react, and you stagger back bleeding.")
+        self.assertTrue(any("hp" in w and "did not decrease" in w for w in warnings))
+
+    def test_continuity_does_not_flag_a_dodged_or_npc_wound(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["hp"], before["hp_max"] = 80, 100
+        after = copy.deepcopy(before)
+        # Wound language present ("wounds you") but paired with a clean deflection: no warning.
+        warnings = update_continuity(before, after, "Deflect the strike", "The strike wounds you at first glance, but you shrug it off completely, barely a scratch.")
+        self.assertFalse(any("did not decrease" in w for w in warnings))
+        # Wound language describing an NPC, not the player: no warning.
+        after2 = copy.deepcopy(before)
+        warnings2 = update_continuity(before, after2, "Attack the bandit", "Your blade cuts deep into the bandit's arm and he collapses, bleeding.")
+        self.assertFalse(any("did not decrease" in w for w in warnings2))
+        # hp actually dropped: nothing to flag.
+        after3 = copy.deepcopy(before)
+        after3["hp"] = 60
+        warnings3 = update_continuity(before, after3, "Press the attack", "The blade cuts into you and you stagger back bleeding.")
+        self.assertFalse(any("did not decrease" in w for w in warnings3))
+
+    def test_continuity_flags_a_quest_declared_finished_that_never_flipped_status(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["quests"] = [{"name": "Deliver the Package", "status": "active"}]
+        after = copy.deepcopy(before)
+        warnings = update_continuity(before, after, "Deliver the package", "You hand over the package to the client. You complete the delivery, the quest is done.")
+        self.assertTrue(any("Deliver the Package" in w and "finished" in w for w in warnings))
+
+    def test_continuity_does_not_flag_completion_language_for_an_unrelated_or_already_complete_quest(self):
+        before = copy.deepcopy(BASE_STATE)
+        before["quests"] = [{"name": "Deliver the Package", "status": "active"}, {"name": "Find the Lost Cat", "status": "active"}]
+        after = copy.deepcopy(before)
+        # Completion language present but this specific quest isn't named.
+        warnings = update_continuity(before, after, "Chat with a merchant", "The merchant mentions a courier nearby finishing his delivery, the job done.")
+        self.assertFalse(any("Deliver the Package" in w for w in warnings))
+        self.assertFalse(any("Find the Lost Cat" in w for w in warnings))
+        # Quest's status already flipped to complete: nothing to flag.
+        after2 = copy.deepcopy(before)
+        after2["quests"][0]["status"] = "complete"
+        warnings2 = update_continuity(before, after2, "Deliver the package", "You hand over the package. You complete the delivery, the quest is done.")
+        self.assertFalse(any("Deliver the Package" in w for w in warnings2))
+
+    def test_gm_rules_document_hp_and_quest_completion_mirrors(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("hp MUST change", rules)
+        self.assertIn("status field must flip to \"complete\"", rules)
+
+    def test_regular_turn_now_triggers_continuity_correction_like_time_skip_does(self):
+        # apply_resolution (an ordinary single-action turn — the far more
+        # common turn type, and the one a simple "I buy X" almost always
+        # goes through) computed continuity_warnings but never acted on
+        # them; only apply_time_skip called request_continuity_correction.
+        # Nothing on the frontend even reads continuity_warnings, so a real
+        # slip on a regular turn went uncorrected forever until now.
+        game = self.fresh("Naruto")
+        game.state["currency"] = {"name": "Ryo", "amount": 500}
+        calls = []
+        game.request_continuity_correction = lambda warnings, narrative: calls.append(warnings)
+        data = {
+            "narrative": "You buy a set of kunai from the weapons shop, handing over a stack of Ryo.",
+            "state_patch": {}, "events": [], "suggested_actions": [],
+        }
+        game.apply_resolution(data, pending_action="Buy kunai from the shop")
+        self.assertTrue(calls)
+        self.assertTrue(any("currency.amount" in w for w in calls[0]))
+
+    def test_gm_rules_include_world_specific_economy_reference(self):
+        # A real player note: One Piece's Yonko are worth billions of
+        # Berries, and the old vague "sized realistically for this world's
+        # economy" instruction had nothing concrete to anchor to — the AI
+        # was left guessing what "realistic" even means for six wildly
+        # different fictional economies.
+        game = self.fresh("One Piece")
+        rules = game.gm_rules()
+        self.assertIn("Yonko", rules)
+        self.assertIn("4,000,000,000", rules)
+        game_naruto = self.fresh("Naruto")
+        self.assertIn("D-rank", game_naruto.gm_rules())
+
+    def test_power_summary_button_and_modal_are_wired_into_the_skills_tab(self):
+        html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="modal-power-summary"', html)
+        self.assertIn('id="btn-open-power-summary"', js)
+        self.assertIn("openPowerSummary", js)
+        # The tier ladder mirrors worlds.py's POWER_TIERS so the Advisor and
+        # this instant, no-AI-call summary never disagree about what a given
+        # tier name means.
+        self.assertIn("Reality-Bending", js)
+        # Deliberately does not fabricate a named-rival comparison (no
+        # tracked per-NPC power data to draw one from honestly) — hands that
+        # judgment off to the Advisor, which has real campaign context.
+        self.assertIn("askAdvisor(", js)
+        self.assertIn("Ask the Advisor", js)
+
+    def test_npc_relationships_default_and_are_documented_in_gm_rules(self):
+        self.assertEqual(BASE_STATE["npc_relationships"], {})
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("npc_relationships", rules)
+        # The instruction has to actually say divergences override stock
+        # canon for NPC-NPC dynamics too, not just player-facing ones —
+        # that's the whole point of tracking this at all.
+        self.assertIn("the divergence wins", rules)
+
+    def test_relationship_snapshot_surfaces_the_npc_network(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["npc_relationships"] = {
+            "Itachi::Shisui": {"a": "Itachi", "b": "Shisui", "type": "mentor", "strength": 80, "status": "active", "note": "Closest friend and confidant."},
+            "Danzo::Itachi": {"a": "Danzo", "b": "Itachi", "type": "grudge", "strength": -60, "status": "estranged", "note": "Coerced, resentful."},
+            "BadEntry": {"type": "rival"},  # no a/b and no recoverable "A::B" key — dropped, not crashed on
+        }
+        view = relationship_snapshot(state)
+        network = view["npc_network"]
+        self.assertEqual(len(network), 2)
+        mentor = next(r for r in network if r["type"] == "mentor")
+        self.assertEqual(mentor["strength"], 80)
+        grudge = next(r for r in network if r["type"] == "grudge")
+        self.assertEqual(grudge["status"], "estranged")
+
+    def test_territory_control_changes_are_stamped_and_surfaced_on_the_map(self):
+        # Both sources of a controlling_faction change (a direct AI
+        # state_patch, or the mechanical off-screen conflict resolver in
+        # systems.py) go through apply_guarded_patch before update_continuity
+        # runs, so a single before/after diff here catches either origin.
+        before = copy.deepcopy(BASE_STATE)
+        before["location_details"] = {"Konoha": {"controlling_faction": "Land of Fire"}}
+        before["turn"] = 10
+        after = copy.deepcopy(before)
+        after["turn"] = 11
+        after["location_details"] = {"Konoha": {"controlling_faction": "Sound Village"}}
+        warnings = update_continuity(before, after, "Off-screen conflict", "")
+        self.assertEqual(after["location_details"]["Konoha"]["controller_changed_turn"], 11)
+        self.assertTrue(any("Konoha" in f["text"] and "Sound Village" in f["text"] for f in after["continuity_ledger"]["facts"]))
+
+        game = self.fresh("Naruto")
+        game.state["turn"] = 12
+        game.state["location_details"] = {game.state["location"]: {"controlling_faction": "Test Faction", "controller_changed_turn": 11}}
+        snap = map_snapshot(game.state, WORLD_DATA["Naruto"]["map"], "Naruto")
+        node = next(n for n in snap["nodes"] if n["name"] == game.state["location"])
+        self.assertTrue(node["recently_changed"])
+        # Outside the recency window, the highlight goes away on its own.
+        game.state["location_details"][game.state["location"]]["controller_changed_turn"] = 2
+        snap2 = map_snapshot(game.state, WORLD_DATA["Naruto"]["map"], "Naruto")
+        node2 = next(n for n in snap2["nodes"] if n["name"] == game.state["location"])
+        self.assertFalse(node2["recently_changed"])
+
+    def test_map_shows_a_recently_changed_territory_highlight(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("territory-changed", js)
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn(".map-node.territory-changed", css)
+
+    def test_world_clock_events_are_visible_in_chronicle_not_the_meta_strip(self):
+        # These used to be moved into the collapsed System strip as
+        # mechanical noise, which also made the world visibly moving on
+        # its own the one thing the meta cleanup accidentally hid. Back to
+        # a real Chronicle beat, and the underlying message text no longer
+        # reads like a status report.
+        game = self.fresh("Naruto")
+        game.state["npc_clocks"] = {"Rival": {"name": "Rival", "goal": "Grow stronger", "progress": 99,
+                                                "threshold": 100, "status": "active", "last_update": ""}}
+        game.ai = PlanningAI()
+        assessed = game.assess_time_skip(1, "days", [], "normal")
+        result = game.run_time_skip(assessed["amount"], assessed["unit"], assessed["orders"], "normal", assessed["assessment"])
+        elsewhere = next(e for e in result["story"] if e["text"].startswith("[ELSEWHERE]"))
+        self.assertEqual(elsewhere["tag"], "system")
+        self.assertIn("Rival has made real headway", elsewhere["text"])
+
+    def test_canon_protected_faction_survives_a_conflict_instead_of_being_destroyed(self):
+        # Reuses WORLD_TERRITORIES (already used to seed the map's starting
+        # colors) as the canon-major-polity check — no new authoring
+        # needed. Konohagakure losing badly to a background dice roll
+        # should weaken it, never wipe it off the map outright.
+        state = {"world": "Naruto", "factions": {}, "world_time": "Day 1", "location_details": {}, "npc_memories": {},
+                 "faction_clocks": {
+                     "Attacker": {"name": "Attacker", "goal": "Conquer", "progress": 99, "threshold": 100,
+                                  "status": "active", "power": 80, "opponent": "Konohagakure"},
+                     "Konohagakure": {"name": "Konohagakure", "goal": "Defend", "progress": 0, "threshold": 100,
+                                      "status": "active", "power": 10},
+                 },
+                 "npc_clocks": {}}
+        with patch("systems.random.random", return_value=0.0):
+            events = tick_world_clocks(state, 1440)
+        messages = [e["message"] for e in events]
+        self.assertTrue(any("badly weakened" in m and "holds on" in m for m in messages))
+        self.assertNotEqual(state["faction_clocks"]["Konohagakure"]["status"], "destroyed")
+        self.assertGreater(state["faction_clocks"]["Konohagakure"]["power"], FACTION_DESTROYED_THRESHOLD)
+
+    def test_canon_protected_npc_survives_a_conflict_instead_of_dying(self):
+        state = {"world": "Naruto", "factions": {}, "world_time": "Day 1", "location_details": {},
+                 "npc_memories": {"Future Hokage": {"goal": "Prove themselves", "recurring": True, "canon_protected": True}},
+                 "npc_clocks": {"Future Hokage": {"name": "Future Hokage", "goal": "Prove themselves",
+                                                    "progress": 99, "threshold": 100, "status": "active",
+                                                    "power": 10, "opponent": "Rival Clan"}},
+                 "faction_clocks": {}}
+        with patch("systems.random.random", return_value=1.0):
+            events = tick_world_clocks(state, 1440)
+        messages = [e["message"] for e in events]
+        self.assertTrue(any("barely survives" in m for m in messages))
+        self.assertNotEqual(state["npc_clocks"]["Future Hokage"]["status"], "defeated")
+        self.assertNotEqual(state["npc_memories"]["Future Hokage"].get("status"), "deceased")
+
+    def test_gm_rules_nudge_referencing_background_world_feed(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("background_world_feed", rules)
+        self.assertIn("one continuous story", rules)
+
+    def test_load_flags_a_long_real_world_gap_for_reentry_recap(self):
+        import game as game_module
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(game_module, "SAVE_DIR", Path(tmp)):
+                session = GameSession()
+                session.state = copy.deepcopy(BASE_STATE)
+                session.state.update(name="Ari", world="Naruto")
+                old_time = (datetime.now() - timedelta(hours=10)).isoformat(timespec="seconds")
+                bundle = session.save_bundle("manual")
+                bundle["saved_at"] = old_time
+                path = session.savepath()
+                path.write_text(json.dumps(bundle), encoding="utf-8")
+
+                fresh_session = GameSession()
+                result = fresh_session.load(path.stem)
+                self.assertIsNotNone(result["_reentry_gap_hours"])
+                self.assertGreaterEqual(result["_reentry_gap_hours"], 9.9)
+
+    def test_load_does_not_flag_a_short_gap(self):
+        import game as game_module
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.object(game_module, "SAVE_DIR", Path(tmp)):
+                session = GameSession()
+                session.state = copy.deepcopy(BASE_STATE)
+                session.state.update(name="Ari", world="Naruto")
+                path = session.savepath()
+                path.write_text(json.dumps(session.save_bundle("manual")), encoding="utf-8")
+
+                fresh_session = GameSession()
+                result = fresh_session.load(path.stem)
+                self.assertIsNone(result["_reentry_gap_hours"])
+
+    def test_generate_reentry_recap_is_narrative_tagged_and_time_locked(self):
+        class RecapAI:
+            def request(self, rules, payload, max_output_tokens=0):
+                self.payload = payload
+                return {"recap": "Word trickles in of a rival guild's climb through the tower.",
+                        "state_patch": {"canon_day": 99999, "world_time": "Never", "hp": 1}}
+
+        game = self.fresh("Solo Max-Level Newbie")
+        game.settings["model"] = "test-model"
+        ai = RecapAI()
+        game.ai_bg = ai
+        game._pending_reentry_hours = 12.0
+        result = game.generate_reentry_recap()
+        self.assertIsNotNone(result)
+        self.assertTrue(result["recap"].startswith("Word trickles in"))
+        entry = next(e for e in result["story"] if e["text"].startswith("[WHILE YOU WERE AWAY]"))
+        self.assertEqual(entry["tag"], "narrative")
+        # allow_time=False must have blocked the (deliberately malicious in
+        # this test) attempt to sneak in a canon_day/world_time change via
+        # the recap's own state_patch, and hp is player-state, not world
+        # movement, so it must be blocked too.
+        self.assertNotEqual(game.state.get("canon_day"), 99999)
+        self.assertNotEqual(game.state.get("world_time"), "Never")
+        self.assertNotEqual(game.state.get("hp"), 1)
+        # Consumed — a second call with nothing pending does nothing.
+        self.assertIsNone(game._pending_reentry_hours)
+        game.ai_bg = ai
+        self.assertIsNone(game.generate_reentry_recap())
+
+    def test_reentry_recap_is_wired_into_the_frontend_load_flow(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("maybeFetchReentryRecap", js)
+        self.assertIn("/api/reentry_recap", js)
+        app_py = (ROOT / "backend" / "app.py").read_text(encoding="utf-8")
+        self.assertIn('"/api/reentry_recap"', app_py)
+
+    def test_yonko_crews_are_real_polities_not_just_map_color(self):
+        # Big Mom (Totto Land) and Kaido (Wano) have unambiguous canon
+        # territory; Whitebeard is alive and at full strength at this
+        # world's default campaign start (seven days before Foosha, well
+        # before Marineford), so Fishman Island under his flag is accurate
+        # there too. They need to exist on the actual map (not just as a
+        # WORLD_TERRITORIES entry with nothing to attach to) and be seeded
+        # as tracked factions, or they're not real polities, just trivia.
+        map_names = {n[0] for n in WORLD_DATA["One Piece"]["map"]}
+        self.assertIn("Totto Land", map_names)
+        self.assertIn("Wano Country", map_names)
+        self.assertIn("Fishman Island", map_names)
+        territories = {"Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates", "Fishman Island": "Whitebeard Pirates"}
+        for name, expected_controller in territories.items():
+            snap = next(n for n in map_snapshot(BASE_STATE, WORLD_DATA["One Piece"]["map"], "One Piece")["nodes"] if n["name"] == name)
+            self.assertEqual(snap["controller"], expected_controller)
+        for faction in ("Whitebeard Pirates", "Big Mom Pirates", "Kaido's Beasts Pirates", "Shanks' Red Hair Pirates"):
+            self.assertIn(faction, WORLD_DATA["One Piece"]["factions"])
+
+    def test_one_piece_map_covers_major_canon_locations_referenced_in_the_timeline(self):
+        # CANON_TIMELINES already narrates real events at Marineford, Impel
+        # Down, Drum Island, Thriller Bark, and Zou, but none of them had an
+        # actual clickable map node before — the map was recalibrated
+        # against a labeled canon-geography reference image, and the vague
+        # catch-all "New World" region node was retired in favor of these
+        # concrete ones.
+        map_names = {n[0] for n in WORLD_DATA["One Piece"]["map"]}
+        for name in ("Marineford", "Impel Down", "Drum Island", "Thriller Bark", "Zou"):
+            self.assertIn(name, map_names)
+        self.assertNotIn("New World", map_names)
+        from systems import WORLD_TERRITORIES
+        territories = WORLD_TERRITORIES["One Piece"]
+        self.assertEqual(territories["Marineford"], "Marines")
+        self.assertEqual(territories["Impel Down"], "World Government")
+
+    def test_parse_price_handles_numbers_and_loosely_typed_text(self):
+        self.assertEqual(parse_price(50), 50)
+        self.assertEqual(parse_price(50.0), 50)
+        self.assertEqual(parse_price("50 Berries"), 50)
+        self.assertEqual(parse_price("Price: 1,200"), 1200)
+        self.assertIsNone(parse_price("free"))
+        self.assertIsNone(parse_price(True))
+
+    def test_resolve_shop_purchase_deducts_currency_and_adds_inventory_deterministically(self):
+        # This is the whole point: once an item has a real price, paying
+        # for it shouldn't need an AI turn at all, so there's no way for it
+        # to reproduce the narrated-but-not-patched currency drift the
+        # continuity detector otherwise exists to catch after the fact.
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Berries", "amount": 500}
+        state["shops"] = [{"name": "General Store", "type": "Merchant", "inventory": [{"name": "Kunai Pouch", "price": "120 Berries"}]}]
+        ok, message, price = resolve_shop_purchase(state, "General Store", "Kunai Pouch")
+        self.assertTrue(ok)
+        self.assertEqual(price, 120)
+        self.assertEqual(state["currency"]["amount"], 380)
+        self.assertTrue(any(isinstance(i, dict) and i.get("name") == "Kunai Pouch" for i in state["inventory"]))
+
+    def test_resolve_shop_purchase_rejects_when_the_player_cannot_afford_it(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Berries", "amount": 50}
+        state["shops"] = [{"name": "General Store", "inventory": [{"name": "Kunai Pouch", "price": 120}]}]
+        ok, message, price = resolve_shop_purchase(state, "General Store", "Kunai Pouch")
+        self.assertFalse(ok)
+        self.assertIsNone(price)
+        self.assertEqual(state["currency"]["amount"], 50)
+        self.assertEqual(state["inventory"], [])
+
+    def test_resolve_shop_purchase_rejects_unknown_shop_item_or_unclear_price(self):
+        state = copy.deepcopy(BASE_STATE)
+        state["currency"] = {"name": "Berries", "amount": 500}
+        state["shops"] = [{"name": "General Store", "inventory": [{"name": "Mystery Box", "price": "ask the merchant"}]}]
+        ok, _, _ = resolve_shop_purchase(state, "Nonexistent Shop", "Anything")
+        self.assertFalse(ok)
+        ok2, _, _ = resolve_shop_purchase(state, "General Store", "Not A Real Item")
+        self.assertFalse(ok2)
+        ok3, message3, _ = resolve_shop_purchase(state, "General Store", "Mystery Box")
+        self.assertFalse(ok3)
+        self.assertIn("clear price", message3)
+
+    def test_buy_shop_item_endpoint_is_deterministic_and_never_calls_the_ai(self):
+        game = self.fresh("Naruto")
+        game.state["currency"] = {"name": "Ryo", "amount": 500}
+        game.state["shops"] = [{"name": "Weapons Stall", "inventory": [{"name": "Kunai Set", "price": 100}]}]
+        game.ai.request = lambda *a, **k: (_ for _ in ()).throw(AssertionError("buy_shop_item must not call the AI"))
+        result = game.buy_shop_item("Weapons Stall", "Kunai Set")
+        self.assertEqual(result["price"], 100)
+        self.assertEqual(game.state["currency"]["amount"], 400)
+        with self.assertRaises(ValueError):
+            game.buy_shop_item("Weapons Stall", "Nonexistent Item")
+
+    def test_yonko_crews_are_seeded_live_at_campaign_creation(self):
+        stats = {name: 30 for name in abilities_for("One Piece")}
+        game = GameSession()
+        game.new_campaign("Test", "One Piece", "Adventurer", "", "", "", "Aspiring Pirate", "Brawler", stats)
+        self.assertIn("Big Mom Pirates", game.state["factions"])
+        self.assertIn("Kaido's Beasts Pirates", game.state["factions"])
+        self.assertIn("Big Mom Pirates", game.state["contacts"])
+        self.assertTrue(game.state["contacts"]["Big Mom Pirates"]["can_contact"])
+        # They're seeded, so tick_world_clocks should pick them up as real
+        # faction clocks on the very first tick, not wait for the AI to
+        # happen to introduce them in prose first.
+        tick_world_clocks(game.state, 1440)
+        self.assertIn("Big Mom Pirates", game.state["faction_clocks"])
+        self.assertIn("Kaido's Beasts Pirates", game.state["faction_clocks"])
+        # And they're protected by the same canon-protection guardrail as
+        # the five-great-villages tier of polity, not a lesser tier.
+        self.assertTrue(_is_canon_protected(game.state, "Big Mom Pirates", "faction_clocks"))
+
+    def test_naruto_amegakure_and_iron_country_are_tracked_polities(self):
+        map_names = {n[0] for n in WORLD_DATA["Naruto"]["map"]}
+        self.assertIn("Amegakure", map_names)
+        self.assertIn("Iron Country", map_names)
+        for name in ("Amegakure", "Iron Country"):
+            self.assertIn(name, WORLD_DATA["Naruto"]["factions"])
+            snap = next(n for n in map_snapshot(BASE_STATE, WORLD_DATA["Naruto"]["map"], "Naruto")["nodes"] if n["name"] == name)
+            self.assertNotEqual(snap["controller"], "Unknown")
+
+    def test_faction_turning_point_prefers_immediate_goal_over_the_placeholder(self):
+        # Every faction_clocks entry the application creates on its own
+        # starts with a flat "Advance X's current agenda" placeholder —
+        # once the GM has set a real immediate_goal, the turning-point
+        # message should describe that, not the generic filler forever.
+        state = {"factions": {}, "world_time": "Day 1", "npc_memories": {},
+                 "faction_clocks": {"Guild": {"name": "Guild", "goal": "Advance Guild's current agenda",
+                                                "immediate_goal": "Secure the eastern trade routes",
+                                                "mid_term_goal": "Break the rival cartel's monopoly",
+                                                "progress": 99, "threshold": 100, "status": "active"}},
+                 "npc_clocks": {}}
+        events = tick_world_clocks(state, 1440)
+        self.assertTrue(any("Secure the eastern trade routes" in e["message"] for e in events))
+        self.assertFalse(any("Advance Guild's current agenda" in e["message"] for e in events))
+
+    def test_gm_rules_document_faction_goal_layering(self):
+        game = self.fresh("Naruto")
+        rules = game.gm_rules()
+        self.assertIn("faction_clocks[name].immediate_goal", rules)
+        self.assertIn("inert scenery", rules)
+
+    def test_clocks_tab_shows_faction_goal_layers_when_present(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("clock.immediate_goal || clock.goal", js)
+        self.assertIn("clock.mid_term_goal", js)
+        self.assertIn("clock.core_ambition", js)
 
 
 if __name__ == "__main__":

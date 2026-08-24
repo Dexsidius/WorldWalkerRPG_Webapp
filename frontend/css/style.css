@@ -516,6 +516,18 @@ input,select,textarea{ font-family:inherit; }
   display:flex; align-items:center; gap:6px;
 }
 .story-entry.canon_event .story-entry-label::before{ content:"⚡"; font-size:12px; }
+.story-entry-body{ min-width:0; width:100%; display:flex; flex-direction:column; gap:8px; }
+.story-entry-chips{ display:flex; flex-wrap:wrap; gap:5px; }
+.story-entry-chips span{ font-size:9.5px; font-weight:700; letter-spacing:.03em; padding:2px 9px; border-radius:999px; background:rgba(var(--accent2-rgb),.1); border:1px solid rgba(var(--accent2-rgb),.3); color:var(--accent2); white-space:nowrap; }
+.story-entry-quote{ margin:0; padding:8px 12px; border-left:2px solid rgba(var(--accent-rgb),.5); background:rgba(0,0,0,.15); border-radius:0 6px 6px 0; }
+.story-entry-quote p{ margin:0 0 4px; color:var(--text); font-style:italic; font-size:12.5px; line-height:1.5; }
+.story-entry-quote cite{ font-style:normal; font-size:10px; color:var(--muted); }
+.story-entry-map-changes{ font-size:11px; }
+.story-entry-map-changes summary{ cursor:pointer; color:var(--gold); font-weight:700; list-style:none; }
+.story-entry-map-changes summary::-webkit-details-marker{ display:none; }
+.story-entry-map-changes summary::before{ content:"🗺 "; }
+.story-entry-map-changes ul{ margin:6px 0 0; padding-left:16px; color:var(--sub); }
+.story-entry-map-changes li{ line-height:1.5; }
 .story-roll-pill{ font-family:var(--font-mono); font-size:10.5px; font-weight:700; font-style:normal; padding:2px 8px; border-radius:999px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.12); color:var(--sub); white-space:nowrap; }
 .story-roll-pill[title]{ cursor:help; }
 .story-roll-pill.hit{ color:#8fe0a0; background:rgba(80,200,120,.12); border-color:rgba(80,200,120,.35); }
@@ -582,6 +594,12 @@ input,select,textarea{ font-family:inherit; }
 .affiliation-row b{ color:var(--gold); }
 .affiliation-status{ margin-left:6px; padding:1px 7px; border-radius:999px; background:rgba(255,255,255,.08); color:var(--sub); font-size:10.5px; text-transform:uppercase; }
 .affiliation-row.exiled, .affiliation-row.former{ border-left-color:var(--danger); opacity:.75; }
+.npc-network-row{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px; }
+.npc-network-row b{ color:var(--text); }
+.npc-network-type{ color:var(--accent2); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; }
+.npc-network-strength{ font-family:var(--font-mono); font-size:11px; font-weight:700; }
+.npc-network-strength.positive{ color:var(--success); }
+.npc-network-strength.negative{ color:var(--danger); }
 #affiliations-list li{ display:flex; align-items:baseline; gap:4px; flex-wrap:wrap; }
 .combat-log{ font-family:var(--font-mono); font-size:11.5px; color:var(--sub); max-height:140px; overflow-y:auto; display:flex; flex-direction:column; gap:4px; }
 .combat-log .combat-log-row.hit{ color:#ffb0a8; }
@@ -589,6 +607,16 @@ input,select,textarea{ font-family:inherit; }
 .combat-log .combat-log-row.player{ color:var(--accent2); }
 .story-entry .typing-caret{ display:inline-block; width:8px; height:14px; background:var(--accent2); margin-left:2px; animation:caretBlink 1s steps(1) infinite; vertical-align:-2px; }
 .story-beat:last-child{ margin-bottom:10px; }
+/* Collapsed by default — mechanical/administrative notices (undo
+   confirmations, stat-delta readouts, quest-complete bookkeeping) that
+   don't belong in the middle of the story being told, but shouldn't be
+   lost either. */
+.story-beat-system{ border-top:1px solid rgba(255,255,255,.035); padding:7px 14px 8px 15px; font-size:10.5px; }
+.story-beat-system summary{ cursor:pointer; color:var(--muted); font-weight:800; letter-spacing:.06em; text-transform:uppercase; font-size:9px; list-style:none; }
+.story-beat-system summary::-webkit-details-marker{ display:none; }
+.story-beat-system summary::before{ content:"⚙ "; }
+.story-beat-system-row{ margin-top:6px; padding-left:14px; color:var(--muted); line-height:1.5; }
+.story-beat-system-row b{ display:block; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:9px; margin-bottom:1px; }
 /* A genuine popup, not inline content the player has to scroll the
    Chronicle to find — same fixed full-viewport treatment as every other
    decision modal (.modal-backdrop), just kept as its own element since a
@@ -684,9 +712,17 @@ input,select,textarea{ font-family:inherit; }
 /* ==========================================================================
    Right column extras
    ========================================================================== */
-.time-row{ display:flex; gap:8px; margin-bottom:8px; }
-#time-amount{ width:64px; }
-#time-unit{ flex:1; }
+/* flex-wrap, not just narrower gaps: with the amount field shown (any unit
+   above "moment"), the amount input + unit select + ADVANCE button's combined
+   min-content width can exceed the sidebar column's width at plenty of
+   ordinary desktop sizes, not just the small-screen breakpoint below — flex
+   items refuse to shrink past their own min-content size by default, so
+   without wrapping the row simply overflows and the button gets visually
+   clipped at the column edge instead of ever actually squeezing down. */
+.time-row{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+#time-amount{ width:64px; flex-shrink:0; }
+#time-unit{ flex:1 1 100px; min-width:90px; }
+.time-row #btn-advance{ flex:1 1 auto; }
 .time-row input, .time-row select{
   background:rgba(0,0,0,.28); border:1px solid var(--border-soft); color:var(--text);
   border-radius:8px; padding:8px 10px; font-size:12px;
@@ -894,9 +930,13 @@ input,select,textarea{ font-family:inherit; }
   border-radius:999px; padding:6px 12px; font-size:11px; font-weight:700; transition:.15s;
 }
 .advisor-starters button:hover{ background:rgba(var(--accent2-rgb),.18); transform:translateY(-1px); }
-.advisor-msg-summary{ font-weight:700; margin-bottom:6px; color:var(--text); }
-.advisor-msg-points{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:5px; }
-.advisor-msg-points li{ padding-left:14px; position:relative; font-size:12px; color:var(--sub); line-height:1.4; }
+/* Advisor replies read like a paragraph someone said out loud, not a
+   cramped report — wider than a normal chat bubble, larger type, more
+   breathing room between the summary and its supporting points. */
+.advisor-msg{ max-width:94%; padding:12px 14px; }
+.advisor-msg-summary{ font-weight:600; margin-bottom:8px; color:var(--text); font-size:13.5px; line-height:1.55; }
+.advisor-msg-points{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px; }
+.advisor-msg-points li{ padding-left:16px; position:relative; font-size:12.5px; color:var(--sub); line-height:1.55; }
 .advisor-msg-points li::before{ content:"▸"; position:absolute; left:0; color:var(--accent2); }
 .advisor-followups{ display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
 .advisor-followups button{
@@ -904,6 +944,35 @@ input,select,textarea{ font-family:inherit; }
   border-radius:999px; padding:5px 11px; font-size:10.5px; font-weight:700; transition:.15s;
 }
 .advisor-followups button:hover{ background:rgba(var(--accent-rgb),.1); }
+
+.advisor-chart{ margin:8px 0 10px; padding:10px 12px; border-radius:9px; background:rgba(0,0,0,.16); border:1px solid var(--border-soft); }
+.advisor-chart-title{ font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.04em; color:var(--accent2); margin-bottom:8px; }
+.advisor-chart-title span{ text-transform:none; font-weight:500; letter-spacing:0; color:var(--muted); }
+.advisor-chart-row{ display:grid; grid-template-columns:min(30%, 120px) 1fr auto; align-items:center; gap:8px; margin-bottom:6px; }
+.advisor-chart-row:last-child{ margin-bottom:0; }
+.advisor-chart-label{ font-size:11.5px; color:var(--sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.advisor-chart-track{ height:10px; border-radius:999px; background:rgba(255,255,255,.06); overflow:hidden; }
+.advisor-chart-bar{ height:100%; border-radius:999px; background:linear-gradient(90deg, rgba(var(--accent2-rgb),.55), var(--accent2)); transition:width .5s ease; }
+.advisor-chart-value{ font-size:11px; font-weight:700; color:var(--text); min-width:2ch; text-align:right; }
+
+/* power summary modal */
+.power-summary-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:14px; }
+.power-summary-head b{ font-size:15px; color:var(--text); }
+.power-summary-head span{ display:block; font-size:11.5px; color:var(--muted); margin-top:2px; }
+.power-tier-card{
+  padding:14px 16px; border-radius:10px; margin-bottom:16px;
+  border:1px solid rgba(var(--accent2-rgb),.35);
+  background:linear-gradient(135deg, rgba(var(--accent2-rgb),.14), rgba(0,0,0,.2));
+}
+.power-tier-badge{ font-size:13px; font-weight:800; letter-spacing:.03em; color:var(--gold); text-transform:uppercase; }
+.power-tier-card p{ margin:6px 0 8px; color:var(--text); font-size:13px; line-height:1.5; }
+.power-tier-card small{ color:var(--muted); font-size:10.5px; line-height:1.4; display:block; }
+.power-stat-list{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+.power-stat-row{ display:grid; grid-template-columns:16px 90px 1fr 32px; align-items:center; gap:9px; font-size:12px; color:var(--sub); }
+.power-stat-row .clock-track{ margin:0; }
+.power-stat-row b{ color:var(--gold); font-family:var(--font-mono); text-align:right; }
+.power-title-list{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
+.power-title-chip{ font-size:10.5px; font-weight:700; padding:3px 10px; border-radius:999px; background:rgba(var(--accent-rgb),.12); border:1px solid rgba(var(--accent-rgb),.35); color:var(--gold); }
 
 /* journal modal */
 .journal-tabs{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
@@ -922,6 +991,15 @@ input,select,textarea{ font-family:inherit; }
 .journal-panel .jrow.currency-jrow .currency-icon svg{ width:100%; height:100%; }
 .journal-panel .jrow.currency-jrow b{ color:var(--gold); font-size:14px; }
 .journal-panel .jrow b{ color:var(--accent2); }
+.journal-panel .jrow.shop-block small{ display:block; color:var(--sub); margin:2px 0 8px; }
+.shop-item-row{ display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--border-soft); }
+.shop-item-row:first-of-type{ border-top:none; }
+.shop-item-row.muted{ color:var(--sub); font-style:italic; }
+.shop-item-name{ flex:1; }
+.shop-item-price{ color:var(--gold); font-size:12px; white-space:nowrap; }
+.shop-buy-btn{ background:rgba(var(--accent-rgb),.18); border:1px solid rgba(var(--accent-rgb),.45); color:var(--text); border-radius:8px; padding:4px 10px; font-size:12px; cursor:pointer; }
+.shop-buy-btn:hover:not(:disabled){ background:rgba(var(--accent-rgb),.3); }
+.shop-buy-btn:disabled{ opacity:.4; cursor:not-allowed; }
 .system-summary{ display:flex; justify-content:space-between; gap:18px; align-items:center; padding:13px 15px; margin-bottom:12px; border:1px solid rgba(var(--accent-rgb),.45); border-radius:10px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.14),rgba(0,0,0,.16)); }
 .system-summary b{ color:var(--gold); font-family:var(--font-display); letter-spacing:.06em; }
 .system-summary span{ color:var(--sub); text-align:right; font-size:11.5px; }
@@ -994,6 +1072,17 @@ input,select,textarea{ font-family:inherit; }
 .map-node.here .map-label{ color:#fff4c8; border-color:rgba(var(--accent-rgb),.7); font-weight:800; }
 .map-node.danger-tense:not(.here) .map-pip{ box-shadow:0 0 10px var(--gold); border-color:rgba(var(--gold-rgb,230,200,119),.8); }
 .map-node.danger-critical:not(.here) .map-pip{ background:var(--danger); box-shadow:0 0 12px var(--danger); animation:mapPulse 1.4s ease-in-out infinite; }
+/* A territory's controlling faction just changed (on-screen or off) — a
+   distinct ring so "something notable happened here" reads differently
+   from the "here"/danger pulses, which otherwise made a flip invisible
+   until the player happened to notice the color or the buried world-event
+   text. Fades out on its own once the change is a few turns old, via
+   map_snapshot's recently_changed window, not a one-shot flag. */
+.map-node.territory-changed:not(.here) .map-pip::after{
+  content:""; position:absolute; inset:-6px; border-radius:50%;
+  border:2px solid var(--accent2); animation:territoryChangeRing 1.6s ease-out infinite;
+}
+@keyframes territoryChangeRing{ 0%{ transform:scale(.6); opacity:.9; } 100%{ transform:scale(1.9); opacity:0; } }
 .danger-label{ font-weight:700; }
 .danger-label.danger-calm{ color:var(--success); }
 .danger-label.danger-uneasy{ color:var(--sub); }
@@ -1149,8 +1238,7 @@ input,select,textarea{ font-family:inherit; }
   .composer-row,.time-row{ gap:7px; }
   #action-input{ font-size:16px; }
   .action-chat-card #action-input{ min-height:120px; }
-  .time-row{ flex-wrap:wrap; }
-  .time-row #btn-advance{ min-height:44px; flex:1; }
+  .time-row #btn-advance{ min-height:44px; }
   .portrait-card{ max-height:none; }
   .portrait-frame{ min-height:260px; }
   .modal{ width:calc(100vw - 14px)!important; max-width:none!important; max-height:92dvh; }

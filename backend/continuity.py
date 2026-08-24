@@ -1,4 +1,5 @@
 """Deterministic campaign-continuity ledger and contradiction warnings."""
+import re
 from datetime import datetime
 
 from util import ai_text
@@ -6,6 +7,61 @@ from util import ai_text
 
 def _quest_map(items):
     return {str(q.get("name", "")).lower(): q for q in items if isinstance(q, dict) and q.get("name")}
+
+
+# A real player report: buying something in the narrative repeatedly left
+# currency.amount untouched, and payment for work that should plausibly pay
+# rarely showed up either. The GM prompt already says currency "must change
+# with every transaction" (engine_core.py), but that's prose the model can
+# just forget under schema pressure the same way it forgets other fields —
+# this catches the mismatch after the fact so it can feed the same
+# correction pass every other continuity warning already uses, rather than
+# relying on the instruction alone.
+_CURRENCY_SPEND_RE = re.compile(r"\b(buys?|bought|purchas\w*|pays? for|paid for|hands? over|handed over)\b", re.I)
+_CURRENCY_EARN_RE = re.compile(
+    r"\b(gets? paid|is paid|was paid|pays? (?:you|your|him|her|them|the)|receives? payment|"
+    r"collects? (?:the|a|her|his|their) (?:reward|payment|fee|wages?)|"
+    r"earns?|reward of|paid (?:him|her|them)|sells? it for|sold it for)\b", re.I,
+)
+_CURRENCY_NO_TRANSACTION_RE = re.compile(
+    r"\b(declin\w*|refus\w*|can'?t afford|cannot afford|couldn'?t afford|too expensive|"
+    r"decides? not to|chooses? not to|considers? buying|thinks? about buying)\b", re.I,
+)
+_CURRENCY_GENERIC_RE = re.compile(r"\b(coins?|gold|money|payment|reward|fee|wages?)\b", re.I)
+
+# Same shape of bug as currency: the model narrates a clear wound and just
+# forgets to patch hp to match. Tied to "you" specifically (this game
+# narrates the player in second person — see gm_rules) rather than any
+# wound language in the scene, since combat narration wounds NPCs and
+# enemies constantly and those never touch the player's own hp.
+_WOUND_RE = re.compile(
+    r"\b(cuts? (?:deep )?into you|stabs? you|slashes? (?:you|across you|into you)|"
+    r"you(?:'re| are) (?:cut|stabbed|slashed|wounded|gashed|pierced|struck down|badly hurt)|"
+    r"wounds? you|pierces? you|you(?:'re| are)? bleed\w*|you collapse\w*,? bleeding|"
+    r"blood (?:pours?|pools?|runs?) (?:from|down) you|"
+    r"knocks? you out|you(?:'re| are) knocked out|"
+    r"breaks? your (?:arm|leg|ribs?|bones?|nose)|"
+    r"burns? you (?:badly|deeply|severely)|"
+    r"you take (?:a|the) (?:heavy|brutal|serious|grievous|solid) (?:hit|blow|wound)|"
+    r"the blade (?:bites|sinks) into you|"
+    r"tears? into your (?:flesh|skin)|"
+    r"leaves? you (?:bleeding|wounded|gashed|badly hurt))\b", re.I,
+)
+_WOUND_AVOIDED_RE = re.compile(
+    r"\b(you (?:dodge|block|parry|parries|deflect|sidestep|narrowly avoid)\w*|"
+    r"(?:the (?:blow|blade|strike|hit|attack)) (?:misses|goes wide)|"
+    r"leaves? you (?:unharmed|unscathed)|you(?:'re| are) (?:unharmed|unscathed)|"
+    r"barely (?:a scratch|grazes? you)|you shrug\w* (?:it|them )?off)\b", re.I,
+)
+
+# Mirror of the quest-regression check further down: the model says the
+# quest is done but never flips its status field to match.
+_QUEST_COMPLETE_RE = re.compile(
+    r"\b(quest (?:is |has been |'s )?(?:complete|completed|done|finished)|"
+    r"(?:complet\w+|finish\w+|accomplish\w+) (?:the |your )?(?:quest|delivery|task|job|mission|errand)|"
+    r"mission (?:is |)accomplished|"
+    r"(?:the )?(?:task|delivery|job) (?:is |)(?:complete|completed|done|finished|delivered))\b", re.I,
+)
 
 
 def update_continuity(before, after, action="", narrative=""):
@@ -18,6 +74,26 @@ def update_continuity(before, after, action="", narrative=""):
         facts.append({**stamp, "type": "location", "text": f"Player moved from {before.get('location')} to {after.get('location')}."})
     if before.get("appearance_desc") != after.get("appearance_desc"):
         facts.append({**stamp, "type": "appearance", "text": f"Current appearance: {after.get('appearance_desc')}."})
+    # A location's controlling_faction can change from either source: the
+    # GM's own state_patch (a player-witnessed change) or the mechanical
+    # off-screen conflict resolver in systems.py (a background one) — both
+    # have already been applied to `after` by the time this runs, so a
+    # single before/after diff here catches either origin instead of having
+    # to stamp the same thing in two separate places. Stamped here rather
+    # than left implicit so the map can show a "recently changed" highlight
+    # instead of a territory flip only ever being visible as a buried
+    # single-line world-event message.
+    before_details = before.get("location_details") if isinstance(before.get("location_details"), dict) else {}
+    after_details = after.get("location_details") if isinstance(after.get("location_details"), dict) else {}
+    for loc, detail in after_details.items():
+        if not isinstance(detail, dict):
+            continue
+        prior_detail = before_details.get(loc) if isinstance(before_details.get(loc), dict) else {}
+        prior_controller = prior_detail.get("controlling_faction")
+        new_controller = detail.get("controlling_faction")
+        if new_controller != prior_controller and (prior_detail or new_controller):
+            detail["controller_changed_turn"] = turn
+            facts.append({**stamp, "type": "territory", "text": f"{loc}'s controlling power changed from {prior_controller or 'unclaimed'} to {new_controller or 'unclaimed'}."})
     new_titles = set(ai_text(t) for t in after.get("titles", []) if ai_text(t))
     old_titles = set(ai_text(t) for t in before.get("titles", []) if ai_text(t))
     for title in new_titles - old_titles:
@@ -46,6 +122,24 @@ def update_continuity(before, after, action="", narrative=""):
         old_status, new_status = str(old.get("status", "")).lower(), str(quest.get("status", "")).lower()
         if old_status in ("complete", "completed", "failed") and new_status not in (old_status, ""):
             warnings.append(f"Quest '{quest.get('name')}' regressed from {old_status} to {new_status} without explanation.")
+    # The mirror case: the narrative declares a quest finished, but the
+    # quest's own status field never actually flipped to complete. Only
+    # fires when the target is unambiguous — the quest is named outright,
+    # or it's the only quest still active and the narrative uses the
+    # generic "the quest is done" phrasing — so a passing mention of some
+    # other completed job doesn't get misattributed.
+    if narrative and _QUEST_COMPLETE_RE.search(narrative):
+        active = [(k, q) for k, q in new_quests.items() if str(q.get("status", "")).lower() not in ("complete", "completed", "failed")]
+        for key, quest in active:
+            old = old_quests.get(key)
+            old_status = str(old.get("status", "")).lower() if old else ""
+            if old_status in ("complete", "completed", "failed"):
+                continue
+            quest_name = str(quest.get("name", ""))
+            name_mentioned = bool(quest_name) and quest_name.lower() in narrative.lower()
+            generic_singular = len(active) == 1 and re.search(r"\bquest\b", narrative, re.I)
+            if name_mentioned or generic_singular:
+                warnings.append(f"The narrative describes '{quest_name}' as finished, but its status is still '{quest.get('status')}'.")
     # A location that changed without the narrative ever naming the new place
     # is the clearest sign the AI moved the player mechanically (or forgot
     # where they were) rather than actually narrating travel.
@@ -65,6 +159,19 @@ def update_continuity(before, after, action="", narrative=""):
         if new_loc and new_loc != "Unknown" and new_loc != old_memory.get("last_known_location") and narrative:
             if str(name).lower() not in str(narrative).lower() and str(new_loc).lower() not in str(narrative).lower():
                 warnings.append(f"{name}'s last-known location changed to {new_loc}, but neither is mentioned in the narrative.")
+    currency_before = before.get("currency") if isinstance(before.get("currency"), dict) else {}
+    currency_after = after.get("currency") if isinstance(after.get("currency"), dict) else {}
+    if narrative and currency_before.get("amount") == currency_after.get("amount") and not _CURRENCY_NO_TRANSACTION_RE.search(narrative):
+        currency_name = str(currency_after.get("name") or currency_before.get("name") or "").strip()
+        currency_mentioned = (bool(currency_name) and currency_name.lower() in narrative.lower()) or bool(_CURRENCY_GENERIC_RE.search(narrative))
+        if currency_mentioned and _CURRENCY_SPEND_RE.search(narrative):
+            warnings.append(f"The narrative describes a purchase or payment being made, but currency.amount ({currency_after.get('amount')} {currency_name}) did not decrease.")
+        elif currency_mentioned and _CURRENCY_EARN_RE.search(narrative):
+            warnings.append(f"The narrative describes the player being paid, rewarded, or earning {currency_name or 'money'}, but currency.amount did not increase.")
+    hp_before, hp_after = before.get("hp"), after.get("hp")
+    if narrative and isinstance(hp_before, (int, float)) and isinstance(hp_after, (int, float)):
+        if hp_after >= hp_before and _WOUND_RE.search(narrative) and not _WOUND_AVOIDED_RE.search(narrative):
+            warnings.append(f"The narrative describes the player being wounded, but hp ({hp_after}) did not decrease from {hp_before}.")
     if action:
         after.setdefault("campaign_canon", []).append({**stamp, "action": str(action)[:500], "outcome": str(narrative)[:1200]})
         after["campaign_canon"] = after["campaign_canon"][-250:]

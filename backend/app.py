@@ -779,11 +779,31 @@ def api_load():
         return err(e)
 
 
+@app.route("/api/reentry_recap", methods=["POST"])
+def api_reentry_recap():
+    try:
+        result = game.generate_reentry_recap()
+        if not result:
+            return jsonify({"recap": "", "state": game.public_state(), "story": []})
+        return jsonify(result)
+    except Exception as e:
+        return err(e)
+
+
 @app.route("/api/quests/note", methods=["POST"])
 def api_quest_note():
     d = request.get_json(force=True)
     try:
         return jsonify({"quest": game.quest_note(d.get("name", ""), d.get("note", ""))})
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/shop/buy", methods=["POST"])
+def api_shop_buy():
+    d = request.get_json(force=True)
+    try:
+        return jsonify(game.buy_shop_item(d.get("shop", ""), d.get("item", "")))
     except Exception as e:
         return err(e, 400)
 

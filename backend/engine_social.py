@@ -6,7 +6,7 @@ import copy, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
-from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, power_tier_reference
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -152,9 +152,11 @@ class SocialMixin:
         # conversational question, not a chat acknowledgment, so a 10-char
         # cutoff would almost never fire on an actual short question.
         concise = len(str(question).split()) <= 6
+        wants_chart = bool(re.search(r"\b(graph|chart|plot|visuali[sz]e|bar\s*chart)\b", str(question), re.I))
         payload = {
             "task": "advisor_question", "question": question, "state": self.trimmed_state_for_ai(),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
+            "canon_divergences": self.state.get("canon_divergences") or [],
             "thread_history": self.state.get("advisor_thread", [])[-16:],
             "schema": {
                 "summary": ("ONE direct sentence answering the question — nothing more" if concise else
@@ -163,19 +165,29 @@ class SocialMixin:
                            ["4-8 substantive supporting points with evidence, comparison, timing, odds, tradeoffs or concrete next steps"]),
                 "follow_ups": ([] if concise else
                                ["2-3 short natural follow-up questions the player might want to ask next, phrased as the PLAYER would ask them"]),
+                "chart": ("null unless the player explicitly asked for a graph/chart/visual comparison, or the answer is fundamentally "
+                          "a numeric comparison across 3+ things a chart would communicate faster than prose — in which case: "
+                          '{"title": "short chart title", "unit": "what the numbers mean, e.g. \'DBZ Power Level\'", '
+                          '"items": [{"label": "name", "value": number}, ...2-8 entries, highest first]}'),
             },
         }
-        rules = f"""You are "The Advisor" for {self.state.get('world','the world')} — an out-of-character, omniscient guide available to the player at any time. You are NOT an in-fiction character and you are not bound by the normal rule that NPCs only know what they could plausibly know.
+        rules = f"""You are "The Advisor" for {self.state.get('world','the world')} — a Dungeon Master the player can lean over and ask a question any time play pauses. You are NOT an in-fiction character and not bound by "NPCs only know what they'd plausibly know" — you know everything tracked plus this world's full canon.
+Voice: talk TO the player, like a DM answering a question at the table — direct, plain, second person ("you're", "they've"), a real opinion when asked for one. Not a report, not a wiki article. This applies to every kind of question, not just rules questions — a strategy or world-state answer should still sound like a person talking, just with more to say.
 You may freely:
 - Assess relative power levels of the player, companions, rivals, factions and known threats, using terms appropriate to this world (bounty/Haki tier, Nen category/rank, jutsu/village rank, class/level, etc.) by default.
 - If the player asks for a specific comparison framework instead — a numeric scale, tiers, percentages, or even a well-known scale borrowed from another series (e.g. "give me this in DBZ power levels") — use exactly the framing they asked for as a communication device to convey relative strength, even when it isn't native to this world. It's a translation aid, not a claim that this world works that way.
+- When you need your OWN internal sense of "how strong is strong" — placing the player, a companion, or a threat on a scale, deciding whether a fight is winnable, judging if a request for a graph makes sense numerically — anchor to this reference ladder instead of improvising a different scale each time:
+{power_tier_reference()}
+  This ladder is scaffolding for your own consistency, never shown to the player unless they specifically ask for a numbered/tiered framing. Once you've placed a named character at a tier across this conversation, stay consistent with that placement rather than re-ranking them differently next time without a stated in-world reason (a real power-up, new information, etc.).
 - Summarize the current state of the world: active threats, opportunities, unresolved plot threads, faction tensions, quest status.
 - Give honest strategic advice, including risks and trade-offs. Never decide for the player — lay out the options.
 - Every world-state or planning answer must reference the supplied next_canon_event countdown and explain whether current plans can fit before it.
-- Speak plainly from the full tracked state given to you. Extrapolate reasonably, but never invent concrete facts about unknowns as if certain — say when you're speculating.
-- When the question is really a rules/mechanics clarifying question (how something works, what's allowed, what would happen if...), answer the way a good tabletop DM explains the rules at the table: direct, plain, second person, happy to walk through an example — not a dry analytical report. Save the more structured Pax-Historia-style briefing format for world-state and strategy questions.
+- ASKED ABOUT SOMETHING NOT IN THE TRACKED STATE (an off-screen character, faction, or event the player hasn't personally touched): don't deflect to "I don't know" or "that's not tracked." Answer it — reason from this world's canon AT THE CURRENT POINT IN THE TIMELINE (the tracked world_time/canon day, never spoiling events still ahead of it), the same way a DM who knows the source material would. First check canon_divergences: if a recorded divergence changed that person/place/event, the divergence is the truth and overrides stock canon — say so plainly ("in this campaign, X happened instead, because..."). Only hedge when canon genuinely never reveals the answer even in principle — and even then, give your best-reasoned read before admitting the limit, don't lead with the disclaimer.
+- When the question is really a rules/mechanics clarifying question (how something works, what's allowed, what would happen if...), walk through it directly with an example if that helps — never a dry analytical report.
+- When the player explicitly asks for a graph/chart/visual comparison, or the honest best answer to their question is fundamentally "here's how N things stack up numerically," fill in the chart field per the schema instead of (or alongside) explaining it in prose — don't just describe numbers in a sentence when they asked to see them.
 {"FOURTH-WALL MODE IS ON. You may additionally expose and analyze the simulation's d100 math, generated difficulty range, stat/title bonuses, queue/time-budget behavior, canon-stop boundaries, AI uncertainty, save/rewind behavior, and clever ways to exploit those rules without falsifying state or changing it. Clearly distinguish engine facts from speculative model behavior." if fourth_wall else "FOURTH-WALL MODE IS OFF. Stay focused on story-world strategy and tracked facts; do not discuss software or hidden engine implementation."}
-{"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a Pax-Historia-like briefing: detailed enough to support a decision, organized and concrete, but still scannable."}
+{"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a real briefing: enough to support a decision, organized and concrete, but still sounds like someone talking to you, not a form being filled out."}
+{"THE PLAYER'S WORDING SUGGESTS THEY WANT A VISUAL (graph/chart/plot) — populate the chart field; don't just describe the numbers in prose instead." if wants_chart else ""}
 You never alter game state; this is a conversation only. Return ONLY valid JSON, no markdown fences."""
         data = self.ai.request(rules, payload, max_output_tokens=200 if concise else 1000)
         entry = {
@@ -183,6 +195,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             "summary": (data.get("summary") or "").strip() or "...",
             "points": [ai_text(p) for p in (data.get("points") or []) if ai_text(p)][:8],
             "follow_ups": [ai_text(q) for q in (data.get("follow_ups") or []) if ai_text(q)][:3],
+            "chart": self._sanitize_advisor_chart(data.get("chart")),
             "fourth_wall": bool(fourth_wall), "canon_countdown": self.canon_countdown(),
             "turn": self.state.get("turn", 0),
         }
@@ -190,6 +203,35 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             self.state.setdefault("advisor_thread", []).append(entry)
             self.autosave()
         return {"entry": entry, "state": self.public_state()}
+
+    @staticmethod
+    def _sanitize_advisor_chart(raw):
+        """The model sometimes returns chart items with a non-numeric value,
+        a missing label, or more entries than the schema asked for — none of
+        that should be able to break rendering, so coerce or drop rather
+        than trusting the shape."""
+        if not isinstance(raw, dict):
+            return None
+        items = []
+        for item in (raw.get("items") or [])[:8]:
+            if not isinstance(item, dict):
+                continue
+            label = ai_text(item.get("label") or item.get("name") or "")
+            value = item.get("value")
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+            if not label:
+                continue
+            items.append({"label": label, "value": value})
+        if not items:
+            return None
+        return {
+            "title": ai_text(raw.get("title") or "") or "Comparison",
+            "unit": ai_text(raw.get("unit") or ""),
+            "items": items,
+        }
 
     def ensure_contact(self, name, kind="person", details=None):
         if not name:
@@ -335,6 +377,67 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             update_continuity(before, self.state, "Background world tick", heard)
             self.autosave()
         return {"heard_event": data.get("heard_event", "")}
+
+    # allow_time=False (apply_guarded_patch) only blocks time/calendar
+    # fields — it was never meant to be a general "background-tick-safe"
+    # filter, so a reentry recap needs its own explicit whitelist to
+    # actually guarantee it can't touch the player's own stats, inventory,
+    # currency, or location, matching what the prompt asks for with a real
+    # mechanical backstop instead of trusting the model to comply.
+    REENTRY_RECAP_ALLOWED_PATCH_FIELDS = {"npc_memories", "factions", "canon_divergences", "npc_relationships", "faction_clocks", "npc_clocks"}
+
+    def generate_reentry_recap(self):
+        """A short narrated "since you've been away" paragraph, triggered
+        from load() detecting a real-world gap (see
+        REENTRY_RECAP_THRESHOLD_HOURS) — the one place the world visibly
+        keeps moving purely because time passed for the PLAYER, not because
+        they took any action. Deliberately narrative-only: no canon_day/
+        world_time movement (ordinary player absence can never advance
+        those, same rule as an ordinary turn), and the allowed state_patch
+        is restricted the same way the background world tick's already is,
+        so this can record real off-screen developments (an NPC's goal
+        advancing, a faction's fortunes shifting) without ever touching the
+        player's own stats, inventory, currency, or location."""
+        hours = self._pending_reentry_hours
+        self._pending_reentry_hours = None
+        if not hours or not self.ai_bg_ready() or self.busy:
+            return None
+        payload = {
+            "task": "reentry_recap", "hours_away": hours, "state": self.trimmed_state_for_ai(),
+            "recent_background_feed": (self.state.get("background_world_feed") or [])[-10:],
+            "requirements": [
+                f"The player was away from the app for about {hours:.0f} hours of real time — not in-game time, which has not moved (ordinary absence never advances world_time/canon_day, exactly like an ordinary turn never does).",
+                "Write ONE short narrated paragraph (3-6 sentences) of what plausibly stirred elsewhere while the player wasn't looking, grounded in recent_background_feed and any tracked npc_clocks/faction_clocks/npc_relationships — build on threads already in motion rather than inventing disconnected new ones.",
+                "This is atmosphere reaching the player on return (a messenger, a notice, something a companion mentions), not something that happened TO the player — never move the player's own location, stats, currency, inventory, or HP, and never advance canon_day/world_time/calendar.",
+                "Keep it proportional to the gap — a few hours away is a quiet aside, not a war concluding. Modest off-screen movement (npc_memories, factions, canon_divergences) may still be recorded via state_patch the same way the regular background world tick can, but nothing time- or player-state-related.",
+                "If genuinely nothing worth narrating has moved, return an empty recap rather than manufacturing filler.",
+            ],
+            "schema": {"recap": "the paragraph, or empty", "state_patch": "npc_memories, factions, canon_divergences or other justified non-time, non-player-state changes only"},
+        }
+        rules = self.core_rules(extra="This is a reentry recap, not a scene and not a time skip. Do not resolve a player action. Do not advance time.")
+        try:
+            data = self.ai_bg.request(rules, payload, max_output_tokens=350)
+        except Exception as e:
+            self.log("Reentry recap failed: " + str(e))
+            return None
+        with self.lock:
+            before = copy.deepcopy(self.state)
+            # allow_time=False on its own only blocks time/calendar fields,
+            # not general player-state ones — the requirements above ask
+            # the model nicely not to touch hp/currency/location, but
+            # nothing enforced that until this whitelist. A real turn earns
+            # the right to touch player state; a background recap the
+            # player didn't act to trigger does not.
+            raw_patch = data.get("state_patch", {})
+            safe_patch = {k: v for k, v in raw_patch.items() if k in self.REENTRY_RECAP_ALLOWED_PATCH_FIELDS} if isinstance(raw_patch, dict) else {}
+            apply_guarded_patch(self.state, safe_patch, allow_time=False, source="reentry_recap")
+            recap = str(data.get("recap", "")).strip()
+            if recap:
+                self.append("[WHILE YOU WERE AWAY]\n" + recap, "narrative")
+                self.log("Reentry recap generated.")
+            update_continuity(before, self.state, "Reentry recap", recap)
+            self.autosave()
+        return {"recap": recap, "state": self.public_state(), "story": self._flush_story()}
 
     def run_memory_manager(self):
         if not self.ai_bg_ready() or self.busy:
