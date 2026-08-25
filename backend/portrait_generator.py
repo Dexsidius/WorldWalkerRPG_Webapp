@@ -124,16 +124,29 @@ def visual_state(state):
     special = state.get("special", {}) if isinstance(state.get("special"), dict) else {}
     visual_special = {k: v for k, v in special.items() if VISUAL_SPECIAL_KEYS.search(str(k))}
     identity = state.get("portrait_identity", {}) if isinstance(state.get("portrait_identity"), dict) else {}
+    age = state.get("age", "")
+    try:
+        age_num = int(age)
+        age_band = "child" if age_num < 13 else "teen" if age_num < 18 else "young adult" if age_num < 30 else "adult" if age_num < 50 else "older adult"
+    except (TypeError, ValueError):
+        age_band = str(age or "unspecified")
+    raw_traits = state.get("portrait_traits", []) if isinstance(state.get("portrait_traits"), list) else []
+    traits, seen = [], set()
+    for value in raw_traits:
+        text = ai_text(value)
+        if text and text.lower() not in seen:
+            traits.append(text); seen.add(text.lower())
+    # The signature intentionally excludes narrative-only fields such as
+    # position, reputation, class labels, and ordinary status changes. A new
+    # paid portrait is warranted by a visible body/clothing/form change, not
+    # by every mechanical update to the character sheet.
     return {
         "world": state.get("world", "Custom World"),
-        "age": state.get("age", ""),
+        "age_band": age_band,
         "appearance": state.get("appearance_desc", ""),
-        "traits": state.get("portrait_traits", []),
+        "traits": traits,
         "equipment": state.get("equipment", {}),
         "affiliations": affiliation_text_for(state),
-        "origin": special.get("Origin", ""),
-        "archetype": special.get("Archetype", ""),
-        "position": state.get("position", ""),
         "visual_special": visual_special,
         "canonical_identity": identity.get("canonical_description", ""),
         "temporary_traits": identity.get("temporary_traits", []),
@@ -247,6 +260,7 @@ def portrait_view(state, settings):
         "_portrait_reference": bool(reference and not cached),
         "_portrait_generation_enabled": bool(settings.get("portrait_generation_enabled", True)),
         "_portrait_generation_ready": portrait_ready(settings),
+        "_portrait_regeneration_policy": "Only significant visible appearance, equipment, affiliation clothing, or transformation changes create a new cache key.",
     }
 
 

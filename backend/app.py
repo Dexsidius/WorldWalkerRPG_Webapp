@@ -9,8 +9,16 @@ from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORL
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
 from portrait_generator import PORTRAIT_CACHE_DIR, generate_portrait, save_reference, portrait_history, revert_portrait, portrait_usage
-from lore import list_lore_sources, import_lore_pack
+from lore import list_lore_sources, import_lore_pack, lore_library_status
 from systems import normalize_tuning, progression_preset_for, relationship_snapshot, campaign_health, map_snapshot
+from reliability import narrative_memory_snapshot, canon_event_tracker, visible_class_profile, visible_skills
+from knowledge import knowledge_snapshot
+from causality import causality_snapshot
+from simulation_integrity import (integrity_snapshot, campaign_search,
+                                  apply_player_correction, build_travel_graph,
+                                  travel_route, canon_dependency_graph)
+from evaluations import list_evaluations, run_model_evaluation
+from support import repair_campaign_state, build_diagnostic_bundle
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else BACKEND_DIR.parent
@@ -47,6 +55,7 @@ _bg_running = False
 _bg_pending = []
 
 _busy_lock = threading.Lock()
+_evaluation_lock = threading.Lock()
 _portrait_lock = threading.Lock()
 
 
@@ -174,6 +183,18 @@ def api_campaign_preview():
             d.get("origin", ""), d.get("archetype", ""), d.get("stats", {}),
             d.get("start_location", ""), d.get("start_note", ""),
             d.get("canon_character_id", ""), d.get("starting_era_id", ""),
+        )
+        return jsonify({"preview": preview})
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/campaign/preview/reroll", methods=["POST"])
+def api_campaign_preview_reroll():
+    d = request.get_json(force=True)
+    try:
+        preview = game.reroll_campaign_preview(
+            d.get("preview", {}), d.get("kind", ""), d.get("background", ""),
         )
         return jsonify({"preview": preview})
     except Exception as e:
@@ -365,7 +386,8 @@ def api_time_assess():
     if not acquire_busy():
         return busy_error()
     try:
-        result = game.assess_time_skip(d.get("amount", 1), d.get("unit", "moment"), d.get("orders", ""), d.get("intensity", "normal"))
+        result = game.assess_time_skip(d.get("amount", 1), d.get("unit", "moment"), d.get("orders", ""),
+                                       d.get("intensity", "normal"), use_model=False)
         return jsonify(result)
     except Exception as e:
         return err(e)
@@ -460,15 +482,23 @@ def api_advisor_ask():
 def _run_background_jobs():
     global _bg_running
     try:
-        chat = game.maybe_generate_incoming_chat()
-        if chat:
-            with _bg_lock:
-                _bg_pending.append({"type": "chat", **chat, "state": game.public_state()})
-        tick = game.create_world_event_if_due()
-        if tick and tick.get("heard_event"):
-            with _bg_lock:
-                _bg_pending.append({"type": "world_event", "message": tick["heard_event"], "state": game.public_state()})
-        game.run_memory_manager()
+        local = game.run_local_background()
+        # Economy and Balanced never spend an extra background-model call.
+        # Deep mode opts into at most one such call every four resolved
+        # turns, alternating communications and wider-world narration.
+        if game.background_ai_due():
+            if int(game.state.get("turn", 0) or 0) % 8:
+                chat = game.maybe_generate_incoming_chat()
+                if chat:
+                    with _bg_lock:
+                        _bg_pending.append({"type": "chat", **chat, "state": game.public_state()})
+            else:
+                tick = game.create_world_event_if_due()
+                if tick and tick.get("heard_event"):
+                    with _bg_lock:
+                        _bg_pending.append({"type": "world_event", "message": tick["heard_event"], "state": game.public_state()})
+        with _bg_lock:
+            _bg_pending.append({"type": "maintenance", **local, "state": game.public_state()})
     except Exception:
         traceback.print_exc()
     finally:
@@ -511,6 +541,7 @@ def api_panels():
         "training_options": ex["training"],
         "ability_progress": s.get("ability_progress", {}),
         "progression_log": s.get("progression_log", []),
+        "progression_ledger": s.get("progression_ledger", []),
         "uses_xp": uses_xp_for(s.get("world", "Custom World")),
         "level": s.get("level", 1), "xp": s.get("xp", 0), "xp_next": s.get("xp_next", 100),
         "stats": s.get("stats", {}),
@@ -521,7 +552,8 @@ def api_panels():
         "equipment": s.get("equipment", {}),
         "companions": s.get("companions", []),
         "titles": s.get("titles", []),
-        "skills": s.get("skills", {}),
+        "skills": visible_skills(s),
+        "class_profile": visible_class_profile(s),
         "combat": s.get("combat", {}),
         "world_events": s.get("world_events", []),
         "timeline": s.get("timeline", []),
@@ -538,6 +570,7 @@ def api_panels():
         "canon_anchor": s.get("canon_anchor", ""), "calendar_epoch": s.get("calendar_epoch", ""),
         "calendar_anchor_day": s.get("calendar_anchor_day"),
         "canon_events": timeline_for(s.get("world", "Custom World")).get("events", []),
+        "canon_event_tracker": canon_event_tracker(s, timeline_for(s.get("world", "Custom World")).get("events", [])),
         "canon_events_fired": s.get("canon_events_fired", []),
         "scheduled_events": game.visible_schedule(),
         "quest_archive": s.get("quest_archive", []),
@@ -549,7 +582,48 @@ def api_panels():
         "progression_preset": progression_preset_for(world), "difficulty_controls": normalize_tuning(s),
         "campaign_health": campaign_health(s), "lore_sources": list_lore_sources(),
         "director_notes": s.get("director_notes", ""),
+        "narrative_memory": narrative_memory_snapshot(s),
+        "npc_knowledge": knowledge_snapshot(s),
+        "causality": causality_snapshot(s),
+        "lore_status": lore_library_status(s.get("world", "Custom World")),
+        "evaluations": list_evaluations(),
+        "simulation": {"profile": game.simulation_profile(),
+                       "intentions": s.get("npc_intentions", {}),
+                       "recent_events": s.get("simulation_events", [])[-40:],
+                       "integrity": integrity_snapshot(s)},
+        "travel_graph": build_travel_graph(s),
+        "canon_dependencies": canon_dependency_graph(s),
     })
+
+
+@app.route("/api/campaign/search")
+def api_campaign_search():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    query = str(request.args.get("q") or "").strip()
+    return jsonify({"query": query, "results": campaign_search(game.state, query, request.args.get("limit", 30))})
+
+
+@app.route("/api/campaign/correct", methods=["POST"])
+def api_campaign_correct():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    d = request.get_json(force=True)
+    try:
+        record = apply_player_correction(game.state, d.get("type"), d.get("target"), d.get("value"), d.get("explanation", ""))
+        game.append("[PLAYER CORRECTION]\n" + record["fact"], "meta")
+        game.autosave()
+        return jsonify({"ok": True, "correction": record, "state": game.public_state(), "story": game._flush_story()})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/travel/route")
+def api_travel_route():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    destination = str(request.args.get("destination") or "").strip()
+    return jsonify(travel_route(game.state, destination))
 
 
 @app.route("/api/campaign/tuning", methods=["POST"])
@@ -567,7 +641,8 @@ def api_campaign_tuning():
 
 @app.route("/api/lore")
 def api_lore_sources():
-    return jsonify({"sources": list_lore_sources(), "folder": str(DATA_DIR / "lore")})
+    return jsonify({"sources": list_lore_sources(), "folder": str(DATA_DIR / "lore"),
+                    "status": lore_library_status(game.state.get("world", "Custom World"))})
 
 
 @app.route("/api/lore/import", methods=["POST"])
@@ -701,7 +776,7 @@ def api_settings_post():
         "provider", "local_base_url", "local_token", "api_key", "model", "secondary_model",
         "narration", "autosave", "sound_enabled", "music_enabled", "music_volume", "animations_enabled",
         "portrait_generation_enabled", "image_model", "local_image_model", "portrait_quality", "developer_mode",
-        "onboarding_seen"
+        "onboarding_seen", "simulation_mode"
     ] if k in d}
     game.update_settings(patch)
     return jsonify({"ok": True})
@@ -829,6 +904,10 @@ def api_turn_rate_good():
 def api_diagnostics():
     data = game.diagnostics_snapshot()
     data["scene"]["reason"] = scene_selection_reason(game.state)
+    data["campaign_health"] = campaign_health(game.state)
+    data["npc_knowledge"] = knowledge_snapshot(game.state)
+    data["causality"] = causality_snapshot(game.state)
+    data["lore_status"] = lore_library_status(game.state.get("world", "Custom World"))
     return jsonify(data)
 
 
@@ -838,6 +917,44 @@ def api_diagnostics_export():
     data["scene"]["reason"] = scene_selection_reason(game.state)
     raw = json.dumps(data, indent=2, ensure_ascii=False).encode("utf-8")
     return send_file(io.BytesIO(raw), mimetype="application/json", as_attachment=True, download_name="worldwalker-diagnostics.json")
+
+
+@app.route("/api/diagnostics/bundle")
+def api_diagnostics_bundle():
+    return send_file(build_diagnostic_bundle(game), mimetype="application/zip", as_attachment=True,
+                     download_name=f"worldwalker-support-{APP_VERSION}.zip")
+
+
+@app.route("/api/campaign/health/repair", methods=["POST"])
+def api_campaign_health_repair():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign before repairing it."}), 400
+    d = request.get_json(silent=True) or {}
+    try:
+        result = repair_campaign_state(game.state, str(d.get("repair_id") or "safe_all"))
+        game.autosave()
+        return jsonify({"repair": result, "campaign_health": campaign_health(game.state), "state": game.public_state()})
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/evaluations")
+def api_evaluations():
+    return jsonify(list_evaluations())
+
+
+@app.route("/api/evaluations/run", methods=["POST"])
+def api_evaluations_run():
+    if not _evaluation_lock.acquire(blocking=False):
+        return jsonify({"error": "A model evaluation is already running."}), 409
+    try:
+        d = request.get_json(silent=True) or {}
+        ids = d.get("scenario_ids") if isinstance(d.get("scenario_ids"), list) else []
+        return jsonify(run_model_evaluation(game, ids))
+    except Exception as e:
+        return err(e, 400)
+    finally:
+        _evaluation_lock.release()
 
 
 @app.route("/api/world-packs")

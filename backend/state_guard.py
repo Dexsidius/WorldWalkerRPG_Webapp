@@ -9,6 +9,7 @@ from datetime import datetime
 
 from util import merge, ai_text
 from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for
+from knowledge import normalize_npc_knowledge
 
 
 APP_OWNED = {
@@ -45,7 +46,13 @@ APP_OWNED = {
     "purchase_offers",
     # Only the player's own rating action (engine_journal.rate_last_turn_good)
     # writes this — never the GM.
-    "rated_good_turns",
+    "rated_good_turns", "narrative_memory", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs",
+    "npc_intentions", "simulation_events", "local_background_turn",
+    # v3.4 deterministic simulation records. The narrator may describe
+    # inputs for these systems, but only local code may author their ledgers.
+    "action_goals", "correction_log", "authoritative_corrections",
+    "information_packets", "npc_schedules", "canon_event_states",
+    "simulation_validation",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -85,6 +92,10 @@ def _clean_quest(raw, hidden=False):
         "clear_conditions": ("clear_conditions", "completion_conditions", "conditions", "objectives"),
         "evidence": ("evidence", "clues"), "involved_npcs": ("involved_npcs", "npcs"),
         "locations": ("locations",), "consequences": ("consequences",),
+        "discovered_clues": ("discovered_clues", "clues", "evidence", "current_knowledge"),
+        "completion_conditions": ("completion_conditions", "clear_conditions", "conditions"),
+        "optional_objectives": ("optional_objectives",),
+        "current_obstacles": ("current_obstacles", "obstacles", "risks", "known_risks"),
     }
     for target, keys in aliases.items():
         value = next((q.get(k) for k in keys if q.get(k) is not None), [])
@@ -99,6 +110,7 @@ def _clean_quest(raw, hidden=False):
     branch = q.get("branch_state")
     q["branch_state"] = copy.deepcopy(branch) if isinstance(branch, dict) else {"current": "main", "available": [], "locked": []}
     q["first_step"] = str(q.get("first_step") or q.get("next_step") or "")[:500]
+    q["next_hint"] = str(q.get("next_hint") or q.get("hint") or q.get("first_step") or q.get("next_step") or "")[:500]
     q["player_notes"] = str(q.get("player_notes") or "")[:4000]
     return q
 
@@ -157,9 +169,13 @@ def _repair(state):
 
 
 def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
+    before = copy.deepcopy(state)
     safe, accepted, rejected = _normalize_patch(patch, state, allow_time, source)
     merge(state, safe)
     repairs = _repair(state)
+    knowledge_changes = normalize_npc_knowledge(state, before, source)
+    if knowledge_changes:
+        repairs.extend(f"Downgraded unsupported secret knowledge for {row['npc']} to a suspicion" for row in knowledge_changes)
     report = {
         "time": datetime.now().isoformat(timespec="seconds"), "turn": state.get("turn", 0),
         "source": source, "accepted": accepted, "rejected": rejected, "repairs": repairs,
@@ -194,7 +210,8 @@ def migrate_state(state, from_version="unknown"):
                         resource_max=resource_new, resource=max(0, round(resource_new * resource_ratio)))
     for key, default in BASE_STATE.items():
         migrated.setdefault(key, copy.deepcopy(default))
-    migrated["schema_version"] = BASE_STATE.get("schema_version", 6)
+    migrated["schema_version"] = BASE_STATE.get("schema_version", 11)
+    normalize_npc_knowledge(migrated, {}, "migration")
     repairs = _repair(migrated)
     migrated.setdefault("diagnostics", {})["migration"] = {
         "from_version": from_version, "repairs": repairs,

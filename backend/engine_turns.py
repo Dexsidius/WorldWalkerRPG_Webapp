@@ -12,9 +12,14 @@ from lore import format_lore_context
 from portrait_generator import portrait_view
 from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
+from reliability import update_narrative_memory, record_progression_ledger, advance_hidden_class_discovery
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks, record_purchase_offer)
+from simulation import advance_npc_intentions, record_simulation_events
+from simulation_integrity import (register_action_goals, reconcile_action_goals,
+                                  validate_turn_response, refresh_npc_schedules,
+                                  transmit_information)
 
 
 DEFAULT_SETTINGS = {
@@ -323,7 +328,7 @@ class TurnsMixin:
 
     def resolve(self, action, assessment, roll_result):
         p = {"task": "narrator_and_resolution", "role": "Narrator + Rules Referee", "action": action,
-             "assessment": assessment, "dice_result": roll_result, "state_before": self.trimmed_state_for_ai(),
+             "assessment": assessment, "dice_result": roll_result, "state_before": self.trimmed_state_for_ai(action),
              "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
                         "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
                         "events": [{"type": "xp|level_up|skill|title|quest|hidden_quest|item|loot|reputation|companion|codex|location|training|combat|injury|death|discovery|world", "message": "notification"}],
@@ -521,11 +526,21 @@ Return ONLY valid JSON."""
     def apply_resolution(self, data, is_opening=False, pending_action=None, progression_context=None):
         with self.lock:
             before = copy.deepcopy(self.state)
+            context = progression_context if isinstance(progression_context, dict) else {}
+            turn_actions = context.get("actions", []) if isinstance(context.get("actions", []), list) else []
+            if pending_action and not turn_actions: turn_actions = [pending_action]
+            if not is_opening:
+                register_action_goals(self.state, turn_actions)
+                data, integrity_report = validate_turn_response(
+                    before, data, turn_actions, context.get("rolls", []),
+                    int(context.get("elapsed_minutes", 5) or 5), [],
+                )
+            else:
+                integrity_report = {}
             validation = apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="opening" if is_opening else "turn")
             if not uses_xp_for(self.state.get("world")):
                 self.state["xp"], self.state["level"], self.state["xp_next"] = before.get("xp", 0), before.get("level", 1), before.get("xp_next", 100)
             else:
-                context = progression_context if isinstance(progression_context, dict) else {}
                 self.apply_system_xp(before, context.get("actions", []) if not is_opening else [], context.get("rolls", []),
                                      context.get("elapsed_minutes", 5), context.get("intensity", "normal"), data.get("events", []))
             self.sync_derived_pools(before)
@@ -539,10 +554,31 @@ Return ONLY valid JSON."""
             self.state["suggested_actions"] = self.guided_suggestions(data.get("suggested_actions"))
             offer_detail = record_purchase_offer(self.state)
             self.append(data.get("narrative", "The scene advances."), detail=({"purchase_offer": offer_detail} if offer_detail else None))
+            record_simulation_events(self.state,
+                                     [{"type": "action", "narrative": data.get("narrative", "")}]
+                                     + list(data.get("events", []) or []), "narrator")
+            advance_npc_intentions(self.state, 5, self.simulation_mode())
+            refresh_npc_schedules(self.state, 5)
+            transmit_information(self.state, data, 5)
+            if integrity_report:
+                self.state.setdefault("simulation_validation", []).append(copy.deepcopy(integrity_report))
+                self.state["simulation_validation"] = self.state["simulation_validation"][-100:]
+                reconcile_action_goals(self.state, [], data, 5)
             if not is_opening:
                 self.append_growth_deltas(before)
             self.ensure_quest_briefings(before, pending_action or "")
             normalize_quest_state_machine(self.state)
+            if not is_opening:
+                advance_hidden_class_discovery(self.state, pending_action or "")
+                record_progression_ledger(
+                    before, self.state, pending_action or "Story development",
+                    context.get("elapsed_minutes", 5), context.get("rolls", []),
+                )
+            update_narrative_memory(
+                before, self.state,
+                pending_action or ("Campaign opening" if is_opening else "Story development"),
+                data.get("narrative", ""),
+            )
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, pending_action or ("campaign opening" if is_opening else ""), data.get("narrative", ""))
             for note in self.state.pop("_pending_chronicle_notes", []):
@@ -580,6 +616,7 @@ Return ONLY valid JSON."""
             "can_rewind": died and bool(self.checkpoints),
             "story": self._flush_story(),
             "validation": validation,
+            "integrity_report": integrity_report,
             "continuity_warnings": continuity_warnings,
         }
 
@@ -671,6 +708,10 @@ Return ONLY valid JSON."""
                 "explanation": f"You committed to this goal at {self.state.get('location', 'your current location')}: {goal}.",
                 "current_knowledge": [f"Starting point: {self.state.get('location', 'current location')}"],
                 "clear_conditions": [goal],
+                "completion_conditions": [goal],
+                "discovered_clues": [f"Starting point: {self.state.get('location', 'current location')}"],
+                "optional_objectives": [],
+                "current_obstacles": ["Unknown until the first lead is investigated"],
                 "locations": [self.state.get("location", "Current location")],
                 "risks": ["Unknown until the first lead is investigated"],
                 "first_step": "Identify the nearest reliable lead, witness, patron, or location connected to the objective.",
@@ -699,6 +740,11 @@ Return ONLY valid JSON."""
             quest["risks"] = [ai_text(x)[:500] for x in risks[:20] if ai_text(x)] or ["No specific danger is confirmed yet."]
             quest["giver"] = str(quest.get("giver") or quest.get("cause") or "Circumstances")[:200]
             quest["first_step"] = str(quest.get("first_step") or quest.get("next_step") or f"Follow the first known lead: {quest['current_knowledge'][0]}")[:500]
+            quest["discovered_clues"] = [ai_text(x)[:500] for x in (quest.get("discovered_clues") or quest["current_knowledge"])[:40] if ai_text(x)]
+            quest["completion_conditions"] = [ai_text(x)[:500] for x in (quest.get("completion_conditions") or quest["clear_conditions"])[:40] if ai_text(x)]
+            quest["optional_objectives"] = [ai_text(x)[:500] for x in (quest.get("optional_objectives") or [])[:20] if ai_text(x)]
+            quest["current_obstacles"] = [ai_text(x)[:500] for x in (quest.get("current_obstacles") or quest["risks"])[:20] if ai_text(x)]
+            quest["next_hint"] = str(quest.get("next_hint") or quest["first_step"])[:500]
             self.append(
                 f"[QUEST STARTED — {quest.get('name', 'New Quest')}]\n"
                 f"{quest['explanation']}\n"

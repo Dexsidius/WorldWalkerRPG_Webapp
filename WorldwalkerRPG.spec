@@ -33,6 +33,7 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=['assets/branding/worldwalker.ico'],
+    version='version_info.txt',
 )
 coll = COLLECT(
     exe,

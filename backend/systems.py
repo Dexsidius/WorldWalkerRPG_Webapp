@@ -11,6 +11,7 @@ import re
 import secrets
 
 from util import ai_text
+from causality import advance_causal_clock
 
 # A chapter is meant to read as a season of the story, not a fixed number of
 # actions — consolidate roughly every in-game quarter (90 days on the
@@ -115,6 +116,14 @@ def normalize_quest_state_machine(state):
             else:
                 objectives.append({"id": f"obj-{index + 1}", "text": str(raw)[:500], "status": "active", "optional": False, "progress": 0})
         quest["objectives"] = objectives
+        quest["completion_conditions"] = [obj["text"] for obj in objectives if not obj.get("optional")]
+        quest["optional_objectives"] = [obj["text"] for obj in objectives if obj.get("optional")]
+        quest["discovered_clues"] = _list(quest.get("discovered_clues") or quest.get("current_knowledge") or quest.get("evidence"))
+        quest["current_obstacles"] = _list(quest.get("current_obstacles") or quest.get("risks"))
+        quest["next_hint"] = str(quest.get("next_hint") or quest.get("first_step") or
+                                 (f"Continue working on: {next((o['text'] for o in objectives if o['status'] == 'active'), 'the next known lead')}") )[:500]
+        required_progress = [obj.get("progress", 0) for obj in objectives if not obj.get("optional")]
+        quest["progress_percent"] = round(sum(required_progress) / len(required_progress)) if required_progress else 0
         quest.setdefault("branch_state", {"current": "main", "available": [], "locked": []})
         quest.setdefault("consequences", [])
         required = [obj for obj in objectives if not obj.get("optional")]
@@ -169,7 +178,10 @@ def update_chapter_memory(before, state, trigger, narrative):
 
 
 def _clock(name, kind, goal, threshold=100):
-    return {"name": name, "kind": kind, "goal": goal, "progress": 0, "threshold": threshold, "status": "active", "last_update": "Not yet advanced"}
+    return {"name": name, "kind": kind, "goal": goal, "progress": 0, "threshold": threshold, "status": "active",
+            "last_update": "Not yet advanced", "method": "organized effort" if kind == "faction" else "personal effort",
+            "target_location": "", "travel_remaining_days": 0, "dependencies": [],
+            "resources": {"capacity": 50}, "resource_cost": {}}
 
 
 # A nemesis clock deliberately takes much longer to reach its turning point
@@ -198,10 +210,11 @@ def tick_world_clocks(state, elapsed_minutes):
     step = max(1, min(18, int(math.ceil(1 + elapsed_days * 3))))
     propose_faction_conflicts(state, elapsed_days)
     events = []
-    for clocks in (faction_clocks, npc_clocks):
+    for clock_kind, clocks in (("faction", faction_clocks), ("npc", npc_clocks)):
         for key, clock in clocks.items():
             if not isinstance(clock, dict) or clock.get("status") not in {None, "active"}: continue
-            clock["progress"] = min(int(clock.get("threshold", 100) or 100), int(clock.get("progress", 0) or 0) + step)
+            causal_step = advance_causal_clock(state, clock.get("name") or key, clock, step, elapsed_days, clock_kind)
+            clock["progress"] = min(int(clock.get("threshold", 100) or 100), int(clock.get("progress", 0) or 0) + causal_step)
             clock["last_update"] = state.get("world_time", "")
             if clock["progress"] >= int(clock.get("threshold", 100) or 100):
                 clock["status"] = "turning_point"
@@ -545,21 +558,41 @@ def relationship_snapshot(state):
 
 def campaign_health(state):
     issues = []
-    def add(severity, area, message, fix): issues.append({"severity": severity, "area": area, "message": message, "suggestion": fix})
+    def add(severity, area, message, fix, repair_id=""):
+        issues.append({"severity": severity, "area": area, "message": message, "suggestion": fix,
+                       "repair_id": repair_id, "repairable": bool(repair_id)})
     if not state.get("quests"): add("warning", "Journey", "No active quest is giving the campaign a visible medium-term objective.", "Follow a current lead or declare a personal quest.")
     if not state.get("chapter_summaries") and int(state.get("turn", 0) or 0) >= 8: add("warning", "Memory", "No chapter summary exists for this older campaign.", "Advance once to let the chapter memory system consolidate recent turns.")
     for quest in state.get("quests", []):
-        if isinstance(quest, dict) and not quest.get("objectives"): add("error", "Quest", f"{quest.get('name', 'A quest')} has no tracked objectives.", "Open or advance the quest so its state can be normalized.")
+        if isinstance(quest, dict) and not quest.get("objectives"): add("error", "Quest", f"{quest.get('name', 'A quest')} has no tracked objectives.", "Normalize it into a safe discovery objective.", "normalize_quests")
+        if isinstance(quest, dict) and not (quest.get("next_hint") or quest.get("first_step")): add("warning", "Quest", f"{quest.get('name', 'A quest')} has no actionable next hint.", "Add a conservative investigate-the-requirements lead.", "normalize_quests")
     vague_skills = [name for name, value in state.get("skills", {}).items() if not isinstance(value, dict) or not (value.get("description") or value.get("effect"))]
-    if vague_skills: add("warning", "Skills", f"{len(vague_skills)} skill descriptions are incomplete.", "Use or investigate those skills so the GM can establish effects and limits.")
+    if vague_skills: add("warning", "Skills", f"{len(vague_skills)} skill descriptions are incomplete.", "Add readable placeholder descriptions without inventing mechanics.", "describe_skills")
     if state.get("continuity_ledger", {}).get("warnings"): add("error", "Continuity", "The continuity ledger contains unresolved warnings.", "Review Journal → Continuity before a long skip.")
     if not state.get("npc_memories") and int(state.get("turn", 0) or 0) >= 4: add("warning", "NPCs", "No recurring NPC memory has been established.", "Interact with named characters or pursue a social lead.")
-    if state.get("location") not in state.get("discovered_locations", []): add("error", "Map", "The current location is missing from discovered locations.", "The next state repair will add it automatically.")
+    memory = state.get("narrative_memory") if isinstance(state.get("narrative_memory"), dict) else {}
+    if int(state.get("turn", 0) or 0) >= 4 and not any(memory.get(key) for key in ("established_facts", "player_goals", "consequences")):
+        add("warning", "Memory", "Long-term narrative memory has no established facts, goals, or consequences.", "Complete a meaningful turn so the memory ledger can establish campaign anchors.")
+    if state.get("location") not in state.get("discovered_locations", []): add("error", "Map", "The current location is missing from discovered locations.", "Add the current location to the discovered map.", "map_current_location")
+    dead = {name for name, row in (state.get("npc_memories") or {}).items() if isinstance(row, dict) and str(row.get("status", "")).lower() in {"dead", "deceased"}}
+    active_dead = [ai_text(c.get("name") if isinstance(c, dict) else c) for c in state.get("companions", []) if ai_text(c.get("name") if isinstance(c, dict) else c) in dead]
+    if active_dead: add("error", "Party", f"Deceased companions remain active: {', '.join(active_dead)}.", "Remove them from the active party while preserving their history.", "remove_deceased_companions")
+    duplicate_rewards = 0
+    for key in ("titles", "achievements"):
+        labels = [ai_text(x.get("name") if isinstance(x, dict) else x).lower() for x in state.get(key, [])]
+        duplicate_rewards += len([x for i, x in enumerate(labels) if x and x in labels[:i]])
+    if duplicate_rewards: add("warning", "Rewards", f"{duplicate_rewards} duplicate title or achievement entries were detected.", "Remove exact duplicates while keeping the first record.", "deduplicate_rewards")
+    blocked = [clock for clocks in (state.get("npc_clocks", {}), state.get("faction_clocks", {})) for clock in clocks.values() if isinstance(clock, dict) and clock.get("blocked_reason")]
+    if blocked: add("warning", "World causality", f"{len(blocked)} off-screen agenda(s) are blocked by travel, resources, or prerequisites.", "Review World Clocks to see the specific causal blockers.")
     score = max(0, 100 - sum(18 if x["severity"] == "error" else 8 for x in issues))
     return {"score": score, "status": "Healthy" if score >= 85 else "Needs attention" if score >= 60 else "Unstable", "issues": issues,
             "counts": {"active_quests": len(state.get("quests", [])), "chapters": len(state.get("chapter_summaries", [])),
                        "npc_clocks": len(state.get("npc_clocks", {})), "faction_clocks": len(state.get("faction_clocks", {})),
-                       "continuity_warnings": len(state.get("continuity_ledger", {}).get("warnings", []))}}
+                       "continuity_warnings": len(state.get("continuity_ledger", {}).get("warnings", [])),
+                       "memory_records": sum(len(v) for v in memory.values() if isinstance(v, list)),
+                       "knowledge_audits": len(state.get("knowledge_audit", [])),
+                       "causal_records": len(state.get("causality_ledger", [])),
+                       "repairs": len(state.get("health_repairs", []))}}
 
 
 def tension_level(state):

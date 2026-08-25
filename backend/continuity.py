@@ -3,6 +3,7 @@ import re
 from datetime import datetime
 
 from util import ai_text
+from reliability import validate_campaign_state
 
 
 def _quest_map(items):
@@ -215,6 +216,8 @@ def update_continuity(before, after, action="", narrative=""):
     if action:
         after.setdefault("campaign_canon", []).append({**stamp, "action": str(action)[:500], "outcome": str(narrative)[:1200]})
         after["campaign_canon"] = after["campaign_canon"][-250:]
+    warnings.extend(validate_campaign_state(before, after, narrative))
+    warnings = list(dict.fromkeys(warnings))
     ledger["facts"] = facts[-300:]
     ledger["warnings"] = warnings[-40:]
     ledger["last_checked_turn"] = turn
