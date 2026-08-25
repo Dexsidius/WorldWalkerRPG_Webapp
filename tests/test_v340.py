@@ -31,7 +31,7 @@ class WorldwalkerV340Tests(unittest.TestCase):
         return state
 
     def test_version_schema_and_new_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.6.0")
+        self.assertEqual(APP_VERSION, "3.6.1")
         self.assertEqual(BASE_STATE["schema_version"], 12)
         for key in ("action_goals", "correction_log", "authoritative_corrections",
                     "information_packets", "npc_schedules", "canon_event_states",
