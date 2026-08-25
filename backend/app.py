@@ -17,7 +17,7 @@ from causality import causality_snapshot
 from simulation_integrity import (integrity_snapshot, campaign_search,
                                   apply_player_correction, build_travel_graph,
                                   travel_route, canon_dependency_graph)
-from evaluations import list_evaluations, run_model_evaluation
+from evaluations import list_evaluations, run_model_comparison, run_model_evaluation
 from support import repair_campaign_state, build_diagnostic_bundle
 
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -143,9 +143,15 @@ def api_worlds():
             "tagline": wd["tagline"], "resource": wd["resource"], "start": wd["start"],
             "origins": ex["origins"], "archetypes": ex["archetypes"], "currency": ex["currency"],
             "abilities": abilities_for(name), "stat_style": stat_style_for(name),
-            "start_options": start_options_for(name),
+            "start_options": start_options_for(name) or [
+                {"label": wd["start"], "location": wd["start"], "note": "Default starting location for this world."}
+            ],
             "playable_characters": playable_characters_for(name),
-            "starting_eras": starting_eras_for(name),
+            "starting_eras": starting_eras_for(name) or [{
+                "id": "default", "label": "Main story opening",
+                "start_day": int(timeline_for(name).get("start_day", -7)),
+                "anchor": timeline_for(name).get("anchor", "Shortly before the main story."),
+            }],
         }
     return jsonify({"worlds": out, "difficulties": DIFFICULTIES, "order": list(WORLD_DATA.keys())})
 
@@ -340,15 +346,21 @@ def api_usage():
     """Session-total estimated AI spend, for the topbar cost indicator.
     Numbers only get more accurate as calls happen — nothing here is
     predictive, it's a running tally of what's already been spent."""
-    main_u, bg_u, portrait_u = game.ai.usage, game.ai_bg.usage, portrait_usage()
-    cost_known = not (main_u.get("cost_unknown") or bg_u.get("cost_unknown"))
-    total_cost = main_u.get("cost_usd", 0.0) + bg_u.get("cost_usd", 0.0) + portrait_u.get("cost_usd", 0.0)
+    main_u, bg_u, major_u, portrait_u = game.ai.usage, game.ai_bg.usage, game.ai_major.usage, portrait_usage()
+    unique_clients = list({id(client): client for client in (game.ai, game.ai_bg, game.ai_major)}.values())
+    cost_known = not any(client.usage.get("cost_unknown") for client in unique_clients)
+    total_cost = sum(client.usage.get("cost_usd", 0.0) for client in unique_clients) + portrait_u.get("cost_usd", 0.0)
+    warning_at = max(0.0, float(game.settings.get("session_budget_warning_usd", 0) or 0))
     return jsonify({
         "provider": game.settings.get("provider", "local"),
-        "main": main_u, "background": bg_u, "portraits": portrait_u,
+        "main": main_u, "background": bg_u, "major": major_u, "portraits": portrait_u,
+        "major_model": game.settings.get("major_event_model", ""),
+        "major_is_separate": game.ai_major is not game.ai,
         "total_cost_usd": round(total_cost, 4),
+        "session_budget_warning_usd": warning_at,
+        "over_session_budget": bool(warning_at and total_cost >= warning_at),
         "cost_estimate_complete": cost_known,
-        "total_calls": main_u.get("calls", 0) + bg_u.get("calls", 0),
+        "total_calls": sum(client.usage.get("calls", 0) for client in unique_clients),
     })
 
 
@@ -587,8 +599,13 @@ def api_panels():
         "causality": causality_snapshot(s),
         "lore_status": lore_library_status(s.get("world", "Custom World")),
         "evaluations": list_evaluations(),
+        "evaluation_models": [model for model in dict.fromkeys([
+            game.settings.get("model", ""), game.settings.get("major_event_model", "")
+        ]) if model],
         "simulation": {"profile": game.simulation_profile(),
                        "intentions": s.get("npc_intentions", {}),
+                       "campaign_direction": s.get("campaign_direction", {}),
+                       "relationship_opportunities": s.get("relationship_opportunities", []),
                        "recent_events": s.get("simulation_events", [])[-40:],
                        "integrity": integrity_snapshot(s)},
         "travel_graph": build_travel_graph(s),
@@ -773,7 +790,8 @@ def api_settings_get():
 def api_settings_post():
     d = request.get_json(force=True)
     patch = {k: d[k] for k in [
-        "provider", "local_base_url", "local_token", "api_key", "model", "secondary_model",
+        "provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model",
+        "max_ai_cost_per_request_usd", "session_budget_warning_usd",
         "narration", "autosave", "sound_enabled", "music_enabled", "music_volume", "animations_enabled",
         "portrait_generation_enabled", "image_model", "local_image_model", "portrait_quality", "developer_mode",
         "onboarding_seen", "simulation_mode"
@@ -938,6 +956,24 @@ def api_campaign_health_repair():
         return err(e, 400)
 
 
+@app.route("/api/actions/update", methods=["POST"])
+def api_actions_update():
+    try:
+        d = request.get_json(force=True)
+        return jsonify({"queued_actions": game.update_queued_action(d.get("index", -1), d.get("action", ""))})
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/actions/move", methods=["POST"])
+def api_actions_move():
+    try:
+        d = request.get_json(force=True)
+        return jsonify({"queued_actions": game.move_queued_action(d.get("index", -1), d.get("to_index", -1))})
+    except Exception as e:
+        return err(e, 400)
+
+
 @app.route("/api/evaluations")
 def api_evaluations():
     return jsonify(list_evaluations())
@@ -951,6 +987,21 @@ def api_evaluations_run():
         d = request.get_json(silent=True) or {}
         ids = d.get("scenario_ids") if isinstance(d.get("scenario_ids"), list) else []
         return jsonify(run_model_evaluation(game, ids))
+    except Exception as e:
+        return err(e, 400)
+    finally:
+        _evaluation_lock.release()
+
+
+@app.route("/api/evaluations/compare", methods=["POST"])
+def api_evaluations_compare():
+    if not _evaluation_lock.acquire(blocking=False):
+        return jsonify({"error": "A model evaluation is already running."}), 409
+    try:
+        d = request.get_json(silent=True) or {}
+        ids = d.get("scenario_ids") if isinstance(d.get("scenario_ids"), list) else []
+        models = d.get("models") if isinstance(d.get("models"), list) else []
+        return jsonify(run_model_comparison(game, models, ids))
     except Exception as e:
         return err(e, 400)
     finally:

@@ -213,6 +213,10 @@
         </div>
       </section>
       <div class="suggestion-dock">
+        <details id="change-reasons" class="change-reasons" hidden>
+          <summary>Why things changed</summary>
+          <div id="change-reasons-list"></div>
+        </details>
         <span class="suggestion-label">Possible next moves</span>
         <div class="suggested-actions" id="suggested-actions"></div>
       </div>
@@ -438,12 +442,20 @@
         </div>
       </div>
       <datalist id="model-suggestions"></datalist>
+      <p id="model-selection-help" class="hint">Choose a preset below, or open either model field to pick an individual model.</p>
+
+      <label>Major Event Model (optional)</label>
+      <input id="st-major-model" type="text" list="model-suggestions" placeholder="Leave blank to use Main GM Model" />
+      <p class="hint">Only major canon events, transformations, major confrontations, and Next Major Event use this model. Ordinary turns stay on the Main model.</p>
 
       <label>Cloud Presets — sets Main/Background/Image model and portrait quality together</label>
       <div class="radio-row">
-        <button type="button" id="btn-preset-budget" class="btn-accent" title="Cheapest cloud models; still fully playable">BUDGET</button>
-        <button type="button" id="btn-preset-quality" class="btn-accent" title="Strongest cloud models and portraits; costs more per session">QUALITY</button>
+        <button type="button" id="btn-preset-budget" class="btn-accent" title="GPT-5 nano for both jobs; lowest text cost">BUDGET</button>
+        <button type="button" id="btn-preset-balanced" class="btn-accent" title="GPT-5.6 Luna GM with GPT-4o mini memory; recommended starting point">BALANCED</button>
+        <button type="button" id="btn-preset-quality" class="btn-accent" title="GPT-5.6 Terra GM with GPT-5.6 Luna memory; stronger story reasoning">QUALITY</button>
+        <button type="button" id="btn-preset-premium" class="btn-accent" title="GPT-5.6 Sol GM with GPT-5.6 Terra memory; highest quality and cost">PREMIUM</button>
       </div>
+      <p class="hint">Presets are shortcuts only. You can mix any listed Main and Background models. Prices shown below are text-token list prices and portraits are separate.</p>
 
       <button id="btn-detect-models" class="btn-accent">DETECT MODELS (local only)</button>
       <span id="detect-status" class="hint"></span>
@@ -465,6 +477,19 @@
         <option value="deep">Deep — broader detail and occasional background narration</option>
       </select>
       <p class="hint">Economy and Balanced use one narrator request for a normal Advance. Deep keeps more actors in detail and may run one additional background update every four turns.</p>
+
+      <div class="two-col">
+        <div>
+          <label>Maximum estimated cost per AI request</label>
+          <input id="st-cost-request-limit" type="number" min="0" step="0.01" value="0" />
+          <p class="hint">USD. 0 disables the hard limit. Requests above it stop before being sent.</p>
+        </div>
+        <div>
+          <label>Session spending warning</label>
+          <input id="st-session-budget" type="number" min="0" step="0.25" value="5" />
+          <p class="hint">USD. Changes the cost indicator to a warning without interrupting play.</p>
+        </div>
+      </div>
 
       <div class="checkbox-row">
         <label><input type="checkbox" id="st-autosave" checked /> Autosave every resolved turn</label>
@@ -898,7 +923,7 @@
       <p>Add any number of actions to the queue. Queuing is planning only: the GM and world remain silent, and the clock does not move.</p>
       <p>Choose an amount of time and press ADVANCE to review the plan. The game resolves the queued actions in order, raising difficulty or deferring later actions when the allotted time is insufficient.</p>
       <p>Each major action, reaction, consequence, and due canon event appears as its own detailed story update. Canon is a living pressure rather than a railroad, so your choices can naturally change it.</p>
-      <p>Hard actions use local d20 rolls. High/extreme lethal choices warn you before commitment. Death can be rewound to the pre-Advance checkpoint.</p>
+      <p>Hard actions use contextual d100 checks. Your roll plus relevant stats, skills, titles, and circumstances must beat the needed number. High/extreme lethal choices warn you before commitment, and death can be rewound to the pre-Advance checkpoint.</p>
       <p><strong>AI ROLES</strong><br/>Main model: Narrator + Rules Referee<br/>Background model: World/NPC Simulator + Memory Manager</p>
       <p><strong>LOCAL AI</strong><br/>LM Studio can run both text roles on your own PC with no per-turn API fees. Open OPTIONS → AI &amp; Portrait Setup, start the LM Studio server, Detect Models, then Save. Portraits require a separately compatible image model.</p>
     </div>

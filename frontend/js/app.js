@@ -271,7 +271,7 @@ function handleNotifications(notifications) {
 // ---------------------------------------------------------------------------
 function storyEntryParts(entry) {
   const tag = entry.tag || "narrative";
-  const raw = String(entry.text || "").trim();
+  const raw = String(entry.text || "").trim().replace(/([.!?])\1+(?=[”"'’\s]|$)/g, "$1");
   const lines = raw.split("\n");
   const bracket = lines[0]?.match(/^\[([^\]]+)\]\s*$/);
   const labelByTag = { narrative: "Story", player: "Your action", system: "Notice", danger: "Urgent", roll: "Check", growth: "Growth", canon_event: "Major Canon Event" };
@@ -435,17 +435,24 @@ function appendStoryEntries(entries) {
         metaEntries.push(part);
         return;
       }
-      // A roll's numbers belong right next to the action they resolved, not
-      // as their own separate row — attach as a compact inline pill onto
-      // whatever action line immediately preceded it in this beat.
+      // Attach a roll only when the preceding row is the action named by
+      // its detail. Multi-action skips may return checks before their later
+      // narrative cards; those checks stay as explicit rows so they can never
+      // appear to belong to the final or otherwise unrelated queued action.
       if (part.tag === "roll" && lastRow) {
-        const pill = document.createElement("span");
-        const positive = /SUCCESS|BREAKTHROUGH/.test(part.body);
-        pill.className = "story-roll-pill " + (positive ? "hit" : "miss");
-        pill.textContent = part.body;
-        if (entry.detail) pill.title = entry.detail;
-        lastRow.querySelector(".story-entry-copy")?.appendChild(pill);
-        return;
+        const detailText = typeof entry.detail === "string" ? entry.detail : "";
+        const actionMatch = detailText.match(/^Action:\s*(.*?)(?:\s+·|$)/);
+        const actionText = actionMatch ? actionMatch[1].trim() : "";
+        const rowText = lastRow.querySelector(".story-entry-copy")?.textContent?.trim() || "";
+        if (actionText && rowText.includes(actionText)) {
+          const pill = document.createElement("span");
+          const positive = /SUCCESS|BREAKTHROUGH/.test(part.body);
+          pill.className = "story-roll-pill " + (positive ? "hit" : "miss");
+          pill.textContent = part.body.startsWith(actionText + " — ") ? part.body.slice(actionText.length + 3) : part.body;
+          pill.title = detailText;
+          lastRow.querySelector(".story-entry-copy")?.appendChild(pill);
+          return;
+        }
       }
       const div = document.createElement("div");
       const isContinuation = part.tag === "narrative" && !part.hasOwnTitle && lastWasUntitledNarrative;
@@ -666,7 +673,7 @@ function renderClassCard(rawClass) {
   const cls = rawClass && typeof rawClass === "object" ? { ...rawClass } : {};
   const rawDiscovery = cls.discovery && typeof cls.discovery === "object" ? cls.discovery : null;
   if (rawDiscovery?.concealed) {
-    cls.name = "Unidentified Hidden Class";
+    cls.name = rawDiscovery.public_name || "Unidentified Class Signature";
     cls.description = rawDiscovery.clue || "A dormant class-shaped power is present, but its nature is not yet understood.";
     cls.effect = Number(rawDiscovery.progress || 0) < 70 ? "Some bonuses are already active; their exact source remains unclear." : cls.effect;
     if (Number(rawDiscovery.progress || 0) < 50) cls.signature_skill = "";
@@ -832,6 +839,7 @@ function renderState(state) {
   const saved = s._last_autosave || s.last_autosave || "";
   $("#hdr-autosave").textContent = saved ? `Saved ${String(saved).replace("T", " ").slice(0, 16)}` : "Not saved";
   renderQueuedActions(s.queued_actions || []);
+  $("#btn-retry-opening").hidden = Boolean(s.opening_complete);
 
   // Generated portraits are keyed by visually relevant state and update only
   // when appearance, form, or visible equipment actually changes.
@@ -968,6 +976,10 @@ function renderState(state) {
     });
     sugg.appendChild(btn);
   });
+  const reasons = Array.isArray(s.last_cause_effect) ? s.last_cause_effect : [];
+  const reasonBox = $("#change-reasons");
+  reasonBox.hidden = !reasons.length;
+  $("#change-reasons-list").innerHTML = reasons.map((row) => `<div class="change-reason"><b>${escapeHtml(row.target || row.category || "Change")}</b><span>${escapeHtml(row.change || "Changed")}</span><small>${escapeHtml(row.because || "The resolved turn changed this.")}</small></div>`).join("");
   if (APP.music.world !== (s.world || "Custom World")) refreshMusic(s.world, APP.music.userStarted);
   renderCombatPanel(s);
   if (s.status_window_due && !APP.statusWindowOpen) { APP.statusWindowOpen = true; renderStatusWindow(s); openModal("modal-status-window"); }
@@ -1042,7 +1054,19 @@ function renderQueuedActions(actions) {
     box.innerHTML = '<p class="hint">No actions queued. Add as many as you want, in order.</p>';
     return;
   }
-  box.innerHTML = actions.map((action, index) => `<div class="queued-action"><span class="queue-index">${index + 1}</span><span>${escapeHtml(action)}</span><button type="button" data-remove-action="${index}" title="Remove queued action">✕</button></div>`).join("");
+  const unit = $("#time-unit")?.value || "moment";
+  const amount = Number($("#time-amount")?.value || 1);
+  const totalDays = unit === "days" ? amount : unit === "weeks" ? amount * 7 : unit === "months" ? amount * 30 : 0;
+  const span = actions.length && totalDays ? totalDays / actions.length : 0;
+  const risk = (action) => /kill|death|assassinate|alone against|boss|invade/i.test(action) ? "Extreme risk" : /fight|attack|duel|battle|infiltrate|steal|escape|master|awaken/i.test(action) ? "High risk" : /train|practice|study|research|craft|persuade|convince/i.test(action) ? "Uncertain" : "Routine";
+  const schedule = (index) => {
+    if (unit === "moment") return index ? "Held for a later Advance" : "Next meaningful beat · up to 24 hours";
+    if (unit === "next_event") return `Step ${index + 1} before the next major turning point`;
+    const start = Math.floor(index * span) + 1, end = Math.max(start, Math.round((index + 1) * span));
+    return `Approx. day ${start}${end > start ? `–${end}` : ""} · ${risk(actions[index])}`;
+  };
+  const countdown = APP.state?._canon_countdown?.available ? `<div class="queue-interruption">Possible interruption: ${escapeHtml(APP.state._canon_countdown.label)}</div>` : "";
+  box.innerHTML = actions.map((action, index) => `<div class="queued-action"><span class="queue-index">${index + 1}</span><span class="queue-copy"><b>${escapeHtml(action)}</b><small>${escapeHtml(schedule(index))}</small></span><span class="queue-controls"><button type="button" data-move-action="${index}" data-to-index="${index - 1}" title="Move earlier" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-move-action="${index}" data-to-index="${index + 1}" title="Move later" ${index === actions.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-edit-action="${index}" title="Edit queued action">✎</button><button type="button" data-remove-action="${index}" title="Remove queued action">✕</button></span></div>`).join("") + countdown;
 }
 
 $("#btn-music-play").addEventListener("click", async () => {
@@ -1062,10 +1086,20 @@ musicPlayer().addEventListener("play", renderMusicStatus);
 musicPlayer().addEventListener("pause", renderMusicStatus);
 
 $("#queued-actions").addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-remove-action]");
+  const button = event.target.closest("[data-remove-action], [data-edit-action], [data-move-action]");
   if (!button || APP.busy) return;
   try {
-    const result = await apiPost("/api/actions/remove", { index: Number(button.getAttribute("data-remove-action")) });
+    let result;
+    if (button.hasAttribute("data-remove-action")) {
+      result = await apiPost("/api/actions/remove", { index: Number(button.getAttribute("data-remove-action")) });
+    } else if (button.hasAttribute("data-move-action")) {
+      result = await apiPost("/api/actions/move", { index: Number(button.getAttribute("data-move-action")), to_index: Number(button.getAttribute("data-to-index")) });
+    } else {
+      const index = Number(button.getAttribute("data-edit-action"));
+      const revised = window.prompt("Edit queued action", APP.state.queued_actions[index]);
+      if (revised === null) return;
+      result = await apiPost("/api/actions/update", { index, action: revised });
+    }
     APP.state.queued_actions = result.queued_actions || [];
     renderQueuedActions(APP.state.queued_actions);
   } catch (error) { showToast(error.message, "danger"); }
@@ -2087,14 +2121,28 @@ $("#action-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submitAction($("#action-input").value.trim()); }
 });
 
+function removeOpeningSetupNotice() {
+  $("#story-feed .story-entry").forEach((row) => {
+    if (row.textContent.includes("AI SETUP REQUIRED")) row.remove();
+  });
+  $("#story-feed .story-beat").forEach((beat) => {
+    if (!beat.querySelector(".story-entry, .story-beat-system")) beat.remove();
+  });
+}
+
 $("#btn-retry-opening").addEventListener("click", async () => {
   if (!APP.campaignActive) { openModal("modal-campaign"); return; }
   setBusy(true);
   try {
     const result = await apiPost("/api/campaign/opening", {});
+    removeOpeningSetupNotice();
     appendStoryEntries(result.story);
     renderState(result.state);
-  } catch (e) { showToast(e.message, "danger"); appendStoryEntries([{ text: "[AI SETUP REQUIRED]\n" + e.message, tag: "danger" }]); }
+  } catch (e) {
+    showToast(e.message, "danger");
+    removeOpeningSetupNotice();
+    appendStoryEntries([{ text: "[AI SETUP REQUIRED]\n" + e.message, tag: "danger" }]);
+  }
   finally { setBusy(false); }
 });
 
@@ -2160,9 +2208,11 @@ function syncTimeControl(unitSelector, amountSelector, amountFieldSelector, mome
       : isMoment ? "Moment resolves exactly one contextual story beat, never more than 24 hours."
       : "Long skips simulate the full period and may stop early for goals or major events.";
   }
+  if (unitSelector === "#time-unit" && APP.state) renderQueuedActions(APP.state.queued_actions || []);
 }
 
 $("#time-unit").addEventListener("change", () => syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help"));
+$("#time-amount").addEventListener("input", () => renderQueuedActions(APP.state?.queued_actions || []));
 $("#td-unit").addEventListener("change", () => syncTimeControl("#td-unit", "#td-amount", "#td-amount-field"));
 syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
 syncTimeControl("#td-unit", "#td-amount", "#td-amount-field");
@@ -2273,24 +2323,103 @@ $("#btn-difficult-tactical").addEventListener("click", () => startChallenge("tac
 // domain-neutral instead of forcing combat phrasing ("technique", "feint")
 // onto checks that aren't a fight at all, which used to read as a total
 // non sequitur against a social or stealth check.
-const TACTICAL_STAGES = [
-  { title: "Stage 1 — Opening", help: "Choose how cautiously to open.", options: [
-    { label: "Play it safe", detail: "Steady footing, modest payoff.", points: 18, volatility: 3 },
-    { label: "Take a calculated risk", detail: "Better payoff if it pans out.", points: 22, volatility: 8 },
-    { label: "Go all in", detail: "High reward with a serious swing.", points: 27, volatility: 17 },
-  ]},
-  { title: "Stage 2 — Commitment", help: "Choose how hard to commit.", options: [
-    { label: "Stay measured", detail: "Reliable and resource-conscious.", points: 20, volatility: 4 },
-    { label: "Push harder", detail: "Strong but dependent on things breaking your way.", points: 24, volatility: 10 },
-    { label: "Full commitment", detail: "Powerful, costly, and unstable.", points: 29, volatility: 19 },
-  ]},
-  { title: "Stage 3 — Close it out", help: "Decide how much certainty to trade for impact.", options: [
-    { label: "Lock in what you have", detail: "Protect what you've gained.", points: 17, volatility: 2 },
-    { label: "Press for more", detail: "Balanced risk and reward.", points: 23, volatility: 9 },
-    { label: "Everything on this", detail: "The largest possible swing.", points: 31, volatility: 24 },
-  ]},
-];
+const TACTICAL_SCENES = {
+  archive: [
+    { title: "Approach the archive", help: "Choose a believable way inside.", options: [
+      { label: "Wear a clerk's disguise", detail: "Blend into the shift change and carry forged work orders.", points: 23, volatility: 7 },
+      { label: "Enter across the rooftops", detail: "Avoid the doors and reach an upper records window.", points: 27, volatility: 16 },
+      { label: "Bribe a records clerk", detail: "Trade coin or leverage for a quiet route through security.", points: 21, volatility: 9 },
+    ]},
+    { title: "Pass the inner watch", help: "The guarded stacks require a second decision.", options: [
+      { label: "Follow the filing carts", detail: "Use routine traffic as moving cover.", points: 21, volatility: 6 },
+      { label: "Create a false summons", detail: "Pull the watch away with a convincing emergency.", points: 25, volatility: 13 },
+      { label: "Question a junior clerk", detail: "Risk conversation to learn the exact shelf and patrol gap.", points: 23, volatility: 10 },
+    ]},
+    { title: "Secure the record", help: "Take the objective without losing the escape route.", options: [
+      { label: "Copy only the key page", detail: "Leave the archive intact and minimize evidence.", points: 20, volatility: 4 },
+      { label: "Swap in a forged file", detail: "Hide the theft, but the replacement must survive inspection.", points: 26, volatility: 14 },
+      { label: "Take the whole dossier", detail: "Gain everything now and outrun the alarm it may cause.", points: 30, volatility: 22 },
+    ]},
+  ],
+  duel: [
+    { title: "Take the initiative", help: "Choose how to shape the opening exchange.", options: [
+      { label: "Apply measured pressure", detail: "Probe the opponent while protecting your guard.", points: 22, volatility: 6 },
+      { label: "Invite the counterattack", detail: "Offer an opening and punish the committed response.", points: 26, volatility: 14 },
+      { label: "Claim the terrain", detail: "Move the duel toward ground that favors your reach or abilities.", points: 24, volatility: 10 },
+    ]},
+    { title: "Read the adjustment", help: "Your opponent changes rhythm after the opening.", options: [
+      { label: "Break their tempo", detail: "Interrupt combinations before they develop.", points: 23, volatility: 8 },
+      { label: "Conserve for a reversal", detail: "Yield space now to preserve the stronger finish.", points: 20, volatility: 4 },
+      { label: "Attack the exposed weakness", detail: "Commit immediately to the flaw you noticed.", points: 29, volatility: 19 },
+    ]},
+    { title: "Decide the clash", help: "Choose how to turn your advantage into an outcome.", options: [
+      { label: "Force a clean surrender", detail: "Control the finish and limit needless harm.", points: 22, volatility: 6 },
+      { label: "Land the decisive counter", detail: "Trust your read and end it in one exchange.", points: 27, volatility: 15 },
+      { label: "Risk your strongest technique", detail: "Stake everything on overwhelming the opponent.", points: 32, volatility: 24 },
+    ]},
+  ],
+  dungeon: [
+    { title: "Read the passage", help: "Choose how to enter hostile ground.", options: [
+      { label: "Scout every sign", detail: "Study tracks, airflow, seams, and recent disturbances.", points: 22, volatility: 5 },
+      { label: "Disarm the obvious traps", detail: "Make a controlled lane before the party commits.", points: 25, volatility: 11 },
+      { label: "Force a fast passage", detail: "Rely on speed and toughness before the dungeon reacts.", points: 29, volatility: 20 },
+    ]},
+    { title: "Cross the hazard", help: "The route closes around a new obstacle.", options: [
+      { label: "Test a hidden route", detail: "Search for a builder's access or creature trail.", points: 24, volatility: 10 },
+      { label: "Use tools and wards", detail: "Spend prepared resources to neutralize the danger.", points: 22, volatility: 5 },
+      { label: "Trigger it on your terms", detail: "Control where and when the hazard releases.", points: 28, volatility: 18 },
+    ]},
+    { title: "Reach the objective", help: "The final chamber can still turn success into disaster.", options: [
+      { label: "Secure an escape first", detail: "Protect the retreat before touching the objective.", points: 21, volatility: 4 },
+      { label: "Separate prize from trap", detail: "Work carefully against the chamber's mechanism.", points: 26, volatility: 12 },
+      { label: "Seize it before opposition arrives", detail: "Trade certainty for a decisive finish.", points: 31, volatility: 23 },
+    ]},
+  ],
+  social: [
+    { title: "Open the conversation", help: "Choose what gives your words weight.", options: [
+      { label: "Appeal to shared interests", detail: "Show how cooperation serves both sides.", points: 23, volatility: 6 },
+      { label: "Offer verifiable proof", detail: "Anchor your claim in facts the other side can test.", points: 25, volatility: 9 },
+      { label: "Apply quiet leverage", detail: "Reveal what refusal may cost without making an open threat.", points: 28, volatility: 18 },
+    ]},
+    { title: "Answer resistance", help: "The other party exposes their real concern.", options: [
+      { label: "Address the fear directly", detail: "Name the risk and offer a safeguard.", points: 24, volatility: 8 },
+      { label: "Trade a limited concession", detail: "Give something useful without surrendering the goal.", points: 22, volatility: 5 },
+      { label: "Call the bluff", detail: "Challenge whether they can afford to walk away.", points: 29, volatility: 19 },
+    ]},
+    { title: "Close the agreement", help: "Turn momentum into a clear commitment.", options: [
+      { label: "Define the next concrete step", detail: "Secure a modest promise that is hard to misunderstand.", points: 22, volatility: 4 },
+      { label: "Bind it with witnesses", detail: "Make the agreement costly to deny later.", points: 26, volatility: 12 },
+      { label: "Demand the full commitment", detail: "Press for everything while your advantage lasts.", points: 31, volatility: 23 },
+    ]},
+  ],
+  craft: [
+    { title: "Prepare the work", help: "Choose how to handle the material's greatest uncertainty.", options: [
+      { label: "Test a small sample", detail: "Learn its tolerances before risking the whole piece.", points: 22, volatility: 4 },
+      { label: "Adapt a proven design", detail: "Modify reliable methods for this unusual commission.", points: 25, volatility: 10 },
+      { label: "Attempt a breakthrough design", detail: "Pursue a much stronger result with little margin for error.", points: 30, volatility: 21 },
+    ]},
+    { title: "Control the critical step", help: "The work reaches the point where flaws become permanent.", options: [
+      { label: "Slow the process", detail: "Protect stability at the cost of time and output.", points: 21, volatility: 4 },
+      { label: "Correct the forming flaw", detail: "Intervene precisely before the weakness spreads.", points: 26, volatility: 13 },
+      { label: "Use rare material now", detail: "Spend a valuable reserve to force a better result.", points: 29, volatility: 17 },
+    ]},
+    { title: "Finish and prove it", help: "Choose what standard the completed work must survive.", options: [
+      { label: "Tune for reliability", detail: "Favor a dependable creation over peak performance.", points: 22, volatility: 5 },
+      { label: "Field-test every function", detail: "Expose weaknesses now and repair what fails.", points: 26, volatility: 12 },
+      { label: "Push beyond the safe limit", detail: "Try to awaken the work's exceptional potential.", points: 32, volatility: 24 },
+    ]},
+  ],
+};
 
+function tacticalStagesFor(check) {
+  const action = String(check?.action || check?.reason || "").toLowerCase();
+  if (/archive|records?|infiltrat|break in|steal|heist|guarded file/.test(action)) return TACTICAL_SCENES.archive;
+  if (/duel|fight|battle|attack|combat|opponent|enemy|guardian/.test(action)) return TACTICAL_SCENES.duel;
+  if (/dungeon|cave|ruin|trap|passage|tomb|labyrinth/.test(action)) return TACTICAL_SCENES.dungeon;
+  if (/persuad|convince|negot|meeting|bargain|ask|recruit|diplom/.test(action)) return TACTICAL_SCENES.social;
+  if (/craft|forge|smith|repair|build|enchant|brew|sew/.test(action)) return TACTICAL_SCENES.craft;
+  return TACTICAL_SCENES.dungeon;
+}
 function startChallenge(mode) {
   const pending = APP.pendingDifficulty;
   if (!pending) return;
@@ -2374,7 +2503,7 @@ function showTacticalCheck() {
 }
 
 function renderTacticalStage() {
-  const challenge = APP.challenge, stage = TACTICAL_STAGES[challenge.stage];
+  const challenge = APP.challenge, stage = tacticalStagesFor(currentChallengeCheck())[challenge.stage];
   $("#tactical-stage-title").textContent = stage.title;
   $("#tactical-stage-help").textContent = stage.help;
   $("#tactical-progress").textContent = `Approach score so far: ${challenge.tacticalPoints}`;
@@ -2385,12 +2514,13 @@ $("#tactical-options").addEventListener("click", (event) => {
   const button = event.target.closest("[data-tactical-option]");
   const challenge = APP.challenge;
   if (!button || !challenge || challenge.mode !== "tactical") return;
-  const option = TACTICAL_STAGES[challenge.stage].options[Number(button.getAttribute("data-tactical-option"))];
+  const stages = tacticalStagesFor(currentChallengeCheck());
+  const option = stages[challenge.stage].options[Number(button.getAttribute("data-tactical-option"))];
   const random = new Uint32Array(1); crypto.getRandomValues(random);
   const swing = (random[0] % (option.volatility * 2 + 1)) - option.volatility;
   challenge.tacticalPoints += option.points + swing;
   challenge.stage += 1;
-  if (challenge.stage >= TACTICAL_STAGES.length) finishChallengeCheck(challenge.tacticalPoints);
+  if (challenge.stage >= stages.length) finishChallengeCheck(challenge.tacticalPoints);
   else renderTacticalStage();
 });
 
@@ -2834,7 +2964,8 @@ async function openJournal(tab) {
     const integrity = data.simulation?.integrity || {}, reports = [...(integrity.recent_validation || [])].reverse();
     const schedules = Object.entries(integrity.npc_schedules || {}), packets = [...(integrity.information_packets || [])].reverse();
     const canon = integrity.canon_dependencies || { counts: {}, events: [] };
-    panel.innerHTML = `<div class="system-summary"><b>LOCAL SIMULATION SAFETY</b><span>These checks run on your computer after the GM writes a turn. They do not make another AI call.</span></div><div class="integrity-stats"><span><b>${escapeHtml(integrity.travel?.nodes || 0)}</b> mapped places</span><span><b>${escapeHtml(integrity.travel?.connections || 0)}</b> travel routes</span><span><b>${escapeHtml((integrity.active_goals || []).length)}</b> active stop goals</span><span><b>${escapeHtml(schedules.length)}</b> NPC schedules</span></div><h3>Recent turn checks</h3>${reports.length ? reports.map((row) => `<details class="integrity-report ${escapeHtml(row.status || "passed")}"><summary><b>Turn ${escapeHtml(row.turn)} · ${escapeHtml(row.status || "passed")}</b><span>${escapeHtml(row.actions_checked || 0)} actions · ${escapeHtml(row.rolls_checked || 0)} rolls</span></summary>${(row.repairs || []).length ? `<p><b>Repaired locally</b></p><ul>${row.repairs.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}${(row.warnings || []).length ? `<p><b>Warnings</b></p><ul>${row.warnings.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : '<p>No mismatch was found.</p>'}</details>`).join("") : '<div class="jrow hint">Resolve a turn to create the first integrity report.</div>'}<h3>Active action goals</h3>${(integrity.active_goals || []).length ? integrity.active_goals.map((row) => `<div class="jrow"><b>${escapeHtml(row.kind || "goal")}</b><br>${escapeHtml(row.condition || row.action)}</div>`).join("") : '<div class="jrow hint">No “until/master/find/reach” goal is currently active.</div>'}<h3>NPC commitments</h3>${schedules.length ? schedules.map(([name,row]) => `<article class="schedule-card"><header><b>${escapeHtml(name)}</b><span>${escapeHtml(row.status || "planned")}</span></header><p>${escapeHtml(row.goal || "Private commitment")}</p><small>${escapeHtml(row.location || "Unknown")} · due around Canon Day ${escapeHtml(row.due_day ?? "?")}</small></article>`).join("") : '<div class="jrow hint">Schedules appear when recurring NPCs establish a real goal.</div>'}<h3>Information in motion</h3>${packets.length ? packets.slice(0,20).map((row) => `<div class="jrow"><b>${escapeHtml(row.fact)}</b><br><small>${escapeHtml(row.channel || "unknown route")} · ${escapeHtml(row.confidence || 0)}% confidence · recipients: ${escapeHtml((row.recipients || []).join(", ") || "none")}${Number(row.available_after_minutes || 0) > 0 ? ` · arrives in ${escapeHtml(row.available_after_minutes)} minutes` : " · delivered"}</small></div>`).join("") : '<div class="jrow hint">No structured news packet has moved yet.</div>'}<h3>Canon dependency health</h3><div class="jrow">${Object.entries(canon.counts || {}).filter(([,v]) => v).map(([k,v]) => `<b>${escapeHtml(v)} ${escapeHtml(k)}</b>`).join(" · ") || "No fixed canon dependencies."}</div>`;
+    const direction = data.simulation?.campaign_direction || {}, approaching = direction.approaching_canon_event || {};
+    panel.innerHTML = `<div class="system-summary"><b>CAMPAIGN DIRECTOR</b><span>Keeps goals, pressures, and opportunities coherent locally without another AI call.</span></div><div class="director-grid"><div><b>Current goal</b><span>${escapeHtml(direction.primary_goal || "Choose a goal")}</span></div><div><b>Next obstacle</b><span>${escapeHtml(direction.next_obstacle || "None confirmed")}</span></div><div><b>Approaching event</b><span>${escapeHtml(approaching.title ? `${approaching.title} · ${approaching.days_until} days` : "No dated event loaded")}</span></div><div><b>Unresolved people</b><span>${escapeHtml((direction.unresolved_characters || []).map((x) => x.name).join(", ") || "None")}</span></div></div><div class="system-summary"><b>LOCAL SIMULATION SAFETY</b><span>These checks run on your computer after the GM writes a turn. They do not make another AI call.</span></div><div class="integrity-stats"><span><b>${escapeHtml(integrity.travel?.nodes || 0)}</b> mapped places</span><span><b>${escapeHtml(integrity.travel?.connections || 0)}</b> travel routes</span><span><b>${escapeHtml((integrity.active_goals || []).length)}</b> active stop goals</span><span><b>${escapeHtml(schedules.length)}</b> NPC schedules</span></div><h3>Recent turn checks</h3>${reports.length ? reports.map((row) => `<details class="integrity-report ${escapeHtml(row.status || "passed")}"><summary><b>Turn ${escapeHtml(row.turn)} · ${escapeHtml(row.status || "passed")}</b><span>${escapeHtml(row.actions_checked || 0)} actions · ${escapeHtml(row.rolls_checked || 0)} rolls</span></summary>${(row.repairs || []).length ? `<p><b>Repaired locally</b></p><ul>${row.repairs.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}${(row.warnings || []).length ? `<p><b>Warnings</b></p><ul>${row.warnings.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : '<p>No mismatch was found.</p>'}</details>`).join("") : '<div class="jrow hint">Resolve a turn to create the first integrity report.</div>'}<h3>Active action goals</h3>${(integrity.active_goals || []).length ? integrity.active_goals.map((row) => `<div class="jrow"><b>${escapeHtml(row.kind || "goal")}</b><br>${escapeHtml(row.condition || row.action)}</div>`).join("") : '<div class="jrow hint">No “until/master/find/reach” goal is currently active.</div>'}<h3>NPC commitments</h3>${schedules.length ? schedules.map(([name,row]) => `<article class="schedule-card"><header><b>${escapeHtml(name)}</b><span>${escapeHtml(row.status || "planned")}</span></header><p>${escapeHtml(row.goal || "Private commitment")}</p><small>${escapeHtml(row.location || "Unknown")} · due around Canon Day ${escapeHtml(row.due_day ?? "?")}</small></article>`).join("") : '<div class="jrow hint">Schedules appear when recurring NPCs establish a real goal.</div>'}<h3>Information in motion</h3>${packets.length ? packets.slice(0,20).map((row) => `<div class="jrow"><b>${escapeHtml(row.fact)}</b><br><small>${escapeHtml(row.channel || "unknown route")} · ${escapeHtml(row.confidence || 0)}% confidence · recipients: ${escapeHtml((row.recipients || []).join(", ") || "none")}${Number(row.available_after_minutes || 0) > 0 ? ` · arrives in ${escapeHtml(row.available_after_minutes)} minutes` : " · delivered"}</small></div>`).join("") : '<div class="jrow hint">No structured news packet has moved yet.</div>'}<h3>Canon dependency health</h3><div class="jrow">${Object.entries(canon.counts || {}).filter(([,v]) => v).map(([k,v]) => `<b>${escapeHtml(v)} ${escapeHtml(k)}</b>`).join(" · ") || "No fixed canon dependencies."}</div>`;
   } else if (tab === "quests") {
     const active = data.quests || [];
     panel.innerHTML = (active.length ? active.map((raw, index) => {
@@ -2949,6 +3080,7 @@ async function openJournal(tab) {
     const factions = data.relationships_view?.factions || [];
     const affiliations = data.relationships_view?.affiliations || [];
     const npcNetwork = data.relationships_view?.npc_network || [];
+    const intentionMap = data.simulation?.intentions || {};
     panel.innerHTML = `<div class="system-summary"><b>RELATIONSHIPS &amp; FACTIONS</b><span>Trust is evidence, not automatic obedience.</span></div>` +
       `<h3>Affiliations — your rank and standing</h3>` + (affiliations.length ? affiliations.map((a) => `<div class="jrow affiliation-row${a.status && a.status !== "active" ? ` ${escapeHtml(a.status)}` : ""}"><b>${escapeHtml(a.rank || "Member")}</b> — ${escapeHtml(a.faction)}${a.status && a.status !== "active" ? `<span class="affiliation-status">${escapeHtml(a.status)}</span>` : ""}${a.joined ? `<br><small>Joined: ${escapeHtml(a.joined)}</small>` : ""}${a.notes ? `<br><small>${escapeHtml(a.notes)}</small>` : ""}</div>`).join("") : '<div class="jrow hint">Not formally affiliated with any group, alliance, or hierarchy yet.</div>') +
       `<h3>People</h3>` + (people.length ? people.map((person) => {
@@ -2958,7 +3090,9 @@ async function openJournal(tab) {
         // bothered to layer.
         const layers = (person.mid_term_goal ? `<p><b>Building toward:</b> ${escapeHtml(person.mid_term_goal)}</p>` : "") +
           (person.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(person.core_ambition)}</p>` : "");
-        return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}${chainHistoryHtml(person.chain)}</div></details>`;
+        const motive = intentionMap[person.name] || {};
+        const motiveLines = `${textList(motive.loyalties).length ? `<p><b>Loyalties:</b> ${textList(motive.loyalties).map(escapeHtml).join(" · ")}</p>` : ""}${textList(motive.fears).length ? `<p><b>Known concerns:</b> ${textList(motive.fears).map(escapeHtml).join(" · ")}</p>` : ""}${motive.opinion_of_player ? `<p><b>Opinion of you:</b> ${escapeHtml(motive.opinion_of_player)}</p>` : ""}`;
+        return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}${motiveLines}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}${chainHistoryHtml(person.chain)}</div></details>`;
       }).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
       // NPCs relating to each other independent of the player — allies,
       // rivals, grudges the GM has established between two named
@@ -3122,7 +3256,7 @@ async function openJournal(tab) {
   } else if (tab === "evaluations") {
     const scenarios = data.evaluations?.scenarios || [];
     const history = data.evaluations?.history || [];
-    panel.innerHTML = `<div class="system-summary"><b>LIVE NARRATOR EVALUATIONS</b><span>These isolated scenarios call the currently configured model but never change the campaign. Each selected scenario uses one AI call and may incur its normal model cost.</span></div><div class="evaluation-actions"><button type="button" class="btn-primary" data-eval-run="all">RUN ALL ${scenarios.length}</button></div><div class="evaluation-grid">${scenarios.map((row) => `<article class="evaluation-card"><header><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.world)}</span></header><p>${escapeHtml(row.action)}</p><button type="button" class="btn-ghost" data-eval-run="${escapeHtml(row.id)}">RUN THIS SCENARIO</button></article>`).join("")}</div><h3>Recent reports</h3><div id="evaluation-result">${history.length ? history.map((row) => `<div class="jrow"><b>${escapeHtml(row.score)}/100 · ${escapeHtml(row.model || "Unknown model")}</b><br>${escapeHtml(row.scenario_count)} scenario(s) · ${escapeHtml(row.created_at || "")}</div>`).join("") : '<div class="jrow hint">No live model evaluation has been run yet.</div>'}</div>`;
+    panel.innerHTML = `<div class="system-summary"><b>LIVE NARRATOR EVALUATIONS</b><span>These isolated scenarios call AI models but never change the campaign. Each model/scenario pair uses one AI call and may incur its normal cost.</span></div><div class="evaluation-actions"><button type="button" class="btn-primary" data-eval-run="all">RUN ALL ${scenarios.length}</button><label class="evaluation-compare"><span>Compare models on the same scenarios</span><input id="evaluation-models" placeholder="gpt-5-mini, gpt-5.4-mini" value="${escapeHtml((data.evaluation_models || []).join(", "))}"><small>Two to five model IDs. This can make several paid calls.</small></label><button type="button" class="btn-ghost" data-eval-compare>COMPARE ON ALL SCENARIOS</button></div><div class="evaluation-grid">${scenarios.map((row) => `<article class="evaluation-card"><header><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.world)}</span></header><p>${escapeHtml(row.action)}</p><button type="button" class="btn-ghost" data-eval-run="${escapeHtml(row.id)}">RUN THIS SCENARIO</button></article>`).join("")}</div><h3>Recent reports</h3><div id="evaluation-result">${history.length ? history.map((row) => `<div class="jrow"><b>${escapeHtml(row.score)}/100 · ${escapeHtml(row.model || "Unknown model")}</b><br>${escapeHtml(row.scenario_count)} scenario(s) · ${escapeHtml(row.created_at || "")}</div>`).join("") : '<div class="jrow hint">No live model evaluation has been run yet.</div>'}</div>`;
   } else if (tab === "combat") {
     const c = data.combat || {};
     if (!c || !c.active) {
@@ -3324,6 +3458,21 @@ $("#journal-panel").addEventListener("click", async (event) => {
       showToast(`Model evaluation finished at ${report.score}/100. The campaign was not changed.`, "notify");
     } catch (error) { showToast(error.message, "danger"); }
     finally { evalButton.disabled = false; evalButton.textContent = key === "all" ? "RUN ALL" : "RUN THIS SCENARIO"; }
+    return;
+  }
+  const compareButton = event.target.closest("[data-eval-compare]");
+  if (compareButton) {
+    const models = String($("#evaluation-models")?.value || "").split(",").map((x) => x.trim()).filter(Boolean);
+    compareButton.disabled = true;
+    compareButton.textContent = "COMPARING — CAMPAIGN WILL NOT CHANGE";
+    try {
+      const index = await apiGet("/api/evaluations");
+      const comparison = await apiPost("/api/evaluations/compare", { models, scenario_ids: (index.scenarios || []).map((row) => row.id) });
+      const target = $("#evaluation-result");
+      if (target) target.innerHTML = `<div class="evaluation-ranking"><h3>Same-scenario ranking</h3>${(comparison.ranking || []).map((row) => `<div class="jrow"><b>#${escapeHtml(row.rank)} ${escapeHtml(row.model)} — ${escapeHtml(row.score)}/100</b><br>${escapeHtml(row.duration_seconds)}s · ${escapeHtml(row.calls)} calls · $${Number(row.cost_usd || 0).toFixed(4)}</div>`).join("")}</div>`;
+      showToast("Model comparison complete. The campaign was not changed.", "notify");
+    } catch (error) { showToast(error.message, "danger"); }
+    finally { compareButton.disabled = false; compareButton.textContent = "COMPARE ON ALL SCENARIOS"; }
     return;
   }
   const noteButton = event.target.closest("[data-quest-note-save]");
@@ -3547,8 +3696,23 @@ function renderCampaignPreview(p, payload) {
     const classCard = profile.hidden_class ? renderClassCard(profile.hidden_class) : "";
     const primer = p.world_primer || {};
     const primerCard = `<section class="world-primer"><div class="world-primer-kicker">WHAT YOU'RE GETTING INTO — NO SPOILERS</div><p class="world-primer-premise">${escapeHtml(primer.premise || "")}</p><div class="world-primer-row"><b>Tone</b><span>${escapeHtml(primer.tone || "")}</span></div><div class="world-primer-row"><b>How power works</b><span>${escapeHtml(primer.power_system || "")}</span></div>${(primer.factions || []).length ? `<div class="world-primer-row"><b>Major powers</b><ul>${primer.factions.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}${(primer.locations || []).length ? `<div class="world-primer-row"><b>Where the story ranges</b><ul>${primer.locations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul></div>` : ""}<p class="world-primer-starting-note">${escapeHtml(primer.starting_note || "")}</p></section>`;
-    const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div><button type="button" data-preview-reroll="class">Hidden class</button><button type="button" data-preview-reroll="ability">Starting ability</button><button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
-    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Open-ended starting abilities</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section><div class="growth-summary"><b>${escapeHtml(growth.aptitude || "Typical local potential")}</b><span>${escapeHtml(Number(growth.learning_rate || 1).toFixed(2))}× sustained-learning rate</span><small>${escapeHtml(growth.explanation || "Actual growth still depends on time, training conditions, and results.")}</small></div>${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : "This original character begins shortly before the world's main story."}</p>`;
+    const classLabels = {
+        "Overgeared": "Hidden class",
+        "Solo Max-Level Newbie": "Hidden class",
+        "Naruto": "Secret shinobi path",
+        "One Piece": "Hidden potential",
+        "Hunter x Hunter": "Rare Nen potential",
+        "Reincarnated as a Slime": "Unique evolution path",
+        "Bleach": "Secret spiritual path",
+        "Custom World": "Hidden potential",
+    };
+    const classLabel = classLabels[p.world] || "Hidden potential";
+    const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div><button type="button" data-preview-reroll="class">${escapeHtml(classLabel)}</button><button type="button" data-preview-reroll="ability">Starting ability</button><button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
+    const learningRate = Number(growth.learning_rate || 1);
+    const ordinaryGrowth = Math.abs(learningRate - 1) < 0.005 && String(growth.aptitude || "").toLowerCase().includes("typical");
+    const growthLabel = !ordinaryGrowth && String(growth.aptitude || "").toLowerCase().includes("typical") ? "Modified learning potential" : (growth.aptitude || "Unusual potential");
+    const growthSummary = ordinaryGrowth ? "" : `<div class="growth-summary"><b>${escapeHtml(growthLabel)}</b><span>${escapeHtml(learningRate.toFixed(2))}× sustained-learning rate</span><small>${escapeHtml(growth.explanation || "Actual growth still depends on time, training conditions, instruction, and recovery.")}</small></div>`;
+    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Open-ended starting abilities</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section>${growthSummary}${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : "This original character begins shortly before the world's main story."}</p>`;
     openModal("modal-campaign-preview");
 }
 
@@ -3629,19 +3793,44 @@ $("#btn-onboarding-done").addEventListener("click", async () => {
 // ---------------------------------------------------------------------------
 // Settings modal
 // ---------------------------------------------------------------------------
-const CLOUD_MODEL_SUGGESTIONS = ["gpt-5.6-luna", "gpt-4o-mini", "gpt-5.4-nano", "gpt-5.6-terra"];
+const CLOUD_MODELS = [
+  { id: "gpt-5-nano", label: "Lowest cost · $0.05 input / $0.40 output per 1M tokens" },
+  { id: "gpt-4o-mini", label: "Fast background model · $0.15 / $0.60" },
+  { id: "gpt-5.6-luna", label: "Recommended balanced GM · $0.20 / $1.20" },
+  { id: "gpt-5.4-nano", label: "Compact reasoning · $0.20 / $1.25" },
+  { id: "gpt-5-mini", label: "Legacy budget reasoning · $0.25 / $2.00" },
+  { id: "gpt-5.4-mini", label: "Stronger mini model · $0.75 / $4.50" },
+  { id: "gpt-5.6-terra", label: "High-quality GM · $2.00 / $12.00" },
+  { id: "gpt-5.4", label: "High-quality established model · $2.50 / $15.00" },
+  { id: "gpt-5.6-sol", label: "Highest-quality GM · $4.00 / $20.00" },
+];
+const CLOUD_MODEL_SUGGESTIONS = CLOUD_MODELS.map((m) => m.id);
+
+function refreshModelSelectionHelp() {
+  const help = $("#model-selection-help");
+  if (!help) return;
+  const provider = ($$('input[name="provider"]:checked')[0] || {}).value || "local";
+  if (provider !== "cloud") {
+    help.textContent = "Local model quality and speed depend on your hardware and the model loaded in LM Studio.";
+    return;
+  }
+  const describe = (id) => CLOUD_MODELS.find((m) => m.id === String(id || "").trim())?.label || "Custom model · price estimate unavailable";
+  const major = $("#st-major-model")?.value?.trim();
+  help.textContent = `Main: ${describe($("#st-main-model").value)} · Background: ${describe($("#st-bg-model").value)}${major ? ` · Major events: ${describe(major)}` : " · Major events inherit Main"}`;
+}
 
 function refreshModelSuggestions() {
   const provider = ($$('input[name="provider"]:checked')[0] || {}).value || "local";
   const list = $("#model-suggestions");
   if (provider === "cloud") {
-    list.innerHTML = CLOUD_MODEL_SUGGESTIONS.map((m) => `<option value="${escapeHtml(m)}">`).join("");
+    list.innerHTML = CLOUD_MODELS.map((m) => `<option value="${escapeHtml(m.id)}" label="${escapeHtml(m.label)}">`).join("");
     $("#btn-detect-models").style.display = "none";
-    $("#detect-status").textContent = "Cloud mode: GPT-5.6 Luna is the balanced low-cost GM default; GPT-4o mini remains the cheaper background model.";
+    $("#detect-status").textContent = "Cloud mode: choose a preset or mix models. Balanced is the recommended starting point.";
   } else {
     $("#btn-detect-models").style.display = "";
     $("#detect-status").textContent = "Not tested yet.";
   }
+  refreshModelSelectionHelp();
 }
 $$('input[name="provider"]').forEach((r) => r.addEventListener("change", () => {
   refreshModelSuggestions();
@@ -3651,6 +3840,10 @@ $$('input[name="provider"]').forEach((r) => r.addEventListener("change", () => {
     if (!background.value.trim() || !CLOUD_MODEL_SUGGESTIONS.includes(background.value.trim())) background.value = "gpt-4o-mini";
   }
 }));
+[$("#st-main-model"), $("#st-bg-model"), $("#st-major-model")].forEach((input) => {
+  input.addEventListener("input", refreshModelSelectionHelp);
+  input.addEventListener("change", refreshModelSelectionHelp);
+});
 
 async function openSettingsModal() {
   const s = await apiGet("/api/settings");
@@ -3659,6 +3852,9 @@ async function openSettingsModal() {
   $("#st-token").value = s.local_token || "";
   $("#st-main-model").value = s.model || "";
   $("#st-bg-model").value = s.secondary_model || "";
+  $("#st-major-model").value = s.major_event_model || "";
+  $("#st-cost-request-limit").value = Number(s.max_ai_cost_per_request_usd || 0);
+  $("#st-session-budget").value = Number(s.session_budget_warning_usd ?? 5);
   $("#st-api-key").value = "";
   $("#st-narration").value = s.narration || "Concise";
   $("#st-simulation-mode").value = s.simulation_mode || "balanced";
@@ -3697,6 +3893,9 @@ $("#btn-save-settings").addEventListener("click", async () => {
     local_token: $("#st-token").value.trim(),
     model: $("#st-main-model").value,
     secondary_model: $("#st-bg-model").value || $("#st-main-model").value,
+    major_event_model: $("#st-major-model").value.trim(),
+    max_ai_cost_per_request_usd: Number($("#st-cost-request-limit").value || 0),
+    session_budget_warning_usd: Number($("#st-session-budget").value || 0),
     narration: $("#st-narration").value,
     simulation_mode: $("#st-simulation-mode").value,
     autosave: $("#st-autosave").checked,
@@ -3783,12 +3982,14 @@ async function refreshUsagePill() {
       const prefix = u.cost_estimate_complete ? "~$" : "$";
       pill.hidden = false;
       pill.textContent = `${prefix}${u.total_cost_usd.toFixed(2)} this session`;
+      pill.classList.toggle("over-budget", !!u.over_session_budget);
       pill.title = `${u.total_calls} AI call(s) — main model + background model + ${u.portraits.generated} portrait(s).`
         + (u.cost_estimate_complete ? "" : " (one or more models are unpriced; total is a floor, not exact.)");
     }
     if (summary && u.provider === "cloud") {
-      summary.textContent = `This session so far: ~$${u.total_cost_usd.toFixed(2)} across ${u.total_calls} AI call(s) `
+      summary.textContent = `${u.over_session_budget ? "SESSION WARNING — " : ""}This session so far: ~$${u.total_cost_usd.toFixed(2)} across ${u.total_calls} AI call(s) `
         + `(${u.main.input_tokens + u.main.output_tokens} main-model tokens, ${u.background.input_tokens + u.background.output_tokens} background-model tokens) `
+        + `${u.major_is_separate ? `${u.major.input_tokens + u.major.output_tokens} major-event tokens, ` : ""}`
         + `and ${u.portraits.generated} portrait(s).`
         + (u.cost_estimate_complete ? "" : " Some pricing is unknown for the selected model(s), so this is a floor, not an exact total.");
     }
@@ -3796,21 +3997,26 @@ async function refreshUsagePill() {
 }
 
 const PRESET_MODELS = {
-  budget: { model: "gpt-5-nano", secondary_model: "gpt-5-nano", image_model: "gpt-image-2", portrait_quality: "low" },
-  quality: { model: "gpt-5.6-terra", secondary_model: "gpt-5.6-luna", image_model: "gpt-image-2", portrait_quality: "high" },
+  budget: { model: "gpt-5-nano", secondary_model: "gpt-5-nano", major_event_model: "", image_model: "gpt-image-2", portrait_quality: "low" },
+  balanced: { model: "gpt-5.6-luna", secondary_model: "gpt-4o-mini", major_event_model: "", image_model: "gpt-image-2", portrait_quality: "low" },
+  quality: { model: "gpt-5.6-terra", secondary_model: "gpt-5.6-luna", major_event_model: "", image_model: "gpt-image-2", portrait_quality: "high" },
+  premium: { model: "gpt-5.6-sol", secondary_model: "gpt-5.6-terra", major_event_model: "", image_model: "gpt-image-2", portrait_quality: "high" },
 };
 function applyModelPreset(name) {
   const p = PRESET_MODELS[name];
   $$('input[name="provider"]').forEach((r) => r.checked = r.value === "cloud");
   $("#st-main-model").value = p.model;
   $("#st-bg-model").value = p.secondary_model;
+  $("#st-major-model").value = p.major_event_model;
   $("#st-image-model").value = p.image_model;
   $("#st-portrait-quality").value = p.portrait_quality;
   refreshModelSuggestions();
-  showToast(`${name === "budget" ? "Budget" : "Quality"} preset applied — press SAVE to confirm.`, "system");
+  showToast(`${name[0].toUpperCase() + name.slice(1)} preset applied — press SAVE to confirm.`, "system");
 }
 $("#btn-preset-budget").addEventListener("click", () => applyModelPreset("budget"));
+$("#btn-preset-balanced").addEventListener("click", () => applyModelPreset("balanced"));
 $("#btn-preset-quality").addEventListener("click", () => applyModelPreset("quality"));
+$("#btn-preset-premium").addEventListener("click", () => applyModelPreset("premium"));
 
 async function refreshHeaderAiStatus() {
   const st = await apiGet("/api/state");

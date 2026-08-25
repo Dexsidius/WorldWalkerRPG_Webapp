@@ -277,12 +277,7 @@ class TurnsMixin:
 
     @staticmethod
     def format_roll_summary(action, result):
-        """A compact numbers-only line, meant to sit directly under the
-        action it resolves (the Chronicle already shows that action as its
-        own line) rather than repeating it: '63 +8 = 71/100 needed 66 —
-        SUCCESS'. action is accepted for API compatibility but no longer
-        embedded — see engine_turns.take_turn, which always logs the action
-        immediately before this."""
+        """One readable d100 line that can never lose its associated action."""
         bonus = int(result.get("total", 0)) - int(result.get("roll", 0))
         needed = int(result.get("difficulty", 0)) + 1  # checks succeed strictly above difficulty
         outcome = "SUCCESS" if result.get("success") else "FAILURE"
@@ -290,7 +285,9 @@ class TurnsMixin:
             outcome = "BREAKTHROUGH"
         mode = str(result.get("challenge_mode") or "").lower()
         prefix = "Timing " if mode == "timing" else "Tactical " if mode == "tactical" else ""
-        return f"{prefix}{int(result.get('roll', 0))} {bonus:+d} = {int(result.get('total', 0))}/100 needed {needed} — {outcome}"
+        action_text = re.sub(r"([.!?])\1+$", r"\1", str(action or "Uncertain action").strip())
+        return (f"{action_text} — {prefix}{int(result.get('roll', 0))} {bonus:+d} = "
+                f"{int(result.get('total', 0))}/100 vs. {needed} needed — {outcome}")
 
     def preview_check(self, check, assessment=None, action=""):
         """Explain expected d100 pressure before the simulation can advance."""
@@ -523,6 +520,37 @@ Return ONLY valid JSON."""
         if lines:
             self.append("[GROWTH]\n" + "\n".join(lines), "meta")
 
+    def append_training_summary(self, before, actions, elapsed_minutes, rolls=None):
+        """Readable proportional report for any meaningful training span."""
+        actions = [str(x).strip() for x in (actions or []) if str(x).strip()]
+        training = [x for x in actions if re.search(r"\b(train|practice|study|research|craft|forge|learn|master)\b", x, re.I)]
+        if not training or int(elapsed_minutes or 0) < 360:
+            return None
+        days = max(.25, float(elapsed_minutes) / 1440.0)
+        changes = []
+        for name, value in (self.state.get("stats", {}) or {}).items():
+            try:
+                delta = float(value) - float((before.get("stats", {}) or {}).get(name, value))
+            except (TypeError, ValueError):
+                continue
+            if delta > 0:
+                changes.append(f"{name} increased by {round(delta, 1)}")
+        gained = sorted(set(self.state.get("skills", {})) - set(before.get("skills", {})))
+        failures = [r for r in (rolls or []) if isinstance(r, dict) and not r.get("success")]
+        breakthroughs = [x for x in (self.state.get("progression_log", []) or [])[-len(training):] if isinstance(x, dict) and x.get("breakthrough")]
+        lines = [f"{round(days, 1)} day(s) of sustained effort were simulated across {len(training)} training goal(s)."]
+        lines += [f"• {x}" for x in changes[:8]]
+        lines += [f"• Learned: {x}" for x in gained[:6]]
+        if failures:
+            lines.append(f"• Remaining weakness: {failures[0].get('reason') or failures[0].get('action') or 'the failed milestone exposed a gap in execution'}")
+        if breakthroughs:
+            lines.append("• Unexpected development: a lore-consistent breakthrough accelerated the normal gain.")
+        if len(lines) == 1:
+            lines.append("• The work accumulated as partial proficiency even though no visible stat crossed its next threshold yet.")
+        self.state["last_training_summary"] = {"days": round(days, 2), "actions": training, "lines": lines[1:]}
+        self.append("[TRAINING REPORT]\n" + "\n".join(lines), "meta")
+        return self.state["last_training_summary"]
+
     def apply_resolution(self, data, is_opening=False, pending_action=None, progression_context=None):
         with self.lock:
             before = copy.deepcopy(self.state)
@@ -538,6 +566,23 @@ Return ONLY valid JSON."""
             else:
                 integrity_report = {}
             validation = apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="opening" if is_opening else "turn")
+            # A narrator may enrich an original character during the opening, but a
+            # canon start already has authoritative identity and mechanical facts.
+            # Reapply the trusted pre-opening values so a generic response cannot
+            # quietly turn Yahiko into a different age, mentor, faction, class, or
+            # starting location while still allowing scene/lead additions.
+            if is_opening and (before.get("player_identity", {}) or {}).get("mode") == "canon":
+                canon_locked = (
+                    "name", "age", "background", "appearance_desc", "portrait_traits",
+                    "origin", "race", "location", "canon_day", "start_day", "position",
+                    "affiliations", "reputation", "skills", "titles", "stats",
+                    "hp", "hp_max", "resource", "resource_max", "companions",
+                    "npc_memories", "contacts", "faction_rosters", "class_profile",
+                    "special", "player_identity",
+                )
+                for field in canon_locked:
+                    if field in before:
+                        self.state[field] = copy.deepcopy(before[field])
             if not uses_xp_for(self.state.get("world")):
                 self.state["xp"], self.state["level"], self.state["xp_next"] = before.get("xp", 0), before.get("level", 1), before.get("xp_next", 100)
             else:
@@ -548,6 +593,8 @@ Return ONLY valid JSON."""
             # a state_patch that happens to include one (models sometimes do)
             # must not be allowed to set it.
             self.state["turn"] = before.get("turn", 0) if is_opening else before.get("turn", 0) + 1
+            if is_opening:
+                self.state["opening_complete"] = True
             tev = data.get("timeline_event", "")
             if tev:
                 self.state.setdefault("timeline", []).append(tev)
@@ -574,6 +621,13 @@ Return ONLY valid JSON."""
                     before, self.state, pending_action or "Story development",
                     context.get("elapsed_minutes", 5), context.get("rolls", []),
                 )
+            from director import build_cause_effect, maybe_offer_relationship_scene, update_campaign_direction
+            relationship_offer = None if is_opening else maybe_offer_relationship_scene(self.state, data.get("events", []))
+            if relationship_offer:
+                self.state["suggested_actions"] = self.guided_suggestions([relationship_offer["prompt"], *self.state.get("suggested_actions", [])])
+                self.append(f"[OPTIONAL CHARACTER MOMENT — {relationship_offer['npc']}]\n{relationship_offer['reason']} This is optional; time will not move until you choose and Advance.", "meta")
+            update_campaign_direction(self.state, turn_actions, data.get("events", []), 0 if is_opening else int(context.get("elapsed_minutes", 5) or 5))
+            build_cause_effect(before, self.state, turn_actions, context.get("rolls", []))
             update_narrative_memory(
                 before, self.state,
                 pending_action or ("Campaign opening" if is_opening else "Story development"),
@@ -628,6 +682,13 @@ Return ONLY valid JSON."""
             text = ai_text(value)
             if text and text.lower() not in {x.lower() for x in suggestions}:
                 suggestions.append(text[:180])
+        for opportunity in reversed(self.state.get("relationship_opportunities", [])):
+            if isinstance(opportunity, dict) and opportunity.get("status") == "available" and opportunity.get("prompt"):
+                suggestions.append(str(opportunity["prompt"])[:180])
+                break
+        direction = self.state.get("campaign_direction") if isinstance(self.state.get("campaign_direction"), dict) else {}
+        for lead in direction.get("nearby_opportunities", [])[:2]:
+            if ai_text(lead): suggestions.append(ai_text(lead)[:180])
         for quest in self.state.get("quests", []):
             if not isinstance(quest, dict): continue
             conditions = quest.get("clear_conditions", []) or quest.get("current_knowledge", [])
@@ -975,5 +1036,32 @@ Return ONLY valid JSON."""
             if index < 0 or index >= len(actions):
                 raise IndexError("Queued action no longer exists.")
             actions.pop(index)
+            self.autosave()
+        return copy.deepcopy(actions)
+
+    def update_queued_action(self, index, text):
+        action = str(text or "").strip()
+        if not action:
+            raise ValueError("A queued action cannot be empty.")
+        if len(action) > 800:
+            raise ValueError("Queued actions must be under 800 characters each.")
+        with self.lock:
+            actions = self.state.setdefault("queued_actions", [])
+            index = int(index)
+            if index < 0 or index >= len(actions):
+                raise IndexError("Queued action no longer exists.")
+            actions[index] = action
+            self.autosave()
+        return copy.deepcopy(actions)
+
+    def move_queued_action(self, index, to_index):
+        with self.lock:
+            actions = self.state.setdefault("queued_actions", [])
+            index, to_index = int(index), int(to_index)
+            if index < 0 or index >= len(actions):
+                raise IndexError("Queued action no longer exists.")
+            to_index = max(0, min(to_index, len(actions) - 1))
+            action = actions.pop(index)
+            actions.insert(to_index, action)
             self.autosave()
         return copy.deepcopy(actions)

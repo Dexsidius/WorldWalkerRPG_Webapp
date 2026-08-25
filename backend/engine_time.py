@@ -18,6 +18,8 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
                      update_chapter_memory, tick_world_clocks)
 from simulation import (deterministic_assessment, prioritize_updates,
                         advance_npc_intentions, record_simulation_events)
+from director import (build_cause_effect, ensure_productive_failures,
+                      maybe_offer_relationship_scene, update_campaign_direction)
 from simulation_integrity import (parse_action_goals, register_action_goals,
                                   reconcile_action_goals, travel_plan_for_actions,
                                   validate_turn_response, refresh_npc_schedules,
@@ -378,6 +380,8 @@ class TimeSkipMixin:
         assessment.setdefault("deferred_actions", budget["deferred_actions"])
         assessment["structured_goals"] = structured_goals
         assessment["travel_plans"] = travel_plans
+        assessment["standing_plan"] = standing_orders
+        assessment["continuing_previous_orders"] = continuing_previous_orders
         if moment_deferred:
             authored_deferred = assessment.get("deferred_actions") if isinstance(assessment.get("deferred_actions"), list) else []
             assessment["deferred_actions"] = moment_deferred + [x for x in authored_deferred if x not in moment_deferred]
@@ -504,6 +508,8 @@ class TimeSkipMixin:
         payload = {
             "task": "resolve_time_skip", "duration": {"amount": simulation_amount, "unit": simulation_unit},
             "original_requested_duration": {"amount": amount, "unit": unit}, "planned_actions": orders,
+            "standing_plan": assessment.get("standing_plan", orders),
+            "continuing_previous_orders": bool(assessment.get("continuing_previous_orders")),
             "intensity": intensity, "assessment": assessment, "dice_results": results,
             "state_before": self.trimmed_state_for_ai(" ".join(str(x) for x in orders or [])),
             "simulation_profile": self.simulation_profile(),
@@ -520,7 +526,7 @@ class TimeSkipMixin:
             "requirements": [
                 "Simulate the ENTIRE skipped period, not just its ending scene.",
                 "Any period longer than a single moment should cover several distinct notable beats/events spread across the timespan (e.g. across a day: morning training, an afternoon encounter, an evening development), not one flattened event. Only moment-to-moment turns focus on a single thing at a time.",
-                "When moment_mode.enabled is true, resolve exactly one immediate meaningful story beat based on current context and the first player action/standing order. Let that beat consume a believable amount of time—even several hours—but never more than 24 hours. Defer every later action and stop at the next decision point.",
+                "When moment_mode.enabled is true, resolve exactly one immediate meaningful story beat based on current context and the first active action. standing_plan contains the complete ongoing itinerary: preserve its later instructions as deferred work instead of forgetting them or pretending the player abandoned them. Let the beat consume a believable amount of time—even several hours—but never more than 24 hours, then stop at the next decision point.",
                 "When live_event_scene is true, the player is personally living through a major canon event inside its own dedicated scene, one beat at a time, like a choose-your-own-adventure page — the narrative should read as immediate, present, moment-to-moment sensory experience (what they see/hear/feel RIGHT NOW, who's near them, what's changing second to second), not a summary or a report of what happened. Directly react to and build on whatever the player just chose or typed — their exact stated action should visibly move the scene forward, not be politely acknowledged and sidestepped. End every beat at a genuine fork the player must actually choose from next (via suggested_actions and/or the open narrative itself), actively pushing them toward the event's real climax rather than stalling in place. Do not force a difficult check on every single beat of this scene — most beats should just be narrative choice and consequence; reserve real risk/checks for the moments that actually warrant them, exactly as you would for any other action.",
                 "When next_major_event_mode.enabled is true, keep simulating through routine decisions and include clear chronological updates, but do not stop for ordinary prompts. The bar for stopping is deliberately high — this mode exists to skip PAST the small stuff and run until the intended goal is reached or the available time fully elapses, not pause partway through for anything less. Stop ONLY when something on this scale actually happens: the character moving into a genuinely different tier of power (not just a stat/skill increase — an actual breakthrough, transformation, or class/form change), a real battle or life-threatening confrontation, a world-changing event (a war, disaster, regime change, a faction destroyed or founded), or a major canon timeline event. A defining goal being fully completed also qualifies. None of the following are ever, by themselves, a reason to stop — narrate them as an ordinary update and keep going: a routine conversation or social call, a minor non-lethal scuffle or scare, an ordinary stat tick or incremental skill/level gain (even a large one, as long as it's the same tier of power as before), a passing rumor or piece of news, a small transaction or errand, meeting or running into someone without real stakes, or anything that would read as one line in a history feed rather than a headline. If you are genuinely unsure whether something clears this bar, it does not — keep simulating past it, all the way to the requested goal or the end of the available time, whichever comes first. Return no intervention_prompt and do not ask Yes/No.",
                 "Present world updates with information fog: distinguish what objectively changed, why it matters, and what the character can actually know through witnesses, messages, evidence, travel time, or rumor. The world is not omniscient and information never teleports.",
@@ -578,7 +584,13 @@ class TimeSkipMixin:
                 "suggested_actions": ["exactly 3 concrete optional actions written as verb + target + purpose: strongest lead, growth/preparation, alternate hook. Each must name a SPECIFIC person, place, faction, item, or thread that actually exists in this campaign right now — never generic filler like 'look for rumors' or 'train' with no real target. Vary the scale honestly: one can be a single moment, another can openly span several days or a longer project ('spend the next few days...', 'seek out ... over the coming weeks') when that's genuinely what the lead calls for — don't force everything into an instant."]
             }
         }
-        data = self.request_with_narrative(self.gm_context(" ".join(str(x) for x in orders or [])), payload, 2800)
+        use_major_model = bool(event_mode or canon_stop or any(bool(chk.get("major_event")) for chk in checks))
+        narrator_client = self.ai_major if use_major_model and self.settings.get("major_event_model") else self.ai
+        request_args = (self.gm_context(" ".join(str(x) for x in orders or [])), payload, 2800)
+        # Preserve compatibility with test and plug-in sessions that override
+        # request_with_narrative using the original three-argument signature.
+        data = (self.request_with_narrative(*request_args, client=narrator_client)
+                if narrator_client is not self.ai else self.request_with_narrative(*request_args))
         if canon_stop and not event_mode:
             data["elapsed"] = {"amount": canon_stop.get("minutes_until", 0), "unit": "minutes"}
             # Whether reaching this boundary becomes a real "will you personally
@@ -759,10 +771,11 @@ class TimeSkipMixin:
         # cannot accidentally turn a requested month into a few hours of
         # growth (or award a month for a goal completed on day thirteen).
         self.enforce_training_progress(data, results, training_amount, training_unit, orders, intensity)
+        ensure_productive_failures(data, results)
         return self.apply_time_skip(data, amount, unit, progression_context={
             "actions": orders, "rolls": results,
             "elapsed_minutes": self.duration_minutes(training_amount, training_unit),
-            "intensity": intensity,
+            "intensity": intensity, "model_used": getattr(narrator_client, "model", ""),
         })
 
     def next_canon_stop(self, amount, unit):
@@ -1214,6 +1227,7 @@ class TimeSkipMixin:
             self.ensure_quest_briefings(before, "; ".join(str(x) for x in context.get("actions", [])))
             completed_quests = normalize_quest_state_machine(self.state)
             elapsed_minutes = self.duration_minutes(elapsed_amount, elapsed_unit)
+            self.append_training_summary(before, context.get("actions", []), elapsed_minutes, context.get("rolls", []))
             integrity_report = data.get("integrity_report") if isinstance(data.get("integrity_report"), dict) else {}
             if integrity_report:
                 self.state.setdefault("simulation_validation", []).append(copy.deepcopy(integrity_report))
@@ -1262,6 +1276,16 @@ class TimeSkipMixin:
             action_summary = "Advance: " + "; ".join(context.get("actions", []) or self.state.get("standing_orders", []))
             advance_hidden_class_discovery(self.state, action_summary)
             record_progression_ledger(before, self.state, action_summary, elapsed_minutes, context.get("rolls", []))
+            relationship_offer = maybe_offer_relationship_scene(self.state, updates)
+            if relationship_offer:
+                self.state["suggested_actions"] = self.guided_suggestions([relationship_offer["prompt"], *self.state.get("suggested_actions", [])])
+                self.append(f"[OPTIONAL CHARACTER MOMENT — {relationship_offer['npc']}]\n{relationship_offer['reason']} This is optional; time will not move until you choose and Advance.", "meta")
+            update_campaign_direction(self.state, context.get("actions", []), updates + local_world_events, elapsed_minutes)
+            cause_effect = build_cause_effect(before, self.state, context.get("actions", []), context.get("rolls", []))
+            self.state["last_ai_route"] = {"role": "Major Event GM" if context.get("model_used") and context.get("model_used") == self.settings.get("major_event_model") else "Main GM",
+                                           "model": context.get("model_used") or self.settings.get("model", ""), "turn": self.state.get("turn", 0)}
+            if self.settings.get("developer_mode"):
+                self.append(f"[AI ROUTE]\n{self.state['last_ai_route']['role']}: {self.state['last_ai_route']['model']}", "meta")
             update_narrative_memory(before, self.state, action_summary, data.get("narrative", ""))
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, action_summary, data.get("narrative", ""))

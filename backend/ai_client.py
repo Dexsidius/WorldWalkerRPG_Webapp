@@ -13,7 +13,7 @@ MODEL_PRICING_PER_1M = {
     "gpt-5.1": (1.25, 10.00), "gpt-5.2": (1.75, 14.00), "gpt-5.4": (2.50, 15.00),
     "gpt-5.4-mini": (0.75, 4.50), "gpt-5.4-nano": (0.20, 1.25), "gpt-5.5": (5.00, 30.00),
     "gpt-5.5-pro": (30.00, 180.00), "gpt-5.6-luna": (0.20, 1.20), "gpt-5.6-terra": (2.00, 12.00),
-    "gpt-5.6-sol": (5.00, 30.00), "gpt-4o": (2.50, 10.00), "gpt-4o-mini": (0.15, 0.60),
+    "gpt-5.6-sol": (4.00, 20.00), "gpt-4o": (2.50, 10.00), "gpt-4o-mini": (0.15, 0.60),
 }
 
 
@@ -100,14 +100,26 @@ def repair_truncated_json(text):
 
 class AI:
     def __init__(self, key="", model=DEFAULT_MODEL, provider="local",
-                 base_url="http://localhost:1234/v1", local_token=""):
+                 base_url="http://localhost:1234/v1", local_token="", max_estimated_cost_usd=0):
         self.key = key
         self.model = model
         self.provider = provider
         self.base_url = base_url.rstrip("/")
         self.local_token = local_token
+        self.max_estimated_cost_usd = max(0.0, float(max_estimated_cost_usd or 0))
         self.last_endpoint = ""
         self.usage = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "cost_usd": 0.0, "cost_unknown": False}
+
+    def estimate_request_cost(self, instructions, payload, max_output_tokens=700):
+        """Conservative preflight estimate; local models always return zero."""
+        if self.provider != "cloud":
+            return 0.0
+        price = MODEL_PRICING_PER_1M.get(str(self.model))
+        if not price:
+            return None
+        raw = str(instructions or "") + json.dumps(payload or {}, ensure_ascii=False, default=str)
+        estimated_input = max(1, len(raw) // 4)
+        return (estimated_input / 1_000_000) * price[0] + (max(1, int(max_output_tokens or 700)) / 1_000_000) * price[1]
 
     def _record_usage(self, data):
         """Tallies tokens from a raw API response, before any JSON-content
@@ -304,6 +316,13 @@ class AI:
         return self._parse_json_payload(str(content))
 
     def request(self, instructions, payload, timeout=240, max_output_tokens=700):
+        projected = self.estimate_request_cost(instructions, payload, max_output_tokens)
+        self.usage["last_projected_cost_usd"] = round(projected, 6) if projected is not None else None
+        if self.max_estimated_cost_usd and projected is not None and projected > self.max_estimated_cost_usd:
+            raise RuntimeError(
+                f"This AI request is estimated at ${projected:.3f}, above your ${self.max_estimated_cost_usd:.3f} per-request limit. "
+                "Raise the limit, choose a cheaper model, or shorten the requested output in AI & Portrait Setup."
+            )
         if self.provider == "cloud" and not self.key:
             raise RuntimeError("Cloud mode is selected but no OpenAI API key is configured.")
 

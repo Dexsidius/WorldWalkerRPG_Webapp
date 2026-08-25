@@ -53,6 +53,7 @@ APP_OWNED = {
     "action_goals", "correction_log", "authoritative_corrections",
     "information_packets", "npc_schedules", "canon_event_states",
     "simulation_validation",
+    "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -210,7 +211,7 @@ def migrate_state(state, from_version="unknown"):
                         resource_max=resource_new, resource=max(0, round(resource_new * resource_ratio)))
     for key, default in BASE_STATE.items():
         migrated.setdefault(key, copy.deepcopy(default))
-    migrated["schema_version"] = BASE_STATE.get("schema_version", 11)
+    migrated["schema_version"] = BASE_STATE.get("schema_version", 12)
     normalize_npc_knowledge(migrated, {}, "migration")
     repairs = _repair(migrated)
     migrated.setdefault("diagnostics", {})["migration"] = {

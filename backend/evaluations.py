@@ -143,3 +143,32 @@ def run_model_evaluation(game, scenario_ids=None, client=None):
     (_evaluation_dir() / filename).write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     report["file"] = filename
     return report
+
+
+def run_model_comparison(game, models, scenario_ids=None):
+    """Run identical, isolated scenarios against several configured models.
+
+    This is deliberately opt-in because it makes one paid call per model per
+    scenario. The real campaign is never passed to or changed by the test.
+    """
+    clean_models = []
+    for model in models or []:
+        model = str(model or "").strip()
+        if model and model not in clean_models:
+            clean_models.append(model)
+    if len(clean_models) < 2:
+        raise ValueError("Enter at least two different model names to compare.")
+    if len(clean_models) > 5:
+        raise ValueError("Compare at most five models at a time to limit cost.")
+    reports = [run_model_evaluation(game, scenario_ids, client=game.make_client(model)) for model in clean_models]
+    ranking = sorted(({
+        "model": row.get("model", ""),
+        "score": row.get("score", 0),
+        "duration_seconds": round(sum(float(item.get("duration_seconds", 0)) for item in row.get("results", [])), 2),
+        "calls": row.get("usage", {}).get("calls", 0),
+        "cost_usd": round(float(row.get("usage", {}).get("cost_usd", 0) or 0), 6),
+    } for row in reports), key=lambda row: (-row["score"], row["cost_usd"], row["duration_seconds"]))
+    for position, row in enumerate(ranking, 1):
+        row["rank"] = position
+    return {"reports": reports, "ranking": ranking, "campaign_mutated": False,
+            "scenario_count": len(reports[0].get("results", [])) if reports else 0}

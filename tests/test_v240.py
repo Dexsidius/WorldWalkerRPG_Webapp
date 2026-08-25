@@ -66,7 +66,7 @@ class WorldwalkerV240Tests(unittest.TestCase):
         self.assertEqual(game.state["name"], "Yahiko")
         self.assertEqual(game.state["location"], "Amegakure")
         self.assertEqual(game.state["player_identity"]["mode"], "canon")
-        self.assertEqual(game.state["canon_day"], -4856)
+        self.assertEqual(game.state["canon_day"], -5221)
 
     def test_queue_does_not_move_time_or_create_story(self):
         game = session()
@@ -104,8 +104,8 @@ class WorldwalkerV240Tests(unittest.TestCase):
         game.new_campaign("Ignored", "Naruto", "Adventurer", "", "", "", "", "", {}, canon_character_id="yahiko_akatsuki")
         game._flush_story()
         before = copy.deepcopy(game.state)
-        game.advance_clock(before, 1, "minutes")
-        self.assertTrue(any("Akatsuki's transformation" in x for x in game.state["world_events"]))
+        game.advance_clock(before, 1, "days")
+        self.assertTrue(any("original Akatsuki is founded" in x for x in game.state["world_events"]))
         self.assertEqual(len(game.state["canon_events_fired"]), 1)
 
     def test_current_landmark_beats_old_battle_language(self):

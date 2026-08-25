@@ -250,6 +250,10 @@ class JournalMixin:
 
     def public_state(self):
         s = copy.deepcopy(self.state)
+        try:
+            s["_canon_countdown"] = self.canon_countdown()
+        except Exception:
+            s["_canon_countdown"] = {"available": False}
         scene_url, cat = scene_image_url(self.state)
         s["_scene_image"] = scene_url
         s["_scene_category"] = cat

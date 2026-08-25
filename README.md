@@ -6,7 +6,14 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.4.0** (schema 11). Version 3.4 is intended for fresh campaigns.
+Current app/save version: **3.6.0** (schema 12). Version 3.6 is intended for fresh campaigns.
+
+Version 3.6 adds a local campaign director, persistent NPC motives, optional
+relationship scenes, branching quest routes, productive failures, readable
+cause-and-effect and training reports, editable/reorderable time-skip plans,
+major-event model routing, request/session cost limits, and opt-in same-scenario
+model comparisons. These systems reuse state the game already tracks and do
+not add routine AI calls.
 
 Version 3.3 reduces simulation bloat: normal Advances use a deterministic
 planning pass plus one combined narrator request, while Economy, Balanced,

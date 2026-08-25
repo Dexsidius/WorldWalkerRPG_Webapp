@@ -191,7 +191,7 @@ class WorldwalkerV251Tests(unittest.TestCase):
             "roll": 63, "total": 71, "difficulty": 65,
             "success": True, "breakthrough": False,
         })
-        self.assertEqual(summary, "63 +8 = 71/100 needed 66 — SUCCESS")
+        self.assertEqual(summary, "Climb the tower — 63 +8 = 71/100 vs. 66 needed — SUCCESS")
         self.assertNotIn("Stat", summary)
         self.assertNotIn("Titles", summary)
 
