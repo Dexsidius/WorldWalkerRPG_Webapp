@@ -56,6 +56,37 @@ WORLD_STARTER_SKILL = {
     "Bleach": "Shinigami Fundamentals", "Custom World": "Background Expertise",
 }
 
+STARTER_SKILL_DESCRIPTIONS = {
+    ("One Piece", "Navigator"): "Charts courses, reads weather and currents, corrects a ship's heading, and recognizes common navigation hazards.",
+    ("One Piece", "Shipwright"): "Inspects hulls and rigging, performs practical repairs, chooses suitable materials, and keeps a vessel seaworthy.",
+    ("One Piece", "Medic"): "Stabilizes injuries, treats common illness, manages field supplies, and recognizes when specialist care is needed.",
+    ("Naruto", "Ninjutsu Student"): "Molds chakra, performs hand seals, uses basic transformations, and executes beginner ninjutsu without wasting control.",
+    ("Naruto", "Taijutsu Specialist"): "Uses stance, footwork, timing, conditioning, and close-range combinations appropriate to a trained shinobi.",
+    ("Naruto", "Medic"): "Applies chakra control to diagnosis, first aid, and safe treatment while recognizing injuries beyond current training.",
+    ("Overgeared", "Blacksmith"): "Selects materials, controls heat, shapes and repairs equipment, and evaluates the causes of common production failures.",
+    ("Overgeared", "Warrior"): "Uses weapon spacing, armor, stamina, and basic combat skills expected of a beginning Satisfy warrior.",
+    ("Hunter x Hunter", "Tracker"): "Reads tracks, prepares routes, notices environmental clues, and follows a quarry without assuming supernatural senses.",
+    ("Bleach", "Zanjutsu Specialist"): "Uses foundational sword posture, distance, cuts, guards, and spiritual awareness without implying an earned release.",
+    ("Reincarnated as a Slime", "Skill Analyst"): "Observes an ability's visible behavior, compares repeated effects, and forms practical hypotheses without bypassing unknown rules.",
+}
+
+
+def starter_skill_description(world, archetype, skill_name):
+    specific = STARTER_SKILL_DESCRIPTIONS.get((world, archetype))
+    if specific:
+        return specific
+    defaults = {
+        "One Piece": "Covers practical movement, combat awareness, stamina, and field habits used by capable travelers of the local seas.",
+        "Hunter x Hunter": "Covers observation, conditioning, planning, and field discipline without granting Nen knowledge that has not been learned.",
+        "Naruto": "Covers chakra safety, shinobi movement, tools, teamwork, and the basic techniques appropriate to the character's training.",
+        "Solo Max-Level Newbie": "Covers System menus, equipment use, combat feedback, and repeatable beginner strategies available at the current stage.",
+        "Overgeared": "Covers the concrete class actions, equipment handling, and Satisfy systems expected of a beginning player in this role.",
+        "Reincarnated as a Slime": "Covers the species traits, magicule awareness, and survival behaviors the character can currently use and explain.",
+        "Bleach": "Covers the spiritual awareness, movement, combat safety, and established techniques appropriate to the character's current station.",
+        "Custom World": "Covers the concrete tools, methods, and limits established for this role in the campaign's world.",
+    }
+    return defaults.get(world, f"Applies the practical tools and methods represented by {skill_name}.")
+
 # A concrete, named starting weapon/tool per archetype — "a sword", not "a
 # travel-worn weapon" — so the opening loadout already looks like it belongs
 # to this specific character instead of a generic placeholder. Falls back to
@@ -116,6 +147,8 @@ POOL_STATS = {
 }
 
 ABILITY_ASPECTS = {
+    "cursed relic": "Hexed Relic", "cursed artifact": "Hexed Relic",
+    "curse": "Hex", "relic": "Relic", "craft": "Forge",
     "space-time": "Warp", "space time": "Warp", "spacetime": "Warp",
     "teleport": "Warp", "portal": "Warp", "warp": "Warp",
     "seal": "Seal", "fuinjutsu": "Seal", "fuuinjutsu": "Seal",
@@ -425,11 +458,27 @@ class CampaignMixin:
 
     @staticmethod
     def hidden_class_requested(background):
-        """A vague hidden/rare class claim still guarantees a complete class."""
+        """A vague hidden/rare class claim still guarantees a complete class.
+
+        Players naturally write phrases such as "hidden crafting class" or
+        "secret production-based class". Allow a few descriptive words
+        between the rarity word and "class" instead of requiring adjacency.
+        """
         text = str(background or "").lower()
         return bool(re.search(
-            r"\b(hidden|secret|rare|unique|special|unknown|mysterious|legendary)\s+(?:starting\s+)?class\b|"
+            r"\b(hidden|secret|rare|unique|special|unknown|mysterious|legendary)\b(?:[ -]+[a-z][a-z'-]*){0,4}[ -]+class\b|"
             r"\bclass\s+(?:that\s+)?(?:nobody|no one|others)\s+(?:knows|recognizes|has)\b",
+            text,
+        ))
+
+    @staticmethod
+    def hidden_class_should_remain_unknown(background):
+        """Keep the true package internal when the character lacks its name."""
+        text = str(background or "").lower()
+        return bool(re.search(
+            r"\b(?:do not|don't|does not|doesn't|cannot|can't)\s+(?:yet\s+)?(?:know|recognize|identify|understand)\b|"
+            r"\b(?:true|real|full)\s+(?:name|nature|abilities?|details?)\s+(?:is|are)\s+(?:unknown|hidden)\b|"
+            r"\b(?:unknown|unidentified|unnamed)\s+(?:hidden\s+)?class\b",
             text,
         ))
 
@@ -495,6 +544,7 @@ class CampaignMixin:
                 "concealed": bool(concealed),
                 "progress": 20 if concealed else 100,
                 "stage": "dormant" if concealed else "understood",
+                "public_name": (f"Unidentified {aspect} Class" if world in {"Overgeared", "Solo Max-Level Newbie"} else f"Unidentified {aspect} Potential"),
                 "clue": f"A {aspect.lower()}-aligned class feature answers instinctively when pressure or focused practice calls on it.",
                 "reveal_requirements": ["Use the unusual class feature", "Seek appraisal or specialist knowledge", "Train along the class's natural affinity"],
             },
@@ -547,23 +597,22 @@ class CampaignMixin:
             motivation = "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world."
 
         training = (
-            f"Their early {role_label.lower()} practice was uneven but persistent, emphasizing "
-            f"{', '.join(primary_stats[:2]) if primary_stats else 'the fundamentals their role demands'}."
+            f"They learned the practical foundations of {role_label.lower()} work through uneven but persistent practice, "
+            f"with the strongest early emphasis on {', '.join(primary_stats[:2]) if primary_stats else 'the fundamentals their role demands'}."
         )
-        relationship = f"{mentor_name}, {mentor}, supplied guidance, friction, and an unfinished expectation."
+        relationship = f"Along the way, {mentor_name}—{mentor}—became an important source of guidance, friction, and unfinished expectations."
         complication = (
             "Their potential is ahead of their experience, so judgment, resources, and reliable control remain real obstacles."
             if boost >= 20 else
-            "They still lack the experience and resources to turn every promising instinct into a dependable result."
+            "They still lack the experience and resources to turn promising instincts into dependable results."
         )
-        supplied = f"Their own account adds: \"{raw.rstrip('.')}\"." if raw else "They have not given a fixed account of their earlier life."
+        supplied = raw.rstrip().rstrip(".") + "." if raw else f"They begin as a {origin_label.lower()} pursuing the path of a {role_label.lower()}."
         expanded = " ".join((
-            f"Raised around {origin_label}, they learned the habits and pressures expected of a {role_label}.",
-            home_context,
             supplied,
+            home_context,
             training,
             relationship,
-            f"The turning point came when {formative_event}.",
+            f"A decisive turning point came when {formative_event}.",
             motivation,
             complication,
         ))
@@ -676,13 +725,16 @@ class CampaignMixin:
         elif archetype: skill_name = f"{archetype} Fundamentals"
         title = self.naruto_identity_title(origin, start_location) if world == "Naruto" else f"{origin or 'Local'} {archetype or 'Adventurer'}".strip()
         skills = {skill_name: {"rank": "Trained" if boost < 20 else "Exceptional", "bonus": 4 + boost // 10,
-                               "description": "Training in the core methods expected of this role."}}
+                               "description": starter_skill_description(world, archetype, skill_name)}}
         hidden_class = None
         generated_ability = None
         class_requested = allow_starting_specials and self.hidden_class_requested(background)
         class_awarded = class_requested or (allow_starting_specials and random.random() < RANDOM_HIDDEN_CLASS_CHANCE)
         if class_awarded:
-            hidden_class = self.generate_hidden_class(world, background, boost, primary, adjusted, concealed=not class_requested)
+            hidden_class = self.generate_hidden_class(
+                world, background, boost, primary, adjusted,
+                concealed=(not class_requested) or self.hidden_class_should_remain_unknown(background),
+            )
             for ability, bonus in hidden_class["stat_bonuses"].items():
                 adjusted[ability] = max(1, int(adjusted.get(ability, 1)) + int(bonus))
             skills[hidden_class["signature_skill"]] = copy.deepcopy(hidden_class["skill"])
@@ -732,7 +784,7 @@ class CampaignMixin:
             profile["stats"] = copy.deepcopy(profile.get("_base_stats") or profile.get("stats") or {})
             hidden = self.generate_hidden_class(
                 world, background, boost, primary, profile["stats"],
-                concealed=not self.hidden_class_requested(background),
+                concealed=(not self.hidden_class_requested(background)) or self.hidden_class_should_remain_unknown(background),
             )
             for ability, bonus in hidden.get("stat_bonuses", {}).items():
                 profile["stats"][ability] = max(1, int(profile["stats"].get(ability, 1)) + int(bonus))
@@ -779,6 +831,48 @@ class CampaignMixin:
     def canon_character_scenario(self, world, scenario_id):
         return next((copy.deepcopy(x) for x in playable_characters_for(world) if x.get("id") == scenario_id), None)
 
+    def normalize_canon_start_profile(self, world, scenario, profile):
+        """Make every player-facing and mechanical field agree with the preset.
+
+        Canon starts must not pass through the original-character backstory
+        filler: doing so invents mentors, homes, and formative incidents that
+        can contradict the already-known character. Scenario data is therefore
+        the final authority for identity, skills, titles, and minimum stats.
+        """
+        normalized = copy.deepcopy(profile) if isinstance(profile, dict) else {}
+        stats = normalized.setdefault("stats", {})
+        for ability, minimum in (scenario.get("stat_minimums") or {}).items():
+            if ability in stats:
+                stats[ability] = max(int(stats.get(ability, 1) or 1), int(minimum))
+        if isinstance(scenario.get("skills"), dict) and scenario["skills"]:
+            normalized["skills"] = copy.deepcopy(scenario["skills"])
+        if scenario.get("title"):
+            normalized["titles"] = [scenario["title"]]
+        expanded = scenario.get("expanded_background") or scenario.get("background") or ""
+        normalized["expanded_background"] = expanded
+        companions = [npc.get("name") for npc in scenario.get("seed_npcs", []) if npc.get("is_companion")]
+        mentors = [npc.get("name") for npc in scenario.get("seed_npcs", []) if not npc.get("is_companion")]
+        normalized["background_details"] = {
+            "upbringing": expanded,
+            "training_history": scenario.get("training_history") or "Established canon training and experience appropriate to this starting point.",
+            "key_connection": ", ".join(companions + mentors),
+            "formative_event": scenario.get("background", ""),
+            "motivation": scenario.get("motivation") or scenario.get("background", ""),
+            "starting_complication": scenario.get("starting_complication") or "Canon pressures remain active, but the player's choices can change what follows.",
+        }
+        normalized["growth_profile"] = {
+            "aptitude": scenario.get("aptitude") or "Established canon potential",
+            "learning_rate": float(scenario.get("learning_rate", 1.0) or 1.0),
+            "starting_strengths": list((scenario.get("stat_minimums") or {}).keys())[:3],
+            "accelerators": ["Established training, relationships, and world-valid opportunities"],
+            "constraints": ["Current mastery", "Chakra or resource limits", "Consequences and opposition"],
+            "explanation": "Growth follows this character's established capabilities, training, decisions, and changed timeline.",
+        }
+        normalized["generated_ability"] = None
+        normalized["hidden_class"] = None
+        normalized["hp_max"], normalized["resource_max"] = self.derive_pools(world, stats)
+        return normalized
+
     def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id=""):
         if world not in WORLD_DATA:
             raise ValueError("Unknown world selected.")
@@ -797,6 +891,8 @@ class CampaignMixin:
         rolled = self.roll_starting_stats(world, archetype, stats or {})
         profile = self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start,
                                               allow_starting_specials=not bool(scenario))
+        if scenario:
+            profile = self.normalize_canon_start_profile(world, scenario, profile)
         if scenario:
             start_day, canon_anchor = int(scenario.get("start_day")), scenario.get("background")
         elif era:
@@ -833,6 +929,8 @@ class CampaignMixin:
             world, origin, archetype, background, rolled, start_location=start,
             allow_starting_specials=not bool(scenario),
         )
+        if scenario:
+            profile = self.normalize_canon_start_profile(world, scenario, profile)
         profile_stats = profile.get("stats") if isinstance(profile.get("stats"), dict) else rolled
         hp_max, resource_max = self.derive_pools(world, profile_stats)
         with self.lock:
@@ -945,6 +1043,12 @@ class CampaignMixin:
                 rosters = scenario.get("seed_faction_rosters")
                 if isinstance(rosters, dict) and rosters:
                     self.state["faction_rosters"] = copy.deepcopy(rosters)
+                self.state["position"] = str(scenario.get("position") or self.state.get("position") or "")
+                self.state["affiliations"] = copy.deepcopy(scenario.get("affiliations") or [])
+                for faction, standing in (scenario.get("reputation") or {}).items():
+                    self.state.setdefault("reputation", {})[faction] = standing
+                if scenario.get("title"):
+                    self.state["titles"] = [scenario["title"]]
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

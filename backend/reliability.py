@@ -325,7 +325,7 @@ def visible_class_profile(state_or_profile):
         visible.pop("true_name", None)
         return visible
     progress = int(discovery.get("progress", 0) or 0)
-    visible["name"] = "Unidentified Hidden Class"
+    visible["name"] = discovery.get("public_name") or "Unidentified Class Signature"
     visible["description"] = discovery.get("clue") or "A dormant class-shaped power is present, but its nature is not yet understood."
     visible["effect"] = "Some bonuses are already active; their exact source remains unclear." if progress < 70 else visible.get("effect", "Its core feature is becoming clear.")
     if progress < 50:

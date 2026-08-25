@@ -124,9 +124,41 @@ def normalize_quest_state_machine(state):
                                  (f"Continue working on: {next((o['text'] for o in objectives if o['status'] == 'active'), 'the next known lead')}") )[:500]
         required_progress = [obj.get("progress", 0) for obj in objectives if not obj.get("optional")]
         quest["progress_percent"] = round(sum(required_progress) / len(required_progress)) if required_progress else 0
-        quest.setdefault("branch_state", {"current": "main", "available": [], "locked": []})
-        quest.setdefault("consequences", [])
         required = [obj for obj in objectives if not obj.get("optional")]
+        branch = quest.get("branch_state") if isinstance(quest.get("branch_state"), dict) else {}
+        branch.setdefault("current", "main")
+        branch["available"] = [str(x)[:300] for x in _list(branch.get("available")) if str(x).strip()]
+        branch["locked"] = [str(x)[:300] for x in _list(branch.get("locked")) if str(x).strip()]
+        # A quest without choices is an isolated checklist.  Seed two grounded
+        # routes from its own briefing, then unlock the confrontation route as
+        # earlier required objectives are completed.  This is deterministic
+        # scaffolding; the narrator can replace or enrich it with specific
+        # world-authored branches on later turns.
+        if not branch["available"] and not branch["locked"]:
+            locations = _list(quest.get("locations") or quest.get("location"))
+            giver = str(quest.get("giver") or quest.get("cause") or "the quest giver").strip()
+            lead = str(quest.get("next_hint") or quest.get("first_step") or "the primary lead").strip()
+            branch["available"] = [f"Follow the primary lead: {lead}"[:300]]
+            alternate = (f"Seek an alternate route through {giver}" if giver else
+                         f"Investigate an alternate route at {locations[0]}" if locations else "Search for an alternate source")
+            if alternate.lower() not in {x.lower() for x in branch["available"]}:
+                branch["available"].append(alternate[:300])
+            if required:
+                branch["locked"] = [f"Directly resolve: {required[-1]['text']}"[:300]]
+        completed_required = [obj for obj in objectives if not obj.get("optional") and obj.get("status") == "complete"]
+        if completed_required and branch["locked"]:
+            unlocked = branch["locked"].pop(0)
+            if unlocked.lower() not in {x.lower() for x in branch["available"]}:
+                branch["available"].append(unlocked)
+        branch["routes"] = [
+            {"name": name, "status": "available", "consequence": "Choosing this route may close or alter competing approaches."}
+            for name in branch["available"]
+        ] + [
+            {"name": name, "status": "locked", "consequence": "Complete an earlier objective or discover the missing prerequisite."}
+            for name in branch["locked"]
+        ]
+        quest["branch_state"] = branch
+        quest.setdefault("consequences", [])
         if required and all(obj.get("status") == "complete" for obj in required):
             quest["status"] = "Completed"
             completed.append(quest.get("name", "Quest"))
@@ -502,6 +534,11 @@ def relationship_snapshot(state):
     relationships = state.get("relationships", {})
     contacts = state.get("contacts", {})
     for name in sorted(set(memories) | set(relationships) | set(contacts)):
+        contact = contacts.get(name, {}) if isinstance(contacts.get(name), dict) else {}
+        # Major factions are contactable from campaign start, but a group
+        # contact is not a person and should stay in the faction sections.
+        if contact.get("kind") == "group" and name not in memories and name not in relationships:
+            continue
         mem = memories.get(name) if isinstance(memories.get(name), dict) else {}
         raw = relationships.get(name, {})
         if isinstance(raw, dict):

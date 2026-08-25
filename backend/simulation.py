@@ -14,6 +14,7 @@ import re
 from datetime import datetime
 
 from worlds import abilities_for
+from director import enrich_npc_depth
 
 
 SIMULATION_MODES = {
@@ -212,6 +213,7 @@ def refresh_npc_intentions(state):
         row["status"] = row.get("status") or "active"
     # Do not delete old intentions: defeated, missing, or absent NPCs are
     # historical state.  They simply stop advancing unless marked active.
+    enrich_npc_depth(state)
     return intentions
 
 

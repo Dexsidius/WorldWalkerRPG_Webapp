@@ -28,6 +28,9 @@ DEFAULT_SETTINGS = {
     "api_key": "",
     "model": "",
     "secondary_model": "",
+    "major_event_model": "",
+    "max_ai_cost_per_request_usd": 0.0,
+    "session_budget_warning_usd": 5.0,
     "narration": "Concise",
     "autosave": True,
     "sound_enabled": True,
@@ -170,6 +173,8 @@ class CoreMixin:
         self.settings = self.load_settings()
         self.ai = self.make_client(self.settings.get("model", ""))
         self.ai_bg = self.make_client(self.settings.get("secondary_model", "") or self.settings.get("model", ""))
+        major_model = self.settings.get("major_event_model", "")
+        self.ai_major = self.make_client(major_model) if major_model and major_model != self.settings.get("model", "") else self.ai
         self.state = copy.deepcopy(BASE_STATE)
         self.history = []
         self.checkpoints = []
@@ -199,6 +204,7 @@ class CoreMixin:
             provider=s.get("provider", "local"),
             base_url=s.get("local_base_url", "http://localhost:1234/v1"),
             local_token=s.get("local_token", ""),
+            max_estimated_cost_usd=s.get("max_ai_cost_per_request_usd", 0),
         )
 
     def local_mode(self):
@@ -219,6 +225,8 @@ class CoreMixin:
         self.save_settings()
         self.ai = self.make_client(self.settings["model"])
         self.ai_bg = self.make_client(self.settings.get("secondary_model") or self.settings["model"])
+        major_model = self.settings.get("major_event_model", "")
+        self.ai_major = self.make_client(major_model) if major_model and major_model != self.settings.get("model", "") else self.ai
 
     def simulation_mode(self):
         return normalize_simulation_mode(self.settings.get("simulation_mode", "balanced"))
@@ -416,7 +424,7 @@ class CoreMixin:
         warnings = update_continuity(self.state, scratch, str(payload.get("action") or ""), data.get("narrative", ""))
         return [w for w in warnings if any(marker in w for marker in self._RETRYABLE_WARNING_MARKERS)]
 
-    def request_with_narrative(self, instructions, payload, max_output_tokens):
+    def request_with_narrative(self, instructions, payload, max_output_tokens, client=None):
         """Some models (smaller/cheaper ones especially) occasionally fill in
         state_patch correctly but leave narrative blank under attention
         pressure. That's a failed response, not a usable one — retry once
@@ -425,7 +433,8 @@ class CoreMixin:
         _simulate_continuity_violations) — same one-retry discipline, named
         specifically so the model isn't just asked to "try again" blind."""
         max_output_tokens = output_budget(max_output_tokens, self.simulation_mode())
-        data = self.ai.request(instructions, payload, max_output_tokens=max_output_tokens)
+        client = client or self.ai
+        data = client.request(instructions, payload, max_output_tokens=max_output_tokens)
         narrative_missing = not (data.get("narrative") or "").strip()
         violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
         if narrative_missing or violations:
@@ -434,7 +443,8 @@ class CoreMixin:
                 reminder += "\n\nREMINDER: your previous attempt left \"narrative\" empty. Write 2-5 sentences of narrative FIRST, then the rest."
             if violations:
                 reminder += "\n\nREMINDER: your previous attempt has a specific problem that must be fixed in this response: " + " ".join(violations)
-            data = self.ai.request(instructions + reminder, payload, max_output_tokens=max_output_tokens)
+            data = client.request(instructions + reminder, payload, max_output_tokens=max_output_tokens)
+        self._last_narrator_model = getattr(client, "model", self.settings.get("model", ""))
         return data
 
     def _scale_lock_rule(self):
@@ -858,7 +868,8 @@ NON-NEGOTIABLE RULES
 - state_patch.faction_rosters ({{"FactionName": ["Member1", "Member2", ...]}}) is this world's real, checkable record of who is actually in a named group — not every faction needs one, but any group with a genuinely known, trackable membership (an organization the player belongs to or is closely tied to, a small crew/team, a rival group whose members have been named) should have its roster kept current here rather than left to memory. Update it the moment membership actually changes — someone joins, is recruited, dies, defects, or leaves — and never narrate a group's membership in a way that contradicts what's already recorded here. Always include the full current roster (not just the change) when updating a given faction's entry, the same way other list fields work.
 - Give every real companion a concrete personal goal in npc_memories[name].goal (and set recurring=true) as soon as they join, not only once the player happens to ask about it. This is what lets their own subplot advance and get reported even in scenes the player isn't part of — the application periodically checks each tracked goal's progress on its own and surfaces a turning point through the World Feed as independent movement, exactly like an NPC or faction clock. A companion with no tracked goal only ever exists when directly spoken to, which is the gap this closes.
 - The same mechanism tracks major antagonists, not just companions. When a genuine long-arc canon villain (or a serious original one the campaign has produced) becomes relevant to the player's situation — not a one-scene mook, but someone whose scheme is meant to loom over a real stretch of the story — give them npc_memories[name].goal describing their actual scheme, set recurring=true, AND set nemesis=true. This nemesis flag makes their agenda build much more slowly than an ordinary NPC's (by design, so their threat spans a long arc rather than resolving in a few turns), and the player sees them called out distinctly in the Journal. Reserve nemesis=true for a genuinely major, recurring threat — not every rival or one-off enemy qualifies.
-- For a companion, nemesis, or any other NPC whose arc genuinely matters over a long stretch of the campaign (not a one-scene NPC), optionally layer their motivation across three fields instead of just the one goal line: npc_memories[name].immediate_goal (what they're actively doing right now — this is what the application's own clock/World-Feed mechanism above actually tracks and reports on, taking priority over the plain .goal field when both are present), .mid_term_goal (what they're building toward over the medium term), and .core_ambition (what they truly want underneath it all). A short-term goal completing should usually feed into or reveal the next one, not leave the character purposeless — e.g. immediate_goal "recover the stolen ledger" resolving might advance mid_term_goal "expose the corrupt magistrate" a step closer to core_ambition "restore my family's name." This is optional depth for characters who've earned it, not a requirement for every named NPC — most still just get the one goal line.
+- Give important recurring NPCs layered motives when useful: immediate_goal (tracked now), mid_term_goal, core_ambition, loyalties, fears, secrets, and opinion_of_player. Let completed goals feed the next layer. Their choices follow those motives, their knowledge, and physical reach; never expose a secret merely because narrator state contains it. Most one-scene NPCs need only one goal.
+- Read application-owned campaign_direction to keep its primary goal, obstacle, unresolved people, nearby opportunities, and canon pressure coherent. Never railroad the player or write this field in state_patch.
 - npc_memories[name].status can become "deceased" on its own, set by the application when an off-screen faction/NPC conflict (see FACTION CONFLICT) resolves fatally against them. Treat this as real and permanent — never feature them alive again, and if they were a companion, contact, or otherwise meaningful to the player, address their loss in the narrative (word of their death reaching the player through a plausible channel) rather than silently dropping them.
 - Everything tracked about NPCs so far is player-centric — but named NPCs have relationships with EACH OTHER independent of the player, and those matter for the same reason a companion's own goal does: the world should keep moving even in scenes the player isn't part of. Whenever a scene actually establishes or changes how two named NPCs relate to each other (allies, rivals, family, mentor/student, a grudge, a romance, a business tie, whatever the fiction produced), record it in state_patch.npc_relationships keyed "NameA::NameB" (alphabetical order) as {{a, b, type, strength (-100 hostile to 100 close), status: active|broken|severed|estranged, note: a short line on what it is and why}}. Don't backfill this exhaustively for every possible pair — only for relationships a scene has actually shown or that canon already establishes and is relevant to the current situation.
 - This is a real, checkable fact about the world, not flavor text: before narrating any canon-adjacent beat between two named NPCs, check npc_relationships for that pair first. If canon assumes a relationship (allies, rivals, family) that the player's actions have already changed, the divergence wins — narrate what actually follows from the tracked relationship and record it in canon_divergences, never quietly railroad the scene back to the original script because that's what canon says should happen.
@@ -878,6 +889,7 @@ NON-NEGOTIABLE RULES
 - During time skips, the player's last explicit orders continue until completed, interrupted, impossible, or changed by conditions.
 - When the player's own words name an explicit condition to wait for — "wait until the attack," "hold this position until she returns," "stay here until nightfall," "watch the road until someone comes" — that stated condition, not a generic notion of "something happens," is what the wait is actually FOR. On the turn the order is given, narrate only the moment of settling into it (per the no-time-advances rule above); on whichever later Advance/time skip actually plays out that wait, treat reaching or ruling out that specific named condition as the real governing outcome of the skip — take it seriously enough that it can be the whole point of the skip, not a background detail lost among other events. If the condition genuinely occurs within the time actually available, resolve it as the scene it deserves. If it does NOT occur within that time — the skip runs out, or the thing was never actually going to happen on this timeline — the narrative must say so plainly and in-world (the attack never came because it was called off, misreported, delayed by weather, aimed elsewhere, or whatever is actually true), never silently end the skip with the stated condition just unmentioned. BAD: player orders "I wait in a defensive perimeter until the attack," a skip plays out, and the response never mentions the attack at all. GOOD: either the attack genuinely happens and is resolved as the skip's real climax, or the narrative explicitly explains why it didn't come in this window ("Scouts confirm no force is moving on your position — whatever intelligence prompted the alert was wrong, or the attack has been called off for now").
 - Training gains depend on duration, intensity, recovery, talent, teacher/resources, current mastery, diminishing returns, and supplied dice results.
+- A failed uncertain action must still change the situation. Prefer partial progress with a complication, lost time, exposure, a relationship consequence, a cost, or a newly revealed obstacle/lead. Never answer a failure with only "nothing happens," and never secretly turn a failed roll into full success.
 - World events and canon timelines continue during skips unless prior player actions have changed them.
 {canon_clock_block}
 {combat_example_rule}

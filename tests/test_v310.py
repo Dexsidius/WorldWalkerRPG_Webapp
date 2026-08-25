@@ -27,8 +27,8 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.game.settings["autosave"] = False
 
     def test_v310_schema_declares_owned_memory_and_progression_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.4.0")
-        self.assertEqual(BASE_STATE["schema_version"], 11)
+        self.assertEqual(APP_VERSION, "3.6.0")
+        self.assertEqual(BASE_STATE["schema_version"], 12)
         self.assertIn("narrative_memory", BASE_STATE)
         self.assertIn("progression_ledger", BASE_STATE)
 
@@ -121,7 +121,8 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.assertTrue(hidden["discovery"]["concealed"])
         self.assertIn(hidden["signature_skill"], profile["skills"])
         visible = visible_class_profile(hidden)
-        self.assertEqual(visible["name"], "Unidentified Hidden Class")
+        self.assertTrue(visible["name"].startswith("Unidentified "))
+        self.assertTrue(visible["name"].endswith(" Class"))
         state = {"skills": profile["skills"], "class_profile": hidden}
         self.assertNotIn(hidden["signature_skill"], visible_skills(state))
 

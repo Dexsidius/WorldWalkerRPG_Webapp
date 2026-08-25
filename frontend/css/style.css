@@ -686,6 +686,14 @@ input,select,textarea{ font-family:inherit; }
 .suggestion-dock{ flex:0 0 auto; padding:9px 16px 12px; border-top:1px solid var(--border-soft); background:rgba(0,0,0,.12); }
 .suggestion-label{ display:block; color:var(--muted); font-size:9.5px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }
 .suggestion-dock .suggested-actions{ margin-top:7px; }
+.change-reasons{ margin:0 0 9px; border:1px solid var(--border-soft); border-radius:8px; background:rgba(var(--accent2-rgb),.05); }
+.change-reasons summary{ padding:7px 9px; cursor:pointer; color:var(--accent2); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; }
+.change-reason{ display:grid; grid-template-columns:minmax(90px,.7fr) minmax(90px,.8fr) 2fr; gap:8px; padding:6px 9px; border-top:1px solid var(--border-soft); font-size:10px; }
+.change-reason small{ color:var(--muted); }
+.director-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin:10px 0 16px; }
+.director-grid>div{ display:flex; flex-direction:column; gap:4px; padding:9px; border:1px solid var(--border-soft); border-radius:8px; background:rgba(0,0,0,.16); }
+.director-grid b{ color:var(--gold); font-size:10px; text-transform:uppercase; }
+.director-grid span{ color:var(--text); font-size:11px; }
 .action-chat-card .panel-body{ display:flex; flex-direction:column; gap:10px; }
 .action-chat-card .composer-row{ flex-direction:column; }
 .action-chat-card #action-input{ width:100%; min-height:96px; resize:vertical; }
@@ -1140,11 +1148,19 @@ input,select,textarea{ font-family:inherit; }
 /* v2.4 planning, campaign library and diagnostic surfaces */
 .portrait-manage{ position:absolute; z-index:5; top:48px; right:9px; width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,.3); background:rgba(4,7,12,.68); color:var(--gold); font-size:16px; cursor:pointer; backdrop-filter:blur(5px); }
 .save-pill{ max-width:145px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--sub); }
+.over-budget{ color:#fff!important; background:rgba(var(--danger-rgb),.82)!important; border-color:var(--danger)!important; }
 .queued-actions{ display:flex; flex-direction:column; gap:6px; margin-top:9px; }
-.queued-action{ display:grid; grid-template-columns:24px 1fr 28px; align-items:center; gap:8px; padding:7px 8px; border:1px solid var(--border-soft); border-radius:8px; background:rgba(0,0,0,.2); font-size:11.5px; }
+.queued-action{ display:grid; grid-template-columns:24px minmax(0,1fr) auto; align-items:center; gap:8px; padding:7px 8px; border:1px solid var(--border-soft); border-radius:8px; background:rgba(0,0,0,.2); font-size:11.5px; }
 .queue-index{ display:grid; place-items:center; width:22px; height:22px; border-radius:50%; background:rgba(var(--accent-rgb),.18); color:var(--gold); font:bold 10px var(--font-mono); }
 .queued-action button{ border:0; background:transparent; color:var(--sub); cursor:pointer; }
 .queued-action button:hover{ color:var(--danger); }
+.queued-action button:disabled{ opacity:.25; cursor:default; }
+.queue-copy{ min-width:0; display:flex; flex-direction:column; gap:3px; }
+.queue-copy b{ overflow-wrap:anywhere; font-weight:600; color:var(--text); }
+.queue-copy small{ color:var(--muted); font-size:9.5px; }
+.queue-controls{ display:grid; grid-template-columns:repeat(2,20px); gap:1px; }
+.queue-controls button{ width:20px; height:20px; padding:0; }
+.queue-interruption{ padding:7px 9px; border-left:2px solid var(--gold); background:rgba(var(--accent-rgb),.08); color:var(--sub); font-size:10px; }
 .world-primer{
   padding:16px 18px; margin-bottom:16px; border-radius:12px;
   background:linear-gradient(160deg, rgba(var(--accent2-rgb),.12), rgba(var(--accent-rgb),.05));
@@ -1541,6 +1557,7 @@ body[data-world="Reincarnated as a Slime"] .quick-nav button:active, body[data-w
 .timeline-dependencies,.timeline-confidence{font-size:12px;color:var(--sub)}
 @media(max-width:720px){.gm-correction-form{grid-template-columns:1fr}.gm-correction-form label,.gm-correction-form button{grid-column:1}.integrity-stats{grid-template-columns:1fr 1fr}.campaign-search-form{grid-template-columns:1fr}.search-result header,.correction-card header,.schedule-card header{align-items:flex-start;flex-direction:column;gap:3px}}
 .knowledge-card>summary,.causality-entry>summary,.lore-conflict>summary,.evaluation-result>summary{cursor:pointer}
+.evaluation-compare{display:flex;flex:1 1 320px;flex-direction:column;gap:5px}.evaluation-compare input{width:100%}.evaluation-compare small{color:var(--text-muted)}
 .knowledge-card section{padding:9px 0;border-top:1px solid var(--border-soft)}.knowledge-card li{margin:5px 0}.knowledge-card li small{margin-left:8px}
 .health-actions,.evaluation-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.health-repair-btn{margin-top:9px;padding:6px 9px;border:1px solid var(--border);background:var(--panel);color:var(--gold);cursor:pointer}
 .evaluation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px}.evaluation-card{display:flex;flex-direction:column}.evaluation-card p{flex:1}.evaluation-card button{margin-top:8px}

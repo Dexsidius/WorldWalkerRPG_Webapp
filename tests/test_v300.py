@@ -46,8 +46,8 @@ class WorldwalkerV300Tests(unittest.TestCase):
             )
 
     def test_version_3_and_schema_8_are_declared(self):
-        self.assertEqual(APP_VERSION, "3.4.0")
-        self.assertEqual(BASE_STATE["schema_version"], 11)
+        self.assertEqual(APP_VERSION, "3.6.0")
+        self.assertEqual(BASE_STATE["schema_version"], 12)
         self.assertIn("class_profile", BASE_STATE)
 
     def test_explicit_hidden_class_is_complete_and_mechanical(self):
