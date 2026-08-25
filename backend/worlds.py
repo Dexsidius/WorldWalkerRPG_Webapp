@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "2.6.53"
+APP_VERSION = "3.4.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -404,7 +404,7 @@ CANON_TIMELINES = {
         {"major": False, "historical_only": True, "day": -9323, "title": "The Second Shinobi World War begins", "location": "Amegakure", "summary": "War breaks out across the shinobi nations; Kurama, the Nine-Tails, is sealed into Kushina Uzumaki, making her its second jinchuriki."},
         {"major": False, "historical_only": True, "day": -6641, "title": "Sakumo Hatake's death", "location": "Konohagakure", "summary": "The White Fang of Konoha takes his own life after being condemned for choosing to save his comrades over completing a mission — a shadow that will hang over his son Kakashi for years."},
         {"day": -4857, "title": "The Kannabi Bridge mission", "location": "Kannabi Bridge", "summary": "Rin Nohara dies and Obito Uchiha is believed killed during a mission gone wrong; Kakashi inherits Obito's Sharingan, and both awaken the Mangekyō Sharingan in their grief."},
-        {"day": -4856, "title": "Yahiko's death and the founding of Akatsuki", "location": "Amegakure", "summary": "Yahiko dies at Hanzō and Danzō's hands; the survivor rescued from Kannabi Bridge — now calling himself Madara — along with Nagato and Konan, forms the organization that will become Akatsuki."},
+        {"day": -4856, "title": "Yahiko's death and Akatsuki's transformation", "location": "Amegakure", "summary": "Yahiko dies after Hanzō and Danzō force a cruel choice on Nagato. The original peace movement survives under a grief-stricken Nagato, while the masked shinobi calling himself Madara begins steering it toward the darker organization later feared as Akatsuki."},
         {"day": -4380, "title": "Naruto's birth and the Nine-Tails attack", "location": "Konohagakure", "banner": "nine_tails_attack_on_konoha", "scope": "wide", "summary": "Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival."},
         {"major": False, "day": -4233, "title": "Might Duy's sacrifice", "location": "Land of Fire", "summary": "Might Duy rescues Guy, Ebisu, and Genma from the Seven Swordsmen of the Mist, killing two of them before dying from opening the Eight Gates."},
         {"major": False, "day": -3233, "title": "The Hyūga Affair", "location": "Konohagakure", "summary": "After Hiashi Hyūga kills a Kumogakure envoy in retaliation for an attempted kidnapping, his twin brother Hizashi sacrifices his own life under the branch seal to satisfy the peace treaty."},
@@ -935,7 +935,7 @@ BASE_STATE = {
     "name":"Traveler","age":"","position":"","world":"Custom World","difficulty":"Adventurer","background":"","custom_world":"","race":"","calendar_epoch":"","calendar_anchor_day":None,"last_protagonist_tick_day":None,"active_canon_event":"","player_identity":{"mode":"original","canon_character_id":"","canon_gravity":True},
     "level":1,"xp":0,"xp_next":100,"hp":100,"hp_max":100,"resource_name":"Energy","resource":100,"resource_max":100,
     "stats":{"Strength":10,"Dexterity":10,"Constitution":10,"Intelligence":10,"Wisdom":10,"Charisma":10},"hidden_stats":{},
-    "skills":{},"titles":[],"inventory":[],"equipment":{},"quests":[],"relationships":{},"reputation":{},
+    "skills":{},"titles":[],"class_profile":{},"inventory":[],"equipment":{},"quests":[],"relationships":{},"reputation":{},
     # faction_chain is mechanically maintained (see continuity.py) — a
     # {faction: [{event, turn, canon_day}, ...]} trail of why reputation
     # actually moved, parallel to how npc_memories[name].chain already
@@ -969,7 +969,10 @@ BASE_STATE = {
     # real established roster (see MAJOR_CHARACTER_STARTS) seed this at
     # creation; the GM keeps it updated as membership actually changes.
     "faction_rosters":{},
-    "known_recipes":[],"training_log":[],"combat":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":6,"world_pack_id":"builtin","last_autosave":"","suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[]
+    "known_recipes":[],"training_log":[],"combat":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":11,"world_pack_id":"builtin","last_autosave":"","suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
+    # memory_updates is a transient GM suggestion; reliability.py folds it
+    # into the app-owned, deduplicated long-term narrative memory.
+    "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]}
 }
 
 WORLD_EXPANSIONS = {

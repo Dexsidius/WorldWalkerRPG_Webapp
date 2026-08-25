@@ -15,6 +15,7 @@ from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks)
+from simulation import refresh_npc_intentions, background_ai_due
 
 
 DEFAULT_SETTINGS = {
@@ -131,6 +132,32 @@ WORLD_ABILITY_FORMS = {
 }
 
 class SocialMixin:
+    def run_local_background(self):
+        """Maintain recurring actors without a background-model request.
+
+        Turn resolution already advances clocks and intentions. This pass
+        only normalizes the persistent intention view, compacts duplicate
+        memory-chain rows, and syncs contact metadata. It is intentionally
+        quiet: routine maintenance should not manufacture Chronicle filler.
+        """
+        with self.lock:
+            refresh_npc_intentions(self.state)
+            for memory in (self.state.get("npc_memories") or {}).values():
+                if not isinstance(memory, dict) or not isinstance(memory.get("chain"), list):
+                    continue
+                clean, seen = [], set()
+                for item in memory["chain"]:
+                    key = str(item).strip().lower()
+                    if key and key not in seen:
+                        clean.append(item); seen.add(key)
+                memory["chain"] = clean[-16:]
+            self.state["local_background_turn"] = int(self.state.get("turn", 0) or 0)
+            self.autosave()
+        return {"maintained": True, "intentions": len(self.state.get("npc_intentions", {}))}
+
+    def background_ai_due(self):
+        return background_ai_due(self.state, self.simulation_mode())
+
     def ask_advisor(self, question, fourth_wall=False):
         """A Pax Historia-style Advisor: an out-of-character, meta-aware
         guide the player can consult any time for power-level assessments,

@@ -1,6 +1,6 @@
 """Shared helpers: state merging, dice math, asset path resolution, and the
 scene/portrait keyword resolvers ported from the original Tkinter build."""
-import os, re, copy, sys
+import os, re, copy, sys, hashlib
 from pathlib import Path
 
 APP_DIR_NAME = "WorldwalkerRPG"
@@ -237,6 +237,13 @@ def _category_from_place(text):
     return None
 
 
+WORLD_NEUTRAL_SCENES = {
+    "Overgeared": "kingdom", "One Piece": "harbor_port", "Hunter x Hunter": "forest_path",
+    "Naruto": "town_square", "Solo Max-Level Newbie": "tower_hub", "Bleach": "town_square",
+    "Reincarnated as a Slime": "forest_path", "Custom World": "starry_sky",
+}
+
+
 def scene_category(state):
     location = str(state.get("location", ""))
     combat = state.get("combat", {}) if isinstance(state.get("combat"), dict) else {}
@@ -291,9 +298,33 @@ def scene_category(state):
         return "tower_hub"
     if any(k in blob for k in ["mountain", "valley", "cliff"]):
         return "mountain_castle"
-    default_map = {"Overgeared": "kingdom", "One Piece": "harbor_port", "Hunter x Hunter": "forest_path",
-                    "Naruto": "town_square", "Solo Max-Level Newbie": "tower_hub", "Bleach": "town_square"}
-    return default_map.get(state.get("world"), "starry_sky")
+    return WORLD_NEUTRAL_SCENES.get(state.get("world"), "starry_sky")
+
+
+def scene_art_confidence(state, category=None):
+    """Explain how strongly the selected art matches the live physical scene."""
+    category = category or scene_category(state)
+    location = str(state.get("location", "")).strip()
+    if state.get("active_canon_event"):
+        return {"score": 100, "label": "Exact event", "reason": "A dedicated active-event banner has priority."}
+    if isinstance(state.get("combat"), dict) and state.get("combat"):
+        return {"score": 98, "label": "Combat match", "reason": "Active combat and opponent type determine the scene."}
+    lowered = location.lower()
+    local_detail_words = ("merchant", "stall", "shop", "bazaar", "market", "alley", "street", "inn", "tavern", "restaurant")
+    if not any(word in lowered for word in local_detail_words):
+        for terms, landmark_name in LANDMARK_SCENES.get(state.get("world"), ()):
+            if any(term in lowered for term in terms):
+                return {"score": 95, "label": "Landmark match", "reason": f"'{location}' matches the {landmark_name} landmark art."}
+    place = _category_from_place(location)
+    if place:
+        return {"score": 92, "label": "Location match", "reason": f"'{location}' directly matches the {place} environment."}
+    weather = str(state.get("weather", "")).lower()
+    if category in {"rain_city", "snow_region"} and weather not in {"", "clear"}:
+        return {"score": 78, "label": "Weather match", "reason": f"The current {weather} weather selected this environment."}
+    time_blob = str(state.get("world_time", "")).lower()
+    if category == "starry_sky" and any(word in time_blob for word in ("night", "midnight", "evening")):
+        return {"score": 76, "label": "Time-of-day match", "reason": "The current time explicitly indicates night."}
+    return {"score": 48, "label": "World fallback", "reason": "The sub-location is too vague for a confident match; neutral world art is safer."}
 
 
 def find_canon_event_banner(world, banner_slug):
@@ -333,6 +364,9 @@ def scene_image_url(state):
     efficient default with canvas-based ambient motion.
     """
     cat = scene_category(state)
+    confidence = scene_art_confidence(state, cat)
+    if confidence["score"] < 60 and not state.get("combat") and not state.get("active_canon_event"):
+        cat = WORLD_NEUTRAL_SCENES.get(state.get("world"), "starry_sky")
     world = state.get("world", "Custom World")
     slug = world_slug(world)
     active_event = str(state.get("active_canon_event") or "").strip()
@@ -372,16 +406,36 @@ def scene_image_url(state):
     return None, cat
 
 
+def scene_art_signature(state):
+    """Stable cache key that changes only with place or scene type.
+
+    Chronicle wording, routine time passage, stats, and distant events are
+    deliberately absent so they cannot trigger needless environment-art
+    churn. Weather only matters when it actually selects a weather scene.
+    """
+    url, category = scene_image_url(state)
+    payload = "|".join((str(state.get("world", "Custom World")),
+                        str(state.get("location", "")), str(category), str(url or ""),
+                        str(state.get("active_canon_event", ""))))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
+
+
+def scene_display_label(state, image_url=None, category=None):
+    """Return a truthful player-facing label without changing the semantic
+    category used by ambient effects and compatibility callers."""
+    if image_url is None or category is None:
+        image_url, category = scene_image_url(state)
+    if image_url and "/generated_scenes/" in image_url:
+        stem = Path(image_url).stem
+        landmark_names = {name for rows in LANDMARK_SCENES.values() for _terms, name in rows}
+        if stem in landmark_names:
+            return stem
+    return category
+
+
 def scene_selection_reason(state):
-    category = scene_category(state)
-    location = str(state.get("location", "Unknown"))
-    combat = state.get("combat", {})
-    if combat:
-        return f"Active combat overrides location and selected {category}."
-    if _category_from_place(location):
-        return f"Current location '{location}' matched the specific {category} environment."
-    weather = str(state.get("weather", "clear"))
-    return f"No specific sub-location matched; selected {category} from world context and weather ({weather})."
+    match = scene_art_confidence(state)
+    return f"{match['label']} ({match['score']}%): {match['reason']}"
 
 
 def portrait_mode(state):

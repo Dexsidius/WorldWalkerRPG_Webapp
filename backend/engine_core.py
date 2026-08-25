@@ -15,6 +15,10 @@ from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks, pacing_guidance, active_nemesis_threats)
+from knowledge import npc_knowledge_boundaries, concealed_player_facts
+from simulation import (compile_context_snapshot, normalize_simulation_mode,
+                        simulation_profile, output_budget)
+from simulation_integrity import canon_dependency_graph
 
 
 DEFAULT_SETTINGS = {
@@ -34,6 +38,7 @@ DEFAULT_SETTINGS = {
     "image_model": "gpt-image-2",
     "local_image_model": "",
     "portrait_quality": "low",
+    "simulation_mode": "balanced",
     "developer_mode": False,
     "onboarding_seen": False,
 }
@@ -215,6 +220,12 @@ class CoreMixin:
         self.ai = self.make_client(self.settings["model"])
         self.ai_bg = self.make_client(self.settings.get("secondary_model") or self.settings["model"])
 
+    def simulation_mode(self):
+        return normalize_simulation_mode(self.settings.get("simulation_mode", "balanced"))
+
+    def simulation_profile(self):
+        return simulation_profile(self.simulation_mode())
+
     def detect_models(self, base_url, token):
         client = AI(provider="local", base_url=base_url or "http://localhost:1234/v1", local_token=token or "", model="unused")
         return client.list_models()
@@ -227,7 +238,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states")
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -256,7 +267,7 @@ class CoreMixin:
                 names.add(name)
         return names
 
-    def trimmed_state_for_ai(self):
+    def trimmed_state_for_ai(self, query=""):
         """The raw state grows without bound over a long campaign —
         campaign_canon alone can hold up to 250 full turn records. Once a
         stretch of turns has been consolidated into a chapter_summaries
@@ -269,30 +280,19 @@ class CoreMixin:
         snapshot = dict(self.state)
         for key in self.AI_HIDDEN_FIELDS:
             snapshot.pop(key, None)
-        # A long campaign can accumulate a large npc_memories roster where
-        # most entries are nobody currently relevant — full detail (chain,
-        # promises, debts, knowledge) for every one of them is pure noise
-        # competing with the handful of NPCs actually in this scene for the
-        # model's attention. Only trims detail, never drops an entry.
-        memories = snapshot.get("npc_memories")
-        if isinstance(memories, dict) and len(memories) > 8:
-            relevant = self._relevant_npc_names()
-            # The stub still keeps attitude/chain/goal/promises/debts — the
-            # exact fields "why does X feel this way" or "what do they
-            # want/owe" get answered from — and only drops the bulkier,
-            # lower-value stuff (raw knowledge/witness lists, deeper goal
-            # layers, suspicions) for an NPC nowhere near this scene.
-            snapshot["npc_memories"] = {
-                name: (mem if name in relevant or not isinstance(mem, dict) else {
-                    "attitude": mem.get("attitude", "Unknown"),
-                    "last_known_location": mem.get("last_known_location", "Unknown"),
-                    "chain": (mem.get("chain") or [])[-4:],
-                    "goal": mem.get("immediate_goal") or mem.get("goal") or mem.get("current_goal") or "",
-                    "promises": (mem.get("promises") or [])[:3],
-                    "debts": (mem.get("debts") or [])[:3],
-                })
-                for name, mem in memories.items()
-            }
+        snapshot["npc_knowledge_boundaries"] = npc_knowledge_boundaries(self.state)
+        snapshot["concealed_player_facts"] = concealed_player_facts(self.state)
+        snapshot["authoritative_player_corrections"] = copy.deepcopy((self.state.get("authoritative_corrections") or [])[-30:])
+        snapshot["active_action_goals"] = [copy.deepcopy(x) for x in self.state.get("action_goals", [])
+                                           if isinstance(x, dict) and x.get("status") == "active"][-12:]
+        snapshot["npc_commitment_schedules"] = copy.deepcopy(self.state.get("npc_schedules", {}))
+        snapshot["canon_dependency_graph"] = canon_dependency_graph(self.state)
+        snapshot["information_in_transit"] = [copy.deepcopy(x) for x in (self.state.get("information_packets") or [])[-30:]
+                                               if isinstance(x, dict) and int(x.get("available_after_minutes", 0) or 0) > 0]
+        # NPC detail is now trimmed once, at the end of this method, by the
+        # query-aware relevance bubble. Doing an earlier fixed eight-person
+        # trim here would discard detail before Deep mode or a player-named
+        # off-screen character had a chance to retain it.
         # Same relevance-filter idea, applied to the two other fields most
         # likely to balloon over a long campaign as the player travels: a
         # shop discovered three towns ago has no business costing tokens on
@@ -322,7 +322,7 @@ class CoreMixin:
         canon = self.state.get("campaign_canon") or []
         if not canon:
             snapshot.pop("campaign_canon", None)
-            return snapshot
+            return compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
         chapters = self.state.get("chapter_summaries") or []
         if chapters:
             try:
@@ -334,7 +334,7 @@ class CoreMixin:
         # recent tail so a fresh campaign's first few requests aren't already
         # carrying unnecessary bulk.
         snapshot["campaign_canon"] = canon[-15:]
-        return snapshot
+        return compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
 
     def append(self, text, tag=None, canon_day=None, detail=None):
         entry = {"text": text, "tag": tag, "time": datetime.now().isoformat(timespec="seconds")}
@@ -360,7 +360,8 @@ class CoreMixin:
         action; a false negative there just means no example that turn,
         which is a missed teaching moment, not a correctness bug — so it's
         safe to reuse loosely rather than plumbing a separate parameter."""
-        lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state)
+        lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
+                                   limit=self.simulation_profile()["lore_limit"])
         self.last_lore_context = lore
         return self.gm_rules(query) + (("\n\n" + lore) if lore else "") + self.rated_good_example_snippet()
 
@@ -423,6 +424,7 @@ class CoreMixin:
         the response would trip a high-confidence continuity check (see
         _simulate_continuity_violations) — same one-retry discipline, named
         specifically so the model isn't just asked to "try again" blind."""
+        max_output_tokens = output_budget(max_output_tokens, self.simulation_mode())
         data = self.ai.request(instructions, payload, max_output_tokens=max_output_tokens)
         narrative_missing = not (data.get("narrative") or "").strip()
         violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
@@ -760,7 +762,8 @@ NARRATION MODE: {narration}
 ABILITIES FOR THIS WORLD (use these exact names for every "ability" field, nothing else): {self.ability_enum()}
 
 NON-NEGOTIABLE RULES
-- Never write campaign_canon, continuity_ledger, chapter_summaries, chapter_buffer, canon_events_fired, or pending_minor_events in state_patch — you will see them inside "state" for context, but they are maintained automatically. Re-authoring them wastes your output budget on content that gets discarded and risks cutting off your own response before it's valid JSON.
+- Never write campaign_canon, continuity_ledger, narrative_memory, progression_ledger, chapter_summaries, chapter_buffer, canon_events_fired, or pending_minor_events in state_patch — they are maintained automatically. You MAY submit concise state_patch.memory_updates grouped under established_facts, player_goals, unresolved_mysteries, promises, relationships, and consequences; the application deduplicates and stores them.
+- authoritative_player_corrections are facts the player explicitly corrected. They outrank prior narration and model assumptions; never contradict or silently undo them.
 - Write like a skilled tabletop DM narrating to a player, not a status report. Be decisive and concrete about what actually happened — when a stated goal succeeds, say so plainly ("You trail them through the back alleys and find the hideout — a boarded-up warehouse near the docks."), don't just describe atmosphere and leave the outcome implied or vague. Treat the roll/check result as settled fact you're narrating, not something to hedge around.
 - The player's stated action is something they DO, not merely intend, consider, or move toward — "I grab her and pull her to safety" means she is now safely pulled aside by the end of this turn, not that the character merely started toward her or prepared to. Downgrading a clear, physically plausible action into "you prepare to..." or "you attempt to move toward..." with no actual outcome is a failure to resolve the turn, not a valid cautious answer. Only stop short of full success when there is a real, narratable obstacle — active resistance, a failed check, a physical impossibility, an interruption — and when that happens, say plainly and concretely what happened instead (she was already pulled away by someone else, a curse's barrier blocks the last few feet, the grab connects but she fights free) rather than leaving the action unresolved. BAD: player says "I grab her and pull her to safety" and the response reads "You move toward her, preparing to help." GOOD: the same action resolved as "You grab her arm and haul her clear just as the wall comes down." Every stated action gets a real, concrete result by the end of the turn it was taken in — success, a specific kind of failure, or a stated reason it's impossible — never a suspended non-answer.
 - NPCs and other actors in a scene should visibly be doing their own things, not just standing by to react to the player — glance up from what they were already doing, be mid-conversation, arrive somewhere for their own reason, leave to attend to their own business. The world should read as already in motion when the player arrives in it, every time, not just when a plot beat requires it.
@@ -774,6 +777,7 @@ NON-NEGOTIABLE RULES
 - Identity and access are discovered, verified, and negotiated in-world. Governments, factions, experts, and canon characters do not magically know or contact the player without a causal information path.
 - Any named character or group the player has a real interaction with — conversation, conflict, favor, negotiation, a direct introduction — becomes contactable going forward via state_patch.new_contacts (or ensure_contact through the normal state_patch route). Default to including them; a minor NPC worth naming in the narrative at all is worth being reachable later. This is separate from and in addition to the world's major factions/polities, which are contactable from the very start of the campaign regardless of whether the player has met them yet.
 - Maintain npc_clocks and faction_clocks for important off-screen agendas. Each clock needs a plain goal, progress from 0 to its threshold, status, and last meaningful update. Player intervention can slow, redirect, expose, or accelerate a clock; never advance it merely to punish the player.
+- For logistical agendas, give clocks method, target_location, travel_remaining_days, dependencies, resources, and resource_cost. Missing travel, prerequisites, or resources block progress; never narrate an outcome the clock could not accomplish.
 - A faction_clocks entry the application creates on its own starts with a flat placeholder goal ("Advance X's current agenda") — replace that with the real thing as soon as you actually know it, and for a major, ongoing power (not a one-scene faction), the same optional three-layer depth described above for NPCs applies here too: faction_clocks[name].immediate_goal (what they're actively doing right now — takes priority over the plain .goal field, same as for NPCs), .mid_term_goal, and .core_ambition. A faction whose immediate_goal keeps resolving into the same placeholder forever reads as inert scenery, not a real actor in a moving world.
 - Whenever a character states, threatens, or promises a specific future action toward the player ("I'll come for you in a month"), or canon establishes a character would approach/target someone in the player's exact position on a knowable day, create a state_patch.scheduled_events entry: {{title, when (human-readable), due_canon_day (integer canon_day this is due — required, this is what actually schedules it), location, visibility (confirmed|rumor|hidden), notes}}. This applies to original/divergent characters too, adapted to their own situation — not only canon-identical placements. The application will force a stop at that day so the opportunity is never silently skipped; always include the full current list when updating this field, the same as other list fields.
 - A skip that crosses a scheduled_events or canon-timeline date must explicitly cover it in that turn's updates — what happened, on which day, and any effect on the player — never let it pass with no mention just because the player didn't personally engage.
@@ -781,8 +785,8 @@ NON-NEGOTIABLE RULES
 - For any time skip covering a full day or more, include at least one or two brief "meanwhile" beats about what the player character plausibly did during unaccounted stretches, inferred from their background, setting, and standing orders when no specific action was given for that time — the world should never read as if the character simply paused between explicit instructions.
 - Independently of the player, regularly surface concrete movement from other major characters and factions relevant to the player's situation — not just abstract clock progress — so the world visibly continues advancing toward known future events in the background. This includes major story-scale milestones the player did not personally attempt: a canon protagonist clearing a dungeon/floor/trial, a rival guild completing a raid, a faction winning or losing a battle. The player is one actor in a moving world, not its bottleneck — canon and NPC-driven progress happens whether or not the player was there for it, and should be reported to the player as news/rumor/observation when it happens off-screen.
 - background_world_feed (in the supplied state) is that same off-screen movement's own running record — check its recent entries before inventing new background color, and let an ordinary scene reference or build on what's already there when it's plausible for the player to have heard (a companion mentions it, a notice board has it, someone brings it up in conversation) rather than always generating a disconnected new mention. A recurring thread (a brewing war, a rival's climb, a faction's decline) should read as one continuous story the player can follow, not a fresh unrelated headline each time it comes up.
-- Canon is the opening condition, not a railroad. Record meaningful changes as canon_divergences.
-- Canon timeline events occur on their scheduled Canon Day unless prior player actions make the original version causally impossible. In that case, preserve the underlying NPC/faction motive, describe the altered event, and record the divergence instead of forcing canon.
+- Canon is the opening condition, not a railroad. Record meaningful changes as structured canon_divergences entries with event, status (altered|delayed|impossible), reason, and replacement. Plain text remains accepted, but structured entries make the result understandable in the Timeline.
+- Canon timeline events occur on their scheduled Canon Day unless prior player actions make the original version causally impossible. In that case, preserve the underlying NPC/faction motive, describe the altered event, and record a believable replacement consequence instead of forcing canon or leaving a hole in the world.
 - Compare every named canon event strictly against the current Canon Day, not against your own background knowledge of when it "usually" happens in the story. Anything listed under CANON HISTORY has already happened relative to this campaign's clock — treat it purely as settled past (something the world remembers, references, or still lives with the consequences of), and never narrate it, foreshadow it, or let a character speak of it as still pending, approaching, or rumored to be coming. BAD: a character speaks of a CANON HISTORY event as still ahead ("word is Ace will join Whitebeard's crew one day") because that's when it happens in the source material generally, ignoring that this campaign's current Canon Day is already well past it. GOOD: the same event is only ever referenced as settled fact ("everyone knows Ace sails with Whitebeard now"), checked against the actual current Canon Day, not general genre knowledge. Only events listed under UPCOMING CANON PRESSURES (or later additions with a day at or after the current Canon Day) are still ahead of the player. If a starting point lands after a major canon event, pick up the world already shaped by its aftermath and continue following canon's broader shape forward from there.
 - Many of a world's scripted canon events are small, ordinary beats (someone else's minor mission, a routine incident three villages over), not personal turning points — these happen on schedule as background texture (a rumor, a mention, a headline, a world_event) and should not derail or interrupt the player's own scene unless the player is actually there or directly involved. Reserve real weight and any stop-and-decide moment for the world's genuinely major beats; weave the small ones into the world's ongoing motion instead.
 - Use all reliable setting knowledge available in your model context and the campaign state/codex. Prefer official source material and internally consistent canon; use reference-wiki knowledge to reconcile details, and never treat forum speculation as established fact unless this campaign has explicitly adopted it. Do not invent a prohibition merely because a detail is obscure.
@@ -820,7 +824,7 @@ NON-NEGOTIABLE RULES
 - Make the 3 suggestions meaningfully different whenever possible: (1) follow the strongest current lead or quest clue, (2) pursue character growth/preparation toward a stated goal or prerequisite, and (3) investigate, socialize, travel or engage an optional world hook. Never suggest knowledge the character does not possess.
 - When the player has no declared goal or active quest, introduce a contextual hook through an NPC motive, rumor, visible problem, faction pressure, opportunity or canon event. Give enough concrete information to act, then let the player ignore it, reshape it or walk away.
 - Progress hooks should form a journey rather than disconnected errands: connect new leads to the character's background, prior choices, relationships, current location, desired abilities and the world's ongoing pressures. Reveal clearer hints when the player is stalled, but do not solve mysteries for them.
-- Maintain npc_memories for recurring named NPCs: what they personally witnessed/heard, attitude, promises, debts, suspicions, and last known location. Never give them omniscience.
+- Give recurring npc_memories a knowledge object with confirmed, heard, suspected, and false_beliefs lists of {{fact, source, confidence}}. Dialogue and decisions use that NPC's boundaries, not narrator omniscience. A concealed_player_fact requires a recorded witnessed, told, evidence, report, research, public, or inference path.
 - Track WHY an NPC's attitude or a faction's reputation actually moved, not just the new label/number: whenever npc_memories[name].attitude changes or meaningfully deepens this turn, also set npc_memories[name].chain_event to ONE plain sentence naming what just happened between the player and that NPC — the application permanently records it and surfaces it in the Chronicle automatically, so never write npc_memories[name].chain yourself, only chain_event. Likewise, whenever a faction's entry in state_patch.reputation changes, include a matching state_patch.reputation_chain_events entry: {{"FactionName": "one plain sentence"}}. Before writing a scene involving a named NPC or faction that already has recorded history (npc_memories[name].chain / faction_chain[name], visible in state), ground their behavior and any dialogue in those REAL recorded reasons — never let an established grudge or debt silently evaporate, and never invent a different reason than what's actually on record.
 - Structured combat is always exactly ONE player-side entity against exactly ONE opposing entity — never a list of separate individually-targetable enemies. When the opposition is a single person, that person IS the entity. When the opposition is multiple people (a squad, a mob, a pack of beasts), represent the WHOLE group as one aggregate entity — do not create one list item per person. BAD: state_patch.combat.enemy is a list of 4 separate bandits, each individually targetable. GOOD: state_patch.combat.enemy is one entity named "Bandit Group" with is_group=true, group_size=4, and hp_max/power sized for the whole group's real aggregate threat.
 - When structured combat begins, set state_patch.combat = {{"active": true, "round": 1, "non_lethal": true|false, "location": "...", "enemy": {{"name": "...", "is_group": true|false, "group_size": N or null, "hp": N, "hp_max": N, "difficulty_min": 1-100, "difficulty_max": 1-100, "attack_min": 1-100, "attack_max": 1-100, "power": world-relative stat estimate, "alive": true}}}}. difficulty_min/max is how hard this opponent is for the player to hit; attack_min/max is how hard it is for the player to avoid or resist this opponent's attacks; power is this opponent's rough stat level on the same world-relative scale the player's own stats use. Every field is required — the application resolves individual exchanges itself and needs real numbers, not just prose. After this turn, further rounds are resolved by the application, not by you; you narrate again only when asked to relay a combat outcome.
@@ -844,7 +848,7 @@ NON-NEGOTIABLE RULES
 - Hidden quests remain in hidden_quests until their discovery condition is met; once revealed, move them into quests and issue a system notification.
 - Canon isn't only big feats — it also establishes mundane, easily-overlooked actions that quietly unlocked something (a canon character who did the basic drills everyone else skipped and found a hidden trainer/quest at it, noticed a detail others ignored, or simply kept going past the point others quit). When the player takes that same kind of overlooked, low-key action in a matching situation, let it work the same way canon showed it could — the fact that a canon character already found it first doesn't mean it's used up or personally reserved for them. Treat these as part of the world's discoverable content, same as any other hidden_quest.
 - Side quests should emerge naturally from NPC motives and local problems, not as random busywork.
-- Every active quest must be a structured object with at least name, status, explanation, current_knowledge (list), and clear_conditions (list). Keep unknown conditions hidden by omitting them or describing only what the player currently knows; update these fields as clues are learned.
+- Every active quest must be a structured object with at least name, status, explanation, discovered_clues/current_knowledge, completion_conditions/clear_conditions, current_obstacles, optional_objectives, and next_hint/first_step. Keep genuinely unknown information hidden; update the visible fields as clues are learned and make the next hint specific enough to act on without solving the quest for the player.
 - Active quests also use objectives: [{{id, text, status active|complete|failed|locked, optional, progress 0-100}}], branch_state, consequences, locations, and deadline when applicable. Update only objectives affected by this result and preserve optional or divergent branches.
 - If the player says they start, begin, accept, or take a quest/mission/job/contract, the same resolution must clearly brief it and add it to state_patch.quests. Include its cause or giver, concrete objective, known location, known risks, first actionable step, and clear completion condition. BAD: narrative says "you accept the delivery job" but state_patch.quests is unchanged. GOOD: the same narrative, with a new structured quest object added to state_patch.quests in this same response. Never claim that a quest began only in prose.
 - The same rule applies in reverse when a quest finishes: if the narrative says the quest/delivery/task/mission is done, complete, or turned in, that quest's status field must flip to "complete" (and its objectives to "complete") in the SAME state_patch — never leave the prose saying it's finished while the structured quest object still reads active. BAD: narrative says "you hand over the package — the delivery is done" but the quest's status field is still "active" in state_patch. GOOD: the same narrative, with that quest's status set to "complete" in this same state_patch. EDGE CASE (don't over-correct): narrative says "you're making good progress on the delivery, just one more stop to go" — status correctly stays "active" here, since the quest genuinely hasn't finished yet; don't mark something complete just because it was mentioned or advanced.

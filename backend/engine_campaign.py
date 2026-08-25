@@ -12,6 +12,7 @@ from lore import format_lore_context
 from portrait_generator import portrait_view
 from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
+from reliability import update_narrative_memory
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks)
@@ -115,6 +116,9 @@ POOL_STATS = {
 }
 
 ABILITY_ASPECTS = {
+    "space-time": "Warp", "space time": "Warp", "spacetime": "Warp",
+    "teleport": "Warp", "portal": "Warp", "warp": "Warp",
+    "seal": "Seal", "fuinjutsu": "Seal", "fuuinjutsu": "Seal",
     "fire": "Ember", "flame": "Ember", "heat": "Ember", "water": "Tide",
     "wind": "Gale", "air": "Gale", "lightning": "Storm", "electric": "Storm",
     "earth": "Stone", "ice": "Frost", "shadow": "Shadow", "dark": "Shadow",
@@ -154,7 +158,7 @@ WORLD_ABILITY_FORMS = {
          "test the instinct, study opponents, and later reinforce it with a suitable Nen category"),
     ],
     "Solo Max-Level Newbie": [
-        ("Adaptive Skill: {aspect} Script", "a background-derived trait recognized when the System evaluates the player",
+        ("Adaptive Skill: {aspect} Script", "a latent trait recognized when the System first evaluates the player",
          "builds proficiency when the player repeats successful {aspect_lower}-aligned solutions",
          "starts at low rank and loses efficiency when the same trick is forced into unsuitable situations",
          "meet hidden conditions, diversify applications, and earn System achievements"),
@@ -172,10 +176,133 @@ WORLD_ABILITY_FORMS = {
          "increase magicule capacity, analyze related phenomena, and combine compatible skills"),
     ],
     "Custom World": [
-        ("{aspect} Gift", "a setting-consistent talent produced from the player's requested parameters",
+        ("{aspect} Gift", "a setting-consistent talent that first surfaced under pressure",
          "creates a flexible {aspect_lower}-themed effect within the established rules of the custom world",
          "begins narrow in scope and cannot bypass costs, counters, or prerequisites established by the setting",
          "practice its core use, discover its source, and earn broader applications through play"),
+    ],
+}
+
+# When a player names the theme of a hidden class, preserve that theme instead
+# of choosing an unrelated stock class.  The stock forms remain useful for a
+# deliberately vague request ("I have a hidden class"), while this form turns a
+# concrete request into a setting-native mechanical package.
+WORLD_EXPLICIT_HIDDEN_CLASS_FORMS = {
+    "Naruto": ("{aspect} Fold Adept", "Secret Shinobi Path",
+        "A concealed chakra discipline that develops {aspect_lower}-aligned formulae through precise control and shinobi fieldcraft.",
+        "The user can produce a brief, tightly bounded {aspect_lower}-aligned effect through a prepared mark or focused chakra technique.",
+        "Range, mass, preparation time, chakra cost, and disrupted concentration sharply limit every use; it cannot bypass seals or defenses stronger than the user can overcome.",
+        "Study fuinjutsu and chakra theory, test safe anchors, and earn longer-range or combat-ready applications through training.", "{aspect} Fold"),
+    "One Piece": ("{aspect} Wake Disciple", "Hidden Fighting Path",
+        "An unusual seafaring combat path that expresses a natural affinity for {aspect_lower}-themed motion and force.",
+        "The user can shape movement, tools, and close-range attacks around a narrow {aspect_lower}-themed technique.",
+        "It remains physical, costs stamina, and cannot imitate a Devil Fruit or Haki ability the user has not actually acquired.",
+        "Condition the body, refine the style at sea, and later combine it with earned Haki or equipment.", "{aspect} Wake"),
+    "Hunter x Hunter": ("{aspect} Vow Specialist", "Hidden Nen Path",
+        "A rare Nen inclination whose future Hatsu naturally organizes itself around {aspect_lower}-themed rules.",
+        "The user can form one narrow {aspect_lower}-themed aura effect whose strength grows with honest restrictions.",
+        "Before Nen is awakened it appears only as instinct, and every declared condition carries a proportional consequence.",
+        "Learn the four major principles, define enforceable restrictions, and develop the personal Hatsu through use.", "{aspect} Vow"),
+    "Solo Max-Level Newbie": ("{aspect} Routebreaker", "Hidden Class",
+        "A System-recognized class built around unusual {aspect_lower}-aligned clear conditions.",
+        "The class reveals limited clues and improves compatible actions when the player genuinely pursues a {aspect_lower}-aligned alternate route.",
+        "Clues are incomplete, rewards still require the real condition, and unsuitable stages provide no advantage.",
+        "Clear hidden conditions, earn related achievements, and survive increasingly strict class trials.", "{aspect} Route Sense"),
+    "Overgeared": ("{aspect} Relicwright", "Hidden Class",
+        "A production-combat class specializing in equipment that carries stable {aspect_lower}-aligned traits.",
+        "Compatible crafting and maintenance can develop one bonded item's narrow {aspect_lower}-themed property.",
+        "The property still requires materials, skill, compatible ratings, and repeated successful work; one item can be bonded at first.",
+        "Raise production mastery, obtain better materials, and complete the class's relic commissions.", "{aspect} Relic Bond"),
+    "Reincarnated as a Slime": ("{aspect} Skill Weaver", "Unique Evolution Path",
+        "An unusual evolutionary path that recognizes compatible {aspect_lower}-aligned fragments in learned and intrinsic skills.",
+        "The user can gradually synthesize closely related fragments into one efficient {aspect_lower}-themed technique.",
+        "Incompatible concepts resist synthesis, failures waste magicules, and major upgrades still require real evolutionary conditions.",
+        "Analyze compatible abilities, increase magicule capacity, and evolve the technique through naming or crisis.", "{aspect} Weaving"),
+    "Bleach": ("{aspect} Resonance Adept", "Secret Shinigami Path",
+        "A rare spiritual path whose Zanpakuto relationship first manifests through {aspect_lower}-themed resonance.",
+        "The wielder can align a basic technique with a narrow {aspect_lower}-themed response from the blade spirit.",
+        "This is not a true name or release; forcing it destabilizes Reiryoku and can silence the spirit.",
+        "Practice Jinzen, deepen mutual recognition, and earn any release through the Zanpakuto's actual trial.", "{aspect} Resonance"),
+    "Custom World": ("{aspect} Wayfarer", "Hidden Class",
+        "A concealed path shaped by a rare affinity for {aspect_lower}-aligned phenomena in this setting.",
+        "The class improves control and improvisation when an action genuinely uses that affinity.",
+        "It cannot ignore the world's established costs, counters, prerequisites, or scale.",
+        "Find a knowledgeable mentor, test the affinity under pressure, and complete a defining class trial.", "{aspect} Attunement"),
+}
+
+# Original characters can very rarely begin with an extra world-valid gift or
+# hidden class even when the background did not ask for one. Explicit requests
+# always win. These are intentionally uncommon enough to feel special without
+# turning every new campaign into a reroll hunt.
+RANDOM_STARTING_ABILITY_CHANCE = 0.08
+RANDOM_HIDDEN_CLASS_CHANCE = 0.04
+
+# A hidden class is a real mechanical package, not a decorative title. Each
+# form supplies a setting-native identity and a signature technique; the
+# character's actual primary stats determine which attributes receive its
+# starting bonuses, so a class complements the chosen archetype instead of
+# replacing it with a one-size-fits-all stat block.
+WORLD_HIDDEN_CLASS_FORMS = {
+    "Naruto": [
+        ("Veiled Sealbearer", "Secret Shinobi Path",
+         "A rare discipline that treats seals as a second chakra network woven through tools, terrain, and the user's own body.",
+         "Prepared marks can store a small technique, redirect chakra, or trigger a compact barrier.",
+         "Every mark needs time, chakra, and exact placement; rushed arrays can collapse or rebound.",
+         "Study fuinjutsu, improve chakra control, and earn access to more complex formulae.", "Sealweaving"),
+        ("Echo-Nerve Operative", "Secret Shinobi Path",
+         "An obscure sensory-combat discipline built around reading tiny changes in breath, balance, and chakra flow.",
+         "The user can anticipate a committed motion and answer it with unusually precise timing.",
+         "Crowds, sensory overload, unfamiliar anatomy, and suppressed chakra produce misleading signals.",
+         "Train against varied opponents and develop a formal sensory technique.", "Echo-Nerve Read"),
+    ],
+    "One Piece": [
+        ("Stormwake Vanguard", "Hidden Fighting Path",
+         "A nearly forgotten seafarer's discipline built around violent changes in footing, weather, and momentum.",
+         "The user turns unstable terrain and sudden motion into force for movement, defense, and close combat.",
+         "It loses much of its edge on predictable ground and rapidly drains an unconditioned body.",
+         "Sail dangerous waters, strengthen the body, and eventually harmonize the style with Haki.", "Stormwake Step"),
+    ],
+    "Hunter x Hunter": [
+        ("Unwritten Specialist", "Hidden Nen Path",
+         "A rare talent whose future Hatsu forms around self-imposed rules rather than a standard combat school.",
+         "Carefully stated conditions can make one narrow application far stronger than its raw aura should allow.",
+         "The effect remains modest until Nen is properly awakened, and breaking a declared condition carries real consequences.",
+         "Learn the four major principles, test restrictions honestly, and define a personal Hatsu.", "Unwritten Condition"),
+    ],
+    "Solo Max-Level Newbie": [
+        ("Condition Breaker", "Hidden Class",
+         "A System-recognized class that notices alternate completion conditions and unstable rule interactions.",
+         "The class reveals a clue when the player is close to satisfying a hidden route or bypassing a conventional solution.",
+         "Clues are incomplete and the class grants no reward unless the actual condition is fulfilled.",
+         "Clear hidden conditions, earn unusual achievements, and survive floors above the expected route.", "Condition Sense"),
+    ],
+    "Overgeared": [
+        ("Relicbound Artificer", "Hidden Class",
+         "A production-combat class that forms a lasting bond with one evolving piece of equipment.",
+         "Successful use and careful maintenance let the bonded item accumulate traits that ordinary equipment would lose.",
+         "Only one item can be bonded at first, and its growth still requires materials, skill, and compatible achievements.",
+         "Raise production mastery, repair the bonded relic, and complete class-specific crafting quests.", "Relic Bond"),
+    ],
+    "Reincarnated as a Slime": [
+        ("Adaptive Skill Weaver", "Unique Evolution Path",
+         "An unusual evolutionary path that recognizes compatible fragments within learned and intrinsic skills.",
+         "The user can gradually combine closely related effects into a more efficient personal technique.",
+         "Incompatible concepts resist synthesis, and failed combinations waste magicules without creating a skill.",
+         "Analyze more abilities, expand magicule capacity, and evolve through a genuine naming or crisis trigger.", "Skill Weaving"),
+    ],
+    "Bleach": [
+        ("Veiled Zanpakuto Adept", "Secret Shinigami Path",
+         "A rare path centered on unusually early communication with the spirit sleeping inside a Zanpakuto.",
+         "The wielder can sense fragments of the blade spirit's intent and align basic techniques with it.",
+         "Fragments are not a true name or release; forcing the bond can silence the spirit and destabilize Reiryoku.",
+         "Deepen Jinzen meditation, learn the spirit's identity, and earn Shikai through mutual recognition.", "Zanpakuto Resonance"),
+    ],
+    "Custom World": [
+        ("{aspect} Wayfarer", "Hidden Class",
+         "A concealed path shaped by a rare affinity for {aspect_lower}-aligned phenomena in this setting.",
+         "The class improves control and improvisation when an action genuinely uses that affinity.",
+         "It cannot ignore the world's established costs, counters, prerequisites, or scale.",
+         "Find a knowledgeable mentor, test the affinity under pressure, and complete a defining class trial.", "{aspect} Attunement"),
     ],
 }
 
@@ -293,15 +420,32 @@ class CampaignMixin:
         text = str(background or "").lower()
         return bool(re.search(
             r"\b(ability|abilities|power|powers|gift|gifted|talent|talented|technique|skill|"
-            r"bloodline|mutation|magic|chakra|nen|hatsu|devil fruit|class)\b", text
+            r"bloodline|mutation|magic|chakra|nen|hatsu|devil fruit)\b", text
         ))
 
     @staticmethod
-    def ability_aspect(background):
+    def hidden_class_requested(background):
+        """A vague hidden/rare class claim still guarantees a complete class."""
+        text = str(background or "").lower()
+        return bool(re.search(
+            r"\b(hidden|secret|rare|unique|special|unknown|mysterious|legendary)\s+(?:starting\s+)?class\b|"
+            r"\bclass\s+(?:that\s+)?(?:nobody|no one|others)\s+(?:knows|recognizes|has)\b",
+            text,
+        ))
+
+    @staticmethod
+    def explicit_ability_aspect(background):
         text = str(background or "").lower()
         for keyword, aspect in ABILITY_ASPECTS.items():
             if keyword in text:
                 return aspect
+        return None
+
+    @classmethod
+    def ability_aspect(cls, background):
+        explicit = cls.explicit_ability_aspect(background)
+        if explicit:
+            return explicit
         return random.choice(("Ember", "Tide", "Gale", "Stone", "Echo", "Flash", "Shadow", "Radiance"))
 
     def generate_background_ability(self, world, background, boost):
@@ -319,7 +463,56 @@ class CampaignMixin:
                 "effect": effect.capitalize() + ".",
                 "limitation": limitation.capitalize() + ".",
                 "growth_path": growth.capitalize() + ".",
-                "generated_from": str(background or "A vague request for an unusual starting ability.").strip(),
+            },
+        }
+
+    def generate_hidden_class(self, world, background, boost, primary_stats, stats, concealed=False):
+        explicit_aspect = self.explicit_ability_aspect(background)
+        aspect = explicit_aspect or self.ability_aspect(background)
+        if explicit_aspect:
+            form = WORLD_EXPLICIT_HIDDEN_CLASS_FORMS.get(world, WORLD_EXPLICIT_HIDDEN_CLASS_FORMS["Custom World"])
+        else:
+            form = random.choice(WORLD_HIDDEN_CLASS_FORMS.get(world, WORLD_HIDDEN_CLASS_FORMS["Custom World"]))
+        values = {"aspect": aspect, "aspect_lower": aspect.lower()}
+        name, kind, description, effect, limitation, growth, signature = (part.format(**values) for part in form)
+        affinities = [key for key in primary_stats if key in stats]
+        if not affinities:
+            affinities = [key for key in abilities_for(world) if key in stats]
+        affinities = affinities[:2]
+        primary_bonus = 5 + min(5, boost // 20)
+        stat_bonuses = {}
+        for index, ability in enumerate(affinities):
+            stat_bonuses[ability] = max(2, primary_bonus - index * 2)
+        rank = "Unique" if boost >= 55 else "Rare"
+        skill_bonus = 5 + min(4, boost // 25)
+        return {
+            "name": name,
+            "true_name": name,
+            "kind": kind,
+            "rank": rank,
+            "revealed": not concealed,
+            "discovery": {
+                "concealed": bool(concealed),
+                "progress": 20 if concealed else 100,
+                "stage": "dormant" if concealed else "understood",
+                "clue": f"A {aspect.lower()}-aligned class feature answers instinctively when pressure or focused practice calls on it.",
+                "reveal_requirements": ["Use the unusual class feature", "Seek appraisal or specialist knowledge", "Train along the class's natural affinity"],
+            },
+            "description": description,
+            "effect": effect,
+            "limitation": limitation,
+            "growth_path": growth,
+            "signature_skill": signature,
+            "stat_bonuses": stat_bonuses,
+            "learning_multiplier": 1.08 if boost < 55 else 1.12,
+            "skill": {
+                "rank": "Initiate" if boost < 20 else "Awakened",
+                "bonus": skill_bonus,
+                "description": effect,
+                "effect": effect,
+                "limitation": limitation,
+                "growth_path": growth,
+                "class_feature": name,
             },
         }
 
@@ -460,7 +653,7 @@ class CampaignMixin:
             rank = "Academy Student"
         return f"{village or 'Unaffiliated'} - {rank}"
 
-    def infer_starting_profile(self, world, origin, archetype, background, stats, start_location=""):
+    def infer_starting_profile(self, world, origin, archetype, background, stats, start_location="", allow_starting_specials=True):
         text = f"{origin} {archetype} {background}".lower()
         boost, band = 0, "Average beginner"
         if any(k in text for k in ("omnipotent", "godlike", "six paths", "demon lord", "yonko", "emperor of the sea")):
@@ -476,15 +669,32 @@ class CampaignMixin:
         learning_rate = background_profile["growth_profile"]["learning_rate"]
         aptitude_bonus = 4 if learning_rate >= 1.3 else (2 if learning_rate > 1 else (-2 if learning_rate < 1 else 0))
         adjusted = {k: max(1, int(v) + boost + (aptitude_bonus if k in primary else 0)) for k, v in stats.items()}
+        base_stats = copy.deepcopy(adjusted)
         skill_name = WORLD_STARTER_SKILL.get(world, "Background Expertise")
         if "uchiha" in text: skill_name = "Uchiha Fire and Dōjutsu Foundations"
         elif "medic" in text or "healer" in text: skill_name = f"{archetype or 'Field'} Healing Fundamentals"
         elif archetype: skill_name = f"{archetype} Fundamentals"
         title = self.naruto_identity_title(origin, start_location) if world == "Naruto" else f"{origin or 'Local'} {archetype or 'Adventurer'}".strip()
         skills = {skill_name: {"rank": "Trained" if boost < 20 else "Exceptional", "bonus": 4 + boost // 10,
-                               "description": "Generated from the character's stated background and starting role."}}
+                               "description": "Training in the core methods expected of this role."}}
+        hidden_class = None
         generated_ability = None
-        if self.background_ability_requested(background):
+        class_requested = allow_starting_specials and self.hidden_class_requested(background)
+        class_awarded = class_requested or (allow_starting_specials and random.random() < RANDOM_HIDDEN_CLASS_CHANCE)
+        if class_awarded:
+            hidden_class = self.generate_hidden_class(world, background, boost, primary, adjusted, concealed=not class_requested)
+            for ability, bonus in hidden_class["stat_bonuses"].items():
+                adjusted[ability] = max(1, int(adjusted.get(ability, 1)) + int(bonus))
+            skills[hidden_class["signature_skill"]] = copy.deepcopy(hidden_class["skill"])
+            background_profile["growth_profile"]["learning_rate"] = round(
+                float(background_profile["growth_profile"].get("learning_rate", 1.0)) * hidden_class["learning_multiplier"], 3
+            )
+            background_profile["growth_profile"]["accelerators"].append(
+                f"The {hidden_class['name']} class opens specialized practice routes"
+            )
+        ability_requested = allow_starting_specials and self.background_ability_requested(background)
+        ability_awarded = ability_requested or (allow_starting_specials and random.random() < RANDOM_STARTING_ABILITY_CHANCE)
+        if ability_awarded:
             generated_ability = self.generate_background_ability(world, background, boost)
             skills[generated_ability["name"]] = copy.deepcopy(generated_ability["details"])
         specific_gear = WORLD_ARCHETYPE_GEAR.get(world, {}).get(archetype)
@@ -498,9 +708,73 @@ class CampaignMixin:
         starting_currency = self.infer_starting_wealth(world, origin, archetype, background, boost)
         return {"stats": adjusted, "skills": skills, "titles": [title], "equipment": equipment,
                 "hp_max": hp_max, "resource_max": resource_max, "power_band": band, "power_notice": notice,
-                "primary_stats": primary, "generated_ability": generated_ability, "race": race,
-                "starting_currency": starting_currency,
+                "primary_stats": primary, "generated_ability": generated_ability, "hidden_class": hidden_class, "race": race,
+                "starting_currency": starting_currency, "_base_stats": base_stats,
+                "_base_learning_rate": learning_rate,
+                "_boost": boost, "_core_skill_name": skill_name,
                 **background_profile}
+
+    def reroll_campaign_preview(self, preview, kind, background=""):
+        """Reroll one creation component without disturbing the others."""
+        result = copy.deepcopy(preview) if isinstance(preview, dict) else {}
+        profile = result.get("starting_profile") if isinstance(result.get("starting_profile"), dict) else {}
+        world = result.get("world", "Custom World")
+        kind = str(kind or "").lower()
+        if not profile or kind not in {"class", "ability", "backstory", "loadout"}:
+            raise ValueError("Choose class, ability, backstory, or loadout to reroll.")
+        boost = int(profile.get("_boost", 0) or 0)
+        primary = profile.get("primary_stats") or primary_stats_for(world, result.get("archetype", ""))
+        if kind == "class":
+            old = profile.get("hidden_class") if isinstance(profile.get("hidden_class"), dict) else {}
+            old_signature = old.get("signature_skill")
+            if old_signature:
+                profile.setdefault("skills", {}).pop(old_signature, None)
+            profile["stats"] = copy.deepcopy(profile.get("_base_stats") or profile.get("stats") or {})
+            hidden = self.generate_hidden_class(
+                world, background, boost, primary, profile["stats"],
+                concealed=not self.hidden_class_requested(background),
+            )
+            for ability, bonus in hidden.get("stat_bonuses", {}).items():
+                profile["stats"][ability] = max(1, int(profile["stats"].get(ability, 1)) + int(bonus))
+            profile.setdefault("skills", {})[hidden["signature_skill"]] = copy.deepcopy(hidden["skill"])
+            profile["hidden_class"] = hidden
+            growth = profile.setdefault("growth_profile", {})
+            growth["learning_rate"] = round(float(profile.get("_base_learning_rate", growth.get("learning_rate", 1))) * hidden["learning_multiplier"], 3)
+            growth["accelerators"] = [x for x in growth.get("accelerators", []) if "class opens specialized practice routes" not in str(x)]
+            growth["accelerators"].append(f"The {hidden['name']} class opens specialized practice routes")
+        elif kind == "ability":
+            old = profile.get("generated_ability") if isinstance(profile.get("generated_ability"), dict) else {}
+            if old.get("name"):
+                profile.setdefault("skills", {}).pop(old["name"], None)
+            ability = self.generate_background_ability(world, background, boost)
+            profile.setdefault("skills", {})[ability["name"]] = copy.deepcopy(ability["details"])
+            profile["generated_ability"] = ability
+        elif kind == "backstory":
+            rebuilt = self.build_background_profile(
+                world, result.get("origin", ""), result.get("archetype", ""), background, boost, primary,
+            )
+            if isinstance(profile.get("hidden_class"), dict):
+                rebuilt["growth_profile"]["learning_rate"] = round(
+                    float(rebuilt["growth_profile"].get("learning_rate", 1)) *
+                    float(profile["hidden_class"].get("learning_multiplier", 1)), 3,
+                )
+                rebuilt["growth_profile"]["accelerators"].append(
+                    f"The {profile['hidden_class']['name']} class opens specialized practice routes"
+                )
+            profile.update(rebuilt)
+            result["background"] = profile.get("expanded_background", background)
+        else:
+            candidates = list(dict.fromkeys(
+                list(WORLD_ARCHETYPE_GEAR.get(world, {}).values()) +
+                [WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])]
+            ))
+            current = (profile.get("equipment") or {}).get("Weapon")
+            alternatives = [item for item in candidates if item != current] or candidates
+            profile["equipment"] = {"Weapon": random.choice(alternatives)}
+        profile["hp_max"], profile["resource_max"] = self.derive_pools(world, profile.get("stats", {}))
+        result["abilities"] = copy.deepcopy(profile.get("stats", {}))
+        result["starting_profile"] = profile
+        return result
 
     def canon_character_scenario(self, world, scenario_id):
         return next((copy.deepcopy(x) for x in playable_characters_for(world) if x.get("id") == scenario_id), None)
@@ -521,7 +795,8 @@ class CampaignMixin:
         era = None if scenario else starting_era_by_id(world, starting_era_id)
         start = str(start_location or wd["start"]).strip()
         rolled = self.roll_starting_stats(world, archetype, stats or {})
-        profile = self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start)
+        profile = self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start,
+                                              allow_starting_specials=not bool(scenario))
         if scenario:
             start_day, canon_anchor = int(scenario.get("start_day")), scenario.get("background")
         elif era:
@@ -554,7 +829,10 @@ class CampaignMixin:
             origin, archetype, start_location = scenario.get("origin", origin), scenario.get("archetype", archetype), scenario.get("location", start_location)
         start = start_location.strip() or wd["start"]
         rolled = copy.deepcopy(preview_stats) if isinstance(preview_stats, dict) else self.roll_starting_stats(world, archetype, stats)
-        profile = copy.deepcopy(preview_profile) if isinstance(preview_profile, dict) else self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start)
+        profile = copy.deepcopy(preview_profile) if isinstance(preview_profile, dict) else self.infer_starting_profile(
+            world, origin, archetype, background, rolled, start_location=start,
+            allow_starting_specials=not bool(scenario),
+        )
         profile_stats = profile.get("stats") if isinstance(profile.get("stats"), dict) else rolled
         hp_max, resource_max = self.derive_pools(world, profile_stats)
         with self.lock:
@@ -569,6 +847,7 @@ class CampaignMixin:
                 special=copy.deepcopy(wd["special"]), discovered_locations=[start],
                 stats=copy.deepcopy(profile_stats), skills=copy.deepcopy(profile.get("skills", {})),
                 titles=copy.deepcopy(profile.get("titles", [])), equipment=copy.deepcopy(profile.get("equipment", {})),
+                class_profile=copy.deepcopy(profile.get("hidden_class") or {}),
                 hp=hp_max, hp_max=hp_max, resource=resource_max, resource_max=resource_max,
                 starting_power_band=profile.get("power_band", "Average beginner"),
                 starting_power_notice=profile.get("power_notice", ""),
@@ -589,7 +868,9 @@ class CampaignMixin:
             self.state["special"]["Growth Profile"] = copy.deepcopy(profile.get("growth_profile", {}))
             normalize_tuning(self.state)
             if isinstance(profile.get("generated_ability"), dict):
-                self.state["special"]["Generated Ability"] = copy.deepcopy(profile["generated_ability"])
+                self.state["special"]["Starting Ability"] = copy.deepcopy(profile["generated_ability"])
+            if isinstance(profile.get("hidden_class"), dict):
+                self.state["special"]["Hidden Class"] = copy.deepcopy(profile["hidden_class"])
             self.state["portrait_traits"] = [appearance_desc] if appearance_desc.strip() else []
             canon = timeline_for(world)
             if scenario:
@@ -667,6 +948,12 @@ class CampaignMixin:
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])
+            motivation = (profile.get("background_details") or {}).get("motivation", "")
+            self.state["memory_updates"] = {
+                "established_facts": [f"{self.state['name']} begins in {start} as a {origin} {archetype}."],
+                "player_goals": [motivation] if motivation else [],
+            }
+            update_narrative_memory(BASE_STATE, self.state, "Campaign beginning", "")
             self.checkpoints = []
             self.history = []
             self.story_log = []
@@ -689,7 +976,7 @@ class CampaignMixin:
             requirements.append("The player left their background blank — invent a plausible backstory consistent with their origin, archetype and world, and set it in state_patch.background.")
         if needs_appearance:
             requirements.append("The player left their appearance blank — invent a fitting physical description consistent with origin/archetype/world, and write the ACTUAL descriptive sentence into state_patch.appearance_desc as a real string (e.g. 'A lean youth with gray eyes and a scar along his jaw') — never a placeholder, a reference to another field, or a note saying it's set elsewhere. portrait_traits is a separate short list of the same distinctive details, in addition to (not instead of) appearance_desc.")
-        requirements.append("Treat every ability, education, social status, possession and trait claimed in the player's background as an authoritative starting fact unless it directly contradicts the chosen world. The generated Background Details, Growth Profile, and Generated Ability in state.special are authoritative starting context; preserve and deepen them rather than erasing them. Very powerful starts are allowed.")
+        requirements.append("Treat every ability, class, education, social status, possession and trait claimed in the player's background as an authoritative starting fact unless it directly contradicts the chosen world. Background Details, Growth Profile, Starting Ability, Hidden Class, and class_profile are authoritative starting context; preserve and deepen them rather than erasing them. Very powerful starts are allowed.")
         if world_supports_races(self.state.get("world", "Custom World")):
             options = WORLD_RACES.get(self.state.get("world"), {}).get("options", [])
             requirements.append(
@@ -697,7 +984,7 @@ class CampaignMixin:
                 f"Established races in this world include: {', '.join(options)}. If the player's background clearly describes something else, invent a specific, fitting race name instead of forcing it into one of these — it just needs to logically follow this world's actual rules for what that race can do (a slime that breathes fire needs an in-fiction reason a human turned monster wouldn't). Keep it a short name (1-3 words), not a sentence."
             )
         requirements.append("If the player's original background was vague, complete the missing upbringing, family or community context, training history, formative event, important relationship, motivation, and complication. Keep supplied facts unchanged, make the additions setting-valid, and return the enriched account in state_patch.background.")
-        requirements.append("Every generated starting ability must remain named in state_patch.skills and be explainable through its origin, effect, limitation or cost, and growth path. Introduce it naturally in the opening; it is a real ability, not a rumor or disposable plot hook.")
+        requirements.append("Every starting ability and hidden-class signature skill must remain named in state_patch.skills and be explainable through its in-world origin, effect, limitation or cost, and growth path. Introduce it naturally in the opening; it is a real capability, not a rumor or disposable plot hook. Preserve class_profile and its mechanical stat bonuses.")
         requirements.append("Open with a concrete situation and at least one actionable lead tied to this location, background, goal or upcoming world pressure. End with exactly 3 optional next actions: follow the lead, prepare/progress, or explore an alternate hook.")
         p = {"task": "opening", "state": self.trimmed_state_for_ai(), "requirements": requirements,
              "schema": {"narrative": "1 short paragraph, 3-5 sentences, ending with an open situation",

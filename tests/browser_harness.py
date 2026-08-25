@@ -44,6 +44,8 @@ class BrowserNarrator:
         if task == "resolve_time_skip":
             actions = payload.get("planned_actions", [])
             event_mode = payload.get("next_major_event_mode", {}).get("enabled")
+            shinobi = world == "Naruto"
+            route_name = "eastern road" if shinobi else "outer harbor channel"
             updates = []
             for index, action in enumerate(actions or ["Continue the prior course"]):
                 updates.append({"sequence": index + 1, "type": "action", "title": "Plan advances", "related_action": action,
@@ -52,18 +54,29 @@ class BrowserNarrator:
                                 "player_knowledge": "The immediate result is directly witnessed; distant motives remain uncertain.",
                                 "next_pressure": "A competing group is moving toward the same objective."})
             updates.append({"sequence": 20, "type": "faction_reaction", "title": "A rival group moves", "related_action": "",
-                            "narrative": "Several hours later, a reliable messenger reports that another team left by the eastern road. The messenger saw their departure but does not know their orders.",
+                            "narrative": f"Several hours later, a reliable witness reports that another team left by the {route_name}. The witness saw their departure but does not know their orders.",
                             "why_it_matters": "The route may become contested.", "player_knowledge": "The departure is confirmed; its purpose is only an inference.",
                             "next_pressure": "Reaching the next landmark first now has value."})
-            quest = {"name": "The Missing Scout", "status": "Active", "category": "main",
-                     "explanation": "A border scout missed two scheduled reports after investigating damaged signal posts.",
-                     "giver": "Village courier", "first_step": "Inspect the eastern signal post",
-                     "current_knowledge": ["The scout was last seen taking the eastern road", "Two signal posts stopped responding"],
-                     "clear_conditions": ["Locate the scout", "Determine what disabled the signal posts"],
-                     "objectives": [{"id": "find", "text": "Locate the missing scout", "status": "active", "optional": False, "progress": 20},
-                                    {"id": "cause", "text": "Identify who damaged the signal posts", "status": "locked", "optional": False, "progress": 0}],
-                     "branch_state": {"current": "search", "available": ["Follow the road", "Question nearby patrols"], "locked": ["Confront the saboteur"]},
-                     "locations": [state.get("location", "Starting Region")], "risks": ["Unknown hostile presence"]}
+            if shinobi:
+                quest = {"name": "The Missing Scout", "status": "Active", "category": "main",
+                         "explanation": "A border scout missed two scheduled reports after investigating damaged signal posts.",
+                         "giver": "Village courier", "first_step": "Inspect the eastern signal post",
+                         "current_knowledge": ["The scout was last seen taking the eastern road", "Two signal posts stopped responding"],
+                         "clear_conditions": ["Locate the scout", "Determine what disabled the signal posts"],
+                         "objectives": [{"id": "find", "text": "Locate the missing scout", "status": "active", "optional": False, "progress": 20},
+                                        {"id": "cause", "text": "Identify who damaged the signal posts", "status": "locked", "optional": False, "progress": 0}],
+                         "branch_state": {"current": "search", "available": ["Follow the road", "Question nearby patrols"], "locked": ["Confront the saboteur"]},
+                         "locations": [state.get("location", "Starting Region")], "risks": ["Unknown hostile presence"]}
+            else:
+                quest = {"name": "The Damaged Courier Boat", "status": "Active", "category": "main",
+                         "explanation": "A courier boat limped into port with a stolen route page and signs of a deliberate attack.",
+                         "giver": "Harbor watch", "first_step": "Inspect the hull and question the deckhand",
+                         "current_knowledge": ["The damage happened outside the harbor", "One Marine route page is missing"],
+                         "clear_conditions": ["Identify who attacked the courier", "Recover or account for the missing page"],
+                         "objectives": [{"id": "attack", "text": "Identify the attackers", "status": "active", "optional": False, "progress": 20},
+                                        {"id": "ledger", "text": "Account for the missing route page", "status": "locked", "optional": False, "progress": 0}],
+                         "branch_state": {"current": "investigate", "available": ["Inspect the boat", "Question harbor witnesses"], "locked": ["Confront the attackers"]},
+                         "locations": [state.get("location", "Starting Region")], "risks": ["Unknown vessel offshore"]}
             return {"narrative": "The ordered plan produces several distinct developments and ends at a clear decision point.",
                     "updates": updates, "state_patch": {"quests": [quest], "factions": {"Eastern Rivals": {"status": "active"}},
                                                        "npc_memories": {"Village Courier": {"goal": "Find the missing scout", "importance": "major", "attitude": "Concerned"}}},
@@ -73,7 +86,8 @@ class BrowserNarrator:
                     "major_event_title": "The Scout's Signal Returns" if event_mode else "",
                     "goal_status": {}, "new_contacts": [], "incoming_chats": [], "completed_actions": actions,
                     "deferred_actions": [],
-                    "suggested_actions": ["Follow the eastern road before the rival team gains distance", "Ask the veteran to identify the signal damage", "Question the courier about the scout's usual contacts"]}
+                    "suggested_actions": (["Follow the eastern road before the rival team gains distance", "Ask the veteran to identify the signal damage", "Question the courier about the scout's usual contacts"] if shinobi else
+                                          ["Inspect the courier boat before the tide changes", "Ask the navigator to chart the attack route", "Question harbor witnesses about the rival vessel"])}
         return {"narrative": "The situation remains stable.", "state_patch": {}, "events": [],
                 "suggested_actions": ["Follow the strongest visible lead", "Prepare for the next obstacle", "Ask a local witness for details"]}
 

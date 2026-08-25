@@ -47,7 +47,7 @@ class WorldwalkerV251Tests(unittest.TestCase):
         )
         generated = preview["starting_profile"]["generated_ability"]
         self.assertIn(generated["name"], state["skills"])
-        self.assertEqual(state["special"]["Generated Ability"]["name"], generated["name"])
+        self.assertEqual(state["special"]["Starting Ability"]["name"], generated["name"])
         self.assertIn("Growth Profile", state["special"])
         self.assertIn("Background Details", state["special"])
         self.assertIn("unfinished expectation", state["background"].lower())

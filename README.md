@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **2.6.0** (schema 6). Version 2.6 is intended for fresh campaigns.
+Current app/save version: **3.4.0** (schema 11). Version 3.4 is intended for fresh campaigns.
+
+Version 3.3 reduces simulation bloat: normal Advances use a deterministic
+planning pass plus one combined narrator request, while Economy, Balanced,
+and Deep detail modes control how much of the wider world stays in focus.
+NPC intentions, lore retrieval, event importance, and art reuse are cached or
+advanced locally whenever a model call is not necessary.
 
 ## Running it
 

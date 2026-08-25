@@ -105,7 +105,7 @@ class WorldwalkerV240Tests(unittest.TestCase):
         game._flush_story()
         before = copy.deepcopy(game.state)
         game.advance_clock(before, 1, "minutes")
-        self.assertTrue(any("founding of Akatsuki" in x for x in game.state["world_events"]))
+        self.assertTrue(any("Akatsuki's transformation" in x for x in game.state["world_events"]))
         self.assertEqual(len(game.state["canon_events_fired"]), 1)
 
     def test_current_landmark_beats_old_battle_language(self):

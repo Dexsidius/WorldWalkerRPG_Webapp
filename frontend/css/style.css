@@ -891,6 +891,7 @@ input,select,textarea{ font-family:inherit; }
 .generated-ability>b,.generated-backstory>b,.growth-summary>b{ color:var(--gold); letter-spacing:.05em; }
 .generated-ability strong{ color:var(--text); }
 .generated-backstory p{ margin:0; }
+.class-profile-card{ border-color:rgba(var(--accent-rgb),.7); background:linear-gradient(135deg,rgba(var(--accent-rgb),.12),rgba(0,0,0,.2)); box-shadow:inset 3px 0 0 rgba(var(--accent-rgb),.65); }
 .growth-summary small{ color:var(--muted); }
 .advisor-mode-toggle{ display:flex !important; align-items:flex-start !important; gap:9px; padding:9px 10px; margin:3px 0 8px !important; border:1px solid var(--border-soft); border-radius:9px; background:rgba(0,0,0,.18); color:var(--sub) !important; }
 .advisor-mode-toggle span{ display:flex; flex-direction:column; gap:2px; }
@@ -1203,7 +1204,7 @@ input,select,textarea{ font-family:inherit; }
 .difficult-check-row strong{ color:var(--gold); }
 .difficult-check-breakdown{ flex-basis:100%; color:var(--accent2); font-style:italic; }
 .challenge-choice-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
-.challenge-choice-grid button{ min-height:74px; padding:9px; }
+.challenge-choice-grid button{ min-height:74px; padding:9px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
 .challenge-choice-grid small{ color:var(--sub); line-height:1.25; }
 .challenge-body h3{ margin:5px 0; color:var(--gold); }
 .challenge-kicker{ color:var(--accent2); font:800 9px var(--font-mono); letter-spacing:.12em; }
@@ -1430,6 +1431,27 @@ body[data-world="Overgeared"] .panel::before, body[data-world="Overgeared"] .pan
 body[data-world="Overgeared"] .panel::before{ left:6px; }
 body[data-world="Overgeared"] .panel::after{ right:6px; }
 
+/* Bleach — high-contrast ink, spirit blue, and squad-paper geometry. */
+body[data-world="Bleach"]{
+  --bg:#080b10; --bg-2:#05070a; --panel:#10161d; --panel-soft:#151d25; --header:#1b2630;
+  --border:#334957; --border-soft:#22323d; --accent:#e8eef2; --accent-rgb:232,238,242;
+  --accent2:#63b9d5; --accent2-rgb:99,185,213; --text:#eef3f5; --sub:#a8bac4; --gold:#d7e2e7;
+  --font-display:'Yuji Syuku','Cinzel',serif; --font-label:'Zen Kaku Gothic New',sans-serif;
+  --radius:2px; --glass-rgb:12,17,23;
+}
+body[data-world="Bleach"] .panel{ border-left:3px solid rgba(232,238,242,.72); }
+body[data-world="Bleach"] .panel-head{ text-transform:uppercase; letter-spacing:.1em; background:linear-gradient(90deg,rgba(232,238,242,.1),transparent); }
+body[data-world="Bleach"] .story-feed{ background-image:linear-gradient(rgba(99,185,213,.025) 1px,transparent 1px); background-size:100% 26px; }
+body[data-world="Bleach"] .quick-nav button:hover, body[data-world="Bleach"] .btn-primary:hover{ box-shadow:inset 4px 0 0 var(--accent2); transform:translateX(2px); }
+body[data-world] .brand::after{ margin-left:9px; color:var(--accent2); font-size:.75em; opacity:.72; }
+body[data-world="One Piece"] .brand::after{ content:"⚓"; }
+body[data-world="Hunter x Hunter"] .brand::after{ content:"▱"; }
+body[data-world="Naruto"] .brand::after{ content:"印"; }
+body[data-world="Solo Max-Level Newbie"] .brand::after{ content:"[SYSTEM]"; font-family:var(--font-mono); }
+body[data-world="Overgeared"] .brand::after{ content:"⚒"; }
+body[data-world="Reincarnated as a Slime"] .brand::after{ content:"◉"; }
+body[data-world="Bleach"] .brand::after{ content:"魂"; }
+
 /* ==========================================================================
    Per-world button micro-interactions — the reskin should feel different
    on interaction, not just on load. Kept to hover/active states on the
@@ -1477,6 +1499,65 @@ body[data-world="Reincarnated as a Slime"] .quick-nav button:hover, body[data-wo
 body[data-world="Reincarnated as a Slime"] .quick-nav button:active, body[data-world="Reincarnated as a Slime"] .btn-primary:active{ transform:scale(.93,1.08); transition-duration:.08s; }
 
 /* Custom World keeps the base theme defined in :root */
+
+/* v3.1 reliability and creation surfaces */
+.class-discovery{ margin:10px 0; padding:9px; border:1px solid var(--border-soft); background:rgba(var(--accent2-rgb),.05); }
+.class-discovery > div{ display:flex; justify-content:space-between; gap:12px; font-size:11px; }
+.class-discovery > i,.quest-progress{ display:block; height:5px; margin:7px 0; border-radius:9px; background:var(--border-soft); overflow:hidden; }
+.class-discovery > i{ background:linear-gradient(90deg,var(--accent2),var(--gold)); box-shadow:0 0 8px rgba(var(--accent2-rgb),.35); }
+.class-discovery small{ color:var(--sub); line-height:1.45; }
+.quest-progress i{ display:block; height:100%; background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+.preview-rerolls{ margin:16px 0; padding:13px; border:1px dashed var(--border); background:rgba(var(--accent-rgb),.04); }
+.preview-rerolls > b{ display:block; margin-bottom:8px; color:var(--gold); }
+.preview-rerolls > div{ display:flex; flex-wrap:wrap; gap:7px; }
+.preview-rerolls button{ border:1px solid var(--border); background:var(--panel-soft); color:var(--text); padding:7px 10px; cursor:pointer; }
+.preview-rerolls button:hover{ border-color:var(--accent); color:var(--gold); }
+.preview-rerolls small{ display:block; margin-top:8px; color:var(--sub); }
+
+/* v3.2 reliability, causality, knowledge, repair and evaluation surfaces */
+.causal-reason,.causal-blocked{display:block;margin-top:6px}.causal-reason{color:#93d7bd}.causal-blocked{color:#ef9d87!important}
+.causality-card,.knowledge-card,.causality-entry,.lore-conflict,.evaluation-card,.evaluation-result{border:1px solid var(--border-soft);background:var(--panel-soft);padding:11px;margin:8px 0;border-radius:8px}
+.causality-card.blocked{border-color:rgba(229,103,78,.55);box-shadow:inset 3px 0 rgba(229,103,78,.55)}
+.causality-card header,.causality-entry summary,.knowledge-card summary,.lore-conflict summary,.evaluation-card header,.evaluation-result summary{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.causality-card small,.knowledge-card small{display:block;margin-top:5px;color:var(--sub)}
+
+/* v3.4 local simulation, correction, route, and campaign-search surfaces */
+.correct-gm-button{border-color:rgba(107,195,255,.42)!important;color:#9ed8ff!important}
+.campaign-search-form{display:grid;grid-template-columns:1fr auto;gap:9px;margin:12px 0 16px}
+.campaign-search-form input{min-width:0;padding:11px 12px;border:1px solid var(--border-soft);border-radius:8px;background:rgba(0,0,0,.25);color:var(--text)}
+.search-result,.correction-card,.schedule-card,.integrity-report{border:1px solid var(--border-soft);background:rgba(0,0,0,.2);padding:12px 14px;margin:8px 0;border-radius:9px}
+.search-result header,.correction-card header,.schedule-card header,.integrity-report summary{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.search-result header span,.correction-card header span,.schedule-card header span,.integrity-report summary span{color:var(--sub);font-size:11px}
+.search-result p,.correction-card p,.schedule-card p{margin:7px 0 0;line-height:1.55;color:var(--text)}
+.gm-correction-form{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px;margin:10px 0 18px}
+.gm-correction-form label{display:flex;flex-direction:column;gap:6px}
+.gm-correction-form label:nth-of-type(3),.gm-correction-form label:nth-of-type(4),.gm-correction-form button{grid-column:1/-1}
+.integrity-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0 18px}
+.integrity-stats span{display:flex;flex-direction:column;gap:3px;text-align:center;padding:10px 6px;border:1px solid var(--border-soft);border-radius:8px;color:var(--sub)}
+.integrity-stats b{font-size:19px;color:var(--gold)}
+.integrity-report summary{cursor:pointer}.integrity-report.repaired{border-color:rgba(230,190,85,.5)}.integrity-report.warning{border-color:rgba(229,103,78,.55)}.integrity-report.passed{border-color:rgba(87,191,137,.4)}
+.map-route-preview{margin-top:12px;padding:10px;border:1px solid var(--border-soft);border-radius:8px;background:rgba(var(--accent-rgb),.07)}
+.map-route-preview p{line-height:1.45;margin:6px 0}.map-route-preview small{color:var(--sub)}
+.timeline-dependencies,.timeline-confidence{font-size:12px;color:var(--sub)}
+@media(max-width:720px){.gm-correction-form{grid-template-columns:1fr}.gm-correction-form label,.gm-correction-form button{grid-column:1}.integrity-stats{grid-template-columns:1fr 1fr}.campaign-search-form{grid-template-columns:1fr}.search-result header,.correction-card header,.schedule-card header{align-items:flex-start;flex-direction:column;gap:3px}}
+.knowledge-card>summary,.causality-entry>summary,.lore-conflict>summary,.evaluation-result>summary{cursor:pointer}
+.knowledge-card section{padding:9px 0;border-top:1px solid var(--border-soft)}.knowledge-card li{margin:5px 0}.knowledge-card li small{margin-left:8px}
+.health-actions,.evaluation-actions{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.health-repair-btn{margin-top:9px;padding:6px 9px;border:1px solid var(--border);background:var(--panel);color:var(--gold);cursor:pointer}
+.evaluation-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:9px}.evaluation-card{display:flex;flex-direction:column}.evaluation-card p{flex:1}.evaluation-card button{margin-top:8px}
+.evaluation-score{display:flex;gap:14px;align-items:center;border:1px solid var(--accent);padding:12px;margin:10px 0;background:rgba(var(--accent-rgb),.08)}.evaluation-score strong{font-size:28px;color:var(--gold)}.evaluation-score span{display:block;color:var(--sub);margin-top:3px}
+.lore-conflict{border-left:3px solid #d0a24c}.lore-conflict small{display:block;color:var(--sub)}
+.ledger-entry summary{ display:flex; justify-content:space-between; gap:10px; cursor:pointer; }
+.ledger-entry > div{ padding-top:8px; }
+.memory-section{ margin-bottom:16px; }
+.memory-row{ padding:10px 12px; margin:7px 0; border-left:3px solid var(--accent2); background:var(--panel-soft); }
+.memory-row p{ margin:0 0 5px; color:var(--text); }
+.memory-row small{ color:var(--sub); text-transform:capitalize; }
+.timeline-row header{ display:flex; justify-content:space-between; gap:8px; }
+.canon-status{ padding:2px 6px; border:1px solid var(--border); font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
+.canon-status.altered,.canon-status.delayed{ color:var(--gold); border-color:var(--accent); }
+.canon-status.impossible{ color:var(--danger); border-color:var(--danger); }
+.timeline-row.impossible{ opacity:.7; }
+.timeline-reason,.timeline-replacement{ padding:6px 8px; background:rgba(var(--accent-rgb),.05); font-size:11px; }
 
 /* ==========================================================================
    Utility / small screens

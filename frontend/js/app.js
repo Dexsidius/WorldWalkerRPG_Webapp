@@ -101,6 +101,7 @@ const APP = {
   challenge: null,
   eventWindow: null,   // {} while the dedicated Major Event window is open, else null
   pendingCampaign: null,
+  pendingPreview: null,
   journalTab: "party",
   portraitAttempted: new Set(),
   portraitInFlight: false,
@@ -117,7 +118,23 @@ function playSfx(name) {
   if (!APP.soundEnabled) return;
   const el = document.getElementById("snd-" + name);
   if (!el) return;
-  try { el.currentTime = 0; el.play().catch(() => {}); } catch (e) {}
+  const worldPitch = {
+    "One Piece": 0.94,
+    "Hunter x Hunter": 1.02,
+    "Naruto": 1.08,
+    "Solo Max-Level Newbie": 1.15,
+    "Overgeared": 0.88,
+    "Reincarnated as a Slime": 1.04,
+    "Bleach": 0.97,
+    "Custom": 1,
+  };
+  try {
+    // Give each interface its own subtle audio character without multiplying
+    // the size of the installation with another full sound pack.
+    el.playbackRate = worldPitch[APP.state?.world] || 1;
+    el.currentTime = 0;
+    el.play().catch(() => {});
+  } catch (e) {}
 }
 
 // ---------------------------------------------------------------------------
@@ -574,14 +591,16 @@ function questView(q, index = 0) {
     name: q.name || q.title || `Quest ${index + 1}`,
     status: q.status || q.stage || "Active",
     explanation: q.explanation || q.description || q.notes || q.summary || "No additional explanation has been discovered yet.",
-    knowledge: textList(q.current_knowledge || q.knowledge || q.clues || q.known_facts),
+    knowledge: textList(q.discovered_clues || q.current_knowledge || q.knowledge || q.clues || q.known_facts),
     conditions: textList(q.clear_conditions || q.completion_conditions || q.conditions || q.objectives || q.objective),
     objectives: Array.isArray(q.objectives) ? q.objectives : [],
     branchState: q.branch_state && typeof q.branch_state === "object" ? q.branch_state : {},
     giver: q.giver || q.cause || q.employer || "",
     locations: textList(q.locations || q.location),
-    risks: textList(q.risks || q.known_risks || q.consequences),
-    firstStep: q.first_step || q.next_step || "",
+    risks: textList(q.current_obstacles || q.risks || q.known_risks || q.consequences),
+    optionalObjectives: textList(q.optional_objectives),
+    firstStep: q.next_hint || q.first_step || q.next_step || "",
+    progress: Number(q.progress_percent || 0),
     deadline: q.deadline || "",
     rewards: textList(q.rewards || q.reward),
   };
@@ -634,6 +653,43 @@ function renderSkillCard(name, rawDetail) {
   ].map(([label, value]) => [label, compactReadable(value)]).filter(([, value]) => value);
   const chips = [rank ? `<span>${escapeHtml(rank)}</span>` : "", bonus !== null ? `<span>${bonus >= 0 ? "+" : ""}${escapeHtml(bonus)} check bonus</span>` : ""].filter(Boolean).join("");
   return `<article class="skill-journal-card"><header><h3>✦ ${escapeHtml(name)}</h3>${chips ? `<div class="skill-chips">${chips}</div>` : ""}</header><p class="skill-summary">${escapeHtml(summary)}</p>${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</article>`;
+}
+
+function formatDuration(minutes) {
+  const total = Math.max(0, Number(minutes || 0));
+  if (total >= 1440) return `${Math.round(total / 144) / 10} day${total >= 2160 ? "s" : ""}`;
+  if (total >= 60) return `${Math.round(total / 6) / 10} hour${total >= 90 ? "s" : ""}`;
+  return `${Math.round(total)} minute${total === 1 ? "" : "s"}`;
+}
+
+function renderClassCard(rawClass) {
+  const cls = rawClass && typeof rawClass === "object" ? { ...rawClass } : {};
+  const rawDiscovery = cls.discovery && typeof cls.discovery === "object" ? cls.discovery : null;
+  if (rawDiscovery?.concealed) {
+    cls.name = "Unidentified Hidden Class";
+    cls.description = rawDiscovery.clue || "A dormant class-shaped power is present, but its nature is not yet understood.";
+    cls.effect = Number(rawDiscovery.progress || 0) < 70 ? "Some bonuses are already active; their exact source remains unclear." : cls.effect;
+    if (Number(rawDiscovery.progress || 0) < 50) cls.signature_skill = "";
+    if (Number(rawDiscovery.progress || 0) < 70) {
+      cls.stat_bonuses = {};
+      cls.limitation = "Use, appraisal, or class-relevant training is required to identify it.";
+      cls.growth_path = "Experiment with the unusual capability and seek a way to appraise hidden paths.";
+    }
+  }
+  if (!cls.name) return "";
+  const bonuses = cls.stat_bonuses && typeof cls.stat_bonuses === "object"
+    ? Object.entries(cls.stat_bonuses).map(([name, value]) => `${name} ${Number(value) >= 0 ? "+" : ""}${value}`).join(" · ")
+    : "";
+  const rows = [
+    ["Class feature", cls.effect],
+    ["Starting bonuses", bonuses],
+    ["Signature skill", cls.signature_skill],
+    ["Limits", cls.limitation],
+    ["Advancement", cls.growth_path],
+  ].map(([label, value]) => [label, compactReadable(value)]).filter(([, value]) => value);
+  const discovery = cls.discovery && typeof cls.discovery === "object" ? cls.discovery : null;
+  const discoveryRow = discovery ? `<div class="class-discovery"><div><b>Discovery</b><span>${escapeHtml(discovery.stage || "dormant")} · ${escapeHtml(discovery.progress ?? 0)}%</span></div><i style="width:${Math.max(0, Math.min(100, Number(discovery.progress || 0)))}%"></i>${textList(discovery.reveal_requirements).length ? `<small>${textList(discovery.reveal_requirements).map(escapeHtml).join(" · ")}</small>` : ""}</div>` : "";
+  return `<article class="skill-journal-card class-profile-card"><header><h3>◆ ${escapeHtml(cls.name)}</h3><div class="skill-chips"><span>${escapeHtml(cls.kind || "Hidden Class")}</span><span>${escapeHtml(cls.rank || "Rare")}</span></div></header><p class="skill-summary">${escapeHtml(compactReadable(cls.description) || "A rare path whose full nature is still being discovered.")}</p>${discoveryRow}${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</article>`;
 }
 
 function loadPortraitImage(url) {
@@ -738,10 +794,29 @@ function abilityIcon(name) {
   return ICONS.star;
 }
 
+const WORLD_UI_THEMES = {
+  "One Piece": { sheet: "Crew Record", attributes: "Capabilities", skills: "Techniques & Titles", chronicle: "Voyage Log" },
+  "Hunter x Hunter": { sheet: "Hunter Record", attributes: "Aptitudes", skills: "Nen & Titles", chronicle: "Case Log" },
+  "Naruto": { sheet: "Shinobi Record", attributes: "Shinobi Arts", skills: "Jutsu & Titles", chronicle: "Mission Scroll" },
+  "Solo Max-Level Newbie": { sheet: "Status Window", attributes: "System Stats", skills: "Skills & Achievements", chronicle: "System Log" },
+  "Overgeared": { sheet: "Player Status", attributes: "Character Stats", skills: "Classes & Skills", chronicle: "Adventure Log" },
+  "Reincarnated as a Slime": { sheet: "Analysis Record", attributes: "Existence Values", skills: "Unique Skills & Titles", chronicle: "Great Sage Record" },
+  "Bleach": { sheet: "Soul Record", attributes: "Spiritual Arts", skills: "Techniques & Releases", chronicle: "Soul Chronicle" },
+  "Custom World": { sheet: "Character Sheet", attributes: "Attributes", skills: "Skills & Titles", chronicle: "Chronicle" },
+};
+function applyWorldInterfaceTheme(world) {
+  const theme = WORLD_UI_THEMES[world] || WORLD_UI_THEMES["Custom World"];
+  $("#character-sheet-title").textContent = theme.sheet;
+  $("#attributes-title").lastChild.textContent = theme.attributes;
+  $("#skills-panel-title").textContent = theme.skills;
+  $("#chronicle-title").textContent = theme.chronicle;
+}
+
 function renderState(state) {
   APP.state = state;
   const s = state;
   document.body.setAttribute("data-world", s.world || "Custom World");
+  applyWorldInterfaceTheme(s.world || "Custom World");
   applyGodotAmbient(s.world || "Custom World");
 
   $("#hdr-world").textContent = s.world || "Custom World";
@@ -762,7 +837,7 @@ function renderState(state) {
   // when appearance, form, or visible equipment actually changes.
   renderAiPortrait(s);
   $("#portrait-name").textContent = s.name || "Traveler";
-  $("#portrait-class").textContent = (s.special && s.special.Archetype) || "Adventurer";
+  $("#portrait-class").textContent = s.class_profile?.name || (s.special && s.special.Archetype) || "Adventurer";
   const locationEl = $("#portrait-location");
   const locationText = (s.location || "").trim();
   if (locationText) { $("#portrait-location-text").textContent = locationText; locationEl.hidden = false; }
@@ -816,7 +891,8 @@ function renderState(state) {
   const isFullSheet = s._stat_style === "full_sheet";
   const hiddenWrap = $("#hidden-stats-wrap");
   if (isFullSheet) {
-    const revealed = s.hidden_stats || {};
+    const revealed = { ...(s.hidden_stats || {}) };
+    if (s.class_profile?.name) revealed["Hidden Class"] = s.class_profile.name;
     // Skip any placeholder that collides with a visible core ability name
     // (e.g. Overgeared/Solo Max-Level Newbie already use "Luck" as a core stat).
     const placeholders = ["Fortune", "Hidden Class", "Talent"].filter((k) => !(k in revealed) && !attrKeys.includes(k));
@@ -835,9 +911,10 @@ function renderState(state) {
   renderGearPanel(s);
 
   // skills & titles
+  const classItems = s.class_profile?.name ? [`◆ ${escapeHtml(s.class_profile.name)} <small>(${escapeHtml(s.class_profile.kind || "Hidden Class")})</small>`] : [];
   const skillItems = Object.keys(s.skills || {}).map((k) => `✦ ${escapeHtml(k)}`);
   const titleItems = (s.titles || []).map((t) => `🏅 ${escapeHtml(titleLabel(t))}`);
-  renderTagListHtml("#skills-list", [...titleItems, ...skillItems], "None");
+  renderTagListHtml("#skills-list", [...classItems, ...titleItems, ...skillItems], "None");
 
   // affiliations — formal membership + rank in any group/kingdom/hierarchy,
   // distinct from general faction reputation. Panel stays hidden until the
@@ -940,9 +1017,10 @@ function renderStatusWindow(s) {
   $("#sw-attributes").innerHTML = Object.entries(attrs).map(([k, v]) =>
     `<div class="status-window-attr"><i class="a-icon">${abilityIcon(k)}</i><span>${escapeHtml(k)}</span><b>${escapeHtml(v)}</b></div>`
   ).join("") || '<div class="hint">None recorded.</div>';
+  const classItems = s.class_profile?.name ? [`<li>◆ ${escapeHtml(s.class_profile.name)} <small>(${escapeHtml(s.class_profile.kind || "Hidden Class")})</small></li>`] : [];
   const skillItems = Object.keys(s.skills || {}).map((k) => `<li>✦ ${escapeHtml(k)}</li>`);
   const titleItems = (s.titles || []).map((t) => `<li>🏅 ${escapeHtml(titleLabel(t))}</li>`);
-  $("#sw-skills").innerHTML = [...titleItems, ...skillItems].join("") || '<li class="hint">None yet.</li>';
+  $("#sw-skills").innerHTML = [...classItems, ...titleItems, ...skillItems].join("") || '<li class="hint">None yet.</li>';
   const currency = s.currency || {};
   const misc = [
     currency.name ? `<div><b>${escapeHtml(currency.amount ?? 0)}</b> ${escapeHtml(currency.name)}</div>` : "",
@@ -1197,9 +1275,15 @@ function applyGodotMapFx(nodes) {
 function updateScene(s) {
   const url = s._scene_image;
   const cat = s._scene_category || "starry_sky";
+  const sceneLabel = s._scene_label || cat;
   const img = $("#scene-img");
   document.body.setAttribute("data-scene", cat);
-  $("#scene-category-badge").textContent = cat.replace(/_/g, " ").toUpperCase();
+  const sceneBadge = $("#scene-category-badge");
+  sceneBadge.textContent = sceneLabel.replace(/_/g, " ").toUpperCase();
+  const artMatch = s._scene_confidence || {};
+  sceneBadge.title = artMatch.score !== undefined
+    ? `Art match ${artMatch.score}% · ${artMatch.label || "Environment"}: ${artMatch.reason || s._scene_reason || ""}`
+    : (s._scene_reason || "Environment art selected from current location and activity.");
   $("#scene-location").textContent = s.location || "Unknown";
   $("#scene-world").textContent = s.world || "Custom World";
 
@@ -2383,6 +2467,13 @@ function handleTimeSkipResult(result, payload) {
   appendStoryEntries(result.story);
   renderState(result.state);
   handleNotifications(result.notifications);
+  // The Advance button lives below Action Chat in its own scrolling column.
+  // After a turn, return that column to the composer so the player's next
+  // input is visible instead of leaving the view parked on Time Control.
+  requestAnimationFrame(() => {
+    const rightColumn = document.querySelector(".col-right");
+    if (rightColumn) rightColumn.scrollTop = 0;
+  });
   if (result.died) {
     // A time skip can end in death too (an extreme roll, the Tower's floor
     // countdown) — same death/rewind modal every other death path already
@@ -2594,6 +2685,7 @@ function openPowerSummary() {
         <div class="clock-track"><i style="width:${pct}%"></i></div><b>${escapeHtml(value)}</b></div>`;
     }).join("") || '<div class="hint">No stats recorded yet.</div>';
   const titles = (s.titles || []).map((t) => `<span class="power-title-chip">🏅 ${escapeHtml(titleLabel(t))}</span>`).join("");
+  const classCard = s.class_profile?.name ? renderClassCard(s.class_profile) : "";
   $("#power-summary-body").innerHTML = `
     <div class="power-summary-head">
       <div><b>${escapeHtml(s.name || "Traveler")}</b><span>${escapeHtml(s.world || "")}${s.position ? ` · ${escapeHtml(s.position)}` : ""}</span></div>
@@ -2604,6 +2696,7 @@ function openPowerSummary() {
       <small>Estimated from current stats, not an official ranking — ask the Advisor for a real read grounded in the campaign.</small>
     </div>
     <div class="power-stat-list">${statRows}</div>
+    ${classCard}
     ${titles ? `<div class="power-title-list">${titles}</div>` : ""}
     <button id="btn-power-summary-ask-advisor" class="btn-ghost full">⚖ Ask the Advisor how you compare</button>
   `;
@@ -2731,28 +2824,40 @@ async function openJournal(tab) {
   if (tab === "party") {
     const comp = data.companions || [];
     panel.innerHTML = comp.length ? comp.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Companion")}</b><br/>${escapeHtml(c.notes || c.role || "")}</div>`).join("") : `<div class="jrow">No companions have joined you yet.</div>` + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — Level ${s.level ?? 1} ${escapeHtml((s.special || {}).Archetype || "")}</div>`;
+  } else if (tab === "search") {
+    panel.innerHTML = `<div class="system-summary"><b>SEARCH YOUR CAMPAIGN</b><span>Find old actions, people, quests, skills, chapters, facts, and player corrections without scrolling through the entire Chronicle.</span></div><form id="campaign-search-form" class="campaign-search-form"><input id="campaign-search-query" type="search" minlength="2" placeholder="Try a name, place, ability, promise, or event" required><button class="btn-primary" type="submit">SEARCH</button></form><div id="campaign-search-results" class="campaign-search-results"><div class="jrow hint">Enter at least two characters to search locally. This makes no AI call.</div></div>`;
+    setTimeout(() => $("#campaign-search-query")?.focus(), 0);
+  } else if (tab === "corrections") {
+    const corrections = [...(data.simulation?.integrity?.corrections || [])].reverse();
+    panel.innerHTML = `<div class="system-summary"><b>CORRECT THE GM</b><span>Your correction becomes an authoritative campaign fact, repairs the selected state immediately, and is included in future GM context. This makes no AI call and does not advance time.</span></div><form id="gm-correction-form" class="gm-correction-form"><label>What needs correcting<select id="correction-type"><option value="fact">Story fact</option><option value="location">Current location</option><option value="inventory_add">Missing inventory item</option><option value="inventory_remove">Item you no longer own</option><option value="currency">Currency amount</option><option value="hp">Current health</option><option value="resource">Current energy pool</option><option value="quest_status">Quest status</option><option value="skill">Skill description</option></select></label><label>Target or name<input id="correction-target" type="text" placeholder="Sword, quest name, skill name, character…"></label><label>Correct value<textarea id="correction-value" rows="3" placeholder="Write the correct fact or value" required></textarea></label><label>Why, if useful<textarea id="correction-explanation" rows="2" placeholder="Optional context that helps the GM preserve this correction"></textarea></label><button class="btn-primary" type="submit">APPLY CORRECTION</button></form><h3>Correction history</h3>${corrections.length ? corrections.map((row) => `<article class="correction-card"><header><b>${escapeHtml(row.target || humanLabel(row.type))}</b><span>Turn ${escapeHtml(row.turn ?? 0)}</span></header><p>${escapeHtml(row.fact)}</p>${row.explanation ? `<small>${escapeHtml(row.explanation)}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No player corrections have been needed.</div>'}`;
+  } else if (tab === "simulation") {
+    const integrity = data.simulation?.integrity || {}, reports = [...(integrity.recent_validation || [])].reverse();
+    const schedules = Object.entries(integrity.npc_schedules || {}), packets = [...(integrity.information_packets || [])].reverse();
+    const canon = integrity.canon_dependencies || { counts: {}, events: [] };
+    panel.innerHTML = `<div class="system-summary"><b>LOCAL SIMULATION SAFETY</b><span>These checks run on your computer after the GM writes a turn. They do not make another AI call.</span></div><div class="integrity-stats"><span><b>${escapeHtml(integrity.travel?.nodes || 0)}</b> mapped places</span><span><b>${escapeHtml(integrity.travel?.connections || 0)}</b> travel routes</span><span><b>${escapeHtml((integrity.active_goals || []).length)}</b> active stop goals</span><span><b>${escapeHtml(schedules.length)}</b> NPC schedules</span></div><h3>Recent turn checks</h3>${reports.length ? reports.map((row) => `<details class="integrity-report ${escapeHtml(row.status || "passed")}"><summary><b>Turn ${escapeHtml(row.turn)} · ${escapeHtml(row.status || "passed")}</b><span>${escapeHtml(row.actions_checked || 0)} actions · ${escapeHtml(row.rolls_checked || 0)} rolls</span></summary>${(row.repairs || []).length ? `<p><b>Repaired locally</b></p><ul>${row.repairs.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}${(row.warnings || []).length ? `<p><b>Warnings</b></p><ul>${row.warnings.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : '<p>No mismatch was found.</p>'}</details>`).join("") : '<div class="jrow hint">Resolve a turn to create the first integrity report.</div>'}<h3>Active action goals</h3>${(integrity.active_goals || []).length ? integrity.active_goals.map((row) => `<div class="jrow"><b>${escapeHtml(row.kind || "goal")}</b><br>${escapeHtml(row.condition || row.action)}</div>`).join("") : '<div class="jrow hint">No “until/master/find/reach” goal is currently active.</div>'}<h3>NPC commitments</h3>${schedules.length ? schedules.map(([name,row]) => `<article class="schedule-card"><header><b>${escapeHtml(name)}</b><span>${escapeHtml(row.status || "planned")}</span></header><p>${escapeHtml(row.goal || "Private commitment")}</p><small>${escapeHtml(row.location || "Unknown")} · due around Canon Day ${escapeHtml(row.due_day ?? "?")}</small></article>`).join("") : '<div class="jrow hint">Schedules appear when recurring NPCs establish a real goal.</div>'}<h3>Information in motion</h3>${packets.length ? packets.slice(0,20).map((row) => `<div class="jrow"><b>${escapeHtml(row.fact)}</b><br><small>${escapeHtml(row.channel || "unknown route")} · ${escapeHtml(row.confidence || 0)}% confidence · recipients: ${escapeHtml((row.recipients || []).join(", ") || "none")}${Number(row.available_after_minutes || 0) > 0 ? ` · arrives in ${escapeHtml(row.available_after_minutes)} minutes` : " · delivered"}</small></div>`).join("") : '<div class="jrow hint">No structured news packet has moved yet.</div>'}<h3>Canon dependency health</h3><div class="jrow">${Object.entries(canon.counts || {}).filter(([,v]) => v).map(([k,v]) => `<b>${escapeHtml(v)} ${escapeHtml(k)}</b>`).join(" · ") || "No fixed canon dependencies."}</div>`;
   } else if (tab === "quests") {
     const active = data.quests || [];
     panel.innerHTML = (active.length ? active.map((raw, index) => {
       const q = questView(raw, index);
       const line = (label, value) => value ? `<div class="quest-brief-line"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>` : "";
       const list = (label, values, emptyText = "") => values.length ? `<div class="quest-detail-label">${escapeHtml(label)}</div><ul>${values.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : (emptyText ? `<div class="quest-detail-label">${escapeHtml(label)}</div><p>${escapeHtml(emptyText)}</p>` : "");
-      const knowledge = q.knowledge.length ? `<div class="quest-detail-label">Current knowledge</div><ul>${q.knowledge.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : `<div class="quest-detail-label">Current knowledge</div><p>Nothing beyond the quest briefing is known yet.</p>`;
+      const knowledge = q.knowledge.length ? `<div class="quest-detail-label">Discovered clues</div><ul>${q.knowledge.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : `<div class="quest-detail-label">Discovered clues</div><p>Nothing beyond the quest briefing is known yet.</p>`;
       const objectives = q.objectives.length ? `<div class="quest-detail-label">Tracked objectives</div><div class="objective-list">${q.objectives.map((obj) => `<div class="objective-row ${escapeHtml(obj.status || "active")}"><span>${obj.status === "complete" ? "✓" : obj.status === "failed" ? "✕" : obj.status === "locked" ? "◇" : "○"}</span><div><b>${escapeHtml(obj.text || obj.name || "Objective")}</b><small>${escapeHtml(obj.status || "active")}${obj.optional ? " · optional" : ""} · ${escapeHtml(obj.progress || 0)}%</small></div></div>`).join("")}</div>` : (q.conditions.length ? `<div class="quest-detail-label">Clear conditions / objectives</div><ul>${q.conditions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : `<div class="quest-detail-label">Clear conditions</div><p>Not yet known. Discover more information or advance the quest.</p>`);
       const branches = [...textList(q.branchState.available), ...textList(q.branchState.locked).map((x) => `${x} (locked)` )];
       const branchInfo = q.branchState.current || branches.length ? `<div class="quest-detail-label">Current route</div><p>${escapeHtml(q.branchState.current || "main")}</p>${list("Known branches", branches)}` : "";
-      return `<details class="quest-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(q.name)} <small>— ${escapeHtml(q.status)}</small></summary><div class="quest-details"><p class="quest-summary">${escapeHtml(q.explanation)}</p><div class="quest-brief-grid">${line("Giver / cause", q.giver)}${line("First step", q.firstStep)}${line("Deadline", q.deadline)}</div>${list("Known locations", q.locations)}${list("Known risks", q.risks)}${knowledge}${objectives}${branchInfo}${list("Known rewards", q.rewards)}<div class="quest-note-row"><input type="text" placeholder="Add your own quest note" data-quest-note-input="${escapeHtml(q.name)}"><button type="button" data-quest-note-save="${escapeHtml(q.name)}">SAVE NOTE</button></div></div></details>`;
+      return `<details class="quest-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(q.name)} <small>— ${escapeHtml(q.status)} · ${escapeHtml(q.progress)}%</small></summary><div class="quest-details"><p class="quest-summary">${escapeHtml(q.explanation)}</p><div class="quest-progress"><i style="width:${Math.max(0, Math.min(100, q.progress))}%"></i></div><div class="quest-brief-grid">${line("Giver / cause", q.giver)}${line("Suggested next lead", q.firstStep)}${line("Deadline", q.deadline)}</div>${list("Known locations", q.locations)}${list("Current obstacles", q.risks)}${knowledge}${objectives}${list("Optional objectives", q.optionalObjectives)}${branchInfo}${list("Known rewards", q.rewards)}<div class="quest-note-row"><input type="text" placeholder="Add your own quest note" data-quest-note-input="${escapeHtml(q.name)}"><button type="button" data-quest-note-save="${escapeHtml(q.name)}">SAVE NOTE</button></div></div></details>`;
     }).join("") : `<div class="jrow">No active quests yet.</div>`) + `<div class="jrow hint">Hidden quests discovered: ${data.hidden_quests_count}</div><h3>Completed / failed quests</h3>${(data.quest_archive || []).length ? data.quest_archive.map((q, i) => { const v = questView(q, i); return `<div class="jrow"><b>${escapeHtml(v.name)}</b> — ${escapeHtml(v.status)}<br>${escapeHtml(v.explanation)}</div>`; }).join("") : '<div class="jrow hint">No archived quests yet.</div>'}`;
   } else if (tab === "skills") {
     const skills = Object.entries(data.skills || {});
     const titles = data.titles || [];
+    const classRow = renderClassCard(data.class_profile);
     const skillRows = skills.length
       ? skills.map(([name, detail]) => renderSkillCard(name, detail)).join("")
       : '<div class="jrow">No learned skills yet.</div>';
     const titleRows = titles.length
       ? titles.map((title) => `<div class="jrow">🏅 ${escapeHtml(titleLabel(title))}</div>`).join("")
       : '<div class="jrow hint">No titles earned yet.</div>';
-    panel.innerHTML = `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button><h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+    panel.innerHTML = `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button>${classRow ? `<h3>Class / Path</h3>${classRow}` : ""}<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
     $("#btn-open-power-summary").addEventListener("click", openPowerSummary);
   } else if (tab === "achievements") {
     const achievements = data.achievements || [];
@@ -2784,6 +2889,16 @@ async function openJournal(tab) {
     }));
   } else if (tab === "progression") {
     const logs = (data.progression_log || []).slice(-40).reverse();
+    const ledger = (data.progression_ledger || []).slice(-40).reverse();
+    const ledgerRows = ledger.map((entry) => {
+      const changes = (entry.changes || []).map((change) => {
+        if (change.before !== undefined && change.after !== undefined) return `<li><b>${escapeHtml(change.name)}</b> ${escapeHtml(change.before)} → ${escapeHtml(change.after)} (${Number(change.delta) >= 0 ? "+" : ""}${escapeHtml(change.delta)})</li>`;
+        return `<li><b>${escapeHtml(change.name)}</b> — ${escapeHtml(change.change || "changed")}</li>`;
+      }).join("");
+      const rolls = (entry.rolls || []).map((roll) => `<li>${escapeHtml(roll)}</li>`).join("");
+      const duration = Number(entry.elapsed_minutes || 0) > 0 ? ` · ${escapeHtml(entry.elapsed_minutes)} minutes` : "";
+      return `<details class="progress-entry ledger-entry"><summary><b>${escapeHtml(entry.cause || "Progress")}</b><span>Turn ${escapeHtml(entry.turn ?? "—")}${duration}</span></summary><div><ul>${changes}</ul>${rolls ? `<small>Relevant checks</small><ul>${rolls}</ul>` : ""}<p>${escapeHtml(entry.explanation || "Growth followed from the listed actions and outcomes.")}</p></div></details>`;
+    }).join("");
     const rows = logs.map((entry) => {
       if (entry && entry.type === "xp") {
         const reasons = (entry.reasons || []).map((reason) => `<li><b>+${escapeHtml(reason.xp || 0)} XP</b> — ${escapeHtml(reason.action || "Progress")}: ${escapeHtml(reason.reason || "Meaningful activity")}</li>`).join("");
@@ -2796,7 +2911,7 @@ async function openJournal(tab) {
     const summary = data.uses_xp
       ? `<div class="progress-summary"><b>LEVEL ${escapeHtml(data.level || 1)}</b><span>${escapeHtml(data.xp || 0)} / ${escapeHtml(data.xp_next || 100)} XP toward the next level</span></div><p class="hint">Meaningful actions earn contextual XP. Base stats increase automatically when XP produces a level.</p>`
       : `<div class="progress-summary"><b>WORLD-BASED GROWTH</b><span>No artificial XP or levels in this setting</span></div><p class="hint">Stats, techniques, knowledge, titles, ranks, and proficiency improve directly through world-valid experience.</p>`;
-    panel.innerHTML = summary + (rows || '<div class="jrow hint">No progression has been recorded yet.</div>');
+    panel.innerHTML = summary + `<h3>Why your character changed</h3>` + (ledgerRows || '<div class="jrow hint">No lasting growth changes have been recorded yet.</div>') + `<h3>Training and XP history</h3>` + (rows || '<div class="jrow hint">No progression has been recorded yet.</div>');
   } else if (tab === "chapters") {
     const chapters = [...(data.chapter_summaries || [])].reverse();
     const recent = data.chapter_buffer || [];
@@ -2810,9 +2925,25 @@ async function openJournal(tab) {
       // have them, same as the NPC relationship cards.
       const layers = (clock.mid_term_goal ? `<p><b>Building toward:</b> ${escapeHtml(clock.mid_term_goal)}</p>` : "") +
         (clock.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(clock.core_ambition)}</p>` : "");
-      return `<article class="clock-row"><header><b>${escapeHtml(clock.name || "Unknown")}</b><span class="clock-status ${escapeHtml(clock.status || "active")}">${escapeHtml((clock.status || "active").replace(/_/g, " "))}</span></header><p>${escapeHtml(clock.immediate_goal || clock.goal || "Private agenda")}</p>${layers}<div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(clock.progress || 0)))}%"></i></div><small>${escapeHtml(clock.progress || 0)} / ${escapeHtml(clock.threshold || 100)} · last moved ${escapeHtml(clock.last_update || "not yet")}</small>${clock.opponent ? `<small>⚔ Power ${escapeHtml(clock.power ?? 50)} vs ${escapeHtml(clock.opponent)}${clock.contested_location ? ` over ${escapeHtml(clock.contested_location)}` : ""}</small>` : ""}</article>`;
+      return `<article class="clock-row"><header><b>${escapeHtml(clock.name || "Unknown")}</b><span class="clock-status ${escapeHtml(clock.status || "active")}">${escapeHtml((clock.status || "active").replace(/_/g, " "))}</span></header><p>${escapeHtml(clock.immediate_goal || clock.goal || "Private agenda")}</p>${layers}<div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(clock.progress || 0)))}%"></i></div><small>${escapeHtml(clock.progress || 0)} / ${escapeHtml(clock.threshold || 100)} · last moved ${escapeHtml(clock.last_update || "not yet")}</small>${clock.last_cause ? `<small class="causal-reason">Because: ${escapeHtml(clock.last_cause)}</small>` : ""}${clock.blocked_reason ? `<small class="causal-blocked">Blocked: ${escapeHtml(clock.blocked_reason)}</small>` : ""}${clock.opponent ? `<small>⚔ Power ${escapeHtml(clock.power ?? 50)} vs ${escapeHtml(clock.opponent)}${clock.contested_location ? ` over ${escapeHtml(clock.contested_location)}` : ""}</small>` : ""}</article>`;
     }).join("") : '<div class="jrow hint">No visible clocks yet. Important NPCs and factions gain clocks as they enter the campaign.</div>');
     panel.innerHTML = renderClocks("Faction agendas", data.faction_clocks) + renderClocks("NPC agendas", data.npc_clocks);
+  } else if (tab === "causality") {
+    const recent = [...(data.causality?.recent || [])].reverse();
+    const actorRows = [...(data.causality?.factions || []), ...(data.causality?.npcs || [])];
+    const sim = data.simulation || {}, profile = sim.profile || { label: "Balanced", description: "Focused world detail" };
+    const intentions = Object.entries(sim.intentions || {}), simEvents = [...(sim.recent_events || [])].reverse().slice(0, 20);
+    panel.innerHTML = `<div class="system-summary"><b>${escapeHtml(profile.label)} WORLD CAUSALITY</b><span>${escapeHtml(profile.description)} Nearby actors receive full detail; distant actors use compact intentions and clocks.</span></div>` +
+      `<h3>Persistent NPC intentions</h3>` + (intentions.length ? intentions.map(([name,row]) => `<article class="causality-card${row.status === "turning_point" ? " blocked" : ""}"><header><b>${escapeHtml(name)}</b><span>${escapeHtml(row.detail || "coarse")} · ${escapeHtml(row.progress || 0)}%</span></header><p>${escapeHtml(row.goal || "Private objective")}</p><small>Next: ${escapeHtml(row.next_action || row.plan || "Continue the plan")}</small><small>Location: ${escapeHtml(row.location || "Unknown")} · ${escapeHtml(row.status || "active")}</small></article>`).join("") : '<div class="jrow hint">Intentions appear after recurring characters establish goals.</div>') +
+      `<h3>Current causal actors</h3>` + (actorRows.length ? actorRows.map((row) => `<article class="causality-card${row.blocked_reason ? " blocked" : ""}"><header><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.status)}</span></header><p>${escapeHtml(row.goal || "No concrete goal recorded.")}</p>${row.target_location ? `<small>Target: ${escapeHtml(row.target_location)}</small>` : ""}${row.last_cause ? `<small>Last cause: ${escapeHtml(row.last_cause)}</small>` : ""}${row.blocked_reason ? `<small class="causal-blocked">Blocked: ${escapeHtml(row.blocked_reason)}</small>` : ""}${Object.keys(row.resources || {}).length ? `<small>Resources: ${Object.entries(row.resources).map(([k,v]) => `${escapeHtml(k)} ${escapeHtml(v)}`).join(" · ")}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No causal actors are active yet.</div>') +
+      `<h3>Consolidated event record</h3>` + (simEvents.length ? simEvents.map((row) => `<details class="causality-entry"><summary><b>${escapeHtml(row.summary || "World development")}</b><span>${escapeHtml(row.importance || 0)}/100</span></summary><small>Turn ${escapeHtml(row.turn ?? "?")} · Day ${escapeHtml(row.canon_day ?? "?")} · ${escapeHtml((row.sources || []).join(", "))}</small></details>`).join("") : '<div class="jrow hint">No consolidated events recorded yet.</div>') +
+      `<h3>Why the world moved</h3>` + (recent.length ? recent.map((row) => `<details class="causality-entry"><summary><b>${escapeHtml(row.actor)}</b><span>${Number(row.progress_delta) > 0 ? `+${escapeHtml(row.progress_delta)} progress` : "no progress"}</span></summary><p>${escapeHtml(row.goal || "Agenda")}</p>${row.reason ? `<small>Cause: ${escapeHtml(row.reason)}</small>` : ""}${row.blocked_reason ? `<small class="causal-blocked">Blocked: ${escapeHtml(row.blocked_reason)}</small>` : ""}</details>`).join("") : '<div class="jrow hint">No causal progress has been recorded yet.</div>');
+  } else if (tab === "knowledge") {
+    const people = data.npc_knowledge?.people || [];
+    const buckets = [["confirmed","Confirmed"],["heard","Heard from others"],["suspected","Suspected"],["false_beliefs","False beliefs"]];
+    panel.innerHTML = `<div class="system-summary"><b>NPC KNOWLEDGE BOUNDARIES</b><span>The narrator knows the campaign; characters act only on what they witnessed, heard, inferred, researched, or falsely believe.</span></div>` +
+      (people.length ? people.map((person) => `<details class="knowledge-card"><summary><b>${escapeHtml(person.name)}</b><span>${escapeHtml(person.last_known_location || "Unknown")}</span></summary><div>${buckets.map(([key,label]) => { const rows = person.knowledge?.[key] || []; return `<section><b>${label}</b>${rows.length ? `<ul>${rows.map((row) => `<li>${escapeHtml(row.fact || row)}${row.source ? `<small>Source: ${escapeHtml(row.source)}${row.confidence !== undefined ? ` · ${escapeHtml(row.confidence)}%` : ""}</small>` : ""}</li>`).join("")}</ul>` : '<p class="hint">None recorded.</p>'}</section>`; }).join("")}</div></details>`).join("") : '<div class="jrow hint">No NPC has a structured knowledge record yet.</div>') +
+      ((data.npc_knowledge?.recent_audit || []).length ? `<h3>Prevented omniscience</h3>${data.npc_knowledge.recent_audit.slice().reverse().map((row) => `<div class="jrow"><b>${escapeHtml(row.npc)}</b><br>${escapeHtml(row.fact)}<br><small>${escapeHtml(row.reason)}</small></div>`).join("")}` : "");
   } else if (tab === "relationships") {
     const people = data.relationships_view?.people || [];
     const factions = data.relationships_view?.factions || [];
@@ -2852,12 +2983,15 @@ async function openJournal(tab) {
   } else if (tab === "timeline") {
     const currentDay = Number(data.canon_day ?? -7);
     const fired = new Set(data.canon_events_fired || []);
-    const rows = (data.canon_events || []).map((event) => {
+    const rows = (data.canon_dependencies?.events || data.canon_event_tracker || data.canon_events || []).map((event) => {
       const id = `day:${event.day || 0}:${event.title || "event"}`;
       const occurred = fired.has(id) || Number(event.day) < currentDay;
       const current = Number(event.day) === currentDay;
       const world = data.world || "Custom World";
-      return `<div class="timeline-row ${occurred ? "occurred" : "upcoming"} ${current ? "current" : ""}"><div class="timeline-day">${escapeHtml(formatCalendarDate(world, event.day, data.calendar_epoch, data.calendar_anchor_day))}</div><div><b>${escapeHtml(event.title || "World event")}</b><small>${escapeHtml(event.location || "")}</small><p>${escapeHtml(event.summary || "")}</p></div></div>`;
+      const status = event.status || (occurred ? "occurred" : "likely");
+      const effectiveDay = event.effective_day ?? event.day;
+      const confidence = event.confidence || {};
+      return `<div class="timeline-row ${escapeHtml(status)} ${current ? "current" : ""}"><div class="timeline-day">${escapeHtml(formatCalendarDate(world, effectiveDay, data.calendar_epoch, data.calendar_anchor_day))}</div><div><header><b>${escapeHtml(event.title || "World event")}</b><span class="canon-status ${escapeHtml(status)}">${escapeHtml(status)}</span></header><small>${escapeHtml(event.location || "")}${confidence.label ? ` · ${escapeHtml(confidence.label)}` : ""}</small><p>${escapeHtml(event.summary || "")}</p>${(event.requires || []).length ? `<p class="timeline-dependencies"><b>Depends on:</b> ${event.requires.map(escapeHtml).join(" → ")}</p>` : ""}${event.reason && !["likely","upcoming","occurred"].includes(status) ? `<p class="timeline-reason"><b>Why changed:</b> ${escapeHtml(event.reason)}</p>` : ""}${event.replacement ? `<p class="timeline-replacement"><b>What may happen instead:</b> ${escapeHtml(event.replacement)}</p>` : ""}${confidence.note ? `<p class="timeline-confidence">${escapeHtml(confidence.note)}</p>` : ""}</div></div>`;
     }).join("");
     panel.innerHTML = `<div class="timeline-anchor"><b>Current: ${escapeHtml(formatCalendarDate(data.world || "Custom World", currentDay, data.calendar_epoch, data.calendar_anchor_day))}</b><span>${escapeHtml(data.canon_anchor || "Before the main story")}</span></div>${rows || '<div class="jrow">No fixed canon timeline for this world.</div>'}<div class="jrow hint">Canon events are scheduled pressures, not rails. Player-caused divergences can alter or prevent their original form.</div>`;
   } else if (tab === "schedule") {
@@ -2869,6 +3003,19 @@ async function openJournal(tab) {
     const facts = ledger.facts || [];
     const section = (title, values) => `<h3>${title}</h3>${(values || []).length ? values.slice(-30).reverse().map((x) => `<div class="jrow">${escapeHtml(typeof x === "object" ? x.text || x.description || JSON.stringify(x) : x)}</div>`).join("") : '<div class="jrow hint">Nothing recorded.</div>'}`;
     panel.innerHTML = section("Campaign canon", canon) + section("Location changes", facts.filter((x) => x.type === "location")) + section("Appearance changes", facts.filter((x) => x.type === "appearance")) + section("Quest changes", facts.filter((x) => x.type === "quest")) + section("Warnings", ledger.warnings);
+  } else if (tab === "memory") {
+    const memory = data.narrative_memory || {};
+    const memorySection = (title, key, empty) => {
+      const rows = (memory[key] || []).slice().reverse();
+      return `<section class="memory-section"><h3>${escapeHtml(title)}</h3>${rows.length ? rows.map((row) => `<article class="memory-row"><p>${escapeHtml(typeof row === "object" ? row.text : row)}</p><small>${escapeHtml(typeof row === "object" ? row.source || "Campaign" : "Campaign")}${row?.canon_day != null ? ` · Canon Day ${escapeHtml(row.canon_day)}` : ""}${row?.status ? ` · ${escapeHtml(row.status)}` : ""}</small></article>`).join("") : `<div class="jrow hint">${escapeHtml(empty)}</div>`}</section>`;
+    };
+    panel.innerHTML = `<div class="system-summary"><b>LONG-TERM NARRATIVE MEMORY</b><span>Campaign facts are separated by purpose so later turns can preserve them without rereading the entire Chronicle.</span></div>` +
+      memorySection("Established facts", "established_facts", "No lasting facts recorded yet.") +
+      memorySection("Player goals", "player_goals", "No long-term goal recorded yet.") +
+      memorySection("Unresolved mysteries", "unresolved_mysteries", "No unresolved mystery recorded yet.") +
+      memorySection("Promises", "promises", "No promises recorded yet.") +
+      memorySection("Relationships", "relationships", "No recurring relationship recorded yet.") +
+      memorySection("Consequences", "consequences", "No lasting consequence recorded yet.");
   } else if (tab === "world-feed") {
     // Split into what the player actually experienced vs. the world moving
     // on its own (NPC/faction clocks, canon beats delivered as background
@@ -2954,11 +3101,15 @@ async function openJournal(tab) {
       canvas.appendChild(dot);
     });
     APP.mapNodes = nodes;
+    APP.travelGraph = data.travel_graph || { edges: {} };
     initMapPanZoom();
   } else if (tab === "lore") {
     const sources = data.lore_sources || [];
-    panel.innerHTML = `<div class="system-summary"><b>OFFLINE LORE LIBRARY</b><span>The GM retrieves relevant entries on each action. Canon and world rules outrank uncertain notes.</span></div><form id="lore-import-form" class="lore-import"><label>Add a lore pack<input id="lore-file" type="file" accept=".json,.md,.txt" required></label><select id="lore-world"><option>${escapeHtml(data.world || "Custom World")}</option><option>Custom World</option></select><button class="btn-primary" type="submit">IMPORT</button></form>` +
-      (sources.length ? sources.map((source) => `<div class="jrow"><b>${escapeHtml(source.name)}</b><br>${escapeHtml(source.kind)} · ${escapeHtml(source.entries || 0)} entries${source.worlds?.length ? ` · ${source.worlds.map(escapeHtml).join(", ")}` : ""}</div>`).join("") : '<div class="jrow">Only built-in setting guidance is available.</div>') + `<p class="hint">JSON format: world names mapped to arrays of {title, keys, text, source}. Markdown and text files are imported into the selected world.</p>`;
+    const conflicts = data.lore_status?.conflicts || [];
+    panel.innerHTML = `<div class="system-summary"><b>AUTHORITY-RANKED LORE LIBRARY</b><span>Official sources outrank references, wikis, forums, and fan analysis. Conflicting claims remain visible instead of being silently blended.</span></div><form id="lore-import-form" class="lore-import"><label>Add a lore pack<input id="lore-file" type="file" accept=".json,.md,.txt" required></label><select id="lore-world"><option>${escapeHtml(data.world || "Custom World")}</option><option>Custom World</option></select><button class="btn-primary" type="submit">IMPORT</button></form>` +
+      (sources.length ? sources.map((source) => `<div class="jrow"><b>${escapeHtml(source.name)}</b><br>${escapeHtml(source.kind)} · authority ${escapeHtml(source.authority || 0)}/100 · ${escapeHtml(source.entries || 0)} entries${source.source_types?.length ? ` · ${source.source_types.map(escapeHtml).join(", ")}` : source.source_type ? ` · ${escapeHtml(source.source_type)}` : ""}${source.worlds?.length ? ` · ${source.worlds.map(escapeHtml).join(", ")}` : ""}</div>`).join("") : '<div class="jrow">Only built-in setting guidance is available.</div>') +
+      `<h3>Source conflicts</h3>` + (conflicts.length ? conflicts.map((row) => `<details class="lore-conflict"><summary><b>${escapeHtml(row.claim)}</b><span>Resolved at ${escapeHtml(row.authority)}/100</span></summary><p>${escapeHtml(row.resolution)}</p><small>Preferred source: ${escapeHtml(row.source)} (${escapeHtml(row.source_type)})</small><ul>${(row.alternatives || []).map((alt) => `<li>Disputed: ${escapeHtml(alt.value)} — ${escapeHtml(alt.source)} (${escapeHtml(alt.authority)}/100)</li>`).join("")}</ul></details>`).join("") : '<div class="jrow hint">No explicit claim conflicts detected for this world.</div>') +
+      `<p class="hint">JSON entries may include title, keys, text, source, source_type, citation, and claims. Source types: official_source, official_reference, licensed_reference, curated, wiki, forum, fan_analysis, imported, or custom.</p>`;
   } else if (tab === "tuning") {
     const t = data.difficulty_controls || {};
     const preset = data.progression_preset || {};
@@ -2966,8 +3117,12 @@ async function openJournal(tab) {
     panel.innerHTML = `<div class="system-summary"><b>${escapeHtml(preset.label || "WORLD PROGRESSION")}</b><span>Separate controls change pacing and danger without rewriting lore.</span></div><form id="tuning-form" class="tuning-form">${slider("check_warning_threshold", "Difficult-check warning threshold", 40, 95, 1, t.check_warning_threshold || 65, "/100")}${slider("xp_rate", "XP rate", .5, 2, .05, t.xp_rate || 1)}${slider("training_rate", "Training rate", .5, 2, .05, t.training_rate || 1)}${slider("breakthrough_rate", "Breakthrough frequency", .5, 2, .05, t.breakthrough_rate || 1)}${slider("combat_danger", "Combat danger", .5, 2, .05, t.combat_danger || 1)}${slider("resource_pressure", "Resource pressure", .5, 2, .05, t.resource_pressure || 1)}<label class="tuning-notes-row"><span><b>Director's Notes</b><small>A standing note to the GM — tone, pacing, what to lean into or away from.</small></span><textarea id="director_notes" maxlength="500" placeholder="e.g. more politics and less combat; slow down on romance subplots">${escapeHtml(data.director_notes || "")}</textarea></label><button class="btn-primary" type="submit">SAVE TUNING</button></form>`;
   } else if (tab === "health") {
     const health = data.campaign_health || { score: 100, status: "Healthy", issues: [], counts: {} };
-    panel.innerHTML = `<div class="health-score ${health.score < 60 ? "bad" : health.score < 85 ? "warn" : "good"}"><strong>${escapeHtml(health.score)}</strong><div><b>${escapeHtml(health.status)}</b><span>Campaign structure and continuity check</span></div></div><div class="health-counts">${Object.entries(health.counts || {}).map(([key, value]) => `<span><b>${escapeHtml(value)}</b>${escapeHtml(humanLabel(key))}</span>`).join("")}</div>` +
-      ((health.issues || []).length ? health.issues.map((issue) => `<article class="health-issue ${escapeHtml(issue.severity)}"><header><b>${escapeHtml(issue.area)}</b><span>${escapeHtml(issue.severity)}</span></header><p>${escapeHtml(issue.message)}</p><small>${escapeHtml(issue.suggestion)}</small></article>`).join("") : '<div class="jrow"><b>No structural problems detected.</b><br>The campaign has objectives, continuity, and enough persistent state to continue cleanly.</div>');
+    panel.innerHTML = `<div class="health-score ${health.score < 60 ? "bad" : health.score < 85 ? "warn" : "good"}"><strong>${escapeHtml(health.score)}</strong><div><b>${escapeHtml(health.status)}</b><span>Campaign structure, knowledge, causality, and continuity check</span></div></div><div class="health-actions"><button type="button" class="btn-primary" data-health-repair="safe_all">APPLY ALL SAFE REPAIRS</button><button type="button" class="btn-ghost" data-support-bundle>DOWNLOAD SUPPORT ZIP</button></div><div class="health-counts">${Object.entries(health.counts || {}).map(([key, value]) => `<span><b>${escapeHtml(value)}</b>${escapeHtml(humanLabel(key))}</span>`).join("")}</div>` +
+      ((health.issues || []).length ? health.issues.map((issue) => `<article class="health-issue ${escapeHtml(issue.severity)}"><header><b>${escapeHtml(issue.area)}</b><span>${escapeHtml(issue.severity)}</span></header><p>${escapeHtml(issue.message)}</p><small>${escapeHtml(issue.suggestion)}</small>${issue.repairable ? `<button type="button" class="health-repair-btn" data-health-repair="${escapeHtml(issue.repair_id)}">REPAIR THIS</button>` : ""}</article>`).join("") : '<div class="jrow"><b>No structural problems detected.</b><br>The campaign has objectives, continuity, causal world state, and enough persistent memory to continue cleanly.</div>');
+  } else if (tab === "evaluations") {
+    const scenarios = data.evaluations?.scenarios || [];
+    const history = data.evaluations?.history || [];
+    panel.innerHTML = `<div class="system-summary"><b>LIVE NARRATOR EVALUATIONS</b><span>These isolated scenarios call the currently configured model but never change the campaign. Each selected scenario uses one AI call and may incur its normal model cost.</span></div><div class="evaluation-actions"><button type="button" class="btn-primary" data-eval-run="all">RUN ALL ${scenarios.length}</button></div><div class="evaluation-grid">${scenarios.map((row) => `<article class="evaluation-card"><header><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.world)}</span></header><p>${escapeHtml(row.action)}</p><button type="button" class="btn-ghost" data-eval-run="${escapeHtml(row.id)}">RUN THIS SCENARIO</button></article>`).join("")}</div><h3>Recent reports</h3><div id="evaluation-result">${history.length ? history.map((row) => `<div class="jrow"><b>${escapeHtml(row.score)}/100 · ${escapeHtml(row.model || "Unknown model")}</b><br>${escapeHtml(row.scenario_count)} scenario(s) · ${escapeHtml(row.created_at || "")}</div>`).join("") : '<div class="jrow hint">No live model evaluation has been run yet.</div>'}</div>`;
   } else if (tab === "combat") {
     const c = data.combat || {};
     if (!c || !c.active) {
@@ -3103,7 +3258,26 @@ $("#journal-panel").addEventListener("input", (event) => {
 });
 
 $("#journal-panel").addEventListener("submit", async (event) => {
-  if (event.target.id === "tuning-form") {
+  if (event.target.id === "campaign-search-form") {
+    event.preventDefault();
+    const query = $("#campaign-search-query").value.trim();
+    if (query.length < 2) return;
+    const target = $("#campaign-search-results");
+    target.innerHTML = '<div class="jrow hint">Searching this campaign…</div>';
+    try {
+      const result = await apiGet(`/api/campaign/search?q=${encodeURIComponent(query)}`);
+      target.innerHTML = result.results?.length ? result.results.map((row) => `<article class="search-result"><header><b>${escapeHtml(row.title || humanLabel(row.kind))}</b><span>${escapeHtml(humanLabel(row.kind))}${row.turn != null ? ` · Turn ${escapeHtml(row.turn)}` : ""}</span></header><p>${escapeHtml(row.text || "")}</p></article>`).join("") : `<div class="jrow">No campaign record matched “${escapeHtml(query)}”.</div>`;
+    } catch (error) { target.innerHTML = `<div class="jrow">${escapeHtml(error.message)}</div>`; }
+  } else if (event.target.id === "gm-correction-form") {
+    event.preventDefault();
+    const payload = { type: $("#correction-type").value, target: $("#correction-target").value.trim(), value: $("#correction-value").value.trim(), explanation: $("#correction-explanation").value.trim() };
+    try {
+      const result = await apiPost("/api/campaign/correct", payload);
+      renderState(result.state); appendStoryEntries(result.story || []);
+      showToast("Correction saved as an authoritative campaign fact.", "notify");
+      await openJournal("corrections");
+    } catch (error) { showToast(error.message, "danger"); }
+  } else if (event.target.id === "tuning-form") {
     event.preventDefault();
     const keys = ["check_warning_threshold", "xp_rate", "training_rate", "breakthrough_rate", "combat_danger", "resource_pressure"];
     const payload = Object.fromEntries(keys.map((key) => [key, Number(document.getElementById(key).value)]));
@@ -3121,6 +3295,37 @@ $("#journal-panel").addEventListener("submit", async (event) => {
 });
 
 $("#journal-panel").addEventListener("click", async (event) => {
+  const repairButton = event.target.closest("[data-health-repair]");
+  if (repairButton) {
+    repairButton.disabled = true;
+    try {
+      const result = await apiPost("/api/campaign/health/repair", { repair_id: repairButton.getAttribute("data-health-repair") });
+      renderState(result.state);
+      showToast((result.repair?.applied || []).length ? result.repair.applied.join(" ") : "No safe repair was needed.", "notify");
+      await openJournal("health");
+    } catch (error) { showToast(error.message, "danger"); repairButton.disabled = false; }
+    return;
+  }
+  if (event.target.closest("[data-support-bundle]")) {
+    downloadEndpoint("/api/diagnostics/bundle");
+    return;
+  }
+  const evalButton = event.target.closest("[data-eval-run]");
+  if (evalButton) {
+    const key = evalButton.getAttribute("data-eval-run");
+    evalButton.disabled = true;
+    evalButton.textContent = "RUNNING — THE CAMPAIGN WILL NOT CHANGE";
+    try {
+      const index = await apiGet("/api/evaluations");
+      const scenarioIds = key === "all" ? (index.scenarios || []).map((row) => row.id) : [key];
+      const report = await apiPost("/api/evaluations/run", { scenario_ids: scenarioIds });
+      const target = $("#evaluation-result");
+      if (target) target.innerHTML = `<div class="evaluation-score"><strong>${escapeHtml(report.score)}/100</strong><div><b>${escapeHtml(report.model || "Configured model")}</b><span>${escapeHtml(report.results?.length || 0)} isolated scenario(s) · ${escapeHtml(report.usage?.calls || 0)} AI call(s)</span></div></div>` + (report.results || []).map((row) => `<details class="evaluation-result"><summary><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.score)}/100</span></summary>${(row.criteria || []).map((item) => `<div><b>${escapeHtml(item.name)} — ${escapeHtml(item.score)}/${escapeHtml(item.max)}</b><p>${escapeHtml(item.detail)}</p></div>`).join("")}${row.error ? `<p class="causal-blocked">${escapeHtml(row.error)}</p>` : ""}</details>`).join("");
+      showToast(`Model evaluation finished at ${report.score}/100. The campaign was not changed.`, "notify");
+    } catch (error) { showToast(error.message, "danger"); }
+    finally { evalButton.disabled = false; evalButton.textContent = key === "all" ? "RUN ALL" : "RUN THIS SCENARIO"; }
+    return;
+  }
   const noteButton = event.target.closest("[data-quest-note-save]");
   if (noteButton) {
     const name = noteButton.getAttribute("data-quest-note-save");
@@ -3155,7 +3360,13 @@ $("#journal-panel").addEventListener("click", async (event) => {
     if (!node) return;
     const detail = $("#map-detail");
     const people = node.notable_individuals || [];
-    detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")} · tier ${escapeHtml(node.tier || 1)}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes)}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller)}</dd>${node.danger_level ? `<dt>Danger</dt><dd class="danger-label danger-${escapeHtml(node.danger_level.toLowerCase())}">${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Notable individuals</dt><dd>${people.length ? people.map(escapeHtml).join(", ") : "None recorded yet"}</dd><dt>Quest links</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "None known"}</dd></dl>`;
+    const links = APP.travelGraph?.edges?.[node.name] || [];
+    detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")} · tier ${escapeHtml(node.tier || 1)}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes)}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller)}</dd>${node.danger_level ? `<dt>Danger</dt><dd class="danger-label danger-${escapeHtml(node.danger_level.toLowerCase())}">${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Notable individuals</dt><dd>${people.length ? people.map(escapeHtml).join(", ") : "None recorded yet"}</dd><dt>Quest links</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "None known"}</dd><dt>Direct routes</dt><dd>${links.length ? links.map((x) => `${escapeHtml(x.to)} (${escapeHtml(formatDuration(x.minutes))})`).join("<br>") : "No direct route recorded"}</dd></dl><div id="map-route-preview" class="map-route-preview">Calculating route from your current location…</div>`;
+    try {
+      const route = await apiGet(`/api/travel/route?destination=${encodeURIComponent(node.name)}`);
+      const preview = $("#map-route-preview");
+      if (preview) preview.innerHTML = route.reachable ? `<b>Route from ${escapeHtml(route.origin)}</b><p>${(route.route || []).map(escapeHtml).join(" → ")}</p><small>Ordinary travel: about ${escapeHtml(formatDuration(route.minutes))}${(route.requirements || []).length ? ` · Needs: ${route.requirements.map(escapeHtml).join("; ")}` : ""}</small>` : `<b>No established route</b><p>${escapeHtml(route.reason || "This destination is not connected yet.")}</p>`;
+    } catch (error) { /* The static landmark details remain useful offline. */ }
     return;
   }
 });
@@ -3323,23 +3534,47 @@ $("#nc-starting-era").addEventListener("change", () => {
   $("#nc-era-note").textContent = era ? era.anchor || "" : "";
 });
 
+function renderCampaignPreview(p, payload) {
+    const profile = p.starting_profile || {};
+    APP.pendingPreview = p;
+    APP.pendingCampaign = { ...payload, preview_stats: p.abilities, preview_profile: profile };
+    const concealedSignature = profile.hidden_class?.discovery?.concealed && Number(profile.hidden_class.discovery.progress || 0) < 50 ? profile.hidden_class.signature_skill : "";
+    const loadout = [...(profile.titles || []).map((x) => `Title: ${x}`), ...Object.keys(profile.skills || {}).filter((x) => x !== concealedSignature).map((x) => `Skill: ${x}`), ...Object.values(profile.equipment || {}).map((x) => `Gear: ${x}`)];
+    const startingAbility = profile.generated_ability || null;
+    const ability = startingAbility && startingAbility.details ? startingAbility.details : {};
+    const growth = profile.growth_profile || {};
+    const abilityCard = startingAbility ? `<section class="generated-ability"><b>STARTING ABILITY — ${escapeHtml(startingAbility.name)}</b><span>${escapeHtml(ability.effect || ability.description || "")}</span><span><strong>In-world origin:</strong> ${escapeHtml(ability.origin || "A rare talent that has begun to surface.")}</span><span><strong>Limit:</strong> ${escapeHtml(ability.limitation || "Must be developed through play.")}</span><span><strong>Growth:</strong> ${escapeHtml(ability.growth_path || "Practice and suitable guidance.")}</span></section>` : "";
+    const classCard = profile.hidden_class ? renderClassCard(profile.hidden_class) : "";
+    const primer = p.world_primer || {};
+    const primerCard = `<section class="world-primer"><div class="world-primer-kicker">WHAT YOU'RE GETTING INTO — NO SPOILERS</div><p class="world-primer-premise">${escapeHtml(primer.premise || "")}</p><div class="world-primer-row"><b>Tone</b><span>${escapeHtml(primer.tone || "")}</span></div><div class="world-primer-row"><b>How power works</b><span>${escapeHtml(primer.power_system || "")}</span></div>${(primer.factions || []).length ? `<div class="world-primer-row"><b>Major powers</b><ul>${primer.factions.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}${(primer.locations || []).length ? `<div class="world-primer-row"><b>Where the story ranges</b><ul>${primer.locations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul></div>` : ""}<p class="world-primer-starting-note">${escapeHtml(primer.starting_note || "")}</p></section>`;
+    const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div><button type="button" data-preview-reroll="class">Hidden class</button><button type="button" data-preview-reroll="ability">Starting ability</button><button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
+    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Open-ended starting abilities</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section><div class="growth-summary"><b>${escapeHtml(growth.aptitude || "Typical local potential")}</b><span>${escapeHtml(Number(growth.learning_rate || 1).toFixed(2))}× sustained-learning rate</span><small>${escapeHtml(growth.explanation || "Actual growth still depends on time, training conditions, and results.")}</small></div>${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : "This original character begins shortly before the world's main story."}</p>`;
+    openModal("modal-campaign-preview");
+}
+
 $("#btn-begin-campaign").addEventListener("click", async () => {
   const payload = collectCampaignPayload();
   try {
     const result = await apiPost("/api/campaign/preview", payload);
-    const p = result.preview;
-    const profile = p.starting_profile || {};
-    APP.pendingCampaign = { ...payload, preview_stats: p.abilities, preview_profile: profile };
-    const loadout = [...(profile.titles || []).map((x) => `Title: ${x}`), ...Object.keys(profile.skills || {}).map((x) => `Skill: ${x}`), ...Object.values(profile.equipment || {}).map((x) => `Gear: ${x}`)];
-    const generated = profile.generated_ability || null;
-    const ability = generated && generated.details ? generated.details : {};
-    const growth = profile.growth_profile || {};
-    const generatedCard = generated ? `<section class="generated-ability"><b>GENERATED ABILITY — ${escapeHtml(generated.name)}</b><span>${escapeHtml(ability.effect || ability.description || "")}</span><span><strong>Origin:</strong> ${escapeHtml(ability.origin || "World-valid background talent.")}</span><span><strong>Limit:</strong> ${escapeHtml(ability.limitation || "Must be developed through play.")}</span><span><strong>Growth:</strong> ${escapeHtml(ability.growth_path || "Practice and suitable guidance.")}</span></section>` : "";
-    const primer = p.world_primer || {};
-    const primerCard = `<section class="world-primer"><div class="world-primer-kicker">WHAT YOU'RE GETTING INTO — NO SPOILERS</div><p class="world-primer-premise">${escapeHtml(primer.premise || "")}</p><div class="world-primer-row"><b>Tone</b><span>${escapeHtml(primer.tone || "")}</span></div><div class="world-primer-row"><b>How power works</b><span>${escapeHtml(primer.power_system || "")}</span></div>${(primer.factions || []).length ? `<div class="world-primer-row"><b>Major powers</b><ul>${primer.factions.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}${(primer.locations || []).length ? `<div class="world-primer-row"><b>Where the story ranges</b><ul>${primer.locations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul></div>` : ""}<p class="world-primer-starting-note">${escapeHtml(primer.starting_note || "")}</p></section>`;
-    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Open-ended starting abilities</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Generated background loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${generatedCard}<section class="generated-backstory"><b>GENERATED BACKSTORY</b><p>${escapeHtml(p.background || "The GM will create a fitting background during the opening.")}</p></section><div class="growth-summary"><b>${escapeHtml(growth.aptitude || "Typical local potential")}</b><span>${escapeHtml(Number(growth.learning_rate || 1).toFixed(2))}× sustained-learning rate</span><small>${escapeHtml(growth.explanation || "Actual growth still depends on time, training conditions, and results.")}</small></div><p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : "This original character begins shortly before the world's main story."}</p>`;
-    openModal("modal-campaign-preview");
+    renderCampaignPreview(result.preview, payload);
   } catch (e) { showToast(e.message, "danger"); }
+});
+
+$("#campaign-preview").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-preview-reroll]");
+  if (!button || !APP.pendingPreview || !APP.pendingCampaign) return;
+  button.disabled = true;
+  const kind = button.getAttribute("data-preview-reroll");
+  try {
+    const result = await apiPost("/api/campaign/preview/reroll", {
+      preview: APP.pendingPreview, kind, background: APP.pendingCampaign.background || "",
+    });
+    renderCampaignPreview(result.preview, APP.pendingCampaign);
+    showToast(`${humanLabel(kind)} rerolled.`, "notify");
+  } catch (error) {
+    showToast(error.message, "danger");
+    button.disabled = false;
+  }
 });
 
 $("#btn-preview-back").addEventListener("click", () => closeModal("modal-campaign-preview"));
@@ -3426,6 +3661,7 @@ async function openSettingsModal() {
   $("#st-bg-model").value = s.secondary_model || "";
   $("#st-api-key").value = "";
   $("#st-narration").value = s.narration || "Concise";
+  $("#st-simulation-mode").value = s.simulation_mode || "balanced";
   $("#st-autosave").checked = !!s.autosave;
   $("#st-sound").checked = !!s.sound_enabled;
   $("#st-music").checked = s.music_enabled !== false;
@@ -3462,6 +3698,7 @@ $("#btn-save-settings").addEventListener("click", async () => {
     model: $("#st-main-model").value,
     secondary_model: $("#st-bg-model").value || $("#st-main-model").value,
     narration: $("#st-narration").value,
+    simulation_mode: $("#st-simulation-mode").value,
     autosave: $("#st-autosave").checked,
     sound_enabled: $("#st-sound").checked,
     music_enabled: $("#st-music").checked,
@@ -3482,7 +3719,7 @@ $("#btn-save-settings").addEventListener("click", async () => {
   if (!APP.musicEnabled) musicPlayer().pause();
   APP.animationsEnabled = patch.animations_enabled;
   closeModal("modal-settings");
-  showToast(`AI mode set to: ${provider === "cloud" ? "OpenAI Cloud" : "Local LM Studio"}`, "system");
+  showToast(`AI mode: ${provider === "cloud" ? "OpenAI Cloud" : "Local LM Studio"} · ${patch.simulation_mode} simulation`, "system");
   await refreshHeaderAiStatus();
   const refreshed = await apiGet("/api/state");
   APP.campaignActive = refreshed.campaign_active;
@@ -3611,6 +3848,7 @@ async function runMenuAction(action) {
 }
 
 $("#btn-diagnostics-export").addEventListener("click", () => downloadEndpoint("/api/diagnostics/export"));
+$("#btn-diagnostics-bundle").addEventListener("click", () => downloadEndpoint("/api/diagnostics/bundle"));
 
 // Explicit listeners are more reliable than delegated clicks inside a native
 // WebView. Menus also toggle on click, so they do not depend on hover support.
