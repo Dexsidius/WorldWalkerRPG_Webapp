@@ -15,10 +15,17 @@ HOW TO START
    Public-network access.
 4. The PC window displays an address similar to:
 
-       http://192.168.1.25:54321/
+       https://192.168.1.25:54321/
 
 5. Type that complete address into Safari or Chrome on your phone, including
-   http:// and the port number after the colon.
+   https:// and the port number after the colon.
+6. The FIRST time you connect, your phone's browser will show a "connection
+   isn't private" or "not trusted" warning. This is expected — Phone Mode
+   secures itself with a certificate it generates locally rather than one
+   from a public certificate authority (there's no real domain name to get
+   one for). Tap "Advanced" / "Show Details", then "Proceed" / "visit this
+   website" to continue. You only need to do this once per phone; it's
+   remembered after that.
 
 The phone is a controller and display for the game running on the PC. Saves,
 AI settings, music, and generated art remain on the PC. Closing the host
