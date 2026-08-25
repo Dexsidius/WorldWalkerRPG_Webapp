@@ -172,18 +172,19 @@ class WorldwalkerV251Tests(unittest.TestCase):
         self.assertNotIn('id="modal-advance-preview"', html)
         self.assertNotIn('openModal("modal-advance-preview")', script)
 
-    def test_chronicle_scroll_and_intervention_are_inline(self):
+    def test_chronicle_scroll_and_major_event_notice_is_informational(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         script = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn('id="intervention-bar" class="inline-intervention" hidden', html)
-        self.assertIn('id="btn-canon-intervene"', html)
-        self.assertIn('YES — STOP HERE', html)
-        self.assertIn('NO — KEEP SIMULATING', html)
-        self.assertNotIn('id="modal-canon-intervention"', html)
+        self.assertNotIn('id="intervention-bar"', html)
+        self.assertNotIn('id="btn-canon-intervene"', html)
+        self.assertNotIn('NO — KEEP SIMULATING', html)
+        self.assertIn('id="modal-event-window"', html)
+        self.assertIn('CLOSE — CONTINUE IN CHRONICLE', html)
+        self.assertIn('function openEventNotice(result)', script)
+        self.assertNotIn('/api/event/respond', script)
         self.assertIn('overflow-y:scroll', css)
         self.assertIn('.modal-xl>.modal-body{ min-height:0; overflow-y:auto; }', css)
-        self.assertIn('await beginTimeSkip(remaining, "minutes", "", payload.intensity || "normal")', script)
 
     def test_roll_summary_is_one_readable_action_line(self):
         game = GameSession()

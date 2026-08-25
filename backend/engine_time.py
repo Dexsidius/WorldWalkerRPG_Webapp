@@ -223,6 +223,17 @@ class TimeSkipMixin:
                 return True
         return False
 
+    def _event_action_prompt(self, event):
+        """Fallback when a narrator recognizes presence but omits the
+        requested position-aware next decision."""
+        event = event if isinstance(event, dict) else {}
+        name = self.state.get("name") or "the player"
+        title = event.get("title") or "this major event"
+        location = self.state.get("location") or event.get("location") or "their current position"
+        position = self.state.get("position") or "their present role"
+        return (f"What does {name} do from {location}, given their current standing as {position}, "
+                f"as {title} reaches the part of the situation they can actually affect?")
+
     @staticmethod
     def _power_goal_chance(days_invested):
         """Two checkpoints, matching what sustained commitment should
@@ -239,7 +250,7 @@ class TimeSkipMixin:
             return 0.8 + 0.2 * ((days_invested - 30) / 7)
         return 1.0
 
-    def _check_power_goal_progress(self, orders, requested_days):
+    def _check_power_goal_progress(self, orders, requested_days, roll_results=None):
         """Mechanically pushes an explicitly-stated power/ability goal
         toward success the longer the player stays committed to that exact
         goal, rather than leaving a full month of stated focused effort
@@ -259,8 +270,16 @@ class TimeSkipMixin:
         tracker["days_invested"] = float(tracker.get("days_invested", 0) or 0) + requested_days
         self.state["power_goal_tracker"] = tracker
         chance = self._power_goal_chance(tracker["days_invested"])
+        matching_roll = next((row for row in (roll_results or []) if isinstance(row, dict)
+                              and row.get("major_event") and str(row.get("action") or "").strip().lower() == key), None)
+        # Production power leaps always receive a visible major d100 check.
+        # The older chance fallback remains only for legacy/custom callers
+        # that supply no roll at all.
+        mechanical_success = bool(matching_roll.get("success")) if matching_roll else random.random() < chance
         return {"order": keyword_order, "days_invested": round(tracker["days_invested"], 1), "chance": round(chance, 3),
-                "mechanical_success": random.random() < chance}
+                "mechanical_success": mechanical_success, "roll_based": bool(matching_roll),
+                "roll_total": matching_roll.get("total") if matching_roll else None,
+                "roll_difficulty": matching_roll.get("difficulty") if matching_roll else None}
 
     @staticmethod
     def estimate_action_minutes(action):
@@ -342,10 +361,10 @@ class TimeSkipMixin:
             "planned_actions": clean_orders, "intensity": intensity, "state": self.trimmed_state_for_ai(" ".join(clean_orders)),
             "time_budget": budget, "continuing_previous_orders": continuing_previous_orders,
             "requirements": [
-                "Identify every activity/project during this period whose outcome materially varies with skill, danger, endurance, learning rate, chance, opposition, or world conditions.",
-                "Create a compact set of contextual d100 checks for those uncertain outcomes.",
+                "Create a d100 check ONLY for an extremely difficult or seemingly impossible attempt, a genuinely lethal undertaking, or a major leap into a new power tier.",
+                "Ordinary political, strategic, social, investigative, travel, crafting, and focused training actions receive no check and resolve successfully to their plausible stated scope; consequences and NPC reactions still matter.",
                 "Do not roll any dice yourself.",
-                "Long repetitive training should usually require a small number of representative milestone checks, not hundreds of rolls.",
+                "Routine or long repetitive training receives no roll. Only an attempted extraordinary power leap, transformation, evolution, or tier change creates one major manual check.",
                 "Treat planned_actions as an ordered itinerary. Carry them out in listed order across the available duration; do not flatten them into one repeated activity.",
                 "Compare the concrete time_budget against the itinerary. Insufficient time makes rushed attempts harder and leaves later actions deferred rather than magically completed.",
                 "Apply time_difficulty_modifier to checks affected by rushing. If an action cannot even begin in sequence, list it in deferred_actions and create no roll for it.",
@@ -399,40 +418,27 @@ class TimeSkipMixin:
             action = clean_orders[action_index] if clean_orders else ""
             previews.append(self.preview_check(check, assessment, action))
         assessment["check_previews"] = previews
-        assessment["difficult_checks"] = [preview for preview in previews if preview.get("difficult")]
-        # A live major canon event ("TAKE PART — EXPERIENCE IT" or "LET IT
-        # PLAY OUT — DECIDE BY ROLL") already promises the player a real
-        # stake in what happens — but only ONCE, on the very first beat of
-        # actually engaging it. Forcing a check is exactly the kind of
-        # compliance gap this hardcodes around elsewhere (see _same_place):
-        # without it, engaging could silently be a no-op the first time. But
-        # applying that same force to EVERY later beat inside the same event
-        # turns what's supposed to be a flowing choose-your-own-adventure
-        # scene into a minigame after minigame after minigame — the model's
-        # own judgment is trusted for every beat after the first, same as it
-        # is anywhere else in normal play.
-        if (unit == "moment" and self.state.get("active_canon_event")
-                and not int(self.state.get("canon_event_engagement_count", 0) or 0)
-                and not assessment["difficult_checks"]):
-            if previews:
-                previews[0]["difficult"] = True
-                assessment["difficult_checks"] = [previews[0]]
-            else:
-                synthetic = {"id": "canon_event_response", "reason": f"Engage directly in {self.state['active_canon_event']}",
-                             "ability": abilities_for(self.state.get("world", "Custom World"))[0], "skill": None,
-                             "difficulty_min": 55, "difficulty_max": 70, "relevant_average_stat": 30,
-                             "situational_bonus": 0, "time_difficulty_modifier": 0, "major_event": True,
-                             "lethal_risk": "moderate"}
-                preview = self.preview_check(synthetic, assessment, clean_orders[0] if clean_orders else "")
-                preview["difficult"] = True
-                assessment["checks"] = checks + [synthetic]
-                assessment["check_previews"] = previews + [preview]
-                assessment["difficult_checks"] = [preview]
+        # A confrontation receives one blocking danger warning, not one for
+        # every difficult beat inside it.  Checks still roll normally after
+        # the acknowledgement; only the repeated confirmation gate is
+        # suppressed.  A newly lethal action is never suppressed and will be
+        # routed through the explicit death-risk confirmation below.
+        warned_scenario = self.danger_scenario_active()
+        for preview in previews:
+            risk = str(preview.get("risk") or "none").lower()
+            preview["warning_suppressed"] = bool(
+                warned_scenario and preview.get("difficult") and risk not in {"high", "extreme"}
+            )
+        assessment["danger_scenario_active"] = warned_scenario
+        assessment["difficult_checks"] = [
+            preview for preview in previews
+            if preview.get("difficult") and not preview.get("warning_suppressed")
+        ]
         assessment["requires_difficulty_confirmation"] = bool(assessment["difficult_checks"])
         return {"assessment": assessment, "amount": amount, "unit": unit, "orders": clean_orders, "intensity": intensity,
                 "time_budget": budget}
 
-    def run_time_skip(self, amount, unit, orders, intensity, assessment, confirmed_lethal=False, confirmed_power_goal=False, manual_rolls=None, challenge_modes=None):
+    def run_time_skip(self, amount, unit, orders, intensity, assessment, confirmed_lethal=False, confirmed_power_goal=False, manual_rolls=None, challenge_modes=None, challenge_resolution_mode="continue", danger_warning_acknowledged=False):
         event_mode = unit == "next_event"
         if unit in {"moment", "next_event"}:
             amount = 1
@@ -449,6 +455,7 @@ class TimeSkipMixin:
             return {"status": "power_goal_confirm_required", "warning": assessment["power_jump_warning"]}
         manual_rolls = manual_rolls if isinstance(manual_rolls, dict) else {}
         challenge_modes = challenge_modes if isinstance(challenge_modes, dict) else {}
+        challenge_resolution_mode = "stop" if challenge_resolution_mode == "stop" and challenge_modes else "continue"
         for chk in checks:
             check_id = str(chk.get("id") or chk.get("reason") or "major")
             if chk.get("major_event") and check_id not in manual_rolls:
@@ -503,7 +510,7 @@ class TimeSkipMixin:
         # where "how many days was this" isn't a clean question).
         power_goal = None
         if not moment_mode and not event_mode and not canon_stop:
-            power_goal = self._check_power_goal_progress(orders, self.duration_minutes(amount, unit) / 1440.0)
+            power_goal = self._check_power_goal_progress(orders, self.duration_minutes(amount, unit) / 1440.0, results)
 
         payload = {
             "task": "resolve_time_skip", "duration": {"amount": simulation_amount, "unit": simulation_unit},
@@ -519,6 +526,10 @@ class TimeSkipMixin:
             "npc_commitment_schedules": self.state.get("npc_schedules", {}),
             "moment_mode": {"enabled": moment_mode, "max_elapsed_minutes": 1440, "instruction": "Resolve only the next immediate meaningful beat"},
             "live_event_scene": bool(moment_mode and self.state.get("active_canon_event")),
+            "active_event_context": self.state.get("active_event_context", ""),
+            "active_event_prompt": self.state.get("active_event_prompt", ""),
+            "danger_scenario": self.state.get("danger_scenario", {}),
+            "challenge_resolution_mode": challenge_resolution_mode,
             "next_major_event_mode": {"enabled": event_mode, "max_elapsed_minutes": event_horizon,
                 "canon_boundary": canon_stop or {},
                 "instruction": "Continue through routine beats and stop ONLY at the earliest genuinely major personal development or the canon boundary — see the requirements below for exactly what qualifies. End naturally; never ask whether the player intervenes."},
@@ -527,7 +538,9 @@ class TimeSkipMixin:
                 "Simulate the ENTIRE skipped period, not just its ending scene.",
                 "Any period longer than a single moment should cover several distinct notable beats/events spread across the timespan (e.g. across a day: morning training, an afternoon encounter, an evening development), not one flattened event. Only moment-to-moment turns focus on a single thing at a time.",
                 "When moment_mode.enabled is true, resolve exactly one immediate meaningful story beat based on current context and the first active action. standing_plan contains the complete ongoing itinerary: preserve its later instructions as deferred work instead of forgetting them or pretending the player abandoned them. Let the beat consume a believable amount of time—even several hours—but never more than 24 hours, then stop at the next decision point.",
-                "When live_event_scene is true, the player is personally living through a major canon event inside its own dedicated scene, one beat at a time, like a choose-your-own-adventure page — the narrative should read as immediate, present, moment-to-moment sensory experience (what they see/hear/feel RIGHT NOW, who's near them, what's changing second to second), not a summary or a report of what happened. Directly react to and build on whatever the player just chose or typed — their exact stated action should visibly move the scene forward, not be politely acknowledged and sidestepped. End every beat at a genuine fork the player must actually choose from next (via suggested_actions and/or the open narrative itself), actively pushing them toward the event's real climax rather than stalling in place. Do not force a difficult check on every single beat of this scene — most beats should just be narrative choice and consequence; reserve real risk/checks for the moments that actually warrant them, exactly as you would for any other action.",
+                "When live_event_scene is true, the player is personally living through a major canon event through the NORMAL Chronicle and Action Chat, one beat at a time — there is no separate event chat. Use active_event_context and active_event_prompt to keep their exact position, distance, involvement, status and access grounded. Write immediate, present, moment-to-moment sensory experience, react directly to what the player chose, and end at a genuine situation-specific fork. Do not force a check merely because the event is important; reserve checks for the rare extreme/impossible actions that actually warrant them.",
+                "danger_scenario records that the player already received and accepted the current confrontation's danger warning. While it is active, continue moment-to-moment without manufacturing another danger decision or permission prompt for each difficult move. Only introduce a new warning when the new action itself creates a credible risk of the character dying. Set danger_scenario_concluded=true once the confrontation is genuinely over or the player successfully leaves it.",
+                "When challenge_resolution_mode is 'stop', use the supplied minigame rolls to resolve ONLY the challenged action or obstacle and stop immediately after its outcome, at the first point where the player can take control again. Do not continue through the rest of the originally requested time. Return the believable time actually consumed, set interrupted=true with interruption_kind='challenge_complete', and keep every later or unfinished planned action in deferred_actions. When it is 'continue', incorporate the same minigame result and continue simulating toward the originally requested endpoint unless another legitimate stop condition is reached.",
                 "When next_major_event_mode.enabled is true, keep simulating through routine decisions and include clear chronological updates, but do not stop for ordinary prompts. The bar for stopping is deliberately high — this mode exists to skip PAST the small stuff and run until the intended goal is reached or the available time fully elapses, not pause partway through for anything less. Stop ONLY when something on this scale actually happens: the character moving into a genuinely different tier of power (not just a stat/skill increase — an actual breakthrough, transformation, or class/form change), a real battle or life-threatening confrontation, a world-changing event (a war, disaster, regime change, a faction destroyed or founded), or a major canon timeline event. A defining goal being fully completed also qualifies. None of the following are ever, by themselves, a reason to stop — narrate them as an ordinary update and keep going: a routine conversation or social call, a minor non-lethal scuffle or scare, an ordinary stat tick or incremental skill/level gain (even a large one, as long as it's the same tier of power as before), a passing rumor or piece of news, a small transaction or errand, meeting or running into someone without real stakes, or anything that would read as one line in a history feed rather than a headline. If you are genuinely unsure whether something clears this bar, it does not — keep simulating past it, all the way to the requested goal or the end of the available time, whichever comes first. Return no intervention_prompt and do not ask Yes/No.",
                 "Present world updates with information fog: distinguish what objectively changed, why it matters, and what the character can actually know through witnesses, messages, evidence, travel time, or rumor. The world is not omniscient and information never teleports.",
                 "Treat structured_action_goals as authoritative stop conditions. Report the matching action verbatim in goal_status.action so the local tracker can close the correct goal.",
@@ -547,14 +560,14 @@ class TimeSkipMixin:
                 "Use simulation_profile as a hard detail budget. Fully resolve people and threads in state_before.simulation_context.detail_bubble; summarize distant actors unless their action crosses into the local scene or becomes a major event.",
                 "This is the turn's one combined narration pass. Resolve the player itinerary, relevant NPC reactions, quests, canon pressure, and wider-world consequences together. Never request or assume a later narrator pass will repair omissions.",
                 "Return no more than simulation_profile.max_updates update cards. Keep every major reaction distinct, but combine routine distant movement into one concise wider-world update instead of repeating the same development through quests, leads, clocks, advisor language, and world feed.",
-                "Generate meaningful world movement on EVERY Advance, including turns with no new player action or turns that merely continue standing orders. If an event genuinely requires the player's decision, stop at that moment and return a concrete intervention_prompt.",
+                "Generate meaningful world movement on EVERY Advance, including turns with no new player action or turns that merely continue standing orders. Significant personal story beats and major world events are hard stop points. If one reaches the player's actual position or reasonably requires their decision, stop there and return a concrete, in-character intervention_prompt for the normal Chronicle/Action Chat.",
                 "Prior player actions and promises continue affecting outcomes.",
-                "If power_goal_progress.order is present and power_goal_progress.mechanical_success is true, this time skip's narrative MUST conclude with the character genuinely succeeding at that stated power/ability goal — sustained, focused commitment (power_goal_progress.days_invested cumulative days on this exact goal) has crossed the threshold for a real breakthrough. Write a concrete, lore-consistent explanation for why it clicked now (not a coincidence, not a shortcut — the payoff of that sustained effort), set goal_status.achieved=true, and reflect the new capability in state_patch (a new skill/technique entry, or whatever this world's own mechanism for a new power is). If mechanical_success is false or power_goal_progress is empty, judge the outcome normally on its own narrative merits — this field only ever pushes toward success, never toward failure.",
+                "If power_goal_progress.order is present and power_goal_progress.mechanical_success is true, the major d100 succeeded: conclude with the character genuinely gaining that power/ability. Give a concrete, lore-consistent story cause grounded in the accumulated training (mentor insight, pressure, affinity, realization, adaptation, rare opportunity, or another setting-valid cause), set goal_status.achieved=true, and persist the new capability. If its roll failed, award substantial foundation/proficiency from the training but do not grant the tier leap yet; explain what almost worked and give a useful next step.",
                 "If an interruption is important enough that the player would reasonably stop and choose what to do, end the skip EARLY and return interrupted=true with the amount of time actually elapsed.",
                 "Treat action wording such as 'until', 'master', 'learn', 'find', 'reach', 'finish', 'complete', or another clear result as a goal condition. If that goal is achieved before the requested duration ends, stop immediately on the day/minute of completion, set goal_status.achieved=true, and return only the actual elapsed time.",
                 "If a stated goal is not achieved by the end of the requested duration, set goal_status.achieved=false and explain the concrete in-world cause: insufficient insight, teacher/resources, injury, interruption, failed milestone, difficulty, or another setting-valid reason. Include a useful next_hint grounded in what the character learned.",
                 "If assessment.canon_stop exists, simulate only through that stop boundary and do not grant progress, travel, recovery or consequences from time after it.",
-                "When stopping at canon_boundary/assessment.canon_stop specifically, decide plausible involvement in exactly two steps, in order. STEP 1 — check the player's own current status: location, travel time from the event, rank/standing, and any established affiliation with its participants. STEP 2 — check the event's own scale: canon_stop.scope is 'wide' when the event affects an entire location/population (a village under attack, a war, a public ceremony) and 'personal' when it's a small-cast incident that merely happens to be tagged with a village-level location for convenience (most of them). Only a wide-scope event lets simply being in the same broad location justify presence; for a personal-scope event, sharing that location proves nothing — most of that village's population never even learns a small-cast incident like this happened at all, let alone happens to be standing in the right room, so the default chance of genuine involvement is very low unless the player's own status from Step 1 specifically puts them there or with its participants. If both steps support it, set interrupted=true and phrase intervention_prompt as a genuine choice to personally engage. Otherwise set interrupted=false, leave intervention_prompt empty, and instead deliver the event as a detailed, concrete report within updates (via news, a messenger, rumor, or documentation appropriate to how fast word could reach them — for a personal-scope event this is often nothing at all, not even a rumor, unless something would plausibly surface it), then continue narrating from where the player actually is. Never ask an intervention question of a player who could not possibly be there. The event's own scale is never itself a reason to force presence — a world-shaking (wide-scope) event still only interrupts someone who was actually positioned for it: if the Nine-Tails attacks Konoha and the player is an ordinary genin elsewhere in the village with no established tie to the Hokage's family or its guard, they experience village-wide chaos and read about the rest, they do not end up in the room with Minato and Kushina; if the player had instead been established earlier as assigned to guard them or traveling with them, presence follows naturally from that standing. This same split applies WITHIN a wide-scope event, not just to whether it opens a scene at all: a wide scope justifies the player being caught up in the event's genuinely public component (the village-wide fighting, evacuation, fires, damage), never in a specific named-character confrontation buried inside it that nobody actually witnessed — Obito's attack on Minato and Kushina during the Nine-Tails' release happened in near-total isolation, so an ungoverned genin swept up in the wide village chaos experiences exactly that chaos and nothing more; only Step 1 (an established tie to Minato, Kushina, or their guard) can put them in that private confrontation, wide scope alone never does. A personal-scope beat needs Step 1 to justify it on its own — if Naruto steals the forbidden scroll after graduation and the player was never with Naruto or otherwise tied into that thread, it is not even background news to them, let alone a scene, with no roll and no intervention choice offered, because they were never in a position to affect it either way. Default to the report (or nothing at all), not the scene, whenever presence is not clearly established.",
+                "When stopping at canon_boundary/assessment.canon_stop specifically, decide plausible involvement in exactly two steps, in order. STEP 1 — check the player's own current status: location, travel time from the event, rank/standing, and any established affiliation with its participants. STEP 2 — check the event's own scale: canon_stop.scope is 'wide' when the event affects an entire location/population (a village under attack, a war, a public ceremony) and 'personal' when it's a small-cast incident that merely happens to be tagged with a village-level location for convenience (most of them). Only a wide-scope event lets simply being in the same broad location justify presence; for a personal-scope event, sharing that location proves nothing. If both steps support involvement, set interrupted=true and write intervention_prompt as the SPECIFIC immediate decision the character actually faces from their real vantage — never a generic Yes/No 'intervene?' question. Account for distance, access, affiliation, rank, duty, knowledge, event scale and whether they are central, peripheral, caught in public fallout, or only observing. Otherwise set interrupted=false, leave intervention_prompt empty, and deliver only what could plausibly reach them as a report, rumor, messenger account or documentation (often nothing for a secret personal event). Never ask a prompt of a player who could not possibly be there. A wide event can catch an ordinary person in public chaos without teleporting them into a private named-character confrontation; only an established tie or duty can put them in that private room. Default to the report or nothing whenever presence is not clearly established.",
                 "For uninterrupted training, treat every training day/session as real accumulated practice; a month is roughly 30 daily sessions, never one generic reward.",
                 "In non-System worlds do not award XP or levels. Show progress through open-ended stats, knowledge, techniques, ranks and titles. Use XP only if state._uses_xp is true.",
                 "Every breakthrough result requires a concrete lore-based cause and a substantially larger but world-valid gain.",
@@ -564,7 +577,7 @@ class TimeSkipMixin:
                 "Give every update its own canon_day so multi-day skips read as a dated sequence of beats, not one undated blob — like a history feed, not a single diary entry. A single day may reasonably contain more than one update when multiple things happen.",
                 "Bold the proper names of every character, faction, and named location the first time each appears within an update's narrative (e.g. **Kaito Moriyama**, **Hueco Mundo**), the way a wiki or timeline entry would — this is for readability, not emphasis of importance.",
                 "Fill in each update's map_changes only on the rare beat that actually shifts who controls a territory/settlement/map node, and quote only on the rare beat with a real, attributable spoken line worth surfacing on its own — both are empty on most updates, and forcing either in when nothing warrants it is worse than leaving them empty.",
-                "If simulating this period would put the player character in real physical danger — a fight, ambush, hazard, or confrontation with a real chance of injury or worse — always stop the skip immediately BEFORE that danger resolves, even if standing orders said to keep going; danger is never auto-resolved silently. Set interrupted=true, interruption_kind='danger', and phrase intervention_prompt as a choice between taking personal control of it now (dropping out of the skip to handle it turn by turn) or letting it be decided by a roll so the simulation can continue."
+                "If simulating this period reaches real physical danger, stop the skip so it cannot be silently auto-resolved. If violence has NOT started and negotiation, retreat or another response is still genuinely possible, stop immediately before it and write a concrete intervention_prompt for the character's actual options. If the player initiated a real fight, or an attacker has already committed to violence with no meaningful chance to negotiate, do NOT add another permission/intervention choice: begin structured combat immediately in state_patch.combat, set interrupted=true and interruption_kind='danger', narrate the opening clash, and give a combat-grounded prompt. The normal combat panel is the next interaction surface."
                 ,"End at a clear decision point. Preserve or reveal at least one actionable journey lead and return exactly 3 optional suggested actions grounded in current knowledge."
             ],
             "schema": {
@@ -572,7 +585,8 @@ class TimeSkipMixin:
                 "events": "system notifications", "timeline_events": "list of major events",
                 "elapsed": {"amount": "number", "unit": "same or sensible normalized unit"},
                 "interrupted": "boolean", "interruption_kind": "canon_event|goal_complete|world_event|danger|other or empty", "interruption_reason": "string or empty",
-                "interruption_context": "full context the player needs before deciding", "intervention_prompt": "specific final question phrased as Will <player name> ...? or empty",
+                "danger_scenario_concluded": "boolean; true only when the current dangerous confrontation has ended or the player has left it",
+                "interruption_context": "full context grounded in the player's distance, involvement, status, access and event scale", "intervention_prompt": "specific immediate in-character decision for the normal Chronicle; never generic Yes/No, or empty",
                 "goal_status": {"action": "goal-bearing action or empty", "achieved": "boolean", "elapsed": {"amount": "number", "unit": "unit"}, "explanation": "in-world result or obstacle", "next_hint": "actionable hint when incomplete"},
                 "major_event_reached": "boolean; required in next major event mode", "major_event_kind": "personal|canon|empty", "major_event_title": "specific title or empty",
                 "active_major_event": "the EXACT title of a major canon event (matching one listed under UPCOMING CANON PRESSURES/CANON HISTORY) if this update is still directly part of that event's unfolding scene, or empty once it has concluded and the story has moved past it — this drives which banner art the player sees, so keep it set for as long as the scene is genuinely still that event and clear it the moment it resolves.",
@@ -633,7 +647,7 @@ class TimeSkipMixin:
                     f"{canon_stop.get('title', 'Timeline event')} is unfolding at {canon_stop.get('location', 'an unknown location')}. "
                     f"{canon_stop.get('summary', 'The situation has reached a point where the player may intervene.')}")
                 data["intervention_prompt"] = (data.get("intervention_prompt") or
-                    f"Will {self.state.get('name', 'the player')} intervene in {canon_stop.get('title', 'this event')}?")
+                    self._event_action_prompt(canon_stop))
                 # Hardcoded, not left to model compliance: the banner art for
                 # a major event the player is actually present for must show
                 # while it's unfolding, matching interrupted=True exactly.
@@ -700,7 +714,7 @@ class TimeSkipMixin:
                     f"{canon_stop.get('title', 'Timeline event')} is unfolding at {canon_stop.get('location', 'an unknown location')}. "
                     f"{canon_stop.get('summary', 'The situation has reached a point where the player may intervene.')}")
                 data["intervention_prompt"] = (data.get("intervention_prompt") or
-                    f"Will {self.state.get('name', 'the player')} intervene in {canon_stop.get('title', 'this event')}?")
+                    self._event_action_prompt(canon_stop))
                 data["active_major_event"] = canon_stop.get("title", "")
             else:
                 data["interruption_kind"] = ""
@@ -717,6 +731,26 @@ class TimeSkipMixin:
                     "title": f"Major Event Reached — {stop_title}", "related_action": "",
                     "narrative": "The advance stops here naturally, at the next real turning point for the campaign — decide how your character responds before time moves again.",
                     "why_it_matters": "", "player_knowledge": "", "next_pressure": ""})
+        if challenge_resolution_mode == "stop" and not data.get("interrupted"):
+            challenged_indices = []
+            for index, check in enumerate(checks):
+                check_id = str(check.get("id") or check.get("reason") or "major")
+                if check_id not in challenge_modes:
+                    continue
+                try:
+                    challenged_indices.append(int(check.get("action_index", index)))
+                except (TypeError, ValueError):
+                    challenged_indices.append(index)
+            stop_index = max(0, min(challenged_indices or [0]))
+            later_actions = orders[stop_index + 1:] if orders else []
+            existing_deferred = data.get("deferred_actions") if isinstance(data.get("deferred_actions"), list) else []
+            data["deferred_actions"] = list(dict.fromkeys([*existing_deferred, *later_actions]))
+            data["completed_actions"] = [action for action in data.get("completed_actions", []) if action in orders[:stop_index + 1]]
+            data["interrupted"] = True
+            data["interruption_kind"] = "challenge_complete"
+            data["interruption_reason"] = data.get("interruption_reason") or "The challenged result has been resolved. The remaining simulation is paused."
+            data["interruption_context"] = data.get("interruption_context") or "The minigame result is now part of the story, but no later queued action or unused portion of the requested skip has been simulated."
+            data["intervention_prompt"] = data.get("intervention_prompt") or f"What does {self.state.get('name') or 'the player'} do next?"
         goal_status = data.get("goal_status") if isinstance(data.get("goal_status"), dict) else {}
         if goal_status.get("achieved"):
             goal_elapsed = goal_status.get("elapsed") if isinstance(goal_status.get("elapsed"), dict) else {}
@@ -758,11 +792,35 @@ class TimeSkipMixin:
             ai_text(x) for x in [*authored_deferred, *assessed_deferred]
             if ai_text(x) and ai_text(x) not in completed
         ))
+        combat_was_active = bool(isinstance(self.state.get("combat"), dict) and self.state.get("combat", {}).get("active"))
+        data["danger_warning_acknowledged"] = bool(danger_warning_acknowledged and self.dangerous_plan(orders, checks))
+        self.ensure_immediate_combat_patch(data, orders)
+        combat_patch = data.get("state_patch", {}).get("combat", {}) if isinstance(data.get("state_patch"), dict) else {}
+        combat_begins = not combat_was_active and isinstance(combat_patch, dict) and bool(combat_patch.get("active"))
+        if combat_begins:
+            data["interrupted"] = True
+            data["interruption_kind"] = "danger"
+            enemy_name = str((combat_patch.get("enemy") or {}).get("name") or "the opposition")
+            data["interruption_reason"] = data.get("interruption_reason") or f"Combat has begun against {enemy_name}."
+            data["interruption_context"] = data.get("interruption_context") or "Violence is already under way; there is no extra intervention decision between this opening clash and combat control."
+            data["intervention_prompt"] = data.get("intervention_prompt") or f"How does {self.state.get('name') or 'the player'} handle the opening exchange with {enemy_name}?"
+            fight_index = next((index for index, order in enumerate(orders)
+                                if self._FIGHT_START_RE.search(str(order)) and not self._FIGHT_NEGATION_RE.search(str(order))), None)
+            if fight_index is not None:
+                # An explicit queued attack begins when its place in the
+                # itinerary is reached; it cannot be followed by the rest of
+                # a week/month skip before the player sees combat controls.
+                elapsed_cap = max(1, sum(self.estimate_action_minutes(order) for order in orders[:fight_index + 1]))
+                elapsed = data.get("elapsed") if isinstance(data.get("elapsed"), dict) else {}
+                authored_minutes = self.duration_minutes(elapsed.get("amount", elapsed_cap), elapsed.get("unit", "minutes"))
+                data["elapsed"] = {"amount": min(max(1, authored_minutes), elapsed_cap), "unit": "minutes"}
+                data["deferred_actions"] = list(dict.fromkeys([*data.get("deferred_actions", []), *orders[fight_index + 1:]]))
+                data["completed_actions"] = [action for action in data.get("completed_actions", []) if action in orders[:fight_index + 1]]
         requested_boundary = self.duration_minutes(simulation_amount, simulation_unit)
         data, integrity_report = validate_turn_response(
             self.state, data, orders, results, requested_boundary,
             assessment.get("travel_plans", []),
-            exact_duration=not moment_mode and not event_mode,
+            exact_duration=not moment_mode and not event_mode and challenge_resolution_mode != "stop",
         )
         actual_elapsed = data.get("elapsed") if isinstance(data.get("elapsed"), dict) else {}
         training_amount = actual_elapsed.get("amount", simulation_amount)
@@ -849,8 +907,8 @@ class TimeSkipMixin:
         training_orders = [str(x) for x in (orders or []) if any(k in str(x).lower() for k in training_words)]
         if not training_orders: return
         days = max(.05, self.duration_minutes(amount, unit) / 1440.0) / max(1, len(training_orders))
-        rates = {"light": .12, "normal": .20, "intense": .35, "extreme": .50}
-        base_rate = rates.get(str(intensity).lower(), .20)
+        rates = {"light": .25, "normal": .45, "intense": .75, "extreme": 1.05}
+        base_rate = rates.get(str(intensity).lower(), .45)
         tuning = normalize_tuning(self.state)
         base_rate *= float(tuning.get("training_rate", 1.0) or 1.0)
         growth_profile = self.state.get("special", {}).get("Growth Profile", {})
@@ -865,9 +923,11 @@ class TimeSkipMixin:
         xp_mode = uses_xp_for(self.state.get("world"))
         progression_events = []
         for index, action in enumerate(training_orders):
-            result = checks[min(index, len(checks) - 1)] if checks else None
+            result = next((row for row in checks if isinstance(row, dict)
+                           and str(row.get("action") or "").strip().lower() == action.strip().lower()), None)
             ability = (result or {}).get("ability") or (primary_stats_for(self.state.get("world"), self.state.get("special", {}).get("Archetype", "")) or list(self.state.get("stats", {})))[0]
-            factor = 1.25 if not result or result.get("success") else .55
+            factor = 1.25 if not result else 1.55 if result.get("success") else .70
+            focused = 1.2 if re.search(r"\b(until|daily|every day|focus|specific|master|learn|improve)\b", action, re.I) else 1.0
             breakthrough = bool((result or {}).get("breakthrough"))
             # Every training day also carries a small independent discovery
             # chance; aggregating it makes a month meaningfully different.
@@ -875,7 +935,7 @@ class TimeSkipMixin:
             if not breakthrough and random.random() < 1 - ((1 - per_day_breakthrough) ** max(1, days)):
                 breakthrough = True
             multiplier = random.uniform(2.2, 4.0) if breakthrough else 1.0
-            gained_points = days * base_rate * factor * multiplier * learning_rate
+            gained_points = days * base_rate * factor * focused * multiplier * learning_rate
             old_fraction = float(self.state.get("ability_progress", {}).get(ability, 0) or 0)
             total_points = old_fraction + gained_points
             current = int(self.state.get("stats", {}).get(ability, 1) or 1)
@@ -1138,11 +1198,13 @@ class TimeSkipMixin:
     def apply_time_skip(self, data, requested_amount, requested_unit, progression_context=None):
         with self.lock:
             before = copy.deepcopy(self.state)
+            context = progression_context if isinstance(progression_context, dict) else {}
+            danger_was_active = self.danger_scenario_active(before)
             validation = apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="time_skip")
+            self.ensure_combat_numbers()
             if not uses_xp_for(self.state.get("world")):
                 self.state["xp"], self.state["level"], self.state["xp_next"] = before.get("xp", 0), before.get("level", 1), before.get("xp_next", 100)
             else:
-                context = progression_context if isinstance(progression_context, dict) else {}
                 self.apply_system_xp(before, context.get("actions", []), context.get("rolls", []),
                                      context.get("elapsed_minutes", self.duration_minutes(requested_amount, requested_unit)),
                                      context.get("intensity", "normal"), data.get("events", []))
@@ -1206,10 +1268,42 @@ class TimeSkipMixin:
                 self.append("[TIME SKIP]\n" + data.get("narrative", "Time passes."), "system")
             self.append_growth_deltas(before)
             interrupted = bool(data.get("interrupted"))
+            interruption_kind = str(data.get("interruption_kind") or "").lower()
+            combat_now = bool(isinstance(self.state.get("combat"), dict) and self.state.get("combat", {}).get("active"))
+            danger_words = " ".join(str(data.get(key) or "") for key in (
+                "interruption_reason", "interruption_context", "intervention_prompt", "narrative"
+            ))
+            danger_triggered = bool(
+                combat_now
+                or interruption_kind == "danger"
+                or (interruption_kind in {"canon_event", "world_event"} and self._DANGER_SCENE_RE.search(danger_words))
+            )
+            warning_was_shown = bool(danger_was_active or data.get("danger_warning_acknowledged"))
+            danger_notice_required = bool(danger_triggered and not warning_was_shown)
+            actions_text = " ".join(str(x) for x in context.get("actions", []) if str(x).strip())
+            location_changed = str(before.get("location") or "").strip().lower() != str(self.state.get("location") or "").strip().lower()
+            if data.get("danger_scenario_concluded") and not combat_now:
+                self.clear_danger_scenario()
+            elif danger_triggered:
+                self.acknowledge_danger_scenario(data.get("interruption_reason") or data.get("major_event_title") or "")
+            elif data.get("danger_warning_acknowledged"):
+                self.acknowledge_danger_scenario(data.get("narrative") or "Dangerous confrontation")
+            elif self.danger_scenario_active(before) and not combat_now and (
+                location_changed or self._DANGER_EXIT_RE.search(actions_text)
+            ):
+                self.clear_danger_scenario()
             if interrupted:
                 is_canon = data.get("interruption_kind") == "canon_event"
                 heading = "MAJOR CANON EVENT" if is_canon else "TIME SKIP INTERRUPTED"
-                self.append(f"[{heading}]\n" + data.get("interruption_reason", "Something requires your attention."), "canon_event" if is_canon else "danger")
+                reason = data.get("interruption_reason", "Something requires your attention.")
+                event_context = str(data.get("interruption_context") or "").strip()
+                event_prompt = str(data.get("intervention_prompt") or "").strip()
+                sections = [reason]
+                if event_context and event_context != reason:
+                    sections.append(event_context)
+                if event_prompt:
+                    sections.append("YOUR NEXT DECISION\n" + event_prompt)
+                self.append(f"[{heading}]\n" + "\n\n".join(sections), "canon_event" if is_canon else "danger")
             # Drives which banner shows behind the scene (see scene_image_url)
             # — defaults to clearing rather than getting stuck on if a turn's
             # response ever omits it, since a banner reverting a beat early is
@@ -1223,6 +1317,12 @@ class TimeSkipMixin:
             elif new_active_event:
                 self.state["canon_event_engagement_count"] = int(self.state.get("canon_event_engagement_count", 0) or 0) + 1
             self.state["active_canon_event"] = new_active_event
+            if new_active_event:
+                self.state["active_event_context"] = str(data.get("interruption_context") or self.state.get("active_event_context") or "").strip()
+                self.state["active_event_prompt"] = str(data.get("intervention_prompt") or self.state.get("active_event_prompt") or "").strip()
+            else:
+                self.state["active_event_context"] = ""
+                self.state["active_event_prompt"] = ""
             context = progression_context if isinstance(progression_context, dict) else {}
             self.ensure_quest_briefings(before, "; ".join(str(x) for x in context.get("actions", [])))
             completed_quests = normalize_quest_state_machine(self.state)
@@ -1316,6 +1416,7 @@ class TimeSkipMixin:
                 "interruption_kind": data.get("interruption_kind", ""),
                 "interruption_context": data.get("interruption_context", ""),
                 "intervention_prompt": data.get("intervention_prompt", ""),
+                "danger_notice_required": danger_notice_required,
                 "major_event_reached": bool(data.get("major_event_reached")),
                 "major_event_kind": data.get("major_event_kind", ""),
                 "major_event_title": data.get("major_event_title", ""),

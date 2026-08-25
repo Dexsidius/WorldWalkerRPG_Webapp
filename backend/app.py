@@ -418,7 +418,9 @@ def api_time_resolve():
                                      confirmed_lethal=bool(d.get("confirmed_lethal")),
                                      confirmed_power_goal=bool(d.get("confirmed_power_goal")),
                                      manual_rolls=d.get("manual_rolls", {}),
-                                     challenge_modes=d.get("challenge_modes", {}))
+                                     challenge_modes=d.get("challenge_modes", {}),
+                                     challenge_resolution_mode=d.get("challenge_resolution_mode", "continue"),
+                                     danger_warning_acknowledged=bool(d.get("danger_warning_acknowledged")))
         return jsonify(result)
     except Exception as e:
         return err(e)

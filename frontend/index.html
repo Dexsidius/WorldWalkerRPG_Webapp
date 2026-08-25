@@ -197,21 +197,6 @@
         <button id="btn-story-latest" class="story-latest" type="button" title="Jump to the newest story beat">↓ LATEST</button>
       </header>
       <div class="panel-body story-feed" id="story-feed"></div>
-      <section id="intervention-bar" class="inline-intervention" hidden>
-        <div class="intervention-card">
-          <img id="canon-event-banner" class="canon-event-banner" alt="" hidden />
-          <div class="intervention-copy">
-            <span id="canon-event-heading">MAJOR EVENT</span>
-            <h3 id="canon-intervention-text">The simulation reached an important decision.</h3>
-            <p id="canon-event-context"></p>
-            <strong id="canon-intervention-question">Do you want to intervene?</strong>
-          </div>
-          <div class="intervention-actions">
-            <button id="btn-canon-intervene" class="btn-primary">YES — STOP HERE</button>
-            <button id="btn-canon-later" class="btn-ghost">NO — KEEP SIMULATING</button>
-          </div>
-        </div>
-      </section>
       <div class="suggestion-dock">
         <details id="change-reasons" class="change-reasons" hidden>
           <summary>Why things changed</summary>
@@ -532,7 +517,7 @@
 </div>
 
 <div class="modal-backdrop" id="modal-chat">
-  <div class="modal modal-xl">
+  <div class="modal modal-xl chat-modal">
     <header class="modal-head"><span>Chats &amp; Contacts</span><button class="modal-close" data-close="modal-chat">✕</button></header>
     <div class="modal-body chat-body">
       <div class="chat-contacts" id="chat-contacts"></div>
@@ -549,7 +534,7 @@
 </div>
 
 <div class="modal-backdrop" id="modal-advisor">
-  <div class="modal modal-lg">
+  <div class="modal modal-xl advisor-modal">
     <header class="modal-head"><span>🧭 The Advisor</span><button class="modal-close" data-close="modal-advisor">✕</button></header>
     <div class="modal-body advisor-body">
       <p class="hint">Ask for a detailed power comparison, world briefing, canon-event countdown, or strategic plan. Advice never changes campaign state and costs no turn.</p>
@@ -673,31 +658,24 @@
 </div>
 
 <div class="modal-backdrop event-window-backdrop" id="modal-event-window">
-  <div class="modal event-window-modal">
+  <div class="modal event-window-modal" role="dialog" aria-modal="true" aria-labelledby="event-window-title">
     <header class="modal-head">
       <span id="event-window-title">MAJOR EVENT</span>
-      <button type="button" id="btn-event-window-leave" title="Step back — the event keeps unfolding in the background; it'll interrupt you again if it needs a decision.">✕</button>
+      <button type="button" id="btn-event-window-leave" aria-label="Close event notice">✕</button>
     </header>
     <img id="event-window-banner" class="event-window-banner" alt="" hidden>
-    <div class="event-window-feed" id="event-window-feed"></div>
-    <div class="event-window-intervention-slot" id="event-window-intervention-slot"></div>
-    <div class="event-window-combat-slot" id="event-window-combat-slot" hidden></div>
-    <div class="event-window-choices" id="event-window-choices"></div>
-    <div class="event-window-respond-row" id="event-window-respond-row">
-      <textarea id="event-window-input" rows="2" placeholder="Or type exactly what you do or say..."></textarea>
-      <button id="btn-event-window-respond" class="btn-primary" type="button">RESPOND</button>
-    </div>
-    <button id="btn-event-window-wait" class="btn-ghost full event-window-wait" type="button" title="For a beat that's showing you something rather than asking for a decision — lets the moment continue without you personally acting.">⏭ CONTINUE WATCHING</button>
-    <div class="event-window-concluded" id="event-window-concluded" hidden>
-      <p>This moment has passed — your journey continues.</p>
-      <button id="btn-event-window-continue" class="btn-primary" type="button">CONTINUE YOUR JOURNEY</button>
+    <div class="event-window-notice">
+      <p class="event-window-kicker" id="event-window-kicker">THE SIMULATION HAS STOPPED HERE</p>
+      <h3 id="event-window-heading">An important event is happening.</h3>
+      <p id="event-window-context"></p>
+      <p class="event-window-guidance">The full scene and your position-aware next prompt are in the Chronicle. Continue through the normal Action Chat; if combat has begun, its controls are ready on the main screen.</p>
+      <button id="btn-event-window-continue" class="btn-primary full" type="button">CLOSE — CONTINUE IN CHRONICLE</button>
     </div>
   </div>
 </div>
 
-<!-- Decision modals (lethal confirm, fate roll, difficulty gate, challenge
-     minigames) are declared AFTER modal-event-window so they always paint on
-     top of it and stay reachable while the event window is open. -->
+<!-- Decision modals (lethal confirm, fate roll, difficulty gate and challenge
+     minigames) are declared after the informational event notice. -->
 <div class="modal-backdrop" id="modal-lethal">
   <div class="modal">
     <header class="modal-head danger-head"><span>⚠ Potentially Lethal Decision</span></header>
@@ -745,6 +723,11 @@
     <div class="modal-body">
       <p>No time has advanced. Review the expected checks before committing this plan.</p>
       <div id="difficult-check-list" class="difficult-check-list"></div>
+      <fieldset class="challenge-resolution-choice">
+        <legend>After a minigame result</legend>
+        <label><input type="radio" name="challenge-resolution" value="stop" checked><span><b>PLAY &amp; STOP</b><small>Resolve this challenge, then pause immediately so you can take control.</small></span></label>
+        <label><input type="radio" name="challenge-resolution" value="continue"><span><b>PLAY &amp; CONTINUE SIM</b><small>Apply the result, then continue toward the time you originally selected.</small></span></label>
+      </fieldset>
       <div class="challenge-choice-grid">
         <button id="btn-difficult-roll" class="btn-primary"><b>USE NORMAL D100</b><small>Accept the listed odds and continue.</small></button>
         <button id="btn-difficult-timing" class="btn-ghost"><b>PLAY TIMING CLASH</b><small>Replace raw rolls with a reaction challenge.</small></button>

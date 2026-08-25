@@ -34,8 +34,8 @@ class WorldwalkerV330Tests(unittest.TestCase):
         return state
 
     def test_version_schema_and_simulation_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.6.1")
-        self.assertEqual(BASE_STATE["schema_version"], 12)
+        self.assertEqual(APP_VERSION, "3.6.4")
+        self.assertEqual(BASE_STATE["schema_version"], 13)
         for field in ("npc_intentions", "simulation_events", "local_background_turn"):
             self.assertIn(field, BASE_STATE)
 
@@ -70,7 +70,7 @@ class WorldwalkerV330Tests(unittest.TestCase):
         game.ai = NoCallAI()
         result = game.assess_time_skip(3, "days", ["Train chakra control", "Talk to Mira"], "normal", use_model=False)
         self.assertEqual(result["assessment"]["assessment_source"], "deterministic_local")
-        self.assertEqual(result["assessment"]["checks"][0]["action_index"], 0)
+        self.assertEqual(result["assessment"]["checks"], [])
         self.assertEqual(result["assessment"]["reachable_actions"], result["time_budget"]["reachable_actions"])
 
     def test_normal_api_advance_uses_exactly_one_narrator_call(self):

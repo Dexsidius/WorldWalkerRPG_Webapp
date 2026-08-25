@@ -17,6 +17,7 @@ from director import (build_cause_effect, enrich_npc_depth,
                       update_campaign_direction)
 from evaluations import run_model_comparison
 from game import GameSession
+from simulation import deterministic_assessment
 from worlds import BASE_STATE
 
 
@@ -114,6 +115,63 @@ class WorldwalkerV360Tests(unittest.TestCase):
         client = AI(key="unused", model="gpt-5.4", provider="cloud", max_estimated_cost_usd=0.000001)
         with self.assertRaisesRegex(RuntimeError, "estimated at"):
             client.request("Long instructions " * 50, {"action": "test"}, max_output_tokens=1000)
+
+    def test_routine_training_politics_strategy_and_combat_do_not_roll(self):
+        state = copy.deepcopy(BASE_STATE)
+        state.update({"world": "Naruto", "stats": {"Ninjutsu": 30, "Willpower": 30}})
+        actions = [
+            "Train chakra control every morning for a week",
+            "Negotiate a patrol agreement with the clan council",
+            "Plan a strategy for protecting the eastern road",
+            "Defeat an ordinary street bandit",
+        ]
+        budget = {"reachable_actions": actions, "deferred_actions": [], "time_dc_modifier": 0}
+        self.assertEqual(deterministic_assessment(state, actions, budget)["checks"], [])
+
+    def test_extreme_obstacles_and_power_leaps_still_roll(self):
+        state = copy.deepcopy(BASE_STATE)
+        state.update({"world": "One Piece", "stats": {"Willpower": 30}})
+        actions = ["Defeat an elite guardian alone", "Train to awaken a new Haki ability"]
+        budget = {"reachable_actions": actions, "deferred_actions": [], "time_dc_modifier": 0}
+        checks = deterministic_assessment(state, actions, budget)["checks"]
+        self.assertEqual(len(checks), 2)
+        self.assertTrue(checks[1]["major_event"])
+        self.assertGreaterEqual(checks[0]["difficulty_min"], 70)
+
+    def test_focused_month_training_now_produces_large_visible_gain(self):
+        game = GameSession()
+        game.state = copy.deepcopy(BASE_STATE)
+        game.state.update({"world": "Naruto", "stats": {"Ninjutsu": 30, "Chakra Control": 30},
+                           "special": {"Archetype": "Ninjutsu Student"}})
+        data = {"state_patch": {}, "events": [], "updates": []}
+        with patch("game.random.random", return_value=1.0):
+            game.enforce_training_progress(data, [], 1, "months", ["Train Ninjutsu daily until I improve"], "normal")
+        self.assertGreaterEqual(data["state_patch"]["stats"]["Ninjutsu"], 50)
+
+    def test_major_power_leap_uses_its_visible_roll_not_hidden_chance(self):
+        game = GameSession()
+        game.state["power_goal_tracker"] = {"key": "train to awaken a new haki ability", "days_invested": 40}
+        failed = game._check_power_goal_progress(
+            ["Train to awaken a new Haki ability"], 1,
+            [{"action": "Train to awaken a new Haki ability", "major_event": True,
+              "success": False, "total": 70, "difficulty": 80}],
+        )
+        succeeded = game._check_power_goal_progress(
+            ["Train to awaken a new Haki ability"], 1,
+            [{"action": "Train to awaken a new Haki ability", "major_event": True,
+              "success": True, "total": 90, "difficulty": 80}],
+        )
+        self.assertFalse(failed["mechanical_success"])
+        self.assertTrue(succeeded["mechanical_success"])
+        self.assertTrue(succeeded["roll_based"])
+
+    def test_system_world_training_xp_is_noticeable_over_a_month(self):
+        game = GameSession()
+        game.state = copy.deepcopy(BASE_STATE)
+        game.state["world"] = "Overgeared"
+        award, reasons = game.calculate_xp_award(["Practice blacksmithing every day"], [], 30 * 1440, "normal", [])
+        self.assertGreaterEqual(award, 300)
+        self.assertIn("30.0 effective days", reasons[0]["reason"])
 
 
 if __name__ == "__main__":

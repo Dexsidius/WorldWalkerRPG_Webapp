@@ -96,10 +96,8 @@ const APP = {
   pendingPowerGoal: null, // the time-skip payload awaiting confirmed_power_goal
   pendingAdvance: null,
   pendingManualRoll: null,
-  pendingIntervention: null,
   pendingDifficulty: null,
   challenge: null,
-  eventWindow: null,   // {} while the dedicated Major Event window is open, else null
   pendingCampaign: null,
   pendingPreview: null,
   journalTab: "party",
@@ -1646,139 +1644,43 @@ $$(".modal-backdrop").forEach((m) => m.addEventListener("click", (e) => {
   if (e.target === m && !locked.has(m.id)) closeModal(m.id);
 }));
 
-// ---------------------------------------------------------------------------
-// Major Event window — a dedicated, self-contained scene for personally
-// engaging a canon event. It relocates the REAL intervention bar and combat
-// panel into itself while open (rather than duplicating their markup/logic)
-// so every existing mechanic — danger follow-ups, the difficulty gate,
-// Timing Clash/Tactical Approach, lethal confirmation, structured combat —
-// keeps working completely unchanged; this window is just where the player
-// watches and drives that same pipeline while it's scoped to one event.
-// ---------------------------------------------------------------------------
-const INTERVENTION_BAR_HOME = $("#intervention-bar").parentElement;
-const COMBAT_PANEL_HOME = $("#combat-panel").parentElement;
-
-function openEventWindow(title, bannerUrl) {
-  // storyBuffer holds every beat/combat-round narrated while this window is
-  // open — the Chronicle behind it must stay untouched during the scene
-  // (the player reads it all live, right here, not duplicated in two
-  // places at once) and gets the complete record in one shot on close.
-  APP.eventWindow = { storyBuffer: [] };
-  $("#event-window-title").textContent = title || "MAJOR EVENT";
+// Major/canon events use a short informational notice only. The event's
+// actual scene, position-aware prompt, suggested actions and any combat all
+// remain in their normal Chronicle/Action Chat panels behind it.
+function openEventNotice(result) {
+  const isCanon = result.interruption_kind === "canon_event";
+  const isDanger = result.interruption_kind === "danger";
+  const title = result.major_event_title || result.state?.active_canon_event ||
+    (isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT");
+  $("#event-window-title").textContent = isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT";
+  $("#event-window-kicker").textContent = result.state?.combat?.active
+    ? "COMBAT HAS BEGUN"
+    : "THE SIMULATION HAS STOPPED HERE";
+  $("#event-window-heading").textContent = title;
+  $("#event-window-context").textContent = result.interruption_context || result.interruption_reason ||
+    "An important event has reached your character's current place in the story.";
   const banner = $("#event-window-banner");
-  if (bannerUrl) { banner.src = bannerUrl; banner.hidden = false; } else { banner.removeAttribute("src"); banner.hidden = true; }
-  $("#event-window-feed").innerHTML = "";
-  $("#event-window-choices").innerHTML = "";
-  $("#event-window-input").value = "";
-  $("#event-window-concluded").hidden = true;
-  $("#event-window-combat-slot").hidden = true;
-  $("#event-window-respond-row").hidden = false;
-  $("#btn-event-window-wait").hidden = false;
+  const bannerUrl = isCanon ? (result.state?._scene_image || "") : "";
+  if (bannerUrl && bannerUrl.includes("/assets/canon_events/")) {
+    banner.src = bannerUrl; banner.hidden = false;
+  } else {
+    banner.removeAttribute("src"); banner.hidden = true;
+  }
   openModal("modal-event-window");
 }
 
-function closeEventWindow() {
-  const bar = $("#intervention-bar");
-  if (bar.parentElement !== INTERVENTION_BAR_HOME) INTERVENTION_BAR_HOME.appendChild(bar);
-  const panel = $("#combat-panel");
-  if (panel.parentElement !== COMBAT_PANEL_HOME) COMBAT_PANEL_HOME.appendChild(panel);
-  // The Chronicle gets a short summary of what happened, not the full
-  // buffered beat-by-beat log — respond_to_event already writes an
-  // "[EVENT CONCLUDED]" entry with exactly that summary once the scene
-  // ends, so find and keep only that (the rest of the buffer already
-  // exists in server-side state regardless; it just isn't worth showing
-  // twice at full length here).
-  const buffer = (APP.eventWindow && APP.eventWindow.storyBuffer) || [];
-  const summary = [...buffer].reverse().find((e) => e && String(e.text || "").startsWith("[EVENT CONCLUDED]"));
-  const title = $("#event-window-title").textContent || "the event";
-  appendStoryEntries([summary || { text: `[EVENT CONCLUDED]\nYou step back from ${title}.`, tag: "system" }]);
-  APP.eventWindow = null;
+function closeEventNotice() {
   closeModal("modal-event-window");
+  $("#time-unit").value = "moment";
+  syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
+  const input = $("#action-input");
+  input.placeholder = APP.state?.combat?.active
+    ? "Combat is active — use the combat controls, or describe a specific combat action here."
+    : "Respond to the event here, add your action, then Advance the next beat.";
+  requestAnimationFrame(() => (APP.state?.combat?.active ? $("#btn-combat-attack") : input).focus());
 }
-$("#btn-event-window-leave").addEventListener("click", closeEventWindow);
-$("#btn-event-window-continue").addEventListener("click", closeEventWindow);
-
-function appendEventWindowEntries(entries) {
-  const feed = $("#event-window-feed");
-  (entries || []).forEach((entry) => {
-    if (!entry || !String(entry.text || "").trim()) return;
-    const div = document.createElement("div");
-    div.className = "event-window-entry" + (entry.tag ? " " + entry.tag : "");
-    div.textContent = entry.text;
-    feed.appendChild(div);
-  });
-  while (feed.children.length > 150) feed.firstElementChild.remove();
-  feed.scrollTop = feed.scrollHeight;
-}
-
-function updateEventWindowAfterResult(result) {
-  if (!APP.eventWindow) return;
-  appendEventWindowEntries(result.story);
-  const combatActive = !!result.state?.combat?.active;
-  const combatSlot = $("#event-window-combat-slot");
-  const panel = $("#combat-panel");
-  if (combatActive) {
-    combatSlot.hidden = false;
-    if (panel.parentElement !== combatSlot) combatSlot.appendChild(panel);
-  } else if (panel.parentElement === combatSlot) {
-    combatSlot.hidden = true;
-    COMBAT_PANEL_HOME.appendChild(panel);
-  }
-  // While a sub-interruption inside the scene (a danger follow-up, most
-  // often) needs the player's call, hide the freeform choices/response row
-  // so there's exactly one decision on screen at a time — handleTimeSkipResult
-  // already relocates #intervention-bar in here when that happens.
-  const hasSubIntervention = !$("#intervention-bar").hidden && $("#event-window-intervention-slot").contains($("#intervention-bar"));
-  $("#event-window-choices").hidden = combatActive || hasSubIntervention;
-  $("#event-window-respond-row").hidden = combatActive || hasSubIntervention;
-  $("#btn-event-window-wait").hidden = combatActive || hasSubIntervention;
-  const choices = $("#event-window-choices");
-  choices.innerHTML = "";
-  (result.suggested_actions || []).forEach((action) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = action;
-    btn.addEventListener("click", () => submitEventWindowAction(action));
-    choices.appendChild(btn);
-  });
-  const stillUnfolding = !!(result.state?.active_canon_event) || combatActive || hasSubIntervention;
-  $("#event-window-concluded").hidden = stillUnfolding;
-}
-
-async function submitEventWindowAction(text) {
-  if (APP.busy) return;
-  $("#event-window-input").value = "";
-  setBusy(true);
-  try {
-    const result = await apiPost("/api/event/respond", { action: text });
-    await handleTurnResult(result, text);
-  } catch (e) {
-    showToast(e.message, "danger"); playSfx("error");
-  } finally { setBusy(false); }
-}
-$("#btn-event-window-respond").addEventListener("click", () => {
-  const text = $("#event-window-input").value.trim();
-  if (!text) { showToast("Type what you do or say first.", "system"); return; }
-  if (APP.eventWindow) APP.eventWindow.lastAction = text;
-  submitEventWindowAction(text);
-});
-$("#event-window-input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("#btn-event-window-respond").click(); }
-});
-$("#btn-event-window-wait").addEventListener("click", () => {
-  // "Continue" means keep doing whatever the player was already doing, not
-  // a separate passive-watching mode — falls back to actually passive
-  // watching only when there's no prior action yet (the very first beat)
-  // or when that action stops making sense, which the prompt itself asks
-  // the model to judge. Deliberately does NOT update lastAction, so
-  // clicking this repeatedly keeps referencing the same real last action
-  // instead of drifting into referencing its own prior "continue" text.
-  const last = APP.eventWindow && APP.eventWindow.lastAction;
-  const text = last
-    ? `Continue doing what I was already doing ("${last}") for as long as that still makes sense here — if it no longer applies to what's happening now, simply have me wait and observe instead. Move the scene forward; don't just restate where things already stood.`
-    : "Hold position and watch this moment continue to unfold without personally stepping in.";
-  submitEventWindowAction(text);
-});
+$("#btn-event-window-leave").addEventListener("click", closeEventNotice);
+$("#btn-event-window-continue").addEventListener("click", closeEventNotice);
 
 // ---------------------------------------------------------------------------
 // Turn submission
@@ -1818,11 +1720,7 @@ async function handleTurnResult(result, action) {
     appendStoryEntries([{ text: "[ACTION NOT POSSIBLE]\n" + result.reason, tag: "meta" }]);
     return;
   }
-  // While the event window is open, its own feed is the only place this
-  // turn's narrative should appear live — the Chronicle gets the full
-  // record in one shot when the window closes (see closeEventWindow).
-  if (APP.eventWindow) APP.eventWindow.storyBuffer.push(...(result.story || []));
-  else appendStoryEntries(result.story);
+  appendStoryEntries(result.story);
   if (result.roll) {
     playSfx("dice");
     if (result.roll.breakthrough) flashScreen("success");
@@ -1835,11 +1733,6 @@ async function handleTurnResult(result, action) {
     openModal("modal-death");
   }
   refreshUsagePill();
-  // Reached when combat inside the event window just concluded and was
-  // narrated (see submitCombatAction) — the same update path the moment-mode
-  // narrative loop uses, so the window drops the combat slot and goes back
-  // to showing the scene's narrative and choices.
-  if (APP.eventWindow) updateEventWindowAfterResult(result);
 }
 
 // ---------------------------------------------------------------------------
@@ -1991,17 +1884,12 @@ function appendCombatLogEntries(entries) {
     log.appendChild(row);
   });
   log.scrollTop = log.scrollHeight;
-  // Mirror the same lines into the main Chronicle, styled like a dice check,
-  // so combat rounds are visible where the player is already looking —
-  // purely a local render, no server round trip or AI cost involved. When
-  // this fight is happening inside an event window, the combat log above
-  // is already visible right there, so the mirror goes into the event's
-  // own buffer instead of leaking live into the Chronicle behind it.
+  // Mirror the same lines into the Chronicle, styled like a dice check, so
+  // combat rounds remain visible in the same log as every other story beat.
   const chronicleLines = (entries || []).map((e) => combatLogLine(e).text).join("\n");
   if (chronicleLines) {
     const entry = { text: "[COMBAT]\n" + chronicleLines, tag: "roll" };
-    if (APP.eventWindow) APP.eventWindow.storyBuffer.push(entry);
-    else appendStoryEntries([entry]);
+    appendStoryEntries([entry]);
   }
 }
 
@@ -2159,15 +2047,6 @@ async function runBackgroundCheck() {
 async function pollBackground() {
   try {
     const r = await apiGet("/api/background/poll");
-    // A background job can still be in flight from the Advance that led up
-    // to the major event (kicked off before the event window ever opened,
-    // landing ~1.5s later via this poll) — injecting an unrelated
-    // "[WORLD REACTION]"/message into the Chronicle while that modal's
-    // opaque backdrop covers it just reads as unreadable noise behind the
-    // blur. The data is already safely recorded server-side either way
-    // (it'll surface normally on the next turn's story flush) — this only
-    // defers the visible toast/Chronicle append until the event concludes.
-    if (APP.eventWindow) return;
     (r.events || []).forEach((ev) => {
       if (ev.type === "chat") {
         showToast(`${ev.sender}: ${ev.message}`, "message"); playSfx("message");
@@ -2293,8 +2172,19 @@ function renderDifficultyGate(checks) {
     const range = check.difficulty_range || ["?", "?"];
     const bonus = Number(check.known_bonus || 0);
     const breakdown = formatBreakdownText(check.bonus_breakdown);
-    return `<article class="difficult-check-row"><header><b>${escapeHtml(check.action || check.reason)}</b><span>${escapeHtml(check.risk || "none")} risk</span></header><div><strong>Needed total ${escapeHtml(range[0])}–${escapeHtml(range[1])}</strong><span>Expected raw roll: about ${escapeHtml(check.expected_raw_needed)}/100 (~${escapeHtml(check.odds_percent ?? "?")}% odds)</span><span>${escapeHtml(check.ability)}${check.skill ? ` · ${escapeHtml(check.skill)}` : ""} · total bonus ${bonus >= 0 ? "+" : ""}${escapeHtml(bonus)}</span>${breakdown ? `<span class="difficult-check-breakdown">${escapeHtml(breakdown)}</span>` : ""}</div></article>`;
+    const lethal = ["high", "extreme"].includes(String(check.risk || "").toLowerCase());
+    const riskText = lethal ? `${String(check.risk).toUpperCase()} — FAILURE MAY BE FATAL` : `${check.risk || "none"} risk`;
+    return `<article class="difficult-check-row"><header><b>${escapeHtml(check.action || check.reason)}</b><span>${escapeHtml(riskText)}</span></header><div><strong>Needed total ${escapeHtml(range[0])}–${escapeHtml(range[1])}</strong><span>Expected raw roll: about ${escapeHtml(check.expected_raw_needed)}/100 (~${escapeHtml(check.odds_percent ?? "?")}% odds)</span><span>${escapeHtml(check.ability)}${check.skill ? ` · ${escapeHtml(check.skill)}` : ""} · total bonus ${bonus >= 0 ? "+" : ""}${escapeHtml(bonus)}</span>${breakdown ? `<span class="difficult-check-breakdown">${escapeHtml(breakdown)}</span>` : ""}</div></article>`;
   }).join("");
+}
+
+function acceptedDifficultyPayload(pending) {
+  const lethal = (pending?.checks || []).some((check) => ["high", "extreme"].includes(String(check.risk || "").toLowerCase()));
+  return {
+    ...pending.payload,
+    danger_warning_acknowledged: true,
+    confirmed_lethal: Boolean(pending.payload.confirmed_lethal || lethal),
+  };
 }
 
 $("#btn-difficult-roll").addEventListener("click", async () => {
@@ -2302,7 +2192,7 @@ $("#btn-difficult-roll").addEventListener("click", async () => {
   if (!pending) return;
   closeModal("modal-difficult-check");
   APP.pendingDifficulty = null;
-  await resolveAssessedTimeSkip(pending.payload);
+  await resolveAssessedTimeSkip(acceptedDifficultyPayload(pending));
 });
 
 $("#btn-difficult-cancel").addEventListener("click", () => {
@@ -2423,8 +2313,9 @@ function tacticalStagesFor(check) {
 function startChallenge(mode) {
   const pending = APP.pendingDifficulty;
   if (!pending) return;
+  const resolutionMode = $$('input[name="challenge-resolution"]:checked')[0]?.value === "continue" ? "continue" : "stop";
   closeModal("modal-difficult-check");
-  APP.challenge = { mode, payload: pending.payload, checks: pending.checks, index: 0, scores: {}, modes: {}, attempts: [], stage: 0, tacticalPoints: 10 };
+  APP.challenge = { mode, resolutionMode, payload: acceptedDifficultyPayload(pending), checks: pending.checks, index: 0, scores: {}, modes: {}, attempts: [], stage: 0, tacticalPoints: 10 };
   APP.pendingDifficulty = null;
   if (mode === "timing") showTimingCheck(); else showTacticalCheck();
 }
@@ -2442,7 +2333,7 @@ function finishChallengeCheck(score) {
     if (challenge.mode === "timing") showTimingCheck(); else showTacticalCheck();
     return;
   }
-  const payload = { ...challenge.payload, manual_rolls: { ...(challenge.payload.manual_rolls || {}), ...challenge.scores }, challenge_modes: challenge.modes };
+  const payload = { ...challenge.payload, manual_rolls: { ...(challenge.payload.manual_rolls || {}), ...challenge.scores }, challenge_modes: challenge.modes, challenge_resolution_mode: challenge.resolutionMode };
   closeModal(challenge.mode === "timing" ? "modal-timing-challenge" : "modal-tactical-challenge");
   APP.challenge = null;
   resolveAssessedTimeSkip(payload);
@@ -2611,103 +2502,17 @@ function handleTimeSkipResult(result, payload) {
     playSfx("danger"); shakeApp();
     openModal("modal-death");
   }
-  if (result.major_event_reached && !APP.eventWindow) {
+  if (result.major_event_reached) {
     showToast(`Major event reached: ${result.major_event_title || "campaign turning point"}.`, "world");
   }
-  const majorStop = ["canon_event", "danger", "world_event"].includes(result.interruption_kind);
-  if (result.interrupted && majorStop && (result.intervention_prompt || result.interruption_kind === "canon_event")) {
-    const isDanger = result.interruption_kind === "danger";
-    const isCanonEvent = result.interruption_kind === "canon_event";
-    $("#canon-event-heading").textContent = isCanonEvent ? "MAJOR CANON EVENT" : isDanger ? "DANGER AHEAD" : "IMPORTANT WORLD EVENT";
-    $("#canon-intervention-text").textContent = result.interruption_reason;
-    $("#canon-event-context").textContent = result.interruption_context || result.narrative || "The simulation stopped at the moment your decision became necessary.";
-    $("#canon-intervention-question").textContent = result.intervention_prompt || `Will ${APP.state?.name || "the player"} intervene?`;
-    $("#btn-canon-intervene").textContent = isDanger ? "TAKE CONTROL — HANDLE IT MYSELF" : isCanonEvent ? "TAKE PART — EXPERIENCE IT" : "YES — STOP HERE";
-    $("#btn-canon-later").textContent = isDanger ? "LET IT PLAY OUT — DECIDE BY ROLL" : isCanonEvent ? "LET IT PLAY OUT — DECIDE BY ROLL" : "NO — KEEP SIMULATING";
-    // The dedicated banner for this specific event (set server-side the
-    // moment it becomes active) — only show it here when it's a real
-    // per-event asset, not just the generic scene art for wherever the
-    // player happens to be standing.
-    const banner = $("#canon-event-banner");
-    const bannerUrl = isCanonEvent ? (result.state?._scene_image || "") : "";
-    if (bannerUrl && bannerUrl.includes("/assets/canon_events/")) {
-      banner.src = bannerUrl; banner.hidden = false;
-    } else {
-      banner.removeAttribute("src"); banner.hidden = true;
-    }
-    APP.pendingIntervention = { result, payload };
-    const bar = $("#intervention-bar");
-    // A sub-interruption surfacing WHILE the Major Event window is already
-    // open (a danger follow-up mid-battle is the common case) has to be
-    // decided from inside that window — it sits on top of and hides
-    // everything behind it, so the bar in its normal spot would be
-    // unreachable. Relocate the real element in rather than duplicating it,
-    // so every existing handler on it keeps working untouched.
-    if (APP.eventWindow) {
-      const slot = $("#event-window-intervention-slot");
-      if (bar.parentElement !== slot) slot.appendChild(bar);
-    } else if (bar.parentElement !== INTERVENTION_BAR_HOME) {
-      INTERVENTION_BAR_HOME.appendChild(bar);
-    }
-    bar.hidden = false;
+  const eventStop = ["canon_event", "world_event"].includes(result.interruption_kind);
+  const freshDangerStop = result.interruption_kind === "danger" && result.danger_notice_required !== false;
+  if (result.interrupted && (eventStop || freshDangerStop)) {
+    openEventNotice(result);
   } else if (result.interrupted && result.interruption_reason) {
     showToast(result.interruption_reason, result.interruption_kind === "goal_complete" ? "notify" : "system");
   }
-  if (APP.eventWindow) updateEventWindowAfterResult(result);
 }
-
-$("#btn-canon-intervene").addEventListener("click", async () => {
-  const pending = APP.pendingIntervention;
-  $("#intervention-bar").hidden = true;
-  APP.pendingIntervention = null;
-  const isCanonEvent = pending?.result?.interruption_kind === "canon_event";
-  if (isCanonEvent && !APP.eventWindow) {
-    const bannerEl = $("#canon-event-banner");
-    const bannerUrl = !bannerEl.hidden ? bannerEl.src : "";
-    const title = pending?.result?.state?.active_canon_event || $("#canon-event-heading").textContent || "Major Event";
-    openEventWindow(title, bannerUrl);
-    await submitEventWindowAction("Engage directly and personally experience this moment as it unfolds.");
-    return;
-  }
-  if (APP.eventWindow) {
-    // A sub-interruption inside an already-open event window — just move
-    // focus to the window's own response box instead of the main screen's.
-    $("#event-window-input").focus();
-    return;
-  }
-  $("#time-unit").value = "moment";
-  syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
-  $("#action-input").focus();
-  $("#action-input").placeholder = "Describe how you intervene, add the action, then Advance the next beat.";
-});
-$("#btn-canon-later").addEventListener("click", async () => {
-  const pending = APP.pendingIntervention;
-  if (!pending || APP.busy) return;
-  $("#intervention-bar").hidden = true;
-  APP.pendingIntervention = null;
-  const payload = pending.payload || {};
-  // Declining a flagged danger or a major canon event doesn't just narrate
-  // past it — it still has to be decided by an actual roll, the same as any
-  // other action. Resolve it as one normal "moment" beat (the same pipeline
-  // every single action already goes through, dice and all) before
-  // continuing the rest of the skip.
-  if (pending.result?.interruption_kind === "danger" || pending.result?.interruption_kind === "canon_event") {
-    const fallbackAction = pending.result?.interruption_kind === "canon_event"
-      ? "Respond to and experience the unfolding event exactly as your character realistically would, without the player personally directing each moment — this only saves time narrating it live, the character is not sitting it out"
-      : "Face the danger without personally taking control";
-    await beginTimeSkip(1, "moment", pending.result.interruption_reason || fallbackAction, payload.intensity || "normal");
-    if (!APP.campaignActive || APP.state?.alive === false) return; // death or campaign end already handled by the moment resolution
-  }
-  if (payload.unit === "moment") {
-    await beginTimeSkip(1, "moment", "", payload.intensity || "normal");
-    return;
-  }
-  const requested = clientDurationMinutes(payload.amount, payload.unit);
-  const elapsed = clientDurationMinutes(pending.result?.elapsed?.amount, pending.result?.elapsed?.unit);
-  const remaining = Math.max(0, Math.round(requested - elapsed));
-  if (remaining > 0) await beginTimeSkip(remaining, "minutes", "", payload.intensity || "normal");
-  else showToast("The requested time period had already ended at this event.", "system");
-});
 
 // ---------------------------------------------------------------------------
 // Chat
@@ -3757,8 +3562,6 @@ $("#btn-confirm-campaign").addEventListener("click", async () => {
     $("#td-amount").value = "1";
     syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
     syncTimeControl("#td-unit", "#td-amount", "#td-amount-field");
-    $("#intervention-bar").hidden = true;
-    APP.pendingIntervention = null;
     closeModal("modal-campaign-preview"); closeModal("modal-campaign"); closeModal("modal-welcome");
     $("#scene-title").textContent = "OPENING SCENE";
     try {
