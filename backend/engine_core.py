@@ -388,6 +388,131 @@ class CoreMixin:
             return True
         return bool(self._COMBAT_SIGNAL_RE.search(str(action_hint or "")))
 
+    _FIGHT_START_RE = re.compile(
+        r"\b(attack|fight|strike|stab|slash|shoot|fire at|punch|kick|hit|tackle|grapple|choke|"
+        r"charge at|lunge at|swing at|blast|ambush|kill|duel|spar|throw .{0,35} at|"
+        r"cast .{0,35} at|unleash .{0,35} (?:at|on)|use .{0,35} to (?:attack|hit|hurt|kill|blast|burn|cut))\b", re.I)
+    _FIGHT_NEGATION_RE = re.compile(
+        r"\b(avoid|prevent|stop|refuse|decline|de[- ]?escalate|negotiate|talk down|do not|don't|without)\b.{0,28}"
+        r"\b(attack|fight|violence|combat|strike|shoot|kill)\b", re.I)
+    _UNAVOIDABLE_ATTACK_RE = re.compile(
+        r"\b(attacks? you|ambush(?:es|ed)? you|charges? (?:at )?you|opens? fire (?:at|on) you|"
+        r"stabs? you|slashes? you|strikes? you|hits? you|shoots? you|lunges? (?:at )?you|"
+        r"swings? .{0,30} at you|fires? .{0,30} at you|blasts? you|tackles? you|grapples? you|"
+        r"wounds? you|cuts? you|drives? .{0,25} (?:at|into) you|launches? .{0,30} at you|"
+        r"(?:blade|sword|weapon|projectile|jutsu|spell|attack) .{0,35} (?:toward|at) you|"
+        r"combat (?:begins|erupts|starts)|violence (?:begins|erupts|starts)|"
+        r"no (?:time|room|chance|opportunity) (?:left )?(?:to|for) negotiat(?:e|ion|ing)?)\b", re.I)
+
+    _DANGER_SCENE_RE = re.compile(
+        r"\b(danger|confront|fight|battle|combat|attack|ambush|duel|raid|siege|hostile|enemy|"
+        r"boss|assassin|monster|threat|violence|kill|death)\b", re.I)
+    _DANGER_EXIT_RE = re.compile(
+        r"\b(flee|escape|retreat|withdraw|leave|depart|disengage|stand down|surrender|"
+        r"de[- ]?escalate|the (?:fight|battle|danger|confrontation) (?:ends?|is over|passes))\b", re.I)
+
+    def danger_scenario_active(self, state=None):
+        """Whether a previously warned confrontation is still the live scene.
+
+        The acknowledgement is intentionally short lived outside explicit
+        combat/major-event state.  This prevents an accepted danger warning
+        from suppressing unrelated warnings much later in the campaign while
+        still covering a multi-beat confrontation at the same place.
+        """
+        state = state if isinstance(state, dict) else self.state
+        combat = state.get("combat")
+        if isinstance(combat, dict) and combat.get("active"):
+            return True
+        scenario = state.get("danger_scenario")
+        if not isinstance(scenario, dict) or not scenario.get("active") or not scenario.get("warned"):
+            return bool(state.get("active_canon_event") and scenario and scenario.get("warned"))
+        location = str(state.get("location") or "").strip().lower()
+        origin = str(scenario.get("location") or "").strip().lower()
+        if location and origin and location != origin:
+            return False
+        try:
+            age = int(state.get("turn", 0) or 0) - int(scenario.get("last_turn", scenario.get("started_turn", 0)) or 0)
+        except (TypeError, ValueError):
+            age = 0
+        return age <= 12
+
+    def acknowledge_danger_scenario(self, reason=""):
+        prior = self.state.get("danger_scenario") if isinstance(self.state.get("danger_scenario"), dict) else {}
+        started = prior.get("started_turn") if prior.get("active") else self.state.get("turn", 0)
+        self.state["danger_scenario"] = {
+            "active": True,
+            "warned": True,
+            "location": self.state.get("location") or prior.get("location") or "",
+            "label": str(reason or prior.get("label") or self.state.get("active_canon_event") or "Dangerous confrontation")[:240],
+            "started_turn": int(started or 0),
+            "last_turn": int(self.state.get("turn", 0) or 0),
+        }
+        return self.state["danger_scenario"]
+
+    def clear_danger_scenario(self):
+        self.state["danger_scenario"] = {}
+
+    def dangerous_plan(self, actions, checks=None):
+        action_text = " ".join(str(x) for x in (actions or []) if str(x).strip())
+        risky_check = any(str(row.get("lethal_risk") or "none").lower() in {"moderate", "high", "extreme"}
+                          for row in (checks or []) if isinstance(row, dict))
+        return risky_check or bool(self._DANGER_SCENE_RE.search(action_text))
+
+    def ensure_immediate_combat_patch(self, data, actions=None):
+        """Last-resort structured-combat backstop.
+
+        The narrator remains responsible for canon-strength opponent numbers.
+        This only activates when it omitted combat entirely despite an explicit
+        player attack or prose saying an unavoidable attack is already under
+        way. CombatMixin then fills any missing numeric fields locally.
+        """
+        if not isinstance(data, dict):
+            return False
+        current = self.state.get("combat")
+        patch = data.setdefault("state_patch", {}) if isinstance(data.get("state_patch", {}), dict) else {}
+        data["state_patch"] = patch
+        authored = patch.get("combat")
+        if (isinstance(current, dict) and current.get("active")) or (isinstance(authored, dict) and authored.get("active")):
+            return False
+        action_text = " ".join(str(x) for x in (actions or []) if str(x).strip())
+        initiated = bool(self._FIGHT_START_RE.search(action_text)) and not bool(self._FIGHT_NEGATION_RE.search(action_text))
+        if re.search(r"\b(?:until|till|through)\b.{0,45}\b(?:attack|fight|battle|combat)\b.{0,20}\b(?:over|ends?|ended|finished|resolved)\b", action_text, re.I):
+            initiated = False
+        narrative = str(data.get("narrative") or "") + " " + " ".join(
+            str(update.get("narrative") or "") for update in (data.get("updates") or []) if isinstance(update, dict)
+        )
+        unavoidable = bool(self._UNAVOIDABLE_ATTACK_RE.search(narrative))
+        if initiated and not unavoidable and re.search(r"\b(training dumm(?:y|ies)|practice targets?|door|wall|rock|tree)\b", action_text, re.I):
+            initiated = False
+        if not (initiated or unavoidable):
+            return False
+
+        haystack = action_text + " " + narrative
+        opponent = "Hostile opponent"
+        known = [str(name) for name in (self.state.get("npc_memories") or {}).keys() if str(name).strip()]
+        known += [str(name) for name in (self.state.get("contacts") or {}).keys() if str(name).strip()]
+        player_name = str(self.state.get("name") or "").lower()
+        for name in sorted(set(known), key=len, reverse=True):
+            if name.lower() != player_name and re.search(rf"\b{re.escape(name)}\b", haystack, re.I):
+                opponent = name
+                break
+        if opponent == "Hostile opponent":
+            match = re.search(r"\b(?:attack|fight|strike|stab|slash|shoot|punch|kick|hit|tackle|grapple|ambush|kill|duel|spar)(?:\s+with)?\s+(?:the\s+|a\s+|an\s+)?([A-Za-z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,2})", action_text, re.I)
+            if match:
+                candidate = re.split(r"\b(?:with|using|at|in|until|because|and|but)\b", match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,!?")
+                if candidate and candidate.lower() not in {"training dummy", "practice target", "door", "wall"}:
+                    opponent = candidate.title()
+        non_lethal = bool(re.search(r"\b(spar|practice bout|friendly duel|training match)\b", action_text, re.I))
+        group = bool(re.search(r"\b(group|squad|mob|pack|gang|troops|soldiers|bandits|monsters)\b", opponent, re.I))
+        patch["combat"] = {
+            "active": True, "round": 1, "non_lethal": non_lethal,
+            "location": self.state.get("location") or "the current scene",
+            "enemy": {"name": opponent, "is_group": group, "group_size": None, "alive": True},
+        }
+        if not str(data.get("narrative") or "").strip():
+            data["narrative"] = f"The confrontation with **{opponent}** turns physical. Combat begins immediately."
+        return True
+
     def rated_good_example_snippet(self):
         """A real, player-approved turn from THIS campaign (see
         engine_journal.rate_last_turn_good), shown as a genuine few-shot
@@ -809,8 +934,8 @@ NON-NEGOTIABLE RULES
 - Never reject an action merely because the original story assigned that feat, technique, item, title, or achievement to someone else. If it is learnable, obtainable, craftable, copyable, inheritable, stealable, trainable, or discoverable under world rules, allow the attempt or a concrete path toward it.
 - Mark an action impossible only for a specific current contradiction with world rules or state. The returned reason must tell the player exactly which prerequisite, incompatibility, exclusive condition, missing resource, or physical/lore rule blocks it. If the obstacle can be overcome later, say what must change; do not use vague reasons such as 'not possible' or 'you cannot do that.'
 - When the player expresses intent to acquire, reproduce, learn, craft, inherit, copy, awaken, or qualify for a notable canon capability, return/update a prerequisite_track. It must have name, source_feat, status (blocked|in_progress|ready|complete), known_requirements (list), met_requirements (list), missing_requirements (list), next_steps (list), and notes. Keep it honest as new lore is discovered; do not reveal secret requirements the character has no way to know.
-- The application rolls uncertain checks. You assess the check; never secretly replace or reroll it.
-- A supplied successful roll must produce meaningful success within the stated scope. A failed roll must matter.
+- Dice are only for extreme/impossible attempts, lethal undertakings, and major power-tier leaps. Ordinary politics, strategy, social play, investigation, travel, crafting, combat, and focused training succeed plausibly without dice; consequences and NPC agency remain.
+- Honor supplied rolls. A successful power-leap roll grants the leap with a setting-valid cause; failure preserves training foundation and reveals what remains.
 - Impossible actions are not rollable.
 - The world never arbitrarily scales to the player.
 - NPCs, allies, rivals and enemies must have varied capability levels appropriate to their role and this world's power scale — a random background character, a seasoned specialist, and a named rival should feel meaningfully different in competence. Do not make everyone equally skilled.
@@ -839,10 +964,11 @@ NON-NEGOTIABLE RULES
 - Structured combat is always exactly ONE player-side entity against exactly ONE opposing entity — never a list of separate individually-targetable enemies. When the opposition is a single person, that person IS the entity. When the opposition is multiple people (a squad, a mob, a pack of beasts), represent the WHOLE group as one aggregate entity — do not create one list item per person. BAD: state_patch.combat.enemy is a list of 4 separate bandits, each individually targetable. GOOD: state_patch.combat.enemy is one entity named "Bandit Group" with is_group=true, group_size=4, and hp_max/power sized for the whole group's real aggregate threat.
 - When structured combat begins, set state_patch.combat = {{"active": true, "round": 1, "non_lethal": true|false, "location": "...", "enemy": {{"name": "...", "is_group": true|false, "group_size": N or null, "hp": N, "hp_max": N, "difficulty_min": 1-100, "difficulty_max": 1-100, "attack_min": 1-100, "attack_max": 1-100, "power": world-relative stat estimate, "alive": true}}}}. difficulty_min/max is how hard this opponent is for the player to hit; attack_min/max is how hard it is for the player to avoid or resist this opponent's attacks; power is this opponent's rough stat level on the same world-relative scale the player's own stats use. Every field is required — the application resolves individual exchanges itself and needs real numbers, not just prose. After this turn, further rounds are resolved by the application, not by you; you narrate again only when asked to relay a combat outcome.
 - Set combat.non_lethal = true for a friendly spar, a rank/promotion test, a supervised duel, or any bout both sides understand is not to the death — the application then floors HP at 1 for both combatants instead of 0, so the bout is won or lost on points and neither side can actually die from it. Leave it false (the default) for any fight with real danger — a hostile enemy, a wild beast, a battle where death is a genuine possible outcome. Never route a routine training montage through structured combat at all (non_lethal or otherwise) — training stays narrated prose handled by the normal training/ability-progress mechanics, not a round-by-round fight.
-- When a time-skip response, a canon event the player chose to personally engage in, or a danger interruption escalates into an actual fight — the player is squaring off against a real opponent with blows being traded, not just facing a single uncertain moment — prefer starting structured combat (state_patch.combat) over resolving the whole fight as one abstract check, so the player gets real round-by-round agency in it. A single quick, low-stakes scuffle or a moment too brief to actually play out round-by-round can still be a normal check; a real battle should not be flattened into one roll.
+- If the player starts a real fight or an enemy commits an attack, structured combat is REQUIRED immediately. A lunge, shot, offensive spell, weapon swing, or landed blow means combat—not another negotiation/intervention prompt. Before violence, negotiation or retreat remains possible.
+- Warn once per dangerous confrontation. After acceptance, continue its moment-to-moment checks without more permission prompts; warn again only for a new credible risk of player death.
 - Set hp_max/power/difficulty from the opponent's own CANONICAL strength — their actual established rank, reputation, and capability in this world/source material — never auto-balanced or scaled to whatever would make a "fair" or "interesting" fight against the player's current power level. A canonically weak or ordinary opponent stays weak even against a weak player; a canonically overwhelming one stays overwhelming even against a strong player. Only deviate from canonical strength when the campaign's own story has diverged in a way that plausibly changed this specific opponent (injury, power-up, different history, AU divergence) — and if so, that divergence should already be reflected elsewhere in state/continuity, not invented just for this fight.
 - For a GROUP, size hp_max/power by the group's real aggregate canonical threat, never by naively summing individual stats across bodies. A large mob of canonically weak individuals (ordinary civilians, low-level grunts) stays a LOW hp_max/power aggregate no matter how large the mob is — a genuinely powerful character can plausibly clear the whole mob in one or two exchanges, a one-sided beatdown, not a war of attrition. A small but canonically elite or coordinated group (e.g. an equally-ranked strike team) gets a HIGH hp_max/power reflecting a real, difficult fight regardless of the player's own level. The numbers should tell the same story a reader would expect: a hundred ordinary civilians are trivial to a genuinely powerful character; the assembled Akatsuki is a real, dangerous fight for nearly anyone.
-- Structured combat is optional scaffolding, never mandatory. The player can always choose to describe a combat-flavored action in plain prose through a normal action instead of using the dedicated combat controls, and you resolve it exactly like any other check (assess/roll/resolve). Never force the player into the structured combat flow or refuse to resolve a freely-described action just because state_patch.combat is active.
+- Once a real fight has begun, structured combat remains active until it ends. The player may still describe a specific combat move in plain prose through the normal Action Chat instead of clicking a combat button; honor that input as the next beat without dismissing it, but do not silently resolve an ongoing battle as a single abstract check or clear state_patch.combat while opponents are still exchanging attacks.
 - Companions/allies fighting alongside the player can grant state_patch.combat.ally_support (an integer 0-30, added to the player's own combat rolls both offense and defense for the fight). Only set this when the scene clearly reads as the player's side acting as a coordinated group against the opposing side — an ambush, a party assault, "jumping" an enemy or enemy group together — never for a one-on-one duel, honor fight, arena match, or any scene where companions are merely present but not actively fighting alongside the player. Omit or leave it 0 by default.
 - Combat should respect initiative, wounds, numbers, terrain, surprise, abilities and resource costs. Opponent HP/status must update mechanically.
 - When granting or updating a skill that could plausibly be used in combat, set its resource_type: "pool" if using it draws from the world's resource pool (Chakra for jutsu, Mana for spells, Aura for Nen/Hatsu, Magicule for named skills, Stamina/Energy for exertion-based techniques), "cooldown" if it instead runs on a recovery-time limit with no resource draw, or "free" if it has no real cost at all. Overgeared specifically distinguishes combat Skills (cooldown-gated, no Mana cost — the default for that world) from Spells/Magic (Mana-gated); tag Overgeared abilities accordingly rather than leaving them to the default. A plain, unnamed attack never costs resource.
@@ -888,7 +1014,7 @@ NON-NEGOTIABLE RULES
 - Long time skips must simulate the entire interval according to standing_orders and prior actions rather than simply jumping to a desired result.
 - During time skips, the player's last explicit orders continue until completed, interrupted, impossible, or changed by conditions.
 - When the player's own words name an explicit condition to wait for — "wait until the attack," "hold this position until she returns," "stay here until nightfall," "watch the road until someone comes" — that stated condition, not a generic notion of "something happens," is what the wait is actually FOR. On the turn the order is given, narrate only the moment of settling into it (per the no-time-advances rule above); on whichever later Advance/time skip actually plays out that wait, treat reaching or ruling out that specific named condition as the real governing outcome of the skip — take it seriously enough that it can be the whole point of the skip, not a background detail lost among other events. If the condition genuinely occurs within the time actually available, resolve it as the scene it deserves. If it does NOT occur within that time — the skip runs out, or the thing was never actually going to happen on this timeline — the narrative must say so plainly and in-world (the attack never came because it was called off, misreported, delayed by weather, aimed elsewhere, or whatever is actually true), never silently end the skip with the stated condition just unmentioned. BAD: player orders "I wait in a defensive perimeter until the attack," a skip plays out, and the response never mentions the attack at all. GOOD: either the attack genuinely happens and is resolved as the skip's real climax, or the narrative explicitly explains why it didn't come in this window ("Scouts confirm no force is moving on your position — whatever intelligence prompted the alert was wrong, or the attack has been called off for now").
-- Training gains depend on duration, intensity, recovery, talent, teacher/resources, current mastery, diminishing returns, and supplied dice results.
+- Focused training gives noticeable gains proportional to time and intensity. Only a tier leap needs a roll.
 - A failed uncertain action must still change the situation. Prefer partial progress with a complication, lost time, exposure, a relationship consequence, a cost, or a newly revealed obstacle/lead. Never answer a failure with only "nothing happens," and never secretly turn a failed roll into full success.
 - World events and canon timelines continue during skips unless prior player actions have changed them.
 {canon_clock_block}

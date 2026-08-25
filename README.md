@@ -6,7 +6,20 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.6.0** (schema 12). Version 3.6 is intended for fresh campaigns.
+Current app/save version: **3.6.3** (schema 13). Version 3.6 is intended for fresh campaigns.
+
+Version 3.6.3 gives dangerous confrontations one persistent warning instead
+of reopening a warning for every difficult choice in the same scene. Normal
+moment-to-moment checks continue after the warning is accepted; only a new
+credible chance of death warns again. Committed attacks from either side now
+enter structured combat immediately through expanded deterministic detection.
+
+Version 3.6.2 moves major/canon events back into the normal Chronicle and
+Action Chat: their popup is now a close-only notice, unavoidable violence
+opens structured combat immediately, and event importance alone no longer
+forces a roll. Challenge minigames can either stop after their result or carry
+that result through the remaining requested skip. Phone chats and the Advisor
+now reserve most of the screen for readable conversation history.
 
 Version 3.6 adds a local campaign director, persistent NPC motives, optional
 relationship scenes, branching quest routes, productive failures, readable

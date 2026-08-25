@@ -145,39 +145,52 @@ def compile_context_snapshot(snapshot, state, query="", mode="balanced"):
     return out
 
 
-UNCERTAIN_RE = re.compile(r"\b(fight|attack|duel|battle|defeat|capture|overcome|challenge|guardian|elite|hunt|sneak|steal|break|escape|persuade|convince|deceive|lie|train|practice|study|research|craft|forge|heal|climb|infiltrate|track|master|awaken|evolve|transform|unlock)\b", re.I)
-MAJOR_RE = re.compile(r"\b(awaken|evolve|transformation|transform|legendary|ultimate|master\b|boss|climactic|deathmatch|conqueror)\b", re.I)
+EXTREME_RE = re.compile(
+    r"\b(impossible|near[- ]impossible|legendary|ultimate|boss|climactic|deathmatch|"
+    r"alone against|one[- ]shot|single[- ]handedly|elite|guardian|godlike|overthrow|"
+    r"entire (?:nation|village|kingdom|world)|admiral|emperor|kage)\b", re.I)
+MAJOR_RE = re.compile(r"\b(awaken|evolve|transformation|transform|legendary|ultimate|boss|climactic|deathmatch|conqueror)\b", re.I)
 LETHAL_RE = re.compile(r"\b(kill|deathmatch|assassinate|boss|suicide|alone against|invade|lethal|to the death)\b", re.I)
 POWER_RE = re.compile(r"\b(learn|master|unlock|awaken|acquire|gain|develop)\b.*\b(ability|power|form|class|haki|nen|jutsu|skill|technique|magic|fruit)\b", re.I)
 
 
 def deterministic_assessment(state, actions, budget, mode="balanced"):
-    """Build contextual d100 gates without spending a model call."""
+    """Build rare high-stakes d100 gates without spending a model call.
+
+    Ordinary training, politics, strategy, investigation, travel, social play,
+    and routine combat resolve directly. Dice are reserved for an extreme
+    obstacle, lethal undertaking, or a genuine leap into a new power tier.
+    """
     abilities = abilities_for(state.get("world", "Custom World")) or ["Willpower"]
     stats = state.get("stats") if isinstance(state.get("stats"), dict) else {}
     checks = []
     for index, action in enumerate(actions or []):
         text = _text(action)
-        if not UNCERTAIN_RE.search(text):
+        power_leap = bool(POWER_RE.search(text))
+        extreme = bool(EXTREME_RE.search(text))
+        lethal_attempt = bool(LETHAL_RE.search(text))
+        if not (power_leap or extreme or lethal_attempt):
             continue
         lower = text.lower()
-        if any(word in lower for word in ("boss", "legendary", "impossible", "alone against", "elite", "guardian")):
-            dc_min, dc_max = 75, 92
-        elif any(word in lower for word in ("fight", "attack", "defeat", "capture", "overcome", "infiltrate", "steal", "awaken", "master")):
-            dc_min, dc_max = 55, 75
-        elif any(word in lower for word in ("train", "practice", "study", "research", "craft")):
-            dc_min, dc_max = 38, 58
+        if any(word in lower for word in ("impossible", "godlike", "entire world", "alone against")):
+            dc_min, dc_max = 82, 96
+        elif power_leap:
+            dc_min, dc_max = 68, 86
         else:
-            dc_min, dc_max = 45, 65
+            dc_min, dc_max = 75, 92
         ability = max(abilities, key=lambda name: float(stats.get(name, 0) or 0)) if stats else abilities[index % len(abilities)]
-        major = bool(MAJOR_RE.search(text))
-        lethal = "high" if LETHAL_RE.search(text) else "moderate" if any(x in lower for x in ("fight", "attack", "battle", "defeat", "capture", "overcome", "guardian", "elite")) else "none"
+        major = power_leap or bool(MAJOR_RE.search(text))
+        lethal = "high" if lethal_attempt else "moderate" if any(x in lower for x in ("boss", "deathmatch", "guardian", "elite", "alone against")) else "none"
+        tracker = state.get("power_goal_tracker") if isinstance(state.get("power_goal_tracker"), dict) else {}
+        action_key = re.sub(r"\s+", " ", text.strip().lower())
+        prior_days = float(tracker.get("days_invested", 0) or 0) if power_leap and tracker.get("key") == action_key else 0
+        preparation_bonus = min(20, int(prior_days // 3)) if power_leap else 0
         checks.append({
             "id": f"action_{index + 1}", "action_index": index, "reason": text[:80], "ability": ability,
             "skill": None, "difficulty_min": dc_min, "difficulty_max": dc_max,
-            "relevant_average_stat": 30, "situational_bonus": 0,
+            "relevant_average_stat": 30, "situational_bonus": preparation_bonus,
             "time_difficulty_modifier": int(budget.get("time_dc_modifier", 0) or 0) * 3,
-            "major_event": major, "major_reason": "Major turning point" if major else "",
+            "major_event": major, "major_reason": "Extreme obstacle or major power leap" if major else "",
             "lethal_risk": lethal, "lethal_warning": "Failure could be fatal." if lethal == "high" else "",
         })
     power_action = next((a for a in actions or [] if POWER_RE.search(_text(a))), "")

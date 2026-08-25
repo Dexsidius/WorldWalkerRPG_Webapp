@@ -176,7 +176,7 @@ class TurnsMixin:
                         "major_reason": "short reason or empty",
                         "lethal_risk": "none|low|moderate|high|extreme", "lethal_warning": "specific warning or empty, under 20 words",
                         "stakes": "success/failure stakes, under 25 words total"}}
-        extra = self.gm_context(action) + " Assess only. Do not narrate or roll. This is d100, never d20/D&D. Set a narrow contextual difficulty range from what is realistic for the AVERAGE RELEVANT character in this world at this exact era; do not scale it to the player. The application randomly samples the final target. A hard or canon-divergent action is not automatically impossible. Mark major_event sparingly but always for evolutions, transformations and climactic confrontations. Keep fields terse and mechanically specific."
+        extra = self.gm_context(action) + " Assess only. Do not narrate or roll. Set requires_check=true ONLY for an extremely difficult or seemingly impossible attempt, a lethal undertaking, or a major power-tier leap. Ordinary political, strategic, social, investigative, crafting, travel, and focused training actions automatically resolve without dice. A hard world-rule contradiction is impossible rather than rollable. This is d100, never d20/D&D. Difficulty reflects the average relevant character, never player scaling. Mark major_event for power leaps, evolutions, transformations, and climactic confrontations. Keep fields terse."
         assessment = self.ai.request(extra, p, max_output_tokens=700)
         self.last_assessment = copy.deepcopy(assessment)
         return assessment
@@ -328,9 +328,10 @@ class TurnsMixin:
              "assessment": assessment, "dice_result": roll_result, "state_before": self.trimmed_state_for_ai(action),
              "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
                         "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
+                        "danger_scenario_concluded": "boolean; true only when the current confrontation ended or the player left it",
                         "events": [{"type": "xp|level_up|skill|title|quest|hidden_quest|item|loot|reputation|companion|codex|location|training|combat|injury|death|discovery|world", "message": "notification"}],
                         "timeline_event": "major event or empty", "suggested_actions": ["exactly 3 optional contextual actions: strongest lead, growth/preparation, alternate hook. Each must name a real, specific person/place/faction/thread already in this campaign, not a generic template. Scale honestly — a longer-term lead can openly say so ('over the next few days...') rather than being forced into an instant."]}}
-        rules = self.gm_context(action) + " You are operating as the MAIN GM: Narrator + Rules Referee. Resolve strictly from dice_result when present. Never hide progression in narration. End by preserving or revealing an actionable journey thread and return exactly three useful, world-consistent suggested actions."
+        rules = self.gm_context(action) + " You are operating as the MAIN GM: Narrator + Rules Referee. Resolve strictly from dice_result when present. Never hide progression in narration. If state.danger_scenario is active, the player already accepted this confrontation's general danger: continue the scene without another permission prompt unless this specific action could kill them, and set danger_scenario_concluded=true only when the danger is truly over or they leave. End by preserving or revealing an actionable journey thread and return exactly three useful, world-consistent suggested actions."
         return self.request_with_narrative(rules, p, 1300)
 
     def take_turn(self, action, confirmed_lethal=False, cached_assessment=None):
@@ -466,6 +467,8 @@ Return ONLY valid JSON."""
         if concluded:
             self.state["active_canon_event"] = ""
             self.state["canon_event_engagement_count"] = 0
+            if not bool(self.state.get("combat", {}).get("active")):
+                self.clear_danger_scenario()
             summary = str(data.get("event_conclusion_summary") or "").strip()
             if summary:
                 self.append("[EVENT CONCLUDED]\n" + summary, "system")
@@ -554,11 +557,13 @@ Return ONLY valid JSON."""
     def apply_resolution(self, data, is_opening=False, pending_action=None, progression_context=None):
         with self.lock:
             before = copy.deepcopy(self.state)
+            danger_was_active = self.danger_scenario_active(before)
             context = progression_context if isinstance(progression_context, dict) else {}
             turn_actions = context.get("actions", []) if isinstance(context.get("actions", []), list) else []
             if pending_action and not turn_actions: turn_actions = [pending_action]
             if not is_opening:
                 register_action_goals(self.state, turn_actions)
+                self.ensure_immediate_combat_patch(data, turn_actions)
                 data, integrity_report = validate_turn_response(
                     before, data, turn_actions, context.get("rolls", []),
                     int(context.get("elapsed_minutes", 5) or 5), [],
@@ -566,6 +571,17 @@ Return ONLY valid JSON."""
             else:
                 integrity_report = {}
             validation = apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="opening" if is_opening else "turn")
+            self.ensure_combat_numbers()
+            combat_now = bool(isinstance(self.state.get("combat"), dict) and self.state.get("combat", {}).get("active"))
+            if not is_opening and data.get("danger_scenario_concluded") and not combat_now:
+                self.clear_danger_scenario()
+            elif not is_opening and combat_now:
+                self.acknowledge_danger_scenario(data.get("narrative") or "Combat")
+            elif not is_opening and danger_was_active:
+                action_text = " ".join(str(x) for x in turn_actions if str(x).strip())
+                location_changed = str(before.get("location") or "").strip().lower() != str(self.state.get("location") or "").strip().lower()
+                if location_changed or self._DANGER_EXIT_RE.search(action_text):
+                    self.clear_danger_scenario()
             # A narrator may enrich an original character during the opening, but a
             # canon start already has authoritative identity and mechanical facts.
             # Reapply the trusted pre-opening values so a generic response cannot
@@ -839,7 +855,7 @@ Return ONLY valid JSON."""
         training_words = ("train", "practice", "study", "research", "drill", "meditat", "spar", "learn", "master", "craft")
         danger_words = ("fight", "battle", "defeat", "boss", "dungeon", "raid", "quest", "mission", "survive", "hunt")
         modest_words = ("rest", "sleep", "wait", "eat", "talk", "ask", "walk", "travel")
-        daily_rates = {"light": 3, "normal": 5, "intense": 7, "extreme": 9}
+        daily_rates = {"light": 6, "normal": 10, "intense": 15, "extreme": 20}
         total, reasons = 0, []
         for index, action in enumerate(actions):
             lowered = action.lower()

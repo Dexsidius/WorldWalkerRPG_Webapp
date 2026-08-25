@@ -422,6 +422,10 @@ class CombatMixin:
         combat = self.state.get("combat") or {}
         combat["active"] = False
         combat["outcome"] = outcome
+        # The round-by-round fight is the dangerous scenario.  Once it has a
+        # mechanical outcome, later unrelated hard actions must be allowed to
+        # receive their own warning instead of inheriting stale consent.
+        self.clear_danger_scenario()
         self.autosave()
         result = {"combat": combat, "hp": self.state.get("hp"), "hp_max": self.state.get("hp_max"),
                   "resource": self.state.get("resource"), "resource_max": self.state.get("resource_max"),

@@ -600,9 +600,9 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # to actually be near. Concrete worked examples anchor the judgment
         # call far more reliably than an abstract rule alone.
         source = (ROOT / "backend" / "engine_time.py").read_text(encoding="utf-8")
-        self.assertIn("event's own scale is never itself a reason to force presence", source)
-        self.assertIn("Nine-Tails attacks Konoha", source)
-        self.assertIn("Naruto steals the forbidden scroll", source)
+        self.assertIn("Account for distance, access, affiliation, rank, duty, knowledge, event scale", source)
+        self.assertIn("without teleporting them into a private named-character confrontation", source)
+        self.assertIn("Default to the report or nothing whenever presence is not clearly established", source)
 
     def test_canon_event_catches_up_if_a_prior_turn_missed_it(self):
         """fire_canon_events used to only catch an event whose day fell
@@ -858,34 +858,21 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertLess(pywebview_pos, unregister_pos)
         self.assertLess(unregister_pos, register_pos)
 
-    def test_event_window_does_not_duplicate_narrative_into_the_chronicle_live(self):
-        # Every turn's narrative, and every combat round, used to be
-        # unconditionally mirrored into the main Chronicle even while the
-        # event window was open on top of it — the same text updating in
-        # two places at once, one of them hidden behind the modal. Both
-        # call sites must route through the event window's own buffer
-        # instead while a scene is active.
+    def test_event_notice_keeps_chronicle_as_the_only_story_surface(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("APP.eventWindow = { storyBuffer: [] };", js)
-        self.assertIn("if (APP.eventWindow) APP.eventWindow.storyBuffer.push(...(result.story || []));", js)
+        self.assertNotIn("APP.eventWindow", js)
+        self.assertIn("appendStoryEntries(result.story);", js)
         combat_mirror = js.index("const chronicleLines = (entries || []).map")
-        event_window_check = js.index("if (APP.eventWindow) APP.eventWindow.storyBuffer.push(entry);")
-        self.assertLess(combat_mirror, event_window_check)
+        chronicle_append = js.index("appendStoryEntries([entry]);", combat_mirror)
+        self.assertLess(combat_mirror, chronicle_append)
 
-    def test_event_window_close_posts_only_a_summary_not_the_full_log(self):
-        # A real report: the full beat-by-beat buffer (every prompt, every
-        # combat round) was landing in the Chronicle verbatim once the event
-        # window closed — a wall of text where a paragraph would do.
-        # respond_to_event already writes a single "[EVENT CONCLUDED]"
-        # summary entry when the scene ends; closeEventWindow must surface
-        # only that, not the whole buffer.
+    def test_event_notice_close_never_posts_or_synthesizes_story(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        close_fn = js[js.index("function closeEventWindow()"):]
+        close_fn = js[js.index("function closeEventNotice()"):]
         close_fn = close_fn[:close_fn.index("\n}\n")]
-        self.assertIn('startsWith("[EVENT CONCLUDED]")', close_fn)
-        self.assertIn("appendStoryEntries([summary", close_fn)
-        self.assertNotIn("appendStoryEntries(APP.eventWindow.storyBuffer)", close_fn)
-        self.assertNotIn("appendStoryEntries(buffer)", close_fn)
+        self.assertIn('closeModal("modal-event-window")', close_fn)
+        self.assertNotIn("appendStoryEntries", close_fn)
+        self.assertNotIn("apiPost", close_fn)
 
     def test_event_conclusion_summary_is_capped_to_one_paragraph(self):
         import inspect
@@ -1084,12 +1071,10 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertFalse(GameSession._same_place("Sand Village", "Konohagakure"))
         self.assertFalse(GameSession._same_place("", "Konohagakure"))
 
-    def test_active_canon_event_guarantees_a_difficulty_gate(self):
-        # A real save hit this: the player clicked "TAKE PART — EXPERIENCE
-        # IT" on the Nine-Tails attack, typed a response, and nothing
-        # happened — the AI's assessment returned no checks at all for that
-        # moment, so the difficulty gate (and its roll/Timing Clash/Tactical
-        # Approach choice) never appeared and engaging did nothing.
+    def test_active_canon_event_does_not_force_a_difficulty_gate(self):
+        # Event importance alone is not uncertainty. Ordinary decisions in a
+        # major event stay narrative; only a genuinely difficult action gets
+        # a roll/minigame gate.
         class NoCheckAI:
             def request(self, rules, payload, max_output_tokens=0):
                 return {"checks": [], "reachable_actions": payload["planned_actions"], "deferred_actions": []}
@@ -1098,8 +1083,8 @@ class WorldwalkerV260Tests(unittest.TestCase):
         game.state["active_canon_event"] = "Naruto's birth and the Nine-Tails attack"
         game.ai = NoCheckAI()
         result = game.assess_time_skip(1, "moment", ["Rush to help defend the village"], "normal")
-        self.assertTrue(result["assessment"]["requires_difficulty_confirmation"])
-        self.assertEqual(len(result["assessment"]["difficult_checks"]), 1)
+        self.assertFalse(result["assessment"]["requires_difficulty_confirmation"])
+        self.assertEqual(result["assessment"]["difficult_checks"], [])
 
         # Outside an active canon event, an empty check list is left alone.
         game2 = self.fresh()
@@ -1349,11 +1334,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertTrue(result["died"])
         self.assertFalse(game.state["alive"])
 
-    def test_forced_canon_event_check_only_fires_on_the_first_beat(self):
-        # Forcing a check on the FIRST beat of engaging a canon event solves
-        # "playing through does nothing" — but applying that same force to
-        # every later beat inside the same event turned the intended
-        # choose-your-own-adventure scene into constant minigame popups.
+    def test_canon_event_never_forces_checks_without_a_difficult_action(self):
         class NoCheckAI:
             def request(self, rules, payload, max_output_tokens=0):
                 if payload["task"] == "assess_time_skip":
@@ -1375,7 +1356,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         game.ai = NoCheckAI()
 
         first = game.assess_time_skip(1, "moment", ["engage"], "normal")
-        self.assertTrue(first["assessment"]["difficult_checks"])
+        self.assertFalse(first["assessment"]["difficult_checks"])
         resolve_fully(game, first)
         self.assertEqual(game.state["canon_event_engagement_count"], 1)
 
@@ -2237,18 +2218,13 @@ class WorldwalkerV260Tests(unittest.TestCase):
         rules = game.event_window_rules()
         self.assertIn("actually happens this beat, not something merely attempted", rules)
 
-    def test_event_window_frontend_has_a_continue_watching_option(self):
-        # Not every beat asks for a decision — some are just showing the
-        # player something. A generic "continue watching" affordance lets
-        # them move past those without typing or picking a suggested action,
-        # and a background job still in flight from before the event window
-        # opened must not inject unrelated Chronicle noise behind the modal
-        # while it's up.
+    def test_event_notice_frontend_is_close_only(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn('id="btn-event-window-wait"', html)
-        self.assertIn('$("#btn-event-window-wait").addEventListener("click"', js)
-        self.assertIn("if (APP.eventWindow) return;", js)
+        self.assertIn('id="btn-event-window-continue"', html)
+        self.assertNotIn('id="btn-event-window-wait"', html)
+        self.assertNotIn('id="event-window-input"', html)
+        self.assertNotIn('/api/event/respond', js)
 
     def test_event_window_rules_honors_a_stated_continue_to_resolution_intent(self):
         # A real report: saying "I help people until the attack is over"
@@ -2330,23 +2306,13 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertFalse(result["event_concluded"])
         self.assertEqual(game.state["active_canon_event"], "The Nine-Tails Attacks")
 
-    def test_continue_watching_repeats_the_players_last_action_not_a_static_wait(self):
-        # The button used to always send the exact same static string,
-        # which both misrepresented "continue" as passive watching when the
-        # player was actively doing something, and produced near-identical
-        # repeated output on consecutive clicks since the model kept
-        # receiving literally the same input with nothing new to react to.
+    def test_event_notice_returns_control_to_normal_action_chat(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("APP.eventWindow.lastAction = text;", js)
-        wait_handler = js[js.index('$("#btn-event-window-wait").addEventListener("click"'):]
-        wait_handler = wait_handler[:wait_handler.index("\n});") + 4]
-        self.assertIn("APP.eventWindow && APP.eventWindow.lastAction", wait_handler)
-        self.assertIn("Continue doing what I was already doing", wait_handler)
-        # Must NOT overwrite lastAction with its own synthetic continuation
-        # text, or a second click would start referencing the first click's
-        # generated text instead of the real last action.
-        self.assertNotIn("lastAction = text", wait_handler)
-        self.assertNotIn("lastAction =", wait_handler)
+        close_handler = js[js.index("function closeEventNotice()"):]
+        close_handler = close_handler[:close_handler.index("\n}")]
+        self.assertIn('$("#action-input")', close_handler)
+        self.assertIn('syncTimeControl("#time-unit"', close_handler)
+        self.assertNotIn("submitEventWindowAction", js)
 
     def test_administrative_notices_are_tagged_meta_not_system(self):
         # A real complaint: the Chronicle mixed real story prose with

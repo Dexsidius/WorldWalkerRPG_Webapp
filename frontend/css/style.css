@@ -550,30 +550,17 @@ input,select,textarea{ font-family:inherit; }
 .combat-mercy-row{ display:flex; align-items:center; gap:7px; color:var(--sub); font-weight:600; font-size:11.5px; margin:-2px 0 10px; cursor:pointer; }
 .combat-mercy-row input{ accent-color:var(--accent2); width:14px; height:14px; flex-shrink:0; }
 
-/* ==========================================================================
-   Major Event window — a dedicated, self-contained scene for personally
-   engaging a major canon event: narrated beats, choices, freeform response,
-   and (via relocated real panels, not duplicates) the same intervention and
-   combat controls used everywhere else in the game.
-   ========================================================================== */
-.event-window-modal{ width:820px; max-width:94vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; }
+/* Major/canon-event notice. This is deliberately informational only: the
+   Chronicle, Action Chat and normal combat panel remain the play surface. */
+.event-window-modal{ width:680px; max-width:94vw; max-height:90vh; overflow:hidden; }
 #btn-event-window-leave{ background:transparent; border:none; color:var(--sub); font-size:16px; cursor:pointer; }
 #btn-event-window-leave:hover{ color:var(--danger); }
 .event-window-banner{ width:100%; max-height:220px; object-fit:cover; display:block; border-bottom:1px solid var(--border-soft); }
-.event-window-feed{ flex:1 1 auto; min-height:120px; max-height:38vh; overflow-y:auto; padding:14px 20px; display:flex; flex-direction:column; gap:10px; }
-.event-window-entry{ font-size:13px; line-height:1.55; white-space:pre-wrap; color:var(--text); padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,.04); }
-.event-window-entry:last-child{ border-bottom:none; }
-.event-window-entry.system, .event-window-entry.danger{ color:var(--sub); font-size:12px; }
-.event-window-entry.canon_event{ color:var(--gold); font-weight:600; }
-.event-window-combat-slot{ padding:0 20px 6px; }
-.event-window-combat-slot .combat-panel{ border:1px solid var(--border-soft); }
-.event-window-choices{ display:flex; flex-direction:column; gap:8px; padding:4px 20px; }
-.event-window-choices button{ text-align:left; background:rgba(255,255,255,.04); border:1px solid var(--border-soft); color:var(--text); border-radius:10px; padding:10px 14px; font-size:13px; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
-.event-window-choices button:hover{ background:rgba(var(--accent-rgb),.12); border-color:rgba(var(--accent-rgb),.4); }
-.event-window-respond-row{ display:flex; gap:10px; padding:12px 20px 18px; border-top:1px solid var(--border-soft); align-items:flex-end; }
-.event-window-respond-row textarea{ flex:1 1 auto; resize:vertical; background:rgba(0,0,0,.28); border:1px solid var(--border-soft); color:var(--text); border-radius:8px; padding:9px 11px; font-size:13px; }
-.event-window-concluded{ padding:16px 20px 20px; text-align:center; }
-.event-window-concluded p{ color:var(--sub); margin:0 0 12px; }
+.event-window-notice{ padding:22px 24px 24px; }
+.event-window-kicker{ margin:0 0 7px; color:var(--accent2); font-size:10px; font-weight:900; letter-spacing:.13em; }
+.event-window-notice h3{ margin:0 0 10px; color:var(--gold); font:700 20px/1.3 var(--font-display); }
+#event-window-context{ margin:0; color:var(--text); font-size:13.5px; line-height:1.62; white-space:pre-wrap; }
+.event-window-guidance{ margin:14px 0 18px; padding:10px 12px; border-left:3px solid var(--accent2); background:rgba(var(--accent2-rgb),.08); color:var(--sub); font-size:12px; line-height:1.5; }
 .combat-enemy.dead{ opacity:.45; }
 .combat-enemy-head{ display:flex; justify-content:space-between; font-size:12.5px; margin-bottom:4px; }
 .combat-enemy-head b{ color:var(--accent2); }
@@ -627,30 +614,7 @@ input,select,textarea{ font-family:inherit; }
 .story-beat-system summary::before{ content:"⚙ "; }
 .story-beat-system-row{ margin-top:6px; padding-left:14px; color:var(--muted); line-height:1.5; }
 .story-beat-system-row b{ display:block; color:var(--sub); font-weight:700; text-transform:uppercase; letter-spacing:.04em; font-size:9px; margin-bottom:1px; }
-/* A genuine popup, not inline content the player has to scroll the
-   Chronicle to find — same fixed full-viewport treatment as every other
-   decision modal (.modal-backdrop), just kept as its own element since a
-   lot of existing logic toggles it via [hidden] rather than the open-class
-   modal system. Sits at the same z-index and relies on DOM order (it's
-   declared early, near the top of <body>) so every real .modal-backdrop —
-   lethal confirm, the difficulty gate, challenge minigames, the event
-   window — still correctly paints on top of it when both are open. */
-.inline-intervention{
-  position:fixed; inset:0; z-index:5000; display:flex; align-items:center; justify-content:center;
-  padding:20px; background:rgba(4,8,12,.86);
-}
-.inline-intervention[hidden]{ display:none; }
-.intervention-card{ width:560px; max-width:100%; max-height:88vh; overflow-y:auto; padding:16px 18px; border:1px solid rgba(var(--accent-rgb),.62); border-radius:14px; background:linear-gradient(135deg,rgba(var(--accent-rgb),.16),rgba(20,14,10,.92)); box-shadow:0 30px 80px rgba(0,0,0,.6); }
-.canon-event-banner{ display:block; width:100%; max-height:160px; object-fit:cover; border-radius:8px; margin-bottom:10px; border:1px solid rgba(255,190,80,.5); box-shadow:0 0 24px rgba(255,170,60,.18); }
-.canon-event-banner[hidden]{ display:none; }
-.intervention-copy>span{ color:var(--accent2); font-size:9px; font-weight:900; letter-spacing:.12em; }
-.intervention-copy h3{ margin:5px 0 7px; color:var(--gold); font:700 14px/1.35 var(--font-display); }
-.intervention-copy p{ margin:0 0 8px; color:var(--sub); font-size:12px; line-height:1.52; white-space:pre-wrap; }
-.intervention-copy strong{ color:var(--text); font-size:12.5px; }
-.intervention-actions{ display:flex; gap:8px; margin-top:11px; }
-.intervention-actions button{ flex:1; min-height:38px; }
-
-/* ==========================================================================
+/* ========================================================================== 
    Composer
    ========================================================================== */
 .composer-card{ flex-shrink:0; }
@@ -939,8 +903,11 @@ input,select,textarea{ font-family:inherit; }
 .chat-hint{ margin:8px 0 0; }
 .chat-input-row{ display:flex; gap:8px; margin-top:10px; }
 .chat-input-row textarea{ flex:1; }
-.advisor-body{ height:64vh; display:flex; flex-direction:column; }
-.advisor-messages{ height:auto; }
+.chat-modal{ height:min(760px,88vh); }
+.chat-modal>.chat-body{ flex:1; }
+.advisor-modal{ width:920px; height:min(780px,90vh); display:flex; flex-direction:column; overflow:hidden; }
+.advisor-modal>.advisor-body{ flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; }
+.advisor-messages{ flex:1 1 0; min-height:220px; height:auto; }
 .advisor-btn{ margin-top:10px; border-color:rgba(var(--accent2-rgb),.4); color:var(--accent2); }
 .advisor-btn:hover{ background:rgba(var(--accent2-rgb),.12); }
 .advisor-starters{ display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 4px; }
@@ -957,7 +924,7 @@ input,select,textarea{ font-family:inherit; }
 .advisor-msg-points{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px; }
 .advisor-msg-points li{ padding-left:16px; position:relative; font-size:12.5px; color:var(--sub); line-height:1.55; }
 .advisor-msg-points li::before{ content:"▸"; position:absolute; left:0; color:var(--accent2); }
-.advisor-followups{ display:flex; gap:6px; flex-wrap:wrap; margin:8px 0; }
+.advisor-followups{ flex:0 0 auto; display:flex; gap:6px; flex-wrap:wrap; max-height:96px; overflow-y:auto; margin:8px 0; }
 .advisor-followups button{
   background:transparent; border:1px dashed rgba(var(--accent-rgb),.5); color:var(--gold);
   border-radius:999px; padding:5px 11px; font-size:10.5px; font-weight:700; transition:.15s;
@@ -1219,6 +1186,14 @@ input,select,textarea{ font-family:inherit; }
 .difficult-check-row>div{ display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:7px; color:var(--sub); font-size:11px; }
 .difficult-check-row strong{ color:var(--gold); }
 .difficult-check-breakdown{ flex-basis:100%; color:var(--accent2); font-style:italic; }
+.challenge-resolution-choice{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0 4px; padding:10px; border:1px solid var(--border-soft); border-radius:10px; }
+.challenge-resolution-choice legend{ padding:0 7px; color:var(--gold); font-size:10px; font-weight:900; letter-spacing:.08em; text-transform:uppercase; }
+.challenge-resolution-choice label{ display:flex; align-items:flex-start; gap:8px; margin:0!important; padding:9px; border:1px solid transparent; border-radius:8px; background:rgba(255,255,255,.025); cursor:pointer; }
+.challenge-resolution-choice label:has(input:checked){ border-color:rgba(var(--accent2-rgb),.5); background:rgba(var(--accent2-rgb),.09); }
+.challenge-resolution-choice input{ margin-top:3px; accent-color:var(--accent2); }
+.challenge-resolution-choice span{ display:flex; flex-direction:column; gap:3px; }
+.challenge-resolution-choice b{ color:var(--text); font-size:11px; }
+.challenge-resolution-choice small{ color:var(--sub); font-size:10px; line-height:1.35; }
 .challenge-choice-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:12px 0; }
 .challenge-choice-grid button{ min-height:74px; padding:9px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; }
 .challenge-choice-grid small{ color:var(--sub); line-height:1.25; }
@@ -1235,7 +1210,7 @@ input,select,textarea{ font-family:inherit; }
 .tactical-options button:hover{ border-color:var(--accent); background:rgba(var(--accent-rgb),.12); }
 .tactical-options span,.tactical-options small{ color:var(--sub); font-size:10px; }
 @media(max-width:900px){ .preview-grid{ grid-template-columns:1fr; } #load-list li{ align-items:flex-start; flex-direction:column; } }
-@media(max-width:720px){ .story-feed{ padding:12px; } .story-entry{ grid-template-columns:1fr; gap:4px; } .story-entry-label{ padding-top:0; } .challenge-choice-grid,.tactical-options{ grid-template-columns:1fr; } .map-layout{ grid-template-columns:1fr; }.map-detail{ min-height:0; }.lore-import,.tuning-row{ grid-template-columns:1fr; } }
+@media(max-width:720px){ .story-feed{ padding:12px; } .story-entry{ grid-template-columns:1fr; gap:4px; } .story-entry-label{ padding-top:0; } .challenge-resolution-choice,.challenge-choice-grid,.tactical-options{ grid-template-columns:1fr; } .map-layout{ grid-template-columns:1fr; }.map-detail{ min-height:0; }.lore-import,.tuning-row{ grid-template-columns:1fr; } }
 
 @media(max-width:720px){
   html,body{ height:auto; min-height:100%; }
@@ -1274,7 +1249,27 @@ input,select,textarea{ font-family:inherit; }
   .modal{ width:calc(100vw - 14px)!important; max-width:none!important; max-height:92dvh; }
   .modal-backdrop{ padding:7px; align-items:center; }
   .modal-body{ padding:14px; }
-  .intervention-actions{ flex-direction:column; }
+  .chat-modal,.advisor-modal{ height:calc(100dvh - 14px); max-height:calc(100dvh - 14px); }
+  .chat-modal>.modal-head,.advisor-modal>.modal-head{ flex:0 0 auto; }
+  .chat-body{ display:flex; flex-direction:column; height:auto; min-height:0; overflow:hidden!important; }
+  .chat-contacts{ flex:0 0 auto; max-height:48px; flex-direction:row; overflow-x:auto; overflow-y:hidden; padding-bottom:4px; }
+  .chat-contacts .contact-item{ flex:0 0 auto; white-space:nowrap; }
+  .chat-thread{ flex:1 1 0; min-height:0; }
+  .chat-messages{ min-height:0; }
+  .chat-hint{ font-size:10px; line-height:1.35; }
+  .chat-input-row{ flex:0 0 auto; }
+  .chat-input-row textarea{ min-height:58px; max-height:22dvh; font-size:16px; }
+  .advisor-body{ min-height:0; padding:10px 12px 12px; }
+  .advisor-body>.hint{ margin:0 0 4px; font-size:10px; line-height:1.3; }
+  .advisor-mode-toggle{ flex:0 0 auto; padding:6px 8px; margin:2px 0 5px!important; }
+  .advisor-mode-toggle small{ display:none; }
+  .advisor-starters,.advisor-followups{ flex:0 0 auto; flex-wrap:nowrap; max-height:none; overflow-x:auto; overflow-y:hidden; padding:3px 0 6px; scrollbar-width:thin; }
+  .advisor-starters button,.advisor-followups button{ flex:0 0 auto; white-space:nowrap; }
+  .advisor-messages{ flex:1 1 0; min-height:0; padding:2px 3px 8px 0; }
+  .advisor-msg{ max-width:98%; padding:11px 12px; }
+  .advisor-msg-summary{ font-size:14px; line-height:1.58; }
+  .advisor-msg-points li{ font-size:13px; line-height:1.55; }
+  .event-window-notice{ padding:18px 16px 20px; }
   #phone-host-banner{ position:relative; grid-template-columns:1fr; }
   #phone-host-banner button{ grid-row:auto; grid-column:auto; }
   body.phone-hosting .app-shell{ height:auto; margin-top:0; }

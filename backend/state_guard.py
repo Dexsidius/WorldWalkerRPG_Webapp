@@ -48,6 +48,10 @@ APP_OWNED = {
     # writes this — never the GM.
     "rated_good_turns", "narrative_memory", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs",
     "npc_intentions", "simulation_events", "local_background_turn",
+    # Acknowledgement of an ongoing dangerous scene is maintained locally.
+    # The narrator can conclude a scene through its response flag, but cannot
+    # forge or erase the stored warning state through state_patch.
+    "danger_scenario",
     # v3.4 deterministic simulation records. The narrator may describe
     # inputs for these systems, but only local code may author their ledgers.
     "action_goals", "correction_log", "authoritative_corrections",
