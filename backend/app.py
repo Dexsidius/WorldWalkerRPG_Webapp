@@ -558,7 +558,7 @@ def api_panels():
         "ability_progress": s.get("ability_progress", {}),
         "progression_log": s.get("progression_log", []),
         "progression_ledger": s.get("progression_ledger", []),
-        "uses_xp": uses_xp_for(s.get("world", "Custom World")),
+        "uses_xp": uses_xp_for(s.get("world", "Custom World"), s.get("custom_world", "")),
         "level": s.get("level", 1), "xp": s.get("xp", 0), "xp_next": s.get("xp_next", 100),
         "stats": s.get("stats", {}),
         "quests": s.get("quests", []),

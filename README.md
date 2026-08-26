@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.7.2** (schema 13). Version 3.7 is intended for fresh campaigns.
+Current app/save version: **3.8.0** (schema 13). Version 3.8 is intended for fresh campaigns.
+
+Version 3.8.0 makes campaign-start labels mechanically authoritative. Canon
+characters and high-status original origins now begin with their promised
+rank, affiliation, signature abilities, equipment, knowledge, quests, and
+conditions before the opening narration runs. It also adds start-era
+consistency warnings and automatic correction for impossible default-era
+origins, expands maps and timelines, limits direct messaging of inaccessible
+factions, and adds focused new archetypes and eras across the non-Bleach worlds.
 
 Version 3.7.2 unifies current-stat interpretation across the Power Summary,
 Advisor, and GM. Extreme specialties remain powerful without being mistaken

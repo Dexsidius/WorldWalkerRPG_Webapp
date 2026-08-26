@@ -1087,7 +1087,7 @@ class TimeSkipMixin:
         patch = data.setdefault("state_patch", {})
         stat_patch = patch.setdefault("stats", {})
         progress_patch = patch.setdefault("ability_progress", {})
-        xp_mode = uses_xp_for(self.state.get("world"))
+        xp_mode = uses_xp_for(self.state.get("world"), self.state.get("custom_world", ""))
         progression_events = []
         for index, action in enumerate(training_orders):
             result = next((row for row in checks if isinstance(row, dict)
@@ -1468,7 +1468,7 @@ class TimeSkipMixin:
             danger_was_active = self.danger_scenario_active(before)
             validation = apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="time_skip")
             self.ensure_combat_numbers()
-            if not uses_xp_for(self.state.get("world")):
+            if not uses_xp_for(self.state.get("world"), self.state.get("custom_world", "")):
                 self.state["xp"], self.state["level"], self.state["xp_next"] = before.get("xp", 0), before.get("level", 1), before.get("xp_next", 100)
             else:
                 self.apply_system_xp(before, context.get("actions", []), context.get("rolls", []),

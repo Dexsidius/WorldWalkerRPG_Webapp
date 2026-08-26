@@ -928,7 +928,7 @@ COMBAT-SUMMARY JOB
             )
         progression_rule = (
             "\n- This is a status-window/LitRPG world: numbered XP and level-ups are the expected shape of base-stat progress. The application calculates XP, levels, thresholds and level-up stat gains after every meaningful action, so never write xp, xp_next, level, or direct base-stat increases in state_patch. Continue to record earned skills, proficiency, knowledge, items, titles, achievements and other world-specific progress normally."
-            if uses_xp_for(world_name) else
+            if uses_xp_for(world_name, self.state.get("custom_world", "")) else
             "\n- This world does not canonically expose XP or numbered levels. Never award XP or change level. Progress is shown through open-ended world-relative attributes, knowledge, techniques, ranks, titles and positions. Attributes have no fixed maximum."
         )
         position_rule = (

@@ -10,6 +10,11 @@ import app as app_module
 
 
 class BrowserNarrator:
+    model = "browser-qa"
+    usage = {"input_tokens": 0, "cached_input_tokens": 0, "uncached_input_tokens": 0,
+             "output_tokens": 0, "calls": 0, "cost_usd": 0.0, "cost_unknown": False,
+             "cost_is_conservative": False}
+
     def request(self, rules, payload, max_output_tokens=0):
         task = payload.get("task")
         state = payload.get("state") or payload.get("state_before") or {}

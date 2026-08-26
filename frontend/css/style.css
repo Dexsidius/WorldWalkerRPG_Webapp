@@ -863,6 +863,8 @@ input,select,textarea{ font-family:inherit; }
 .generated-ability{ border-color:rgba(var(--accent-rgb),.65); background:rgba(var(--accent-rgb),.09); }
 .generated-ability>b,.generated-backstory>b,.growth-summary>b{ color:var(--gold); letter-spacing:.05em; }
 .generated-ability strong{ color:var(--text); }
+.start-warnings{ display:flex; flex-direction:column; gap:5px; margin:10px 0; padding:10px 12px; border:1px solid rgba(230,174,74,.72); border-radius:9px; background:rgba(230,174,74,.1); color:var(--text); font-size:12px; line-height:1.45; }
+.start-warnings>b{ color:var(--gold); letter-spacing:.05em; }
 .generated-backstory p{ margin:0; }
 .class-profile-card{ border-color:rgba(var(--accent-rgb),.7); background:linear-gradient(135deg,rgba(var(--accent-rgb),.12),rgba(0,0,0,.2)); box-shadow:inset 3px 0 0 rgba(var(--accent-rgb),.65); }
 .growth-summary small{ color:var(--muted); }
