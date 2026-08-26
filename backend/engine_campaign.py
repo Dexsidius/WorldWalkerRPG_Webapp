@@ -20,6 +20,7 @@ from bleach_data import (academy_kido_skills, kido_reference_summary,
                          owns_release, zanpakuto_tracks)
 from world_progression import normalize_world_progression
 from lit_systems import initialize_lit_systems
+from skill_system import infer_skill_metadata
 
 
 DEFAULT_SETTINGS = {
@@ -613,15 +614,7 @@ BACKGROUND_HOMES = (
 class CampaignMixin:
     @staticmethod
     def combat_skill_metadata(name, effect=""):
-        blob = f"{name} {effect}".lower()
-        usable = bool(re.search(
-            r"\b(attack|strike|combat|fight|weapon|jutsu|spell|blast|projectile|trap|bind|stun|"
-            r"heal|restore|shield|guard|weaken|poison|haki|nen|chakra pulse|damage|sword|blade|cut|"
-            r"zanjutsu|hakuda|shikai|bankai|had[ōo]|bakud[ōo]|kid[ōo])\b", blob
-        ))
-        if re.search(r"\b(navigat|chart|craft|smith|cook|merchant|account|history|research)\b", blob) and not re.search(r"\b(attack|combat|trap|heal|shield|damage)\b", blob):
-            usable = False
-        return {"combat_usable": usable, "effect_type": "damage" if usable else "utility"}
+        return infer_skill_metadata(name, {"description": effect})
 
     def roll_starting_stats(self, world, archetype, player_stats):
         """Generate an open-ended, world-relative starting profile.
@@ -1154,9 +1147,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             boost, band = 100, "World-shaking"
         elif any(k in text for k in ("hokage", "kage", "admiral", "master assassin", "legendary", "s-rank")):
             boost, band = 55, "Elite / major power"
-        elif any(k in text for k in ("veteran", "prodigy", "genius", "bloodline", "elite", "champion", "jonin", "notorious", "renowned")):
+        elif any(k in text for k in ("prodigy", "genius", "bloodline", "elite", "champion", "jonin", "notorious", "renowned")):
             boost, band = 20, "Exceptional starter"
-        elif any(k in text for k in ("trained", "graduate", "martial artist", "soldier", "hunter", "chunin", "samurai")):
+        elif any(k in text for k in ("trained", "graduate", "veteran", "martial artist", "soldier", "hunter", "chunin", "samurai")):
             boost, band = 8, "Trained starter"
         primary = primary_stats_for(world, archetype)
         background_profile = self.build_background_profile(world, origin, archetype, background, boost, primary)
@@ -1231,7 +1224,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     "description": bleach_release_profile["shikai_effect"], "effect": bleach_release_profile["shikai_effect"],
                     "limitation": bleach_release_profile["shikai_limitation"],
                     "growth_path": "Deepen the Zanpakuto bond, develop applications and earn the Bankai prerequisites.",
-                    "combat_usable": True, "effect_type": "utility", "release_stage": "Shikai",
+                    "combat_usable": True, "effect_type": "transform", "category": "transformation", "target_type": "self", "duration_rounds": 4, "release_stage": "Shikai",
                 }
                 if has_bankai:
                     skills[bleach_release_profile["bankai_name"]] = {
@@ -1239,7 +1232,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                         "description": bleach_release_profile["bankai_effect"], "effect": bleach_release_profile["bankai_effect"],
                         "limitation": bleach_release_profile["bankai_cost"],
                         "growth_path": "Extend safe duration, refine control and integrate Bankai without abandoning the Shikai's core identity.",
-                        "combat_usable": True, "effect_type": "utility", "release_stage": "Bankai",
+                        "combat_usable": True, "effect_type": "transform", "category": "transformation", "target_type": "self", "duration_rounds": 5, "release_stage": "Bankai",
                     }
             bleach_tracks = zanpakuto_tracks(has_shikai=has_shikai, has_bankai=has_bankai)
         specific_gear = WORLD_ARCHETYPE_GEAR.get(world, {}).get(archetype)

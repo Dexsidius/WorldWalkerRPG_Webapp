@@ -14,6 +14,7 @@ from knowledge import normalize_npc_knowledge
 from bleach_data import CANON_HADO, CANON_BAKUDO
 from world_progression import normalize_world_progression
 from lit_systems import initialize_lit_systems
+from skill_system import normalize_skill_map
 
 
 APP_OWNED = {
@@ -252,9 +253,9 @@ def _repair_bleach_mechanics(state, before):
     profile = special.get("Zanpakuto Profile") if isinstance(special.get("Zanpakuto Profile"), dict) else {}
     if shikai_ok and profile.get("shikai_name"):
         skill_name = f"Shikai — {profile['shikai_name']}"
-        skills.setdefault(skill_name, {"rank":"Shikai", "bonus":10, "description":profile.get("shikai_effect", "The recorded first release of this Zanpakuto."), "effect":profile.get("shikai_effect", ""), "limitation":profile.get("shikai_limitation", "Consumes Reiryoku and requires release control."), "growth_path":"Deepen the bond and refine applications.", "combat_usable":True, "effect_type":"utility", "release_stage":"Shikai"})
+        skills.setdefault(skill_name, {"rank":"Shikai", "bonus":10, "description":profile.get("shikai_effect", "The recorded first release of this Zanpakuto."), "effect":profile.get("shikai_effect", ""), "limitation":profile.get("shikai_limitation", "Consumes Reiryoku and requires release control."), "growth_path":"Deepen the bond and refine applications.", "combat_usable":True, "effect_type":"transform", "release_stage":"Shikai"})
     if bankai_ok and profile.get("bankai_name"):
-        skills.setdefault(profile["bankai_name"], {"rank":"Bankai", "bonus":14, "description":profile.get("bankai_effect", "The recorded final release of this Zanpakuto."), "effect":profile.get("bankai_effect", ""), "limitation":profile.get("bankai_cost", "Consumes immense Reiryoku."), "growth_path":"Extend safe duration and mastery.", "combat_usable":True, "effect_type":"utility", "release_stage":"Bankai"})
+        skills.setdefault(profile["bankai_name"], {"rank":"Bankai", "bonus":14, "description":profile.get("bankai_effect", "The recorded final release of this Zanpakuto."), "effect":profile.get("bankai_effect", ""), "limitation":profile.get("bankai_cost", "Consumes immense Reiryoku."), "growth_path":"Extend safe duration and mastery.", "combat_usable":True, "effect_type":"transform", "release_stage":"Bankai"})
     return repairs
 
 
@@ -262,6 +263,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     before = copy.deepcopy(state)
     safe, accepted, rejected = _normalize_patch(patch, state, allow_time, source)
     merge(state, safe)
+    state["skills"] = normalize_skill_map(state.get("skills", {}))
     repairs = _repair(state)
     repairs.extend(_repair_bleach_mechanics(state, before))
     repairs.extend(normalize_world_progression(state, before))
@@ -307,6 +309,7 @@ def migrate_state(state, from_version="unknown"):
     migrated["schema_version"] = BASE_STATE.get("schema_version", 12)
     normalize_npc_knowledge(migrated, {}, "migration")
     repairs = _repair(migrated)
+    migrated["skills"] = normalize_skill_map(migrated.get("skills", {}))
     repairs.extend(normalize_world_progression(migrated))
     repairs.extend(initialize_lit_systems(migrated))
     migrated.setdefault("diagnostics", {})["migration"] = {

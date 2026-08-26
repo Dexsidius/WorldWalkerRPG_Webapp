@@ -1600,7 +1600,22 @@ class TimeSkipMixin:
             # first regardless of where their day actually falls among them.
             # A canon note gets sequence -1 so it reads as that day's opening
             # headline when it shares a day with a narrator update.
-            entries = [{"canon_day": int(u.get("canon_day", 0) or 0), "sequence": int(u.get("sequence", 0) or 0), "kind": "update", "data": u} for u in updates]
+            # If the narrator omits a date, the update describes the result at
+            # the end of the resolved span. Sorting it as literal day 0 made a
+            # final-day action card appear before canon events from earlier in
+            # the same skip, even though its displayed header used the final
+            # date. Anchor undated updates to the clock we just advanced to.
+            final_canon_day = int(self.state.get("canon_day", before.get("canon_day", 0)) or 0)
+            def update_canon_day(update):
+                try:
+                    value = update.get("canon_day")
+                    return int(value) if value is not None and str(value).strip() else final_canon_day
+                except (TypeError, ValueError):
+                    return final_canon_day
+            entries = [{
+                "canon_day": update_canon_day(u),
+                "sequence": int(u.get("sequence", 0) or 0), "kind": "update", "data": u,
+            } for u in updates]
             entries += [{"canon_day": p["canon_day"], "sequence": -1, "kind": "canon", "data": p} for p in (pending_canon_appends or [])]
             entries.sort(key=lambda e: (e["canon_day"], e["sequence"]))
             if entries:
@@ -1621,7 +1636,7 @@ class TimeSkipMixin:
                     tail_bits = [str(update.get(key)).strip() for key in ("why_it_matters", "player_knowledge", "next_pressure") if update.get(key)]
                     if tail_bits:
                         sections.append(" ".join(bit if bit.endswith((".", "!", "?", '"', "”")) else bit + "." for bit in tail_bits))
-                    canon_day = update.get("canon_day")
+                    canon_day = entry["canon_day"]
                     try: canon_day = int(canon_day) if canon_day is not None else None
                     except (TypeError, ValueError): canon_day = None
                     body = "\n\n".join(sections)

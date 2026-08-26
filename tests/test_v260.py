@@ -830,18 +830,9 @@ class WorldwalkerV260Tests(unittest.TestCase):
         cache_open_pos = service_worker.index("caches.open(CACHE).then((cache) => cache.put(")
         self.assertLess(clone_pos, cache_open_pos)
 
-    def test_service_worker_does_not_intercept_godot_build_assets(self):
-        # A real report: loading a world logged an uncaught
-        # "Failed to execute 'put' on 'Cache': Partial response (status code
-        # 206) is unsupported". Godot's Web export loader issues ranged
-        # fetches for its large .wasm/.pck files, which return 206 Partial
-        # Content — the Cache API rejects caching those outright, and the
-        # fetch handler's fire-and-forget cache.put() had no .catch(), so it
-        # surfaced as an unhandled rejection on every world load. Those build
-        # files don't need service-worker caching in the first place, so
-        # they're excluded the same way /music/ and /portrait-cache/ are.
+    def test_service_worker_has_no_obsolete_godot_exception(self):
         service_worker = (ROOT / "frontend" / "sw.js").read_text(encoding="utf-8")
-        self.assertIn('url.pathname.startsWith("/godot/")', service_worker)
+        self.assertNotIn("godot", service_worker.lower())
 
     def test_desktop_shell_never_registers_a_service_worker(self):
         # A pywebview window only ever talks to its own same-machine Flask
@@ -881,166 +872,43 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("ONE paragraph", source)
         self.assertIn("not a beat-by-beat recap", source)
 
-    def test_godot_portrait_ambient_export_and_embed_wiring_are_present(self):
-        # The Godot-rendered ambient effect ships as a static HTML5/WebGL
-        # export sitting under frontend/godot/, served by the same
-        # catch-all static route as everything else in frontend/ — no
-        # dedicated Flask route needed. This locks in that the exported
-        # build and the iframe-embedding JS both actually exist together,
-        # since a build without wiring (or wiring without a build) is a
-        # silent no-op with no console error to notice.
-        export_dir = ROOT / "frontend" / "godot" / "portrait_ambient"
-        for filename in ("index.html", "index.js", "index.wasm", "index.pck"):
-            self.assertTrue((export_dir / filename).exists(), f"missing {filename} in the exported Godot build")
+    def test_native_portrait_ambient_replaces_godot_runtime(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn('id="portrait-godot-ambient"', (ROOT / "frontend" / "index.html").read_text(encoding="utf-8"))
-        self.assertIn("GODOT_AMBIENT_WORLDS", js)
-        self.assertIn("/godot/portrait_ambient/index.html?world=", js)
-        self.assertIn("applyGodotAmbient(s.world", js)
-        # One export, six worlds — the scene reads ?world= at runtime and
-        # re-themes its own particle material rather than needing a
-        # separate ~40MB WASM build shipped per world.
-        for world in ("Naruto", "One Piece", "Hunter x Hunter", "Solo Max-Level Newbie", "Overgeared", "Reincarnated as a Slime"):
-            self.assertIn(f'"{world}"', js[js.index("GODOT_AMBIENT_WORLDS"):js.index("GODOT_AMBIENT_WORLDS") + 300])
-        theme_script = (ROOT / "godot" / "portrait_ambient" / "ambient_theme.gd").read_text(encoding="utf-8")
-        for world in ("Naruto", "One Piece", "Hunter x Hunter", "Solo Max-Level Newbie", "Overgeared", "Reincarnated as a Slime"):
-            self.assertIn(f'"{world}"', theme_script)
-        self.assertIn("_world_from_query", theme_script)
-        self.assertIn("GradientTexture1D", theme_script)  # color_ramp needs a texture, not a raw Gradient
+        html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="portrait-ambient"', html)
+        self.assertIn("function applyPortraitAmbient(s)", js)
+        self.assertNotIn("godot", html.lower())
+        self.assertFalse((ROOT / "godot").exists())
+        self.assertFalse((ROOT / "frontend" / "godot").exists())
 
-    def test_godot_scene_ambient_export_and_embed_wiring_are_present(self):
-        # The scene banner's old canvas particle/glow system (#scene-fx,
-        # seedParticles/seedSceneGlows/tickSceneFx) and CSS weather overlay
-        # (.scene-weather) are fully replaced by one Godot layer, not
-        # layered underneath it — this locks in both that the replacement
-        # is actually wired up AND that the old dead code is gone, not
-        # just unreachable.
-        export_dir = ROOT / "frontend" / "godot" / "scene_ambient"
-        for filename in ("index.html", "index.js", "index.wasm", "index.pck"):
-            self.assertTrue((export_dir / filename).exists(), f"missing {filename} in the exported Godot build")
+    def test_native_scene_ambient_uses_weather_activity_and_time(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
-        self.assertIn('id="scene-godot-fx"', html)
-        self.assertNotIn('id="scene-fx"', html)
-        self.assertNotIn('id="scene-weather"', html)
-        self.assertIn(".scene-godot-fx{", css)
-        self.assertNotIn(".scene-weather{", css)
-        self.assertIn("applyGodotSceneFx", js)
-        self.assertIn("/godot/scene_ambient/index.html?", js)
-        for dead in ("function startSceneFx", "function seedParticles", "function seedSceneGlows",
-                     "function tickSceneFx", "function resizeSceneFx", "sceneFx.canvas"):
-            self.assertNotIn(dead, js)
-        # Live re-theming, not a reload: the scene category/weather can
-        # change nearly every turn, so a second call must talk to the
-        # already-running instance instead of reloading the ~40MB WASM
-        # runtime. JavaScriptBridge.create_callback()/get_interface() to
-        # expose a Godot-side function to JS proved unreliable in testing
-        # (calls landed nowhere, no error raised) — the page instead sets a
-        # plain JS global that scene_theme.gd polls a few times a second via
-        # eval(), the same primitive its own initial query-string read
-        # already uses successfully.
-        self.assertIn("frame.contentWindow.sceneThemeParams = key", js)
-        theme_script = (ROOT / "godot" / "scene_ambient" / "scene_theme.gd").read_text(encoding="utf-8")
-        self.assertIn("func set_theme(category: String, weather: String)", theme_script)
-        self.assertIn("window.sceneThemeParams", theme_script)
-        self.assertIn("GradientTexture1D", theme_script)
-        # Every category actually used elsewhere in the app maps to a
-        # real family, not silently falling back to the default for most
-        # of them.
-        for category in ("town_square", "kingdom", "indoor_grandhall", "harbor_port", "forest_path",
-                          "mountain_castle", "battlefield_dusk", "monster_battlefield", "monster_lair",
-                          "dungeon_cave", "starry_sky", "night_wilderness", "tower_hub", "duel",
-                          "merchant_shop", "tavern_inn", "academy_classroom", "arena_floor", "ship_deck"):
-            self.assertIn(f'"{category}"', theme_script, f"{category} has no family mapping in scene_theme.gd")
+        self.assertIn('id="scene-ambient"', html)
+        self.assertIn("function ambientModeFor(category, weather, s)", js)
+        self.assertIn("function timeOfDayFor(s)", js)
+        self.assertIn("function activityFor(s)", js)
+        self.assertIn("function applyNativeSceneFx(category, weather, s)", js)
         for weather in ("rain", "storm", "snow", "fog"):
-            self.assertIn(f'"{weather}"', theme_script)
+            self.assertIn(f'data-effect="{weather}"', css)
+        self.assertIn("prefers-reduced-motion:reduce", css)
 
-    def test_godot_projects_are_configured_for_a_transparent_embedded_background(self):
-        # A real report: the banner rendered as an opaque black rectangle
-        # with particles floating on it instead of a transparent overlay
-        # over the actual scene art. window/size/transparent (a desktop
-        # window-compositing flag) does nothing for a Web export — the
-        # viewport itself needs transparent_background, or every pixel the
-        # scene doesn't explicitly draw over composites as opaque black
-        # regardless of clear-color alpha. canvas_resize_policy=2 (Adaptive)
-        # is required too: with the default (0/None) the browser stretches
-        # a fixed-resolution canvas to fill the responsive iframe box via
-        # GPU bilinear scaling, which left a visible opaque band along the
-        # top/bottom edges even after the viewport fix. Even with both of
-        # those fixed and verified via direct canvas pixel-alpha sampling,
-        # the packaged app still showed a solid black square: Godot's
-        # generated HTML export shell hardcodes `body { background-color:
-        # black; }`, which sits directly behind the (correctly transparent)
-        # canvas in the SAME document and shows through once the browser
-        # composites the canvas's real per-pixel alpha onto the page — a
-        # layer no canvas-level pixel sampling or iframe/canvas CSS check
-        # can detect, since neither inspects the child document's own body.
-        # html/head_include injects a later, !important override so this
-        # survives every future re-export instead of hand-patching the
-        # generated index.html files.
-        for project in ("scene_ambient", "portrait_ambient", "map_ambient"):
-            cfg = (ROOT / "godot" / project / "project.godot").read_text(encoding="utf-8")
-            self.assertIn("viewport/transparent_background=true", cfg, f"{project}/project.godot")
-            preset = (ROOT / "godot" / project / "export_presets.cfg").read_text(encoding="utf-8")
-            self.assertIn("html/canvas_resize_policy=2", preset, f"{project}/export_presets.cfg")
-            self.assertIn("background:transparent!important", preset, f"{project}/export_presets.cfg")
-            exported_html = (ROOT / "frontend" / "godot" / project / "index.html").read_text(encoding="utf-8")
-            self.assertIn("background:transparent!important", exported_html, f"frontend/godot/{project}/index.html")
-
-    def test_godot_ambient_layers_fill_their_container_instead_of_letterboxing(self):
-        # A real report, after the black-square bug above was fixed: the
-        # banner picture only occupied a centered strip with black bars on
-        # either side. Godot's window/stretch/aspect defaults to "keep",
-        # which pillarboxes/letterboxes to preserve each project's fixed
-        # design resolution (640x260 / 280x200 / 960x600) instead of filling
-        # whatever shape its actual embedding container is — invisible
-        # before, because the whole canvas rendered opaque black anyway, so
-        # the letterbox bars blended into the same black square. Fixing the
-        # black-square bug made the previously-hidden pillarboxing visible.
-        # "expand" fills the container with no letterboxing, but the
-        # emitters were hand-placed in each .tscn assuming the fixed design
-        # size, so each script must also rescale them off the live
-        # get_viewport_rect().size or they'd stay pinned to their original
-        # small patch instead of covering the actual, larger visible area.
-        for project in ("scene_ambient", "portrait_ambient", "map_ambient"):
-            cfg = (ROOT / "godot" / project / "project.godot").read_text(encoding="utf-8")
-            self.assertIn('window/stretch/aspect="expand"', cfg, f"{project}/project.godot")
-        scene_script = (ROOT / "godot" / "scene_ambient" / "scene_theme.gd").read_text(encoding="utf-8")
-        self.assertIn("get_viewport_rect().size", scene_script)
-        self.assertIn("get_viewport().size_changed.connect(_fit_to_viewport)", scene_script)
-        portrait_script = (ROOT / "godot" / "portrait_ambient" / "ambient_theme.gd").read_text(encoding="utf-8")
-        self.assertIn("get_viewport_rect().size", portrait_script)
-        self.assertIn("get_viewport().size_changed.connect(_fit_to_viewport)", portrait_script)
-        map_script = (ROOT / "godot" / "map_ambient" / "map_theme.gd").read_text(encoding="utf-8")
-        self.assertIn("get_viewport().size_changed.connect(_fit_to_viewport)", map_script)
-
-    def test_godot_map_ambient_export_and_embed_wiring_are_present(self):
-        # The map's real interactive parts (pan/zoom, territory Voronoi
-        # coloring, clickable pins) are untouched — this is purely an
-        # additive glow/atmosphere layer. Unlike the scene banner, #map-wrap
-        # is a fresh DOM element every time the Map tab renders, so danger
-        # nodes travel as a query-string param read once at startup rather
-        # than a live-update mechanism — a JavaScriptBridge.create_callback
-        # attempt for the banner proved unreliable in testing (see the
-        # scene_theme.gd note), and the map doesn't need that complexity
-        # anyway since a fresh load already happens on every tab-open.
-        export_dir = ROOT / "frontend" / "godot" / "map_ambient"
-        for filename in ("index.html", "index.js", "index.wasm", "index.pck"):
-            self.assertTrue((export_dir / filename).exists(), f"missing {filename} in the exported Godot build")
-        html_text = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
+    def test_native_map_ambient_tracks_critical_nodes_without_iframes(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
-        # map-godot-fx isn't in index.html's static markup — the map panel
-        # (like the rest of the Journal) is built from a JS template string
-        # at render time, not present in the page's initial HTML.
-        self.assertIn('id="map-godot-fx"', js)
-        self.assertIn(".map-godot-fx{", css)
-        self.assertIn("applyGodotMapFx", js)
-        self.assertIn("/godot/map_ambient/index.html?", js)
+        self.assertIn('id="map-ambient"', js)
+        self.assertIn("function applyNativeMapFx(nodes)", js)
+        self.assertIn(".map-danger-glow", css)
         self.assertIn('danger_level || "").toLowerCase() === "critical"', js)
-        theme_script = (ROOT / "godot" / "map_ambient" / "map_theme.gd").read_text(encoding="utf-8")
-        self.assertIn('kv[0] == "danger"', theme_script)
+
+    def test_native_scene_transitions_are_world_themed_and_scene_confined(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn('playSceneTransition("combat", s)', js)
+        self.assertIn('playSceneTransition("event", s)', js)
+        self.assertIn('.scene-transition[data-kind="combat"]', css)
+        self.assertIn('.scene-transition[data-kind="event"]', css)
 
     def test_index_html_is_served_with_cache_busting_asset_versions(self):
         # A desktop build's no-store headers only stop the plain HTTP

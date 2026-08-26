@@ -107,6 +107,8 @@ const APP = {
   lastChapterCount: null,
   statusWindowOpen: false,
   lastLocation: null,
+  lastCombatActive: false,
+  lastMajorVisualKey: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -126,10 +128,16 @@ function playSfx(name) {
     "Bleach": 0.97,
     "Custom": 1,
   };
+  const worldGain = {
+    "One Piece": .82, "Hunter x Hunter": .76, "Naruto": .84,
+    "Solo Max-Level Newbie": .72, "Overgeared": .9,
+    "Reincarnated as a Slime": .7, "Bleach": .78, "Custom": .8,
+  };
   try {
     // Give each interface its own subtle audio character without multiplying
     // the size of the installation with another full sound pack.
     el.playbackRate = worldPitch[APP.state?.world] || 1;
+    el.volume = worldGain[APP.state?.world] || .8;
     el.currentTime = 0;
     el.play().catch(() => {});
   } catch (e) {}
@@ -219,13 +227,28 @@ function showToast(message, tag) {
 }
 
 const CINEMATIC_ICON = { level_up: "🎉", xp: "✦", notify: "★", danger: "⚠", message: "✉", world: "🌍", time: "⏳", damage: "💥", position: "👑", achievement: "🏆", canon_event: "⚡" };
+function clearTransientFeedback() {
+  const banner = $("#cinematic-banner");
+  clearTimeout(banner._t);
+  clearTimeout(banner._clearT);
+  banner.classList.remove("show");
+  banner.replaceChildren();
+  $("#toast-stack").replaceChildren();
+}
+
 function showCinematic(type, message) {
   const banner = $("#cinematic-banner");
   const icon = CINEMATIC_ICON[type] || "★";
   banner.innerHTML = `<div class="banner-card ${type === "danger" || type === "damage" ? "danger" : type === "achievement" ? "achievement" : type === "canon_event" ? "canon-event" : ""}"><span class="banner-icon">${icon}</span><span>${escapeHtml(message)}</span></div>`;
   banner.classList.add("show");
   clearTimeout(banner._t);
-  banner._t = setTimeout(() => banner.classList.remove("show"), 3200);
+  clearTimeout(banner._clearT);
+  banner._t = setTimeout(() => {
+    banner.classList.remove("show");
+    banner._clearT = setTimeout(() => {
+      if (!banner.classList.contains("show")) banner.replaceChildren();
+    }, 500);
+  }, 3200);
 }
 
 function flashScreen(kind) {
@@ -665,14 +688,19 @@ function renderSkillCard(name, rawDetail) {
   const detail = rawDetail;
   const rank = compactReadable(detail.rank ?? detail.tier ?? detail.level);
   const bonus = Number.isFinite(Number(detail.bonus)) ? Number(detail.bonus) : null;
+  const category = compactReadable(detail.category);
+  const effectType = compactReadable(detail.effect_type);
+  const targetType = compactReadable(detail.target_type);
+  const duration = Number(detail.duration_rounds || 0);
   const summary = compactReadable(detail.effect || detail.description || detail.summary) || "The exact practical effect has not been recorded yet.";
   const rows = [
+    ["Combat use", detail.combat_usable ? [effectType && humanLabel(effectType), targetType && `targets ${humanLabel(targetType)}`, duration > 0 && `${duration} rounds`].filter(Boolean).join(" · ") : ""],
     ["How it works", detail.use || detail.activation || detail.usage || detail.requirements],
     ["Origin", detail.origin],
     ["Cost / limits", detail.limitation || detail.limitations || detail.cost || detail.drawback],
     ["How to improve", detail.growth_path || detail.growth || detail.next_steps],
   ].map(([label, value]) => [label, compactReadable(value)]).filter(([, value]) => value);
-  const chips = [rank ? `<span>${escapeHtml(rank)}</span>` : "", bonus !== null ? `<span>${bonus >= 0 ? "+" : ""}${escapeHtml(bonus)} check bonus</span>` : ""].filter(Boolean).join("");
+  const chips = [rank ? `<span>${escapeHtml(rank)}</span>` : "", category ? `<span>${escapeHtml(humanLabel(category))}</span>` : "", bonus !== null ? `<span>${bonus >= 0 ? "+" : ""}${escapeHtml(bonus)} check bonus</span>` : ""].filter(Boolean).join("");
   return `<article class="skill-journal-card"><header><h3>✦ ${escapeHtml(name)}</h3>${chips ? `<div class="skill-chips">${chips}</div>` : ""}</header><p class="skill-summary">${escapeHtml(summary)}</p>${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</article>`;
 }
 
@@ -914,8 +942,9 @@ function renderState(state) {
   APP.state = state;
   const s = state;
   document.body.setAttribute("data-world", s.world || "Custom World");
+  document.body.classList.toggle("motion-off", !APP.animationsEnabled);
   applyWorldInterfaceTheme(s.world || "Custom World");
-  applyGodotAmbient(s.world || "Custom World");
+  applyPortraitAmbient(s);
 
   $("#hdr-world").textContent = s.world || "Custom World";
   $("#hdr-location").textContent = s.location || "Unknown";
@@ -1342,9 +1371,8 @@ function updateWorldSystemIcons(s) {
 // ---------------------------------------------------------------------------
 let scenePaint = { canvas: null, ctx: null, w: 0, h: 0, lastKey: null };
 
-// Weather is tracked in state — normalized to the handful of keys the
-// Godot scene_ambient theme actually recognizes (see WEATHER_THEMES in
-// scene_theme.gd) rather than passing the raw AI-written phrase through.
+// Weather is tracked in state and normalized to the small native visual
+// vocabulary used by the scene, portrait, and map ambience layers.
 function weatherKeyFor(weather) {
   const w = String(weather || "").toLowerCase();
   if (/storm|thunder|typhoon|hurricane/.test(w)) return "storm";
@@ -1354,58 +1382,119 @@ function weatherKeyFor(weather) {
   return "";
 }
 
-// Godot-rendered scene ambience test: a small HTML5 export sitting in
-// frontend/godot/scene_ambient/, embedded as an iframe in the scene
-// viewport. Replaces the old canvas particle/glow system (seedParticles/
-// tickSceneFx) and the CSS .scene-weather overlay with one layered effect
-// that reads both the scene category and the current weather at once.
-let godotSceneFxKey = null;
-let godotSceneFxLoaded = false;
-function applyGodotSceneFx(category, weather) {
-  const frame = $("#scene-godot-fx");
-  if (!frame) return;
-  const weatherKey = weatherKeyFor(weather);
-  const key = category + "::" + weatherKey;
-  if (godotSceneFxKey === key) return;
-  godotSceneFxKey = key;
-  if (!godotSceneFxLoaded) {
-    // First paint only: a real load, carrying the initial values as query
-    // params for scene_theme.gd's _ready() to read.
-    frame.addEventListener("load", () => { godotSceneFxLoaded = true; }, { once: true });
-    const params = new URLSearchParams({ category, weather: weatherKey });
-    frame.src = `/godot/scene_ambient/index.html?${params.toString()}`;
-    frame.hidden = false;
-    return;
+const FIRE_SCENES = new Set(["merchant_shop", "tavern_inn", "indoor_grandhall", "dungeon_cave", "monster_lair", "battlefield_dusk"]);
+const STAR_SCENES = new Set(["starry_sky", "night_wilderness", "tower_hub"]);
+const WIND_SCENES = new Set(["harbor_port", "ship_deck", "forest_path", "mountain_castle", "snow_region"]);
+
+function timeOfDayFor(s) {
+  const hour = Number(s?.calendar?.hour);
+  if (Number.isFinite(hour)) {
+    if (hour < 5 || hour >= 21) return "night";
+    if (hour < 8) return "dawn";
+    if (hour < 17) return "day";
+    if (hour < 20) return "dusk";
+    return "night";
   }
-  // Every later change re-themes the already-running instance in place —
-  // reloading the iframe here would mean a multi-second WASM reload on
-  // nearly every turn, since the scene banner's category/weather can
-  // change that often. scene_theme.gd polls this variable a few times a
-  // second (see its _process) rather than the page calling a Godot-exposed
-  // function directly — JavaScriptBridge.create_callback()/get_interface()
-  // proved unreliable in testing (calls landed nowhere, no error), while
-  // polling a plain JS global reuses the same eval() primitive the
-  // initial query-string read already does successfully.
-  try { frame.contentWindow.sceneThemeParams = key; } catch (e) { /* not ready yet */ }
+  const text = String(s?.world_time || "").toLowerCase();
+  if (/night|midnight/.test(text)) return "night";
+  if (/dawn|sunrise|morning/.test(text)) return "dawn";
+  if (/dusk|sunset|evening/.test(text)) return "dusk";
+  return "day";
 }
 
-// Godot-rendered map ambience: gentle drifting cloud-shadows plus a
-// pulsing glow at any landmark whose danger_level is "critical" — a
-// stronger atmospheric complement to the pin's own existing pulse
-// animation, reading as "this whole area is dangerous" rather than just
-// highlighting one dot. #map-wrap (and everything in it, including this
-// iframe) is a fresh DOM element every time the Map tab renders, so unlike
-// the scene/portrait effects there's no persistent instance to re-theme in
-// place — a fresh load is correct here, not a workaround.
-function applyGodotMapFx(nodes) {
-  const frame = $("#map-godot-fx");
-  if (!frame) return;
-  const dangerNodes = (nodes || [])
-    .filter((n) => String(n.danger_level || "").toLowerCase() === "critical")
-    .map((n) => ({ x: n.x, y: n.y }));
-  const params = new URLSearchParams({ danger: JSON.stringify(dangerNodes) });
-  frame.src = `/godot/map_ambient/index.html?${params.toString()}`;
-  frame.hidden = false;
+function activityFor(s) {
+  if (s?.combat?.active) return "combat";
+  const text = [s?.current_activity, ...(s?.queued_actions || []), ...(s?.standing_orders || [])].join(" ").toLowerCase();
+  if (/train|practice|study|meditat|spar/.test(text)) return "training";
+  if (/travel|sail|walk|fly|journey|depart/.test(text)) return "travel";
+  if (/craft|forge|smith|cook|brew/.test(text)) return "crafting";
+  if (/talk|meet|negot|ask|diploma/.test(text)) return "social";
+  return "idle";
+}
+
+function ambientModeFor(category, weather, s) {
+  const weatherMode = weatherKeyFor(weather);
+  if (weatherMode) return weatherMode;
+  if (s?.combat?.active || ["duel", "monster_battlefield", "battlefield_dusk"].includes(category)) return "sparks";
+  if (activityFor(s) === "training") return s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "chakra" : "energy";
+  if (FIRE_SCENES.has(category)) return "embers";
+  if (STAR_SCENES.has(category)) return "stars";
+  if (WIND_SCENES.has(category)) return category === "forest_path" ? "leaves" : "wind";
+  if (category === "rain_city") return "rain";
+  if (category === "underwater") return "bubbles";
+  if (s?.world === "One Piece") return "wind";
+  if (s?.world === "Hunter x Hunter" || s?.world === "Naruto") return "leaves";
+  if (s?.world === "Overgeared") return "embers";
+  if (s?.world === "Bleach") return "spirit";
+  if (s?.world === "Solo Max-Level Newbie") return "system";
+  if (s?.world === "Reincarnated as a Slime") return "magic";
+  return "motes";
+}
+
+function stableAmbientUnit(seed) {
+  let h = 2166136261;
+  for (let i = 0; i < seed.length; i++) { h ^= seed.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) / 4294967295;
+}
+
+function fillAmbientLayer(el, mode, count, key) {
+  if (!el) return;
+  const renderKey = `${mode}:${count}:${key}`;
+  if (el.dataset.renderKey === renderKey) return;
+  el.dataset.renderKey = renderKey;
+  el.dataset.effect = mode;
+  el.replaceChildren(...Array.from({ length: count }, (_, index) => {
+    const mote = document.createElement("i");
+    const u = (suffix) => stableAmbientUnit(`${key}:${index}:${suffix}`);
+    mote.style.setProperty("--x", `${Math.round(u("x") * 100)}%`);
+    mote.style.setProperty("--y", `${Math.round(u("y") * 100)}%`);
+    mote.style.setProperty("--size", `${(2 + u("s") * 7).toFixed(1)}px`);
+    mote.style.setProperty("--delay", `${(-u("d") * 9).toFixed(2)}s`);
+    mote.style.setProperty("--duration", `${(4 + u("t") * 8).toFixed(2)}s`);
+    mote.style.setProperty("--drift", `${Math.round((u("r") - .5) * 80)}px`);
+    return mote;
+  }));
+}
+
+function applyNativeSceneFx(category, weather, s) {
+  const layer = $("#scene-ambient");
+  const mode = ambientModeFor(category, weather, s);
+  const time = timeOfDayFor(s);
+  document.body.setAttribute("data-time", time);
+  layer.dataset.time = time;
+  layer.dataset.activity = activityFor(s);
+  fillAmbientLayer(layer, mode, mode === "rain" || mode === "snow" ? 26 : 18, `${s?.world}:${category}:${mode}`);
+}
+
+function applyPortraitAmbient(s) {
+  const layer = $("#portrait-ambient");
+  if (!layer) return;
+  const mode = s?.combat?.active ? "sparks" : s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "chakra" : s?.world === "Solo Max-Level Newbie" ? "system" : s?.world === "Overgeared" ? "embers" : s?.world === "Reincarnated as a Slime" ? "magic" : s?.world === "One Piece" ? "wind" : "motes";
+  fillAmbientLayer(layer, mode, 12, `portrait:${s?.world}:${mode}`);
+}
+
+function applyNativeMapFx(nodes) {
+  const layer = $("#map-ambient");
+  if (!layer) return;
+  const dangerNodes = (nodes || []).filter((n) => String(n.danger_level || "").toLowerCase() === "critical");
+  layer.replaceChildren(...dangerNodes.map((node) => {
+    const glow = document.createElement("i");
+    glow.className = "map-danger-glow";
+    glow.style.left = `${node.x}%`;
+    glow.style.top = `${node.y}%`;
+    return glow;
+  }));
+  layer.dataset.dangerCount = String(dangerNodes.length);
+}
+
+function playSceneTransition(kind, s) {
+  if (!APP.animationsEnabled) return;
+  const transition = $("#scene-transition");
+  transition.dataset.kind = kind;
+  transition.dataset.world = s?.world || "Custom World";
+  transition.classList.remove("playing");
+  void transition.offsetWidth;
+  transition.classList.add("playing");
 }
 
 function updateScene(s) {
@@ -1423,7 +1512,7 @@ function updateScene(s) {
   $("#scene-location").textContent = s.location || "Unknown";
   $("#scene-world").textContent = s.world || "Custom World";
 
-  applyGodotSceneFx(cat, s.weather);
+  applyNativeSceneFx(cat, s.weather, s);
 
   // A location change gets a quick cut-to-black-and-back in the scene box
   // only — deliberately not anywhere else in the UI — so travel reads as a
@@ -1432,13 +1521,14 @@ function updateScene(s) {
     APP.lastLocation = s.location;
   } else if (s.location && s.location !== APP.lastLocation) {
     APP.lastLocation = s.location;
-    if (APP.animationsEnabled) {
-      const t = $("#scene-transition");
-      t.classList.remove("playing");
-      void t.offsetWidth;
-      t.classList.add("playing");
-    }
+    playSceneTransition("travel", s);
   }
+  const combatActive = Boolean(s.combat?.active);
+  if (combatActive && !APP.lastCombatActive) playSceneTransition("combat", s);
+  APP.lastCombatActive = combatActive;
+  const majorVisualKey = String(s.active_canon_event || s.active_major_event || "");
+  if (majorVisualKey && majorVisualKey !== APP.lastMajorVisualKey) playSceneTransition("event", s);
+  APP.lastMajorVisualKey = majorVisualKey;
 
   if (url) {
     if (img.getAttribute("data-src") !== url) {
@@ -1454,80 +1544,6 @@ function updateScene(s) {
     img.classList.remove("loaded");
   }
   paintScene(cat, s.world || "Custom World");
-  startCharacterAmbient(cat);
-}
-
-// ---- Ambient particles behind the character card --------------------------
-// A much lighter echo of the scene particle system (seedParticles/tickSceneFx
-// below) so the character card feels like it shares the same atmosphere as
-// the scene, instead of being a static island next to a moving one.
-let charAmbient = { mode: null, motes: [], canvas: null, ctx: null, w: 0, h: 0, raf: null, t: 0 };
-const AMBIENT_COLOR_BY_MODE = {
-  battlefield_dusk: "#ff8a4c", monster_battlefield: "#ff6a52", monster_lair: "#c95a3a",
-  forest_path: "#8fce6a", dungeon_cave: "#6e8ca6", starry_sky: "#eef4ff", night_wilderness: "#cfe0ff",
-  harbor_port: "#8bdde0", ship_deck: "#8bdde0", tower_hub: "#63e0f5", tavern_inn: "#f2b25a",
-  merchant_shop: "#f2b25a", academy_classroom: "#e6c877", arena_floor: "#f2b25a",
-};
-function resizeCharAmbient() {
-  const c = charAmbient.canvas;
-  if (!c) return;
-  const rect = c.parentElement.getBoundingClientRect();
-  charAmbient.w = c.width = rect.width;
-  charAmbient.h = c.height = rect.height;
-}
-window.addEventListener("resize", () => { if (APP.animationsEnabled) resizeCharAmbient(); });
-function startCharacterAmbient(mode) {
-  if (!charAmbient.canvas) {
-    charAmbient.canvas = $("#character-ambient");
-    charAmbient.ctx = charAmbient.canvas.getContext("2d");
-  }
-  if (charAmbient.mode === mode) return;
-  charAmbient.mode = mode;
-  resizeCharAmbient();
-  const { w, h } = charAmbient;
-  charAmbient.motes = Array.from({ length: 16 }, () => ({
-    x: rand(0, w), y: rand(0, h), r: rand(.8, 2.6), phase: rand(0, Math.PI * 2), speed: rand(.01, .03),
-  }));
-  if (!charAmbient.raf) charAmbient.raf = requestAnimationFrame(tickCharAmbient);
-}
-// Godot-rendered ambient test: a small HTML5 export sitting in
-// frontend/godot/portrait_ambient/, embedded as an iframe in the same
-// slot as the canvas ambient above. Only worlds actually listed here have
-// an export to show; everyone else keeps the existing canvas effect. This
-// is deliberately additive — a proof that the export/embed pipeline
-// works, not a replacement for the canvas system yet.
-const GODOT_AMBIENT_WORLDS = new Set(["Naruto", "One Piece", "Hunter x Hunter", "Solo Max-Level Newbie", "Overgeared", "Reincarnated as a Slime"]);
-let godotAmbientWorld = null;
-function applyGodotAmbient(world) {
-  const frame = $("#portrait-godot-ambient");
-  if (!frame) return;
-  if (!GODOT_AMBIENT_WORLDS.has(world)) {
-    frame.hidden = true;
-    godotAmbientWorld = null;
-    return;
-  }
-  if (godotAmbientWorld === world) return;
-  godotAmbientWorld = world;
-  frame.src = `/godot/portrait_ambient/index.html?world=${encodeURIComponent(world)}`;
-  frame.hidden = false;
-}
-function tickCharAmbient() {
-  charAmbient.raf = requestAnimationFrame(tickCharAmbient);
-  const { ctx, w, h, motes, mode } = charAmbient;
-  if (!ctx || !w || !h) return;
-  ctx.clearRect(0, 0, w, h);
-  if (!APP.animationsEnabled) return;
-  charAmbient.t += 0.016;
-  const color = AMBIENT_COLOR_BY_MODE[mode] || "#c7a15c";
-  motes.forEach((m) => {
-    const y = m.y - ((charAmbient.t * m.speed * 260) % (h + 20));
-    const x = m.x + Math.sin(charAmbient.t * .6 + m.phase) * 8;
-    const yy = ((y % (h + 20)) + (h + 20)) % (h + 20) - 10;
-    ctx.globalAlpha = .35 + .35 * Math.sin(charAmbient.t * 1.3 + m.phase);
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(x, yy, m.r, 0, Math.PI * 2); ctx.fill();
-  });
-  ctx.globalAlpha = 1;
 }
 
 // ---- Procedural scene fallback ------------------------------------------
@@ -1756,6 +1772,7 @@ function openEventNotice(result) {
   const isDanger = result.interruption_kind === "danger";
   const title = result.major_event_title || result.state?.active_canon_event ||
     (isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT");
+  playSceneTransition(result.state?.combat?.active ? "combat" : "event", result.state || APP.state);
   $("#event-window-title").textContent = isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT";
   $("#event-window-kicker").textContent = result.state?.combat?.active
     ? "COMBAT HAS BEGUN"
@@ -1871,6 +1888,16 @@ function combatLogLine(e) {
       ? { text: `You use ${label} on ${e.target || "the enemy"} — it takes hold, weakening them${swingNote}${costNote}.`, cls: "player" }
       : { text: `You try ${label} on ${e.target || "the enemy"} — it doesn't take hold${swingNote}${costNote}.`, cls: "miss" };
   }
+  if (e.actor === "player" && ["buff", "shield", "cleanse", "control", "summon", "movement", "detect", "stealth", "transform", "utility"].includes(e.action)) {
+    const label = e.ability && e.ability !== "Attack" ? e.ability : "the technique";
+    const costNote = e.resource_cost ? ` (-${e.resource_cost} ${APP.state?.resource_name || "Energy"})` : "";
+    if (!e.applied) return { text: `You try ${label}, but it fails to take hold${costNote}.`, cls: "miss" };
+    if (e.action === "shield") return { text: `${label} forms a ${e.shield || 0}-point barrier${costNote}.`, cls: "player" };
+    if (e.action === "cleanse") return { text: `${label} clears ${e.removed?.length ? e.removed.join(", ") : "harmful effects"}${costNote}.`, cls: "player" };
+    if (e.action === "summon") return { text: `${label} calls ${e.summon || "an ally"} into the fight${costNote}.`, cls: "player" };
+    if (e.action === "control") return { text: `${label} inflicts ${e.status || "Control"} on ${e.target || "the enemy"}${costNote}.`, cls: "player" };
+    return { text: `${label} grants ${e.status || humanLabel(e.action)} for ${e.duration || 1} round${e.duration === 1 ? "" : "s"}${costNote}.`, cls: "player" };
+  }
   if (e.actor === "player") {
     const label = e.ability && e.ability !== "Attack" ? e.ability : "a plain attack";
     const costNote = e.resource_cost ? ` (-${e.resource_cost} ${APP.state?.resource_name || "Energy"})` : "";
@@ -1880,26 +1907,42 @@ function combatLogLine(e) {
       : { text: `You try ${label} on ${e.target || "the enemy"} — it misses${swingNote}${costNote}.`, cls: "miss" };
   }
   if (e.actor === "enemy") {
+    if (e.action === "controlled") return { text: `${e.name || "The enemy"} cannot act while ${e.status || "controlled"}.`, cls: "player" };
     if (e.shrugged) return { text: `You completely shrug off ${e.name || "the enemy"}'s attack${swingNote}.`, cls: "player" };
+    const shieldNote = e.absorbed ? ` (${e.absorbed} absorbed by your barrier)` : "";
     return e.success
-      ? { text: `${e.name || "The enemy"} hits you for ${e.damage ?? 0} dmg${e.massive ? " — MASSIVE" : ""}${swingNote}.`, cls: "hit" }
+      ? { text: `${e.name || "The enemy"} hits you for ${e.damage ?? 0} dmg${shieldNote}${e.massive ? " — MASSIVE" : ""}${swingNote}.`, cls: "hit" }
       : { text: `${e.name || "The enemy"}'s attack misses${swingNote}.`, cls: "miss" };
   }
+  if (e.actor === "status") return { text: `${e.status || "A lingering effect"} deals ${e.damage || 0} damage to ${e.target === "player" ? "you" : "the enemy"}.`, cls: "hit" };
   return { text: "Something happens.", cls: "" };
 }
 
-const COMBAT_EFFECT_ICON = { heal: "🩹 ", debuff: "⛓ ", damage: "" };
+const COMBAT_EFFECT_ICON = { damage: "⚔ ", heal: "🩹 ", buff: "⬆ ", debuff: "⛓ ", shield: "🛡 ", cleanse: "✦ ", control: "⊘ ", summon: "♟ ", movement: "➜ ", detect: "◉ ", stealth: "◌ ", transform: "◆ ", utility: "◇ " };
 function combatAbilityEffectType(s, name) {
   const detail = (s.skills || {})[name];
-  const t = (detail && typeof detail === "object" ? detail.effect_type : "") || "";
-  return ["damage", "heal", "debuff"].includes(t) ? t : "damage";
+  const t = String((detail && typeof detail === "object" ? detail.effect_type : "") || "").toLowerCase();
+  const valid = ["damage", "heal", "buff", "debuff", "shield", "cleanse", "control", "summon", "movement", "detect", "stealth", "transform", "utility"];
+  if (valid.includes(t)) return t;
+  const blob = `${name} ${detail?.description || ""} ${detail?.effect || ""}`.toLowerCase();
+  if (/heal|restore hp|regenerat/.test(blob)) return "heal";
+  if (/shield|barrier|ward/.test(blob)) return "shield";
+  if (/stun|bind|paraly|sleep|freeze|bakud/.test(blob)) return "control";
+  if (/summon|familiar|construct/.test(blob)) return "summon";
+  if (/transform|shikai|bankai|awakening/.test(blob)) return "transform";
+  if (/stealth|invisib|conceal/.test(blob)) return "stealth";
+  if (/detect|sense|scan/.test(blob)) return "detect";
+  if (/dash|teleport|movement|blink/.test(blob)) return "movement";
+  if (/buff|empower|enhance/.test(blob)) return "buff";
+  if (/debuff|weaken|slow|poison|burn|bleed/.test(blob)) return "debuff";
+  return "damage";
 }
 function combatAbilityUsable(s, name) {
   const detail = (s.skills || {})[name];
   if (!detail || typeof detail !== "object") return false;
   if (detail.combat_usable === false) return false;
   if (detail.combat_usable === true) return true;
-  if (["damage", "heal", "debuff"].includes(String(detail.effect_type || "").toLowerCase())) return true;
+  if (["damage", "heal", "buff", "debuff", "shield", "cleanse", "control", "summon", "movement", "detect", "stealth", "transform"].includes(String(detail.effect_type || "").toLowerCase())) return true;
   // Backward-compatible inference for older saves whose skills predate the
   // combat_usable field.  Profession/knowledge fundamentals no longer turn
   // into attacks merely because they have a numeric bonus.
@@ -1930,7 +1973,8 @@ const COMBAT_ACTION_ICON = {
   heal: `<svg ${SVG_ICON_ATTRS}><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`,
   debuff: `<svg ${SVG_ICON_ATTRS}><circle cx="12" cy="12" r="10"/><line x1="8" y1="12" x2="16" y2="12"/></svg>`,
 };
-const COMBAT_ACTION_LABEL = { damage: "ATTACK", heal: "HEAL", debuff: "DEBUFF" };
+for (const kind of ["buff", "shield", "cleanse", "control", "summon", "movement", "detect", "stealth", "transform", "utility"]) COMBAT_ACTION_ICON[kind] = ICONS.sparkles || ICONS.sword;
+const COMBAT_ACTION_LABEL = { damage: "ATTACK", heal: "HEAL", buff: "EMPOWER", debuff: "WEAKEN", shield: "BARRIER", cleanse: "CLEANSE", control: "CONTROL", summon: "SUMMON", movement: "MOVE", detect: "ANALYZE", stealth: "CONCEAL", transform: "TRANSFORM", utility: "USE" };
 function updateCombatAttackButtonLabel(s) {
   const selected = $("#combat-ability").value;
   const effectType = selected ? combatAbilityEffectType(s, selected) : "damage";
@@ -1994,6 +2038,13 @@ function renderCombatPanel(s) {
   const resourceRow = $("#combat-resource-row");
   if (s.resource_max) resourceRow.innerHTML = `<span>${escapeHtml(s.resource_name || "Energy")}</span><b>${escapeHtml(s.resource ?? 0)} / ${escapeHtml(s.resource_max)}</b>`;
   else resourceRow.innerHTML = "";
+  const conditionRows = [
+    Number(combat.player_shield || 0) > 0 ? { name: `Barrier ${combat.player_shield}`, rounds_left: null } : null,
+    ...(combat.player_buffs || []), ...(combat.player_statuses || []), ...(combat.summons || []),
+  ].filter(Boolean);
+  $("#combat-status-row").innerHTML = conditionRows.map((row) => `<span title="${row.rounds_left ? `${escapeHtml(row.rounds_left)} round${Number(row.rounds_left) === 1 ? "" : "s"} remaining` : "Absorbs incoming damage"}">${escapeHtml(row.name || "Active effect")}${row.rounds_left ? ` · ${escapeHtml(row.rounds_left)}` : ""}</span>`).join("");
+  const enemyConditions = [...(combat.enemy_debuffs || []), ...(combat.enemy_statuses || [])];
+  if (enemyConditions.length) enemyBox.insertAdjacentHTML("beforeend", `<div class="combat-condition-strip">${enemyConditions.map((row) => `<span>${escapeHtml(row.name || "Affected")} · ${escapeHtml(row.rounds_left || 1)}</span>`).join("")}</div>`);
   populateCombatAbilitySelect(s);
 }
 
@@ -3225,10 +3276,10 @@ async function openJournal(tab) {
     const legendChips = groupNodesByController(nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}">${escapeHtml(t.controller)}</span>`).join("");
     panel.innerHTML = `<div class="map-heading"><div><b>${escapeHtml(data.world || s.world || "World")} Atlas</b><small>${nodes.length} important landmarks · ${knownCount} visited/discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
       (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
-      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><iframe id="map-godot-fx" class="map-godot-fx" aria-hidden="true" tabindex="-1" hidden></iframe></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>A reference atlas — click a landmark for what's known about it, who's tied to it, and who controls it. Drag to pan, scroll or use the buttons to zoom.</p></aside></div>`;
+      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>A reference atlas — click a landmark for what's known about it, who's tied to it, and who controls it. Drag to pan, scroll or use the buttons to zoom.</p></aside></div>`;
     const canvas = $("#map-canvas");
     paintMapTerritories($("#map-territory-canvas"), nodes);
-    applyGodotMapFx(nodes);
+    applyNativeMapFx(nodes);
     nodes.forEach((node) => {
       const dot = document.createElement("button");
       dot.type = "button";
@@ -3777,8 +3828,7 @@ $("#btn-confirm-campaign").addEventListener("click", async () => {
   try {
     const created = await apiPost("/api/campaign/new", APP.pendingCampaign);
     APP.campaignActive = true; APP.portraitAttempted.clear();
-    $("#toast-stack").innerHTML = "";
-    $("#cinematic-banner").classList.remove("show");
+    clearTransientFeedback();
     $("#story-feed").innerHTML = ""; appendStoryEntries(created.story || []); renderState(created.state);
     // A new campaign always begins at the next story beat. Do not carry a
     // previous campaign's long-skip selection or intervention state forward.
@@ -4126,6 +4176,7 @@ async function openLoadModal() {
       try {
         const res = await apiPost("/api/load", { name: save.id });
         APP.campaignActive = true;
+        clearTransientFeedback();
         $("#story-feed").innerHTML = "";
         appendStoryEntries(res.story.map((s) => ({ text: s.text, tag: s.tag })));
         renderState(res.state);
@@ -4135,7 +4186,7 @@ async function openLoadModal() {
       } catch (err) { showToast(err.message, "danger"); }
     });
     li.querySelector("[data-save-recover]")?.addEventListener("click", async () => {
-      try { const res = await apiPost("/api/save/recover", { name: save.id }); APP.campaignActive = true; $("#story-feed").innerHTML = ""; appendStoryEntries(res.story || []); renderState(res.state); closeModal("modal-load"); showToast("Campaign recovered from its newest autosave.", "notify"); maybeFetchReentryRecap(res.state); }
+      try { const res = await apiPost("/api/save/recover", { name: save.id }); APP.campaignActive = true; clearTransientFeedback(); $("#story-feed").innerHTML = ""; appendStoryEntries(res.story || []); renderState(res.state); closeModal("modal-load"); showToast("Campaign recovered from its newest autosave.", "notify"); maybeFetchReentryRecap(res.state); }
       catch (err) { showToast(err.message, "danger"); }
     });
     li.querySelector("[data-save-delete]").addEventListener("click", async () => {

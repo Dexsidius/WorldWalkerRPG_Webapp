@@ -16,17 +16,11 @@ from util import DATA_DIR
 # hybrid-GPU laptops) can render the embedded WebView2 browser as a solid
 # white window even though the Runtime itself is installed and healthy — a
 # known WebView2/Chromium GPU-compositing bug, not a Worldwalker bug. This
-# app used to force --disable-gpu up front as a preemptive fix, but that
-# turned out to break the alpha-transparency of the embedded Godot canvases
-# used for portrait/scene/map ambience: even with the WebGL context
-# correctly requesting alpha (confirmed via getContextAttributes().alpha),
-# WebView2's software rendering path doesn't composite that alpha channel
-# onto the page correctly, and it shows as an opaque black square instead
-# of a transparent overlay — invisible to any CSS/JS inspection, only
-# visible as the actual rendered pixels. Since the white-window bug is
-# hardware-specific (not universal) and blanket-forcing everyone into
-# software rendering breaks a real, shipped feature for everyone, this now
-# defaults to normal GPU-accelerated rendering. If the white-window bug
+# app used to force --disable-gpu up front as a preemptive fix, but blanket
+# software rendering makes the native CSS/canvas interface less responsive
+# and is unnecessary on most machines. Since the white-window bug is
+# hardware-specific, the launcher now defaults to normal GPU-accelerated
+# rendering. If the white-window bug
 # resurfaces for a specific machine, WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
 # can still be set manually as an environment variable before launching.
 
@@ -38,15 +32,10 @@ from werkzeug.serving import make_server
 LAN_MODE = "--lan" in sys.argv
 HOST = "0.0.0.0" if LAN_MODE else "127.0.0.1"
 
-# A phone's browser refuses to run this app's embedded Godot ambience canvases
-# unless the page is served from a "secure context" — https://, or literally
-# localhost/127.0.0.1. Phone Mode is neither (it's a bare LAN IP over plain
-# http), so it needs a real TLS listener even though there's no real domain to
-# get a CA-trusted certificate for. A self-signed cert satisfies the browser's
-# secure-context check the moment the user accepts the one-time "this site
-# isn't trusted" warning — it's persisted to disk and reused across launches
-# specifically so that warning only has to be accepted once per device, not
-# every time Phone Mode starts.
+# Phone Mode uses HTTPS so mobile browsers can enable secure-context features
+# such as service workers and clipboard access on a bare LAN address. A
+# persisted self-signed certificate keeps this local-only setup independent
+# of a public domain and limits the trust warning to the first connection.
 SCHEME = "https" if LAN_MODE else "http"
 
 

@@ -1,4 +1,4 @@
-const CACHE = "worldwalker-v3120-shell-1";
+const CACHE = "worldwalker-v3122-shell-1";
 const SHELL = ["/", "/css/style.css", "/js/app.js", "/manifest.webmanifest", "/assets/branding/worldwalker-emblem.png"];
 
 self.addEventListener("install", (event) => {
@@ -9,7 +9,7 @@ self.addEventListener("activate", (event) => {
 });
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (event.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname.startsWith("/music/") || url.pathname.startsWith("/portrait-cache/") || url.pathname.startsWith("/godot/")) return;
+  if (event.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname.startsWith("/music/") || url.pathname.startsWith("/portrait-cache/")) return;
   event.respondWith(fetch(event.request).then((response) => {
     // The clone MUST happen synchronously, in this same tick, before the
     // response is handed back below — once `caches.open()`'s promise settles

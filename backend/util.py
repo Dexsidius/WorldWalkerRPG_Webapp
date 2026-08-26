@@ -277,12 +277,22 @@ def scene_category(state):
         return "rain_city"
     if any(k in weather for k in ("snow", "blizzard", "sleet")):
         return "snow_region"
+    # Only live player-facing activity is allowed to influence a vague
+    # location. Old Chronicle/timeline prose often contains battles far away
+    # from the character and was the source of merchant stalls receiving
+    # battlefield art after unrelated world updates.
     blob = " ".join([
-        str(state.get("world", "")),
+        str(state.get("current_activity", "")),
+        " ".join(str(x) for x in state.get("queued_actions", [])[-3:]),
+        " ".join(str(x) for x in state.get("standing_orders", [])[-3:]),
         str(state.get("world_time", "")),
-        " ".join(str(x) for x in state.get("timeline", [])[-2:]),
-        " ".join(str(x) for x in state.get("world_events", [])[-1:]),
     ]).lower()
+    if any(k in blob for k in ["train", "practice", "study technique", "spar", "meditat"]):
+        return "training_ground"
+    if any(k in blob for k in ["craft", "forge", "smith", "workshop", "brew"]):
+        return "merchant_shop"
+    if any(k in blob for k in ["heal", "recover", "medical treatment", "infirmary"]):
+        return "hospital_clinic"
     if any(k in blob for k in ["duel", "one-on-one", "one on one", "single combat", "sparring match"]):
         return "duel"
     if any(k in blob for k in ["monster horde", "army of monsters", "swarm of monsters", "monster battlefield"]):
@@ -329,6 +339,18 @@ def scene_art_confidence(state, category=None):
     place = _category_from_place(location)
     if place:
         return {"score": 92, "label": "Location match", "reason": f"'{location}' directly matches the {place} environment."}
+    activity = " ".join([
+        str(state.get("current_activity", "")),
+        " ".join(str(x) for x in state.get("queued_actions", [])[-3:]),
+        " ".join(str(x) for x in state.get("standing_orders", [])[-3:]),
+    ]).lower()
+    activity_matches = {
+        "training_ground": ("train", "practice", "spar", "meditat"),
+        "merchant_shop": ("craft", "forge", "smith", "brew"),
+        "hospital_clinic": ("heal", "recover", "medical", "infirmary"),
+    }
+    if category in activity_matches and any(word in activity for word in activity_matches[category]):
+        return {"score": 84, "label": "Activity match", "reason": "The current player activity selected this environment."}
     weather = str(state.get("weather", "")).lower()
     if category in {"rain_city", "snow_region"} and weather not in {"", "clear"}:
         return {"score": 78, "label": "Weather match", "reason": f"The current {weather} weather selected this environment."}
@@ -376,7 +398,8 @@ def scene_image_url(state):
     """
     cat = scene_category(state)
     confidence = scene_art_confidence(state, cat)
-    if confidence["score"] < 60 and not state.get("combat") and not state.get("active_canon_event"):
+    active_combat = isinstance(state.get("combat"), dict) and bool(state.get("combat", {}).get("active"))
+    if confidence["score"] < 60 and not active_combat and not state.get("active_canon_event"):
         cat = WORLD_NEUTRAL_SCENES.get(state.get("world"), "starry_sky")
     world = state.get("world", "Custom World")
     slug = world_slug(world)
@@ -397,7 +420,7 @@ def scene_image_url(state):
     landmarks = LANDMARK_SCENES.get(world, ())
     action_categories = {"duel", "monster_battlefield", "monster_lair", "dungeon_cave"}
     local_detail_words = ("merchant", "stall", "shop", "bazaar", "market", "alley", "street", "inn", "tavern", "restaurant")
-    if not state.get("combat") and cat not in action_categories and not any(word in location for word in local_detail_words):
+    if not active_combat and cat not in action_categories and not any(word in location for word in local_detail_words):
         for terms, landmark_name in landmarks:
             if any(term in location for term in terms):
                 for ext in ("gif", "webp", "png"):

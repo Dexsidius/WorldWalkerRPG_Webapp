@@ -29,7 +29,7 @@ class WorldwalkerV370Tests(unittest.TestCase):
         return game
 
     def test_version_and_manual_portrait_default(self):
-        self.assertEqual(APP_VERSION, "3.12.1")
+        self.assertEqual(APP_VERSION, "3.12.2")
         self.assertFalse(DEFAULT_SETTINGS["portrait_auto_generate"])
 
     def test_completed_combat_never_overrides_the_current_environment_art(self):
@@ -94,8 +94,10 @@ class WorldwalkerV370Tests(unittest.TestCase):
 
     def test_profession_skills_are_explicitly_hidden_from_combat(self):
         game = self.fresh()
-        self.assertEqual(game.combat_skill_metadata("Navigator Fundamentals", "Chart routes and read weather"),
-                         {"combat_usable": False, "effect_type": "utility"})
+        navigation = game.combat_skill_metadata("Navigator Fundamentals", "Chart routes and read weather")
+        self.assertFalse(navigation["combat_usable"])
+        self.assertEqual(navigation["effect_type"], "utility")
+        self.assertEqual(navigation["category"], "utility")
         self.assertEqual(game.combat_skill_metadata("Fireball Jutsu", "Attack with a damaging chakra blast")["combat_usable"], True)
 
     def test_task_prompts_are_smaller_than_the_legacy_everything_prompt(self):

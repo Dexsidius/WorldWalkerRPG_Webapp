@@ -78,8 +78,7 @@
     <section class="panel character-card">
       <div class="portrait-frame">
         <img id="portrait-img" class="portrait-image" alt="AI-generated character portrait" />
-        <canvas id="character-ambient" class="character-ambient" aria-hidden="true"></canvas>
-        <iframe id="portrait-godot-ambient" class="portrait-godot-ambient" aria-hidden="true" tabindex="-1" hidden></iframe>
+        <div id="portrait-ambient" class="portrait-ambient ambient-fx" aria-hidden="true"></div>
         <div id="portrait-loading" class="portrait-loading" hidden><span></span><b>CREATING PORTRAIT…</b></div>
         <button id="btn-portrait-regenerate" class="portrait-regenerate" type="button" title="Regenerate AI portrait">↻</button>
         <button id="btn-portrait-manage" class="portrait-manage" type="button" title="Manage portrait identity">✦</button>
@@ -180,8 +179,8 @@
       </header>
       <div class="scene-viewport" id="scene-viewport">
         <canvas id="scene-paint" class="scene-paint"></canvas>
-        <iframe id="scene-godot-fx" class="scene-godot-fx" aria-hidden="true" tabindex="-1" hidden></iframe>
         <img id="scene-img" class="scene-img" alt="" />
+        <div id="scene-ambient" class="scene-ambient ambient-fx" aria-hidden="true"></div>
         <div class="scene-shade"></div>
         <div class="scene-transition" id="scene-transition"></div>
         <div class="scene-badge" id="scene-category-badge">STARRY SKY</div>
@@ -217,6 +216,7 @@
           <input type="checkbox" id="combat-mercy-toggle"> Spare the enemy — knock out, don't kill
         </label>
         <div id="combat-resource-row" class="combat-resource-row"></div>
+        <div id="combat-status-row" class="combat-status-row"></div>
         <div class="combat-ability-row">
           <label for="combat-ability">Ability</label>
           <select id="combat-ability"><option value="">Plain Attack</option></select>

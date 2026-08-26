@@ -42,7 +42,7 @@ class FakeEvalClient:
 
 class WorldwalkerV320Tests(unittest.TestCase):
     def test_version_schema_and_owned_reliability_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.12.1")
+        self.assertEqual(APP_VERSION, "3.12.2")
         self.assertEqual(BASE_STATE["schema_version"], 14)
         for key in ("causality_ledger", "knowledge_audit", "health_repairs"):
             self.assertIn(key, BASE_STATE)

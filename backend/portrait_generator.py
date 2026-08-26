@@ -94,7 +94,11 @@ WORLD_BACKDROPS = {
 }
 
 VISUAL_SPECIAL_KEYS = re.compile(
-    r"species|race|form|transformation|evolution|clan|bloodline|devil fruit|class|body|eyes|hair|mark|curse|mutation|zanpakuto|shikai|bankai|spiritual nature",
+    r"species|race|form|transformation|evolution|clan|bloodline|devil fruit|body|eyes|hair|mark|curse|mutation|zanpakuto|shikai|bankai|spiritual nature",
+    re.I,
+)
+VISIBLE_EQUIPMENT_KEYS = re.compile(
+    r"weapon|sword|blade|bow|gun|armor|armour|outfit|clothing|robe|cloak|coat|shirt|pants|dress|uniform|head|hat|mask|glove|boot|shoe|shield|accessor|ring|neck|ear|waist|belt",
     re.I,
 )
 
@@ -126,6 +130,23 @@ def affiliation_text_for(state):
     return text or "none recorded"
 
 
+def visible_equipment_for(state):
+    """Return only gear that can actually change a portrait silhouette.
+
+    Narrative inventory updates such as ore, medicine, keys, quest items and
+    carried supplies must not create a new paid portrait cache key.
+    """
+    equipment = state.get("equipment", {})
+    if not isinstance(equipment, dict):
+        return equipment if VISIBLE_EQUIPMENT_KEYS.search(str(equipment)) else {}
+    visible = {}
+    for slot, value in equipment.items():
+        text = f"{slot} {ai_text(value)}"
+        if VISIBLE_EQUIPMENT_KEYS.search(text):
+            visible[str(slot)] = value
+    return visible
+
+
 def visual_state(state):
     special = state.get("special", {}) if isinstance(state.get("special"), dict) else {}
     visual_special = {k: v for k, v in special.items() if VISUAL_SPECIAL_KEYS.search(str(k))}
@@ -151,7 +172,7 @@ def visual_state(state):
         "age_band": age_band,
         "appearance": state.get("appearance_desc", ""),
         "traits": traits,
-        "equipment": state.get("equipment", {}),
+        "equipment": visible_equipment_for(state),
         "affiliations": affiliation_text_for(state),
         "visual_special": visual_special,
         "canonical_identity": identity.get("canonical_description", ""),
@@ -183,7 +204,7 @@ def portrait_prompt(state, preserve_identity=False):
     style = WORLD_PORTRAIT_STYLES.get(world, WORLD_PORTRAIT_STYLES["Custom World"])
     backdrop = WORLD_BACKDROPS.get(world, WORLD_BACKDROPS["Custom World"])
     traits = "; ".join(ai_text(x) for x in state.get("portrait_traits", []) if ai_text(x)) or "none recorded"
-    equipment = state.get("equipment", {})
+    equipment = visible_equipment_for(state)
     if isinstance(equipment, dict):
         equipment_text = "; ".join(f"{k}: {v}" for k, v in equipment.items()) or "ordinary setting-appropriate clothing"
     else:

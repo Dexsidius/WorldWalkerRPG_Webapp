@@ -10,12 +10,14 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from game import GameSession
 from simulation import deterministic_assessment
+from portrait_generator import portrait_signature
+from util import scene_category, scene_image_url
 from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 
 class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.12.1")
+        self.assertEqual(APP_VERSION, "3.12.2")
 
     def make_system_game(self, world):
         game = GameSession()
@@ -58,6 +60,42 @@ class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
         self.assertGreater(data["state_patch"]["stats"]["Chakra Control"],
                            data["state_patch"]["stats"]["Taijutsu"])
         self.assertEqual(data["state_patch"]["progression_log"][-1]["ability"], "Chakra Control")
+
+    def test_veteran_gamer_is_trained_not_exceptional(self):
+        game = GameSession()
+        stats = {name: 20 for name in abilities_for("Solo Max-Level Newbie")}
+        profile = game.infer_starting_profile(
+            "Solo Max-Level Newbie", "Veteran Gamer", "All-Rounder",
+            "A veteran gamer who studies hidden routes and trains efficiently.",
+            stats, "Earth — Tower Entrance", allow_starting_specials=False,
+        )
+        self.assertEqual(profile["power_band"], "Trained starter")
+        self.assertEqual(profile["power_notice"], "")
+
+    def test_undated_skip_updates_follow_earlier_canon_events(self):
+        game = GameSession()
+        game.settings["autosave"] = False
+        game.new_campaign(
+            "Ari", "Naruto", "Adventurer", "", "", "", "Academy Student",
+            "Ninjutsu Student", {name: 30 for name in abilities_for("Naruto")},
+            starting_era_id="before_naruto_birth",
+        )
+        result = game.apply_time_skip({
+            "narrative": "Training continues through the full span.",
+            "updates": [{"sequence": 1, "type": "action", "title": "Training complete",
+                         "narrative": "Ari completes the planned training."}],
+            "state_patch": {}, "events": [], "timeline_events": [],
+            "elapsed": {"amount": 8, "unit": "days"}, "interrupted": False,
+            "major_event_reached": False, "major_event_kind": "", "major_event_title": "",
+            "goal_status": {}, "new_contacts": [], "incoming_chats": [],
+            "completed_actions": ["Train"], "deferred_actions": [],
+            "suggested_actions": ["Review the result", "Speak to a mentor", "Rest"],
+        }, 8, "days", {"actions": ["Train"], "rolls": [], "elapsed_minutes": 8 * 1440, "intensity": "normal"})
+        dated = [entry for entry in result["story"] if entry.get("canon_day") is not None]
+        days = [entry["canon_day"] for entry in dated]
+        self.assertEqual(days, sorted(days))
+        self.assertEqual(dated[-1]["canon_day"], result["state"]["canon_day"])
+        self.assertIn("TRAINING COMPLETE", dated[-1]["text"])
 
     def test_successful_opening_check_changes_combat_state_once(self):
         game = self.make_system_game("Overgeared")
@@ -163,6 +201,50 @@ class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
         self.assertIn("Selected skip: next major event", source)
         self.assertIn("<optgroup", source)
         self.assertIn('debuff: "⛓ "', source)
+        self.assertIn("function clearTransientFeedback()", source)
+        self.assertIn("banner.replaceChildren()", source)
+
+    def test_mobile_suggestions_wrap_instead_of_clipping(self):
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        mobile = css[css.index("@media(max-width:720px){", css.index("@media(max-width:720px){") + 1):]
+        self.assertIn(".suggested-actions{ max-width:100%; flex-wrap:wrap; overflow-x:visible; }", mobile)
+        self.assertIn("white-space:normal", mobile)
+
+    def test_completed_combat_cannot_override_current_landmark_art(self):
+        state = copy.deepcopy(BASE_STATE)
+        state.update({
+            "world": "Naruto", "location": "Konohagakure",
+            "combat": {"active": False, "enemy": {"name": "Bandit"}, "log": ["Fight ended"]},
+        })
+        image, category = scene_image_url(state)
+        self.assertEqual(category, "town_square")
+        self.assertIn("naruto_konohagakure", image)
+
+    def test_distant_world_battle_does_not_change_vague_local_activity_art(self):
+        state = copy.deepcopy(BASE_STATE)
+        state.update({
+            "world": "Overgeared", "location": "Workshop",
+            "current_activity": "Forge a careful blade",
+            "world_events": ["A monster army begins a distant battlefield assault"],
+            "timeline": ["War and siege consume the eastern front"],
+        })
+        self.assertEqual(scene_category(state), "merchant_shop")
+
+    def test_hospital_uses_its_dedicated_still_art(self):
+        state = copy.deepcopy(BASE_STATE)
+        state.update({"world": "Custom World", "location": "Royal Hospital Infirmary"})
+        image, category = scene_image_url(state)
+        self.assertEqual(category, "hospital_clinic")
+        self.assertEqual(image, "/assets/generated_scenes/hospital_clinic.png")
+
+    def test_nonvisible_inventory_does_not_regenerate_portrait(self):
+        state = copy.deepcopy(BASE_STATE)
+        state.update({"world": "Overgeared", "name": "Rune", "appearance_desc": "A young smith with dark curls."})
+        before = portrait_signature(state)
+        state["equipment"] = {"Ore pouch": "12 iron ore", "Quest key": "Old workshop key"}
+        self.assertEqual(before, portrait_signature(state))
+        state["equipment"]["Armor"] = "A newly forged blue-steel breastplate"
+        self.assertNotEqual(before, portrait_signature(state))
 
 
 if __name__ == "__main__":
