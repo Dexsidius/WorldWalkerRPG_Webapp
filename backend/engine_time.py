@@ -15,7 +15,8 @@ from continuity import update_continuity
 from reliability import update_narrative_memory, record_progression_ledger, advance_hidden_class_discovery
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks)
+                     update_chapter_memory, tick_world_clocks, uses_literal_quests,
+                     quest_presentation_for)
 from simulation import (deterministic_assessment, prioritize_updates,
                         advance_npc_intentions, record_simulation_events,
                         agency_bypasses_check, explicit_world_method,
@@ -670,7 +671,9 @@ class TimeSkipMixin:
                 "Training intensity must affect gains, fatigue, injury risk, resources, and sustainability.",
                 ("Respect travel times, sleep, recovery, food, healing, social obligations, faction responses, lore, and world chronology. Bleach uses narrative supply access—rank, authorization, favors, requisitions and availability—instead of tracking money." if self.state.get("world") == "Bleach" else "Respect travel times, sleep, recovery, money, food, healing, social obligations, faction responses, lore, and world chronology."),
                 "Use supplied dice results exactly for uncertain milestones.",
-                "If an action begins or accepts a quest/mission/job/contract, give a complete readable briefing and add a structured active quest: name, giver/cause, objective, known location, known risks, first actionable step, current knowledge, and clear completion conditions.",
+                ("If an action begins or accepts a quest/mission/job/contract, give a complete readable briefing and add a structured active quest: name, giver/cause, objective, known location, known risks, first actionable step, current knowledge, and clear completion conditions. Keep literal objective progress synchronized with events."
+                 if uses_literal_quests(self.state.get("world")) else
+                 "If an action begins or accepts a mission, job, promise, investigation, or personal goal, establish a narrative Agenda entry with its situation, cause or commitment, current knowledge, relevant people and places, immediate pressures, developments, and a useful lead. Do not present a percentage, checklist, locked route, mandatory order, or fixed solution; alternate story-valid resolutions remain possible."),
                 "Write skills in plain language with effect, use/activation, limitation or cost, and growth path; never expose raw arrays, internal identifiers, or calculation traces as descriptions.",
                 "Advance NPCs, factions, canon events, quests, relationships, markets, wars, organizations, and rumors independently.",
                 "Use simulation_profile as a hard detail budget. Fully resolve people and threads in state_before.simulation_context.detail_bubble; summarize distant actors unless their action crosses into the local scene or becomes a major event.",
@@ -1637,7 +1640,12 @@ class TimeSkipMixin:
                 # actually fixed the original complaint.
                 self.append("[ELSEWHERE]\n" + message, "system")
             for name in completed_quests:
-                self.append(f"[QUEST COMPLETE — {name}]\nAll required objectives have been completed.", "meta")
+                if uses_literal_quests(self.state.get("world")):
+                    message = f"[QUEST COMPLETE — {name}]\nAll required objectives have been completed."
+                else:
+                    label = quest_presentation_for(self.state.get("world"))["entry_label"].upper()
+                    message = f"[{label} CONCLUDED — {name}]\nThe situation reached a story-established outcome and has moved into campaign history."
+                self.append(message, "meta")
             notifications = self.notify(before, self.state, list(data.get("events", []) or []) + local_world_events)
             if interrupted and data.get("interruption_kind") == "canon_event":
                 notifications.append({"message": "MAJOR CANON EVENT: " + data.get("interruption_reason", "A major canon event is unfolding."),

@@ -15,7 +15,8 @@ from continuity import update_continuity
 from reliability import update_narrative_memory, record_progression_ledger, advance_hidden_class_discovery
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks, record_purchase_offer)
+                     update_chapter_memory, tick_world_clocks, record_purchase_offer,
+                     uses_literal_quests, quest_presentation_for)
 from simulation import (advance_npc_intentions, record_simulation_events,
                         normalize_assessment_for_agency)
 from simulation_integrity import (register_action_goals, reconcile_action_goals,
@@ -827,6 +828,8 @@ Return ONLY valid JSON."""
         structured quest patch.
         """
         trigger = re.sub(r"\s+", " ", str(trigger_text or "")).strip()
+        literal_quests = uses_literal_quests(self.state.get("world"))
+        presentation = quest_presentation_for(self.state.get("world"))
         prior_names = {
             str(q.get("name", "")).strip().lower() for q in before.get("quests", [])
             if isinstance(q, dict) and str(q.get("name", "")).strip()
@@ -855,6 +858,7 @@ Return ONLY valid JSON."""
                 "locations": [self.state.get("location", "Current location")],
                 "risks": ["Unknown until the first lead is investigated"],
                 "first_step": "Identify the nearest reliable lead, witness, patron, or location connected to the objective.",
+                "agenda_mode": "literal" if literal_quests else "narrative",
             }
             quests.append(quest)
             new_quests.append(quest)
@@ -916,14 +920,26 @@ Return ONLY valid JSON."""
             quest["optional_objectives"] = [ai_text(x)[:500] for x in (quest.get("optional_objectives") or [])[:20] if ai_text(x)]
             quest["current_obstacles"] = [ai_text(x)[:500] for x in (quest.get("current_obstacles") or quest["risks"])[:20] if ai_text(x)]
             quest["next_hint"] = str(quest.get("next_hint") or quest["first_step"])[:500]
-            self.append(
-                f"[QUEST STARTED — {quest.get('name', 'New Quest')}]\n"
-                f"{quest['explanation']}\n"
-                f"Objective: {quest['clear_conditions'][0]}\n"
-                f"First step: {quest['first_step']}\n"
-                f"Known risk: {quest['risks'][0]}",
-                "system",
-            )
+            quest["agenda_mode"] = "literal" if literal_quests else "narrative"
+            if literal_quests:
+                briefing = (
+                    f"[QUEST STARTED — {quest.get('name', 'New Quest')}]\n"
+                    f"{quest['explanation']}\n"
+                    f"Objective: {quest['clear_conditions'][0]}\n"
+                    f"First step: {quest['first_step']}\n"
+                    f"Known risk: {quest['risks'][0]}"
+                )
+                self.append(briefing, "system")
+            else:
+                known = quest["current_knowledge"][0] if quest["current_knowledge"] else "The situation is still unfolding."
+                briefing = (
+                    f"[{presentation['entry_label'].upper()} ADDED — {quest.get('name', 'New Direction')}]\n"
+                    f"{quest['explanation']}\n"
+                    f"Current direction: {quest['first_step']}\n"
+                    f"What you know: {known}\n"
+                    f"Immediate pressure: {quest['risks'][0]}"
+                )
+                self.append(briefing, "system")
         return new_quests
 
     @staticmethod

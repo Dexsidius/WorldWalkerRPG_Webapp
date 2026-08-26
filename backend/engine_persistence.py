@@ -277,6 +277,7 @@ class PersistenceMixin:
             raise ValueError("This is not a Worldwalker campaign export.")
         source_version = str(bundle.get("version", "Legacy"))
         imported_state = migrate_state(bundle["state"], source_version)
+        normalize_quest_state_machine(imported_state)
         base = safe_filename(imported_state.get("name", "Imported") + "_" + imported_state.get("world", "World"))
         target = _save_dir() / f"{base}.json"
         suffix = 2
@@ -315,6 +316,7 @@ class PersistenceMixin:
         with self.lock:
             had_canon_clock = "canon_time_minutes" in b.get("state", {})
             self.state = migrate_state(b["state"], b.get("version", "Legacy"))
+            normalize_quest_state_machine(self.state)
             self.history = b.get("history", [])
             self.checkpoints = b.get("checkpoints", [])
             self.story_log = b.get("story_log", [])

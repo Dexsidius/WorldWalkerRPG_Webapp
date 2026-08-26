@@ -36,6 +36,28 @@ WORLD_PROGRESSION_PRESETS = {
 }
 
 
+LITERAL_QUEST_WORLDS = {"Overgeared", "Solo Max-Level Newbie"}
+
+WORLD_QUEST_PRESENTATION = {
+    "Overgeared": {"literal": True, "tab_label": "Quests", "rail_label": "Active Quest", "empty_label": "No active quest", "entry_label": "Quest", "archive_label": "Completed / failed quests"},
+    "Solo Max-Level Newbie": {"literal": True, "tab_label": "System Quests", "rail_label": "Active Quest", "empty_label": "No active quest", "entry_label": "Quest", "archive_label": "Completed / failed quests"},
+    "Naruto": {"literal": False, "tab_label": "Mission Agenda", "rail_label": "Current Assignment", "empty_label": "No current assignment", "entry_label": "Assignment", "archive_label": "Mission history"},
+    "One Piece": {"literal": False, "tab_label": "Voyage Log", "rail_label": "Current Priority", "empty_label": "No current priority", "entry_label": "Priority", "archive_label": "Past voyages and promises"},
+    "Hunter x Hunter": {"literal": False, "tab_label": "Hunter Agenda", "rail_label": "Current Case", "empty_label": "No current case", "entry_label": "Case", "archive_label": "Closed cases and hunts"},
+    "Bleach": {"literal": False, "tab_label": "Division Agenda", "rail_label": "Current Order", "empty_label": "No current order", "entry_label": "Order", "archive_label": "Completed orders and incidents"},
+    "Reincarnated as a Slime": {"literal": False, "tab_label": "Journey Agenda", "rail_label": "Current Concern", "empty_label": "No current concern", "entry_label": "Concern", "archive_label": "Resolved concerns"},
+    "Custom World": {"literal": False, "tab_label": "Agenda", "rail_label": "Current Direction", "empty_label": "No current direction", "entry_label": "Agenda", "archive_label": "Past goals and outcomes"},
+}
+
+
+def uses_literal_quests(world):
+    return str(world or "Custom World") in LITERAL_QUEST_WORLDS
+
+
+def quest_presentation_for(world):
+    return copy.deepcopy(WORLD_QUEST_PRESENTATION.get(str(world or "Custom World"), WORLD_QUEST_PRESENTATION["Custom World"]))
+
+
 WORLD_TERRITORIES = {
     "One Piece": {"Shells Town": "Marines", "Loguetown": "Marines", "Enies Lobby": "World Government", "Sabaody": "World Government", "Arlong Park": "Pirates",
                   "Fishman Island": "Whitebeard Pirates", "Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates",
@@ -97,7 +119,8 @@ def _list(value):
 
 
 def normalize_quest_state_machine(state):
-    """Upgrade active quests into explicit objective/branch state."""
+    """Keep literal quests mechanical and narrative-world agendas flexible."""
+    literal = uses_literal_quests(state.get("world"))
     completed = []
     for quest in state.get("quests", []):
         if not isinstance(quest, dict):
@@ -115,6 +138,7 @@ def normalize_quest_state_machine(state):
                                    "optional": bool(raw.get("optional")), "progress": max(0, min(100, int(raw.get("progress", 100 if status == "complete" else 0) or 0)))})
             else:
                 objectives.append({"id": f"obj-{index + 1}", "text": str(raw)[:500], "status": "active", "optional": False, "progress": 0})
+        quest["agenda_mode"] = "literal" if literal else "narrative"
         quest["objectives"] = objectives
         quest["completion_conditions"] = [obj["text"] for obj in objectives if not obj.get("optional")]
         quest["optional_objectives"] = [obj["text"] for obj in objectives if obj.get("optional")]
@@ -122,13 +146,43 @@ def normalize_quest_state_machine(state):
         quest["current_obstacles"] = _list(quest.get("current_obstacles") or quest.get("risks"))
         quest["next_hint"] = str(quest.get("next_hint") or quest.get("first_step") or
                                  (f"Continue working on: {next((o['text'] for o in objectives if o['status'] == 'active'), 'the next known lead')}") )[:500]
-        required_progress = [obj.get("progress", 0) for obj in objectives if not obj.get("optional")]
-        quest["progress_percent"] = round(sum(required_progress) / len(required_progress)) if required_progress else 0
         required = [obj for obj in objectives if not obj.get("optional")]
         branch = quest.get("branch_state") if isinstance(quest.get("branch_state"), dict) else {}
         branch.setdefault("current", "main")
         branch["available"] = [str(x)[:300] for x in _list(branch.get("available")) if str(x).strip()]
         branch["locked"] = [str(x)[:300] for x in _list(branch.get("locked")) if str(x).strip()]
+        if not literal:
+            # These fields remain private continuity memory, but narrative
+            # worlds never turn them into a progress bar, mandatory route, or
+            # automatic completion gate. The fiction may resolve a mission by
+            # any logically valid route the GM and player establish.
+            quest.pop("progress_percent", None)
+            generic_routes = (
+                "follow the primary lead:", "seek an alternate route through",
+                "investigate an alternate route at", "search for an alternate source",
+            )
+            branch["available"] = [name for name in branch["available"] if not name.lower().startswith(generic_routes)]
+            branch["locked"] = []
+            branch["routes"] = [
+                {"name": name, "status": "possible", "consequence": "One possible approach; other story-valid approaches remain available."}
+                for name in branch["available"]
+            ]
+            quest["branch_state"] = branch
+            quest.setdefault("developments", [])
+            quest.setdefault("commitments", [])
+            explanation = str(quest.get("explanation") or quest.get("description") or "").strip()
+            if not explanation or explanation.lower().startswith(("no additional explanation", "no briefing recorded", "no explanation recorded")):
+                source = str(quest.get("giver") or quest.get("cause") or "your current circumstances").strip()
+                quest["explanation"] = (
+                    f"{quest.get('name', 'This concern')} remains active. It began with {source}; "
+                    f"current circumstances point toward {quest['next_hint'].rstrip('.')} ."
+                ).replace(" .", ".")[:2000]
+            if str(quest.get("status", "active")).lower() in {"complete", "completed"}:
+                completed.append(quest.get("name", "Agenda"))
+            continue
+
+        required_progress = [obj.get("progress", 0) for obj in objectives if not obj.get("optional")]
+        quest["progress_percent"] = round(sum(required_progress) / len(required_progress)) if required_progress else 0
         # A quest without choices is an isolated checklist.  Seed two grounded
         # routes from its own briefing, then unlock the confrontation route as
         # earlier required objectives are completed.  This is deterministic

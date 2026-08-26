@@ -210,7 +210,8 @@ class WorldwalkerV251Tests(unittest.TestCase):
         self.assertTrue(quest["clear_conditions"])
         self.assertTrue(quest["first_step"])
         self.assertTrue(quest["risks"])
-        self.assertTrue(any("QUEST STARTED" in entry["text"] for entry in game.story_log))
+        self.assertTrue(any("ADDED" in entry["text"] for entry in game.story_log))
+        self.assertFalse(any("Objective:" in entry["text"] for entry in game.story_log))
 
     def test_autosave_overwrites_one_file_per_campaign(self):
         with tempfile.TemporaryDirectory() as temp:

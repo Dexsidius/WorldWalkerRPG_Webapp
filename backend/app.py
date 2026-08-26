@@ -10,7 +10,9 @@ from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
 from portrait_generator import PORTRAIT_CACHE_DIR, generate_portrait, save_reference, portrait_history, revert_portrait, portrait_usage
 from lore import list_lore_sources, import_lore_pack, lore_library_status
-from systems import normalize_tuning, progression_preset_for, relationship_snapshot, campaign_health, map_snapshot
+from systems import (normalize_tuning, progression_preset_for, relationship_snapshot,
+                     campaign_health, map_snapshot, quest_presentation_for,
+                     normalize_quest_state_machine)
 from reliability import narrative_memory_snapshot, canon_event_tracker, visible_class_profile, visible_skills
 from knowledge import knowledge_snapshot
 from causality import causality_snapshot
@@ -545,6 +547,7 @@ def api_background_poll():
 @app.route("/api/panels")
 def api_panels():
     s = game.state
+    normalize_quest_state_machine(s)
     ex = expansion_for(s.get("world", "Custom World"))
     world = s.get("world", "Custom World")
     world_map = WORLD_DATA.get(world, {}).get("map", [])
@@ -584,6 +587,7 @@ def api_panels():
         "level": s.get("level", 1), "xp": s.get("xp", 0), "xp_next": s.get("xp_next", 100),
         "stats": s.get("stats", {}),
         "quests": s.get("quests", []),
+        "quest_presentation": quest_presentation_for(world),
         "hidden_quests_count": len(s.get("hidden_quests", [])),
         "codex": s.get("codex", []),
         "inventory": s.get("inventory", []),

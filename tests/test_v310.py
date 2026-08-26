@@ -27,7 +27,7 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.game.settings["autosave"] = False
 
     def test_v310_schema_declares_owned_memory_and_progression_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.11.0")
+        self.assertEqual(APP_VERSION, "3.12.0")
         self.assertEqual(BASE_STATE["schema_version"], 14)
         self.assertIn("narrative_memory", BASE_STATE)
         self.assertIn("progression_ledger", BASE_STATE)
@@ -80,7 +80,7 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.assertIn("different team", rows[0]["replacement"])
 
     def test_quest_progression_has_clues_obstacles_optional_goals_and_hint(self):
-        state = {"quests": [{
+        state = {"world": "Overgeared", "quests": [{
             "name": "Find the Relic", "status": "Active",
             "objectives": [
                 {"text": "Locate the vault", "progress": 50},

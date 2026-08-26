@@ -590,7 +590,7 @@ function chainHistoryHtml(entries) {
 
 function questView(q, index = 0) {
   if (typeof q !== "object" || q === null) {
-    return { name: String(q || `Quest ${index + 1}`), status: "Active", explanation: "No additional explanation has been discovered yet.", knowledge: [], conditions: [], objectives: [], branchState: {}, giver: "", locations: [], risks: [], firstStep: "", deadline: "", rewards: [] };
+    return { name: String(q || `Quest ${index + 1}`), status: "Active", explanation: "No additional explanation has been discovered yet.", knowledge: [], conditions: [], objectives: [], branchState: {}, giver: "", locations: [], risks: [], firstStep: "", deadline: "", rewards: [], developments: [], commitments: [], optionalObjectives: [], progress: 0 };
   }
   return {
     name: q.name || q.title || `Quest ${index + 1}`,
@@ -608,7 +608,22 @@ function questView(q, index = 0) {
     progress: Number(q.progress_percent || 0),
     deadline: q.deadline || "",
     rewards: textList(q.rewards || q.reward),
+    developments: textList(q.developments || q.recent_developments),
+    commitments: textList(q.commitments || q.promises),
   };
+}
+
+function questPresentation(world) {
+  const presentations = {
+    "Overgeared": { literal: true, tab_label: "Quests", rail_label: "Active Quest", empty_label: "No active quest", entry_label: "Quest", archive_label: "Completed / failed quests" },
+    "Solo Max-Level Newbie": { literal: true, tab_label: "System Quests", rail_label: "Active Quest", empty_label: "No active quest", entry_label: "Quest", archive_label: "Completed / failed quests" },
+    "Naruto": { literal: false, tab_label: "Mission Agenda", rail_label: "Current Assignment", empty_label: "No current assignment", entry_label: "Assignment", archive_label: "Mission history" },
+    "One Piece": { literal: false, tab_label: "Voyage Log", rail_label: "Current Priority", empty_label: "No current priority", entry_label: "Priority", archive_label: "Past voyages and promises" },
+    "Hunter x Hunter": { literal: false, tab_label: "Hunter Agenda", rail_label: "Current Case", empty_label: "No current case", entry_label: "Case", archive_label: "Closed cases and hunts" },
+    "Bleach": { literal: false, tab_label: "Division Agenda", rail_label: "Current Order", empty_label: "No current order", entry_label: "Order", archive_label: "Completed orders and incidents" },
+    "Reincarnated as a Slime": { literal: false, tab_label: "Journey Agenda", rail_label: "Current Concern", empty_label: "No current concern", entry_label: "Concern", archive_label: "Resolved concerns" },
+  };
+  return presentations[world] || { literal: false, tab_label: "Agenda", rail_label: "Current Direction", empty_label: "No current direction", entry_label: "Agenda", archive_label: "Past goals and outcomes" };
 }
 
 function humanLabel(value) {
@@ -1017,13 +1032,16 @@ function renderState(state) {
   // the complete journal view.
   const questPreview = $("#active-quest-preview");
   const activeQuests = s.quests || [];
+  const questUi = questPresentation(s.world);
+  const questTab = $('#journal-tabs button[data-tab="quests"]');
+  if (questTab) questTab.textContent = questUi.tab_label;
   if (activeQuests.length) {
     const q = questView(activeQuests[0]);
     questPreview.classList.remove("empty");
-    questPreview.innerHTML = `<span>Active Quest</span><small>${escapeHtml(q.name)}</small>`;
+    questPreview.innerHTML = `<span>${escapeHtml(questUi.rail_label)}</span><small>${escapeHtml(q.name)}</small>`;
   } else {
     questPreview.classList.add("empty");
-    questPreview.innerHTML = `<span>Active Quest</span><small>No active quest</small>`;
+    questPreview.innerHTML = `<span>${escapeHtml(questUi.rail_label)}</span><small>${escapeHtml(questUi.empty_label)}</small>`;
   }
 
   const feedItems = [...(s.world_events || []), ...(s.timeline || []).slice(-5)].slice(-8).map((e) => escapeHtml(typeof e === "object" ? (e.text || JSON.stringify(e)) : e));
@@ -2901,16 +2919,34 @@ async function openJournal(tab) {
     panel.innerHTML = `<div class="system-summary"><b>CAMPAIGN DIRECTOR</b><span>Keeps goals, pressures, and opportunities coherent locally without another AI call.</span></div><div class="director-grid"><div><b>Current goal</b><span>${escapeHtml(direction.primary_goal || "Choose a goal")}</span></div><div><b>Next obstacle</b><span>${escapeHtml(direction.next_obstacle || "None confirmed")}</span></div><div><b>Approaching event</b><span>${escapeHtml(approaching.title ? `${approaching.title} · ${approaching.days_until} days` : "No dated event loaded")}</span></div><div><b>Unresolved people</b><span>${escapeHtml((direction.unresolved_characters || []).map((x) => x.name).join(", ") || "None")}</span></div></div><div class="system-summary"><b>LOCAL SIMULATION SAFETY</b><span>These checks run on your computer after the GM writes a turn. They do not make another AI call.</span></div><div class="integrity-stats"><span><b>${escapeHtml(integrity.travel?.nodes || 0)}</b> mapped places</span><span><b>${escapeHtml(integrity.travel?.connections || 0)}</b> travel routes</span><span><b>${escapeHtml((integrity.active_goals || []).length)}</b> active stop goals</span><span><b>${escapeHtml(schedules.length)}</b> NPC schedules</span></div><h3>Recent turn checks</h3>${reports.length ? reports.map((row) => `<details class="integrity-report ${escapeHtml(row.status || "passed")}"><summary><b>Turn ${escapeHtml(row.turn)} · ${escapeHtml(row.status || "passed")}</b><span>${escapeHtml(row.actions_checked || 0)} actions · ${escapeHtml(row.rolls_checked || 0)} rolls</span></summary>${(row.repairs || []).length ? `<p><b>Repaired locally</b></p><ul>${row.repairs.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : ""}${(row.warnings || []).length ? `<p><b>Warnings</b></p><ul>${row.warnings.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : '<p>No mismatch was found.</p>'}</details>`).join("") : '<div class="jrow hint">Resolve a turn to create the first integrity report.</div>'}<h3>Active action goals</h3>${(integrity.active_goals || []).length ? integrity.active_goals.map((row) => `<div class="jrow"><b>${escapeHtml(row.kind || "goal")}</b><br>${escapeHtml(row.condition || row.action)}</div>`).join("") : '<div class="jrow hint">No “until/master/find/reach” goal is currently active.</div>'}<h3>NPC commitments</h3>${schedules.length ? schedules.map(([name,row]) => `<article class="schedule-card"><header><b>${escapeHtml(name)}</b><span>${escapeHtml(row.status || "planned")}</span></header><p>${escapeHtml(row.goal || "Private commitment")}</p><small>${escapeHtml(row.location || "Unknown")} · due around Canon Day ${escapeHtml(row.due_day ?? "?")}</small></article>`).join("") : '<div class="jrow hint">Schedules appear when recurring NPCs establish a real goal.</div>'}<h3>Information in motion</h3>${packets.length ? packets.slice(0,20).map((row) => `<div class="jrow"><b>${escapeHtml(row.fact)}</b><br><small>${escapeHtml(row.channel || "unknown route")} · ${escapeHtml(row.confidence || 0)}% confidence · recipients: ${escapeHtml((row.recipients || []).join(", ") || "none")}${Number(row.available_after_minutes || 0) > 0 ? ` · arrives in ${escapeHtml(row.available_after_minutes)} minutes` : " · delivered"}</small></div>`).join("") : '<div class="jrow hint">No structured news packet has moved yet.</div>'}<h3>Canon dependency health</h3><div class="jrow">${Object.entries(canon.counts || {}).filter(([,v]) => v).map(([k,v]) => `<b>${escapeHtml(v)} ${escapeHtml(k)}</b>`).join(" · ") || "No fixed canon dependencies."}</div>`;
   } else if (tab === "quests") {
     const active = data.quests || [];
-    panel.innerHTML = (active.length ? active.map((raw, index) => {
+    const qp = data.quest_presentation || questPresentation(data.world);
+    const line = (label, value) => value ? `<div class="quest-brief-line"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>` : "";
+    const list = (label, values, emptyText = "") => values.length ? `<div class="quest-detail-label">${escapeHtml(label)}</div><ul>${values.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : (emptyText ? `<div class="quest-detail-label">${escapeHtml(label)}</div><p>${escapeHtml(emptyText)}</p>` : "");
+    const archive = `<h3>${escapeHtml(qp.archive_label)}</h3>${(data.quest_archive || []).length ? data.quest_archive.map((q, i) => { const v = questView(q, i); return `<div class="jrow"><b>${escapeHtml(v.name)}</b> — ${escapeHtml(v.status)}<br>${escapeHtml(v.explanation)}</div>`; }).join("") : '<div class="jrow hint">Nothing has moved into campaign history yet.</div>'}`;
+    if (qp.literal) {
+      panel.innerHTML = (active.length ? active.map((raw, index) => {
       const q = questView(raw, index);
-      const line = (label, value) => value ? `<div class="quest-brief-line"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>` : "";
-      const list = (label, values, emptyText = "") => values.length ? `<div class="quest-detail-label">${escapeHtml(label)}</div><ul>${values.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : (emptyText ? `<div class="quest-detail-label">${escapeHtml(label)}</div><p>${escapeHtml(emptyText)}</p>` : "");
       const knowledge = q.knowledge.length ? `<div class="quest-detail-label">Discovered clues</div><ul>${q.knowledge.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : `<div class="quest-detail-label">Discovered clues</div><p>Nothing beyond the quest briefing is known yet.</p>`;
       const objectives = q.objectives.length ? `<div class="quest-detail-label">Tracked objectives</div><div class="objective-list">${q.objectives.map((obj) => `<div class="objective-row ${escapeHtml(obj.status || "active")}"><span>${obj.status === "complete" ? "✓" : obj.status === "failed" ? "✕" : obj.status === "locked" ? "◇" : "○"}</span><div><b>${escapeHtml(obj.text || obj.name || "Objective")}</b><small>${escapeHtml(obj.status || "active")}${obj.optional ? " · optional" : ""} · ${escapeHtml(obj.progress || 0)}%</small></div></div>`).join("")}</div>` : (q.conditions.length ? `<div class="quest-detail-label">Clear conditions / objectives</div><ul>${q.conditions.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : `<div class="quest-detail-label">Clear conditions</div><p>Not yet known. Discover more information or advance the quest.</p>`);
       const branches = [...textList(q.branchState.available), ...textList(q.branchState.locked).map((x) => `${x} (locked)` )];
       const branchInfo = q.branchState.current || branches.length ? `<div class="quest-detail-label">Current route</div><p>${escapeHtml(q.branchState.current || "main")}</p>${list("Known branches", branches)}` : "";
       return `<details class="quest-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(q.name)} <small>— ${escapeHtml(q.status)} · ${escapeHtml(q.progress)}%</small></summary><div class="quest-details"><p class="quest-summary">${escapeHtml(q.explanation)}</p><div class="quest-progress"><i style="width:${Math.max(0, Math.min(100, q.progress))}%"></i></div><div class="quest-brief-grid">${line("Giver / cause", q.giver)}${line("Suggested next lead", q.firstStep)}${line("Deadline", q.deadline)}</div>${list("Known locations", q.locations)}${list("Current obstacles", q.risks)}${knowledge}${objectives}${list("Optional objectives", q.optionalObjectives)}${branchInfo}${list("Known rewards", q.rewards)}<div class="quest-note-row"><input type="text" placeholder="Add your own quest note" data-quest-note-input="${escapeHtml(q.name)}"><button type="button" data-quest-note-save="${escapeHtml(q.name)}">SAVE NOTE</button></div></div></details>`;
-    }).join("") : `<div class="jrow">No active quests yet.</div>`) + `<div class="jrow hint">Hidden quests discovered: ${data.hidden_quests_count}</div><h3>Completed / failed quests</h3>${(data.quest_archive || []).length ? data.quest_archive.map((q, i) => { const v = questView(q, i); return `<div class="jrow"><b>${escapeHtml(v.name)}</b> — ${escapeHtml(v.status)}<br>${escapeHtml(v.explanation)}</div>`; }).join("") : '<div class="jrow hint">No archived quests yet.</div>'}`;
+      }).join("") : `<div class="jrow">${escapeHtml(qp.empty_label)}.</div>`) + `<div class="jrow hint">Hidden quests discovered: ${data.hidden_quests_count}</div>` + archive;
+    } else {
+      const intro = `<div class="system-summary agenda-intro"><b>${escapeHtml(qp.tab_label.toUpperCase())}</b><span>This records responsibilities, promises, investigations, and developing situations. It follows what happens in the story—not percentages, mandatory steps, or a fixed solution.</span></div>`;
+      const cards = active.length ? active.map((raw, index) => {
+        const q = questView(raw, index);
+        const possible = [...new Set([
+          q.firstStep,
+          ...textList(q.branchState.available),
+        ].filter(Boolean))];
+        const openThreads = [...new Set(q.objectives.filter((obj) => obj && obj.status !== "complete" && obj.status !== "failed").map((obj) => obj.text || obj.name).filter(Boolean))];
+        const commitments = [...new Set([...q.commitments, ...q.optionalObjectives])];
+        const knowledge = list("What you currently know", q.knowledge, "Only the original situation is confirmed so far.");
+        return `<details class="quest-card agenda-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(q.name)} <small>— ${escapeHtml(q.status)}</small></summary><div class="quest-details"><div class="quest-detail-label">Situation</div><p class="quest-summary">${escapeHtml(q.explanation)}</p><div class="quest-brief-grid">${line("Responsibility / source", q.giver)}${line("Current direction", q.firstStep)}${line("Time pressure", q.deadline)}</div>${list("Relevant places", q.locations)}${list("Immediate pressures", q.risks)}${knowledge}${list("Threads still in play", openThreads)}${list("Possible approaches", possible, "Choose any approach that makes sense in the story; you are not limited to a listed route.")}${list("Commitments and possibilities", commitments)}${list("Recent developments", q.developments)}<div class="quest-note-row"><input type="text" placeholder="Add your own agenda note" data-quest-note-input="${escapeHtml(q.name)}"><button type="button" data-quest-note-save="${escapeHtml(q.name)}">SAVE NOTE</button></div></div></details>`;
+      }).join("") : `<div class="jrow">${escapeHtml(qp.empty_label)}. New responsibilities and leads will appear through play.</div>`;
+      panel.innerHTML = intro + cards + archive;
+    }
   } else if (tab === "skills") {
     const skills = Object.entries(data.skills || {});
     const titles = data.titles || [];
