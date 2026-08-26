@@ -6,7 +6,14 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.7.0** (schema 13). Version 3.7 is intended for fresh campaigns.
+Current app/save version: **3.7.1** (schema 13). Version 3.7 is intended for fresh campaigns.
+
+Version 3.7.1 makes Story, Adventurer, and Veteran explicitly player-favoring:
+possible actions resolve decisively, diplomacy is challenged through NPC and
+faction responses instead of abstract failure, and specific world-valid plans
+bypass arbitrary gates. Sustained training is faster and broader; six months
+of rigorous Naruto combat training can now establish jōnin-level capability
+without falsely granting an official village rank. Nightmare remains strict.
 
 Version 3.7.0 reduces AI cost and improves simulation consistency. It sends
 task-specific context to each model, uses the secondary model for Advisor and

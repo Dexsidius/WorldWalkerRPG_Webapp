@@ -153,6 +153,75 @@ MAJOR_RE = re.compile(r"\b(awaken|evolve|transformation|transform|legendary|ulti
 LETHAL_RE = re.compile(r"\b(kill|deathmatch|assassinate|boss|suicide|alone against|invade|lethal|to the death)\b", re.I)
 POWER_RE = re.compile(r"\b(learn|master|unlock|awaken|acquire|gain|develop)\b.*\b(ability|power|form|class|haki|nen|jutsu|skill|technique|magic|fruit)\b", re.I)
 
+DIPLOMACY_RE = re.compile(
+    r"\b(negotiate|persuade|convince|diploma|politic|petition|propose|proposal|alliance|ally|"
+    r"bargain|mediate|appeal to|make (?:a |my )?case|present (?:a |my )?case|request|recruit|"
+    r"lobby|debate|argue|offer terms|peace talk|ceasefire|treaty)\b", re.I)
+EXPLICIT_METHOD_RE = re.compile(
+    r"\b(by|through|using|via|with the help of|under the guidance of|under .+?'?s guidance|"
+    r"because|leveraging|offering|in exchange for|every day|daily|rigorous(?:ly)?|systematically|"
+    r"step by step|according to|following)\b", re.I)
+HARD_BLOCK_REASON_RE = re.compile(
+    r"\b(no known ability|physically impossible|metaphysically impossible|does not exist|"
+    r"dead|deceased|mutually exclusive|world[- ]rule contradiction|no logical possibility|"
+    r"requires an? (?:absent|missing|specific) (?:bloodline|lineage|body|species|artifact)|"
+    r"cannot .+ without (?:the|an?) (?:required|specific|unique))\b", re.I)
+
+
+def player_favoring_difficulty(state):
+    """All modes below Nightmare prioritize achievable power-fantasy play."""
+    return str((state or {}).get("difficulty", "Adventurer")) != "Nightmare"
+
+
+def diplomatic_action(action):
+    return bool(DIPLOMACY_RE.search(_text(action)))
+
+
+def explicit_world_method(action):
+    """A concrete player-authored route should count as real preparation.
+
+    This is intentionally lexical and generous. The narrator still checks the
+    route against setting facts; this helper only prevents a logically usable
+    plan from being converted into an arbitrary luck gate.
+    """
+    text = _text(action)
+    return len(text.split()) >= 6 and bool(EXPLICIT_METHOD_RE.search(text))
+
+
+def agency_bypasses_check(state, action, assessment=None):
+    if not player_favoring_difficulty(state):
+        return False
+    assessment = assessment if isinstance(assessment, dict) else {}
+    if assessment.get("hard_rule_block"):
+        return False
+    if diplomatic_action(action):
+        return True
+    lethal = str(assessment.get("lethal_risk") or "none").lower()
+    return explicit_world_method(action) and lethal not in {"high", "extreme"}
+
+
+def normalize_assessment_for_agency(state, action, assessment):
+    """Keep model caution from becoming an extra lower-mode rules gate."""
+    result = copy.deepcopy(assessment) if isinstance(assessment, dict) else {}
+    if not player_favoring_difficulty(state):
+        return result
+    # Cached v3.7.0 assessments predate hard_rule_block. Preserve only their
+    # concrete impossibilities; social reluctance and low odds are not blocks.
+    hard_block = bool(result.get("hard_rule_block")) or bool(
+        result.get("impossible") and "hard_rule_block" not in result
+        and HARD_BLOCK_REASON_RE.search(_text(result.get("reason")))
+    )
+    if hard_block:
+        result["hard_rule_block"] = True
+    if result.get("impossible") and not hard_block:
+        result["impossible"] = False
+        result["reason"] = "The action can be attempted within the world's rules; its consequences depend on the people and forces involved."
+    if agency_bypasses_check(state, action, result):
+        result["requires_check"] = False
+        result["difficulty_min"] = None
+        result["difficulty_max"] = None
+    return result
+
 
 def deterministic_assessment(state, actions, budget, mode="balanced"):
     """Build rare high-stakes d100 gates without spending a model call.
@@ -169,6 +238,10 @@ def deterministic_assessment(state, actions, budget, mode="balanced"):
         power_leap = bool(POWER_RE.search(text))
         extreme = bool(EXTREME_RE.search(text))
         lethal_attempt = bool(LETHAL_RE.search(text))
+        if player_favoring_difficulty(state) and (
+            diplomatic_action(text) or (explicit_world_method(text) and not lethal_attempt)
+        ):
+            continue
         if not (power_leap or extreme or lethal_attempt):
             continue
         lower = text.lower()
