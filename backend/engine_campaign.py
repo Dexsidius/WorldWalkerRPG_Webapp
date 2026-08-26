@@ -18,6 +18,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
                      update_chapter_memory, tick_world_clocks)
 from bleach_data import (academy_kido_skills, kido_reference_summary,
                          owns_release, zanpakuto_tracks)
+from world_progression import normalize_world_progression
 
 
 DEFAULT_SETTINGS = {
@@ -656,10 +657,25 @@ class CampaignMixin:
     def background_ability_requested(background):
         """Treat an underspecified power claim as permission to instantiate it."""
         text = str(background or "").lower()
+        if CampaignMixin.background_ability_declined(text):
+            return False
         return bool(re.search(
             r"\b(ability|abilities|power|powers|gift|gifted|talent|talented|technique|skill|"
             r"bloodline|lineage|kekkei genkai|d[ōo]jutsu|mutation|innate trait|magic|chakra|nen|hatsu|"
             r"devil fruit|zanpakut[ōo]|release)\b", text
+        ))
+
+    @staticmethod
+    def background_ability_declined(background):
+        """Honor explicit requests to begin without a special power package."""
+        text = str(background or "").lower()
+        return bool(re.search(
+            r"\b(?:without|no|not with|never had|do not have|don't have|does not have|doesn't have)\b"
+            r"(?:\s+[a-z][a-z'-]*){0,5}\s+"
+            r"(?:special\s+)?(?:ability|abilities|power|powers|gift|talent|bloodline|lineage|"
+            r"kekkei genkai|d[ōo]jutsu|mutation|innate trait|magic|chakra gift|nen ability|hatsu|"
+            r"devil fruit|zanpakut[ōo] release)\b",
+            text,
         ))
 
     @staticmethod
@@ -671,9 +687,21 @@ class CampaignMixin:
         between the rarity word and "class" instead of requiring adjacency.
         """
         text = str(background or "").lower()
+        if CampaignMixin.hidden_class_declined(text):
+            return False
         return bool(re.search(
             r"\b(hidden|secret|rare|unique|special|unknown|mysterious|legendary)\b(?:[ -]+[a-z][a-z'-]*){0,4}[ -]+class\b|"
             r"\bclass\s+(?:that\s+)?(?:nobody|no one|others)\s+(?:knows|recognizes|has)\b",
+            text,
+        ))
+
+    @staticmethod
+    def hidden_class_declined(background):
+        """Distinguish a refusal from a request that merely names the feature."""
+        text = str(background or "").lower()
+        return bool(re.search(
+            r"\b(?:without|no|not with|never had|do not have|don't have|does not have|doesn't have)\b"
+            r"(?:\s+[a-z][a-z'-]*){0,5}\s+(?:hidden|secret|rare|unique|special|legendary)?\s*class\b",
             text,
         ))
 
@@ -1157,7 +1185,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         class_requested = allow_starting_specials and self.hidden_class_requested(background)
         # Bleach progression is expressed through the Zanpakuto relationship,
         # releases and Kido—not a generic hidden-class card.
-        class_awarded = world != "Bleach" and (class_requested or (allow_starting_specials and random.random() < RANDOM_HIDDEN_CLASS_CHANCE))
+        class_declined = self.hidden_class_declined(background)
+        class_awarded = world != "Bleach" and (
+            class_requested or (
+                allow_starting_specials and not class_declined and random.random() < RANDOM_HIDDEN_CLASS_CHANCE
+            )
+        )
         if class_awarded:
             hidden_class = self.generate_hidden_class(
                 world, background, boost, primary, adjusted,
@@ -1173,7 +1206,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 f"The {hidden_class['name']} class opens specialized practice routes"
             )
         ability_requested = allow_starting_specials and self.background_ability_requested(background)
-        ability_awarded = world != "Bleach" and (ability_requested or (allow_starting_specials and random.random() < RANDOM_STARTING_ABILITY_CHANCE))
+        ability_declined = self.background_ability_declined(background)
+        ability_awarded = world != "Bleach" and (
+            ability_requested or (
+                allow_starting_specials and not ability_declined and random.random() < RANDOM_STARTING_ABILITY_CHANCE
+            )
+        )
         if ability_awarded:
             generated_ability = self.generate_background_ability(world, background, boost)
             skills[generated_ability["name"]] = copy.deepcopy(generated_ability["details"])
@@ -1247,6 +1285,58 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 package.setdefault("position", rank)
                 package["title"] = self.naruto_identity_title(origin, start_location)
                 merge(package.setdefault("special_patch", {}), {"Home Village": village})
+        # Every selectable origin receives a saved mechanical identity even
+        # when it does not have a bespoke high-status package above.  This is
+        # intentionally local and deterministic: ordinary starts should not
+        # need an extra model call merely to know their job, affiliation,
+        # progression-system state, and first objective.
+        package.setdefault("position", str(origin or archetype or "Local traveler"))
+        special = package.setdefault("special_patch", {})
+        if world == "One Piece":
+            special.setdefault("Crew Role", archetype or "Unassigned")
+            special.setdefault("Home Sea", "East Blue" if start_location in {
+                "Foosha Village", "Shells Town", "Goa Kingdom", "Shimotsuki Village", "Orange Town",
+                "Syrup Village", "Baratie", "Cocoyasi Village", "Loguetown"
+            } else "Grand Line / Other Sea")
+            if origin == "Aspiring Pirate":
+                package.setdefault("affiliations", [{"faction":"Pirates","rank":"Independent rookie","status":"active","joined":"Campaign start","notes":"Has openly chosen the pirate path but has not joined an established crew."}])
+                package.setdefault("reputation", {"Pirates": 5, "Marines": -3})
+        elif world == "Hunter x Hunter":
+            special.setdefault("Hunter License", "Applicant" if "Aspirant" in origin or start_location == "Hunter Exam Site" else "Unlicensed")
+            special.setdefault("Nen Access", "Undiscovered")
+        elif world == "Naruto":
+            special.setdefault("Shinobi Rank", "Academy Student" if "Graduate" not in origin else "Genin")
+            special.setdefault("Home Village", start_location if start_location in WORLD_PUBLIC_CONTACTS.get("Naruto", set()) else "None")
+        elif world == "Solo Max-Level Newbie":
+            special.setdefault("Pre-Tower Game Rank", "Experienced" if origin in {"Veteran Gamer", "Competitive Raider", "Elite Ranker"} else "Unranked")
+            special.setdefault("System Status", "Awaiting manifestation")
+        elif world == "Overgeared":
+            special.setdefault("Class", archetype or "Beginner")
+            special.setdefault("Class Rarity", "Normal")
+            special.setdefault("Satisfy Status", "Active Player")
+        elif world == "Reincarnated as a Slime":
+            special.setdefault("Species", "Human" if any(token in origin for token in ("Human", "Hero", "Noble")) else "Unknown")
+            special.setdefault("Evolution Stage", "New Arrival" if "Otherworld" in origin or "Isekai" in origin else "Unnamed")
+        if not package.get("quests"):
+            path_names = {
+                "One Piece": "Choose a Course on the Grand Line",
+                "Hunter x Hunter": "Establish a Hunter Path",
+                "Naruto": "Earn a Place in the Shinobi World",
+                "Solo Max-Level Newbie": "Survive the Tower's Opening",
+                "Overgeared": "Establish a Place in Satisfy",
+                "Reincarnated as a Slime": "Find a Place in the New World",
+            }
+            quest_name = path_names.get(world)
+            if quest_name:
+                package["quests"] = [{
+                    "name": quest_name, "status": "Active", "category": "main", "giver": "Personal Direction",
+                    "locations": [start_location],
+                    "explanation": f"Your starting role as {origin} creates opportunities and obligations in {start_location}. Choose a concrete first goal and begin building a lasting place in the world.",
+                    "current_knowledge": [f"You begin in {start_location} with the training and equipment of a {origin}.", f"Your strongest starting approach is {archetype}."],
+                    "objectives": ["Choose an immediate personal goal", "Follow a setting-appropriate lead", "Create a relationship, achievement, or discovery that moves that goal forward"],
+                    "clear_conditions": [f"Complete a meaningful first objective in {start_location} and choose the next direction"],
+                    "next_hint": "Inspect the immediate situation, ask what opportunities are nearby, or state the first result you want to pursue.",
+                }]
         return package
 
     def apply_start_package_to_profile(self, world, profile, package):
@@ -1410,7 +1500,13 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         return result
 
     def canon_character_scenario(self, world, scenario_id):
-        return next((copy.deepcopy(x) for x in playable_characters_for(world) if x.get("id") == scenario_id), None)
+        scenario = next((copy.deepcopy(x) for x in playable_characters_for(world) if x.get("id") == scenario_id), None)
+        if scenario:
+            exact = scenario.get("stat_values") if isinstance(scenario.get("stat_values"), dict) else {}
+            minimums = scenario.get("stat_minimums") if isinstance(scenario.get("stat_minimums"), dict) else {}
+            scenario["stat_values"] = {ability: int(exact.get(ability, minimums.get(ability, 10)) or 10)
+                                       for ability in abilities_for(world)}
+        return scenario
 
     def normalize_canon_start_profile(self, world, scenario, profile):
         """Make every player-facing and mechanical field agree with the preset.
@@ -1707,6 +1803,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 self.state["currencies"] = {}
                 self.state["purchase_offer"] = None
                 self.state["purchase_offers"] = []
+            normalize_world_progression(self.state)
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_supports_races, WORLD_RACES, tower_floor_theme, TOWER_FLOOR_COUNT, tower_band, power_profile_for
+from world_progression import WORLD_MECHANIC_RULES
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -636,8 +637,10 @@ class CoreMixin:
         calls run far more often than a real turn (the incoming-chat check
         alone fires every other turn), so the savings compound."""
         wd = WORLD_DATA[self.state["world"]]
+        mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "")
         return f"""You are the world-consistency layer for Worldwalker RPG's "{self.state['world']}" campaign — not narrating a full scene, just keeping one small piece of the simulation honest.
 WORLD RULES: {wd['rules']}
+{mechanics}
 CUSTOM SETTING: {self.state.get('custom_world', '')}
 
 CORE PRINCIPLES
@@ -724,11 +727,13 @@ Return ONLY valid JSON. No markdown fences."""
         difficulty = DIFFICULTIES[self.state["difficulty"]]
         tuning = normalize_tuning(self.state)
         profile = progression_preset_for(self.state.get("world"))
+        mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "")
         narration = self.settings.get("narration", "Concise")
         agency_rules = self.player_agency_rules()
         shared = f"""You are the authoritative Game Master for a persistent Worldwalker RPG campaign.
 WORLD: {self.state['world']}
 WORLD RULES: {wd['rules']}
+{mechanics}
 CUSTOM SETTING: {self.state.get('custom_world', '')}
 DIFFICULTY: {self.state['difficulty']} — {difficulty['description']}
 PROGRESSION: {profile['label']}; training x{tuning['training_rate']}, breakthrough x{tuning['breakthrough_rate']}, XP x{tuning['xp_rate']} only where canonical XP exists.

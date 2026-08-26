@@ -12,6 +12,7 @@ from util import merge, ai_text
 from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for
 from knowledge import normalize_npc_knowledge
 from bleach_data import CANON_HADO, CANON_BAKUDO
+from world_progression import normalize_world_progression
 
 
 APP_OWNED = {
@@ -248,6 +249,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     merge(state, safe)
     repairs = _repair(state)
     repairs.extend(_repair_bleach_mechanics(state, before))
+    repairs.extend(normalize_world_progression(state, before))
     knowledge_changes = normalize_npc_knowledge(state, before, source)
     if knowledge_changes:
         repairs.extend(f"Downgraded unsupported secret knowledge for {row['npc']} to a suspicion" for row in knowledge_changes)
@@ -289,6 +291,7 @@ def migrate_state(state, from_version="unknown"):
     migrated["schema_version"] = BASE_STATE.get("schema_version", 12)
     normalize_npc_knowledge(migrated, {}, "migration")
     repairs = _repair(migrated)
+    repairs.extend(normalize_world_progression(migrated))
     migrated.setdefault("diagnostics", {})["migration"] = {
         "from_version": from_version, "repairs": repairs,
         "time": datetime.now().isoformat(timespec="seconds"),

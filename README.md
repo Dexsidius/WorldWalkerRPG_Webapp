@@ -6,7 +6,17 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.8.1** (schema 13). Version 3.8 is intended for fresh campaigns.
+Current app/save version: **3.10.0** (schema 13).
+
+Version 3.10 brings the non-Bleach worlds up to the same mechanical standard
+as the Bleach rebuild without adding map nodes or timeline dates. One Piece,
+Hunter × Hunter, Naruto, Solo Max-Level Newbie, Overgeared, and Reincarnated
+as a Slime now have dedicated world-system records and Journal cards. Existing
+canon events are spoiler-safe and causally ordered, canon-character starts use
+complete deterministic stat sheets and live opening situations, every ordinary
+origin receives a saved role, loadout, progression state, and opening quest,
+and non-level settings no longer receive a misleading Level label in Party.
+Additional selectable starts use only locations that were already on each map.
 
 Version 3.8.1 adds a fully mechanical Pain canon start immediately after
 Yahiko's death, while the Deva Path and transformed Akatsuki are first taking

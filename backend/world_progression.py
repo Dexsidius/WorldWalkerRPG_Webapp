@@ -1,0 +1,236 @@
+"""Structured, zero-cost presentation and persistence for built-in power systems.
+
+The narrator may still invent setting-valid abilities.  This module keeps the
+result in a stable shape so the Journal, Advisor, combat resolver, and later
+turns all read the same facts instead of interpreting loose prose differently.
+"""
+import copy
+
+
+WORLD_PROGRESSION_LABELS = {
+    "One Piece": "Devil Fruit, Haki & Crew",
+    "Hunter x Hunter": "Nen Development",
+    "Naruto": "Shinobi Record",
+    "Solo Max-Level Newbie": "System Status",
+    "Overgeared": "Class & Production",
+    "Reincarnated as a Slime": "Evolution & Skills",
+    "Bleach": "Zanpakuto Releases",
+}
+
+
+WORLD_MECHANIC_RULES = {
+    "One Piece": """
+WORLD-SYSTEM RECORD: Keep special['Devil Fruit Profile'] as a structured profile with name, type, abilities, limitations, counters, awakening_status and awakening_requirements. Keep special['Haki Profile'] with Observation, Armament and Conqueror entries containing mastery, applications and evidence. Never grant Conqueror's Haki casually. Crew role, ship and bounty are separate from combat power. Any original Devil Fruit must be unique, permanent once introduced, unable to bypass seawater/Sea-Prism weaknesses, and comparable to established fruits of its type rather than copied from one.
+""",
+    "Hunter x Hunter": """
+WORLD-SYSTEM RECORD: Keep special['Nen Profile'] with visibility, category, Ten, Zetsu, Ren and Hatsu Profile. Before Nen is plausibly learned, visibility is Undiscovered and public characters must not know its terminology. Once authored, an original Hatsu is permanent and records name, category_mix, effect, activation, vows, limitations, counters, aura_cost, evidence and growth_path. Strength comes from personality-fit, skill, aura and real restrictions—not a generic spell list.
+""",
+    "Naruto": """
+WORLD-SYSTEM RECORD: Keep official Shinobi Rank separate from measured combat ability. Maintain special['Shinobi Profile'] with home_village, rank, clan, nature_affinities, kekkei_genkai, summons, transformations and known_jutsu. Original bloodlines and techniques are allowed when the background or story supports them, but must record mechanism, chakra cost, limitations, counters, prerequisites and training evidence. Never lower a power assessment merely because the official rank is lower.
+""",
+    "Solo Max-Level Newbie": """
+WORLD-SYSTEM RECORD: Keep special['System Profile'] with floor, unspent_stat_points, copied_abilities, copy_capacity, achievements and hidden_conditions. System rewards, copied skills, titles, conditions and floor clears must be explicit and persistent. A copied ability records source, rank, effect, restriction and slot use; foreknowledge reveals routes only when the character actually knows them and does not silently complete their conditions.
+""",
+    "Overgeared": """
+WORLD-SYSTEM RECORD: Keep special['Satisfy Profile'] with primary_class, secondary_class, class_rarity, crafting_mastery, production_specialties, known_recipes, guild and npc_affinity. A generated class must have a unique identity, rarity, class features, signature skill, restrictions, advancement route and comparable setting role. Crafted items record rating, materials, creator, effects, restrictions and why that quality was achieved. Legendary potential is not instant mastery.
+""",
+    "Reincarnated as a Slime": """
+WORLD-SYSTEM RECORD: Keep special['Evolution Profile'] with species, stage, named_status, magicule_capacity, resistances, intrinsic_skills, extra_skills, unique_skills, ultimate_skills and evolution_requirements. Original Skills are allowed but must follow the setting's hierarchy, record effect, magicule cost, limitations, resistances/counters, acquisition cause and synthesis/evolution route. Naming, species evolution and Demon Lord awakening require their real triggers and remain distinct from ordinary training.
+""",
+}
+
+
+def _profile(value):
+    return copy.deepcopy(value) if isinstance(value, dict) else {}
+
+
+def _skill_names(state, ranks=()):
+    result = []
+    for name, detail in (state.get("skills") or {}).items():
+        rank = str(detail.get("rank", "")) if isinstance(detail, dict) else ""
+        if not ranks or any(token.lower() in rank.lower() for token in ranks):
+            result.append(str(name))
+    return result
+
+
+def normalize_world_progression(state, before=None):
+    """Populate structured mirrors while preserving every established value."""
+    if not isinstance(state, dict):
+        return []
+    world = state.get("world")
+    special = state.setdefault("special", {})
+    if not isinstance(special, dict):
+        special = state["special"] = {}
+    repairs = []
+    old_special = (before or {}).get("special", {}) if isinstance((before or {}).get("special", {}), dict) else {}
+
+    def sync(profile, profile_key, legacy_key, default):
+        old_profile_name = {
+            "One Piece": "Haki Profile", "Hunter x Hunter": "Nen Profile", "Naruto": "Shinobi Profile",
+            "Solo Max-Level Newbie": "System Profile", "Overgeared": "Satisfy Profile",
+            "Reincarnated as a Slime": "Evolution Profile",
+        }.get(world, "")
+        old_profile = old_special.get(old_profile_name, {}) if isinstance(old_special.get(old_profile_name), dict) else {}
+        structured_changed = profile_key in profile and profile.get(profile_key) != old_profile.get(profile_key)
+        legacy_changed = legacy_key in special and special.get(legacy_key) != old_special.get(legacy_key)
+        chosen = profile.get(profile_key, default) if structured_changed and not legacy_changed else special.get(legacy_key, profile.get(profile_key, default))
+        profile[profile_key] = copy.deepcopy(chosen)
+        special[legacy_key] = copy.deepcopy(chosen)
+        return chosen
+
+    if world == "One Piece":
+        fruit = _profile(special.get("Devil Fruit Profile"))
+        legacy_fruit = special.get("Devil Fruit", "None")
+        old_fruit = old_special.get("Devil Fruit Profile", {}) if isinstance(old_special.get("Devil Fruit Profile"), dict) else {}
+        fruit_changed = fruit.get("name") != old_fruit.get("name")
+        legacy_changed = legacy_fruit != old_special.get("Devil Fruit", "None")
+        fruit_name = fruit.get("name", legacy_fruit) if fruit_changed and not legacy_changed else legacy_fruit
+        fruit["name"] = fruit_name
+        special["Devil Fruit"] = fruit_name
+        fruit.setdefault("type", "Unknown" if str(legacy_fruit).lower() not in {"none", "unknown", ""} else "None")
+        fruit.setdefault("abilities", [])
+        fruit.setdefault("limitations", ["Seawater and Sea-Prism Stone suppress Devil Fruit users"] if fruit["type"] != "None" else [])
+        fruit.setdefault("counters", [])
+        fruit.setdefault("awakening_status", "Unawakened" if fruit["type"] != "None" else "Not applicable")
+        fruit.setdefault("awakening_requirements", [])
+        haki = _profile(special.get("Haki Profile"))
+        legacy_haki = special.get("Haki") if isinstance(special.get("Haki"), dict) else {}
+        for branch in ("Observation", "Armament", "Conqueror"):
+            entry = _profile(haki.get(branch))
+            old_haki = old_special.get("Haki Profile", {}) if isinstance(old_special.get("Haki Profile"), dict) else {}
+            old_entry = old_haki.get(branch, {}) if isinstance(old_haki.get(branch), dict) else {}
+            structured_changed = entry.get("mastery") != old_entry.get("mastery")
+            branch_legacy_changed = legacy_haki.get(branch, 0) != (old_special.get("Haki", {}) or {}).get(branch, 0)
+            mastery = entry.get("mastery", 0) if structured_changed and not branch_legacy_changed else legacy_haki.get(branch, entry.get("mastery", 0))
+            entry["mastery"] = int(mastery or 0)
+            legacy_haki[branch] = entry["mastery"]
+            entry.setdefault("applications", [])
+            entry.setdefault("evidence", [])
+            haki[branch] = entry
+        special["Devil Fruit Profile"], special["Haki Profile"] = fruit, haki
+        special["Haki"] = legacy_haki
+        special.setdefault("Crew Role", special.get("Archetype", "Unassigned"))
+        special.setdefault("Ship", "None")
+        repairs.append("Synchronized One Piece progression profile")
+
+    elif world == "Hunter x Hunter":
+        nen = _profile(special.get("Nen Profile"))
+        category = special.get("Nen Category", "Unknown")
+        learned = any(int(special.get(key, 0) or 0) > 0 for key in ("Ten", "Zetsu", "Ren")) or str(category).lower() not in {"unknown", "none", ""}
+        nen.setdefault("visibility", "Discovered" if learned else "Undiscovered")
+        category = sync(nen, "category", "Nen Category", category)
+        for key in ("Ten", "Zetsu", "Ren"):
+            nen.setdefault(key.lower(), int(special.get(key, 0) or 0))
+        hatsu = _profile(nen.get("hatsu_profile"))
+        legacy_hatsu = special.get("Hatsu", "Undeveloped")
+        hatsu.setdefault("name", legacy_hatsu)
+        hatsu.setdefault("category_mix", [category] if learned and category not in {"Unknown", "None"} else [])
+        hatsu.setdefault("effect", "")
+        hatsu.setdefault("activation", "")
+        hatsu.setdefault("vows", [])
+        hatsu.setdefault("limitations", [])
+        hatsu.setdefault("counters", [])
+        hatsu.setdefault("aura_cost", "")
+        hatsu.setdefault("evidence", [])
+        hatsu.setdefault("growth_path", "Learn the four major principles and define an ability that reflects the user's nature.")
+        nen["hatsu_profile"] = hatsu
+        if hatsu.get("name"):
+            special["Hatsu"] = hatsu["name"]
+        special["Nen Profile"] = nen
+        repairs.append("Synchronized Nen progression profile")
+
+    elif world == "Naruto":
+        profile = _profile(special.get("Shinobi Profile"))
+        sync(profile, "home_village", "Home Village", "None")
+        sync(profile, "rank", "Shinobi Rank", "Civilian")
+        sync(profile, "clan", "Clan", "None")
+        affinities = special.get("Nature Affinity", "Unknown")
+        profile.setdefault("nature_affinities", affinities if isinstance(affinities, list) else ([affinities] if affinities not in {"", "Unknown", "None"} else []))
+        profile.setdefault("kekkei_genkai", special.get("Kekkei Genkai", "None"))
+        profile.setdefault("summons", special.get("Summons", []))
+        profile.setdefault("transformations", special.get("Transformations", []))
+        profile["known_jutsu"] = copy.deepcopy(special.get("Known Jutsu", profile.get("known_jutsu", [])))
+        starting = special.get("Starting Ability") if isinstance(special.get("Starting Ability"), dict) else {}
+        if starting.get("name") and starting["name"] not in profile["known_jutsu"]:
+            profile["known_jutsu"].append(starting["name"])
+        special["Known Jutsu"] = copy.deepcopy(profile["known_jutsu"])
+        special["Nature Affinity"] = copy.deepcopy(profile["nature_affinities"] or "Unknown")
+        profile.setdefault("mission_record", {})
+        special["Shinobi Profile"] = profile
+        repairs.append("Synchronized shinobi progression profile")
+
+    elif world == "Solo Max-Level Newbie":
+        profile = _profile(special.get("System Profile"))
+        profile["floor"] = int(sync(profile, "floor", "Floor", state.get("tower_floor", 0)) or 0)
+        profile["unspent_stat_points"] = int(sync(profile, "unspent_stat_points", "Unspent Stat Points", 0) or 0)
+        profile["copied_abilities"] = copy.deepcopy(sync(profile, "copied_abilities", "Copied Abilities", []))
+        profile.setdefault("copy_capacity", max(1, len(profile["copied_abilities"]) or 1))
+        profile["achievements"] = copy.deepcopy(special.get("Achievements", state.get("achievements", profile.get("achievements", []))))
+        profile["hidden_conditions"] = int(special.get("Hidden Conditions Found", profile.get("hidden_conditions", 0)) or 0)
+        profile.setdefault("active_system_notices", [])
+        special["System Profile"] = profile
+        repairs.append("Synchronized System progression profile")
+
+    elif world == "Overgeared":
+        profile = _profile(special.get("Satisfy Profile"))
+        class_profile = state.get("class_profile") if isinstance(state.get("class_profile"), dict) else {}
+        if class_profile.get("name") and class_profile.get("name") not in {"Unidentified Hidden Class", "Unidentified Class Signature"}:
+            special["Class"] = class_profile["name"]
+        profile["primary_class"] = sync(profile, "primary_class", "Class", class_profile.get("name", "Beginner"))
+        profile["secondary_class"] = sync(profile, "secondary_class", "Secondary Class", "None")
+        profile["class_rarity"] = class_profile.get("rank", profile.get("class_rarity", "Normal"))
+        profile["crafting_mastery"] = int(sync(profile, "crafting_mastery", "Crafting Mastery", 0) or 0)
+        profile.setdefault("production_specialties", [])
+        profile["known_recipes"] = copy.deepcopy(state.get("known_recipes", profile.get("known_recipes", [])))
+        profile["guild"] = special.get("Guild", profile.get("guild", "None"))
+        profile["npc_affinity"] = copy.deepcopy(special.get("NPC Affinity", profile.get("npc_affinity", {})))
+        special["Satisfy Profile"] = profile
+        repairs.append("Synchronized Satisfy progression profile")
+
+    elif world == "Reincarnated as a Slime":
+        profile = _profile(special.get("Evolution Profile"))
+        profile["species"] = sync(profile, "species", "Species", state.get("race", "Unknown"))
+        profile["stage"] = sync(profile, "stage", "Evolution Stage", "Unnamed")
+        profile.setdefault("named_status", "Named" if "named" in str(profile["stage"]).lower() else "Unnamed")
+        profile["magicule_capacity"] = int(sync(profile, "magicule_capacity", "Magicule Capacity", 0) or 0)
+        profile.setdefault("resistances", copy.deepcopy(special.get("Resistances", [])))
+        profile.setdefault("intrinsic_skills", _skill_names(state, ("Intrinsic",)))
+        named = copy.deepcopy(special.get("Named Skills", []))
+        profile.setdefault("extra_skills", [])
+        profile.setdefault("unique_skills", [x for x in named if "unique" in str(x).lower()] or named)
+        profile.setdefault("ultimate_skills", [])
+        starting = special.get("Starting Ability") if isinstance(special.get("Starting Ability"), dict) else {}
+        if starting.get("name"):
+            detail = starting.get("details") if isinstance(starting.get("details"), dict) else {}
+            rank = str(detail.get("rank") or starting.get("rank") or "Extra Skill").lower()
+            bucket = "ultimate_skills" if "ultimate" in rank else "unique_skills" if "unique" in rank else "extra_skills"
+            if starting["name"] not in profile[bucket]:
+                profile[bucket].append(starting["name"])
+        special["Named Skills"] = list(dict.fromkeys(profile["unique_skills"] + profile["ultimate_skills"] + named))
+        profile.setdefault("evolution_requirements", [])
+        special["Evolution Profile"] = profile
+        repairs.append("Synchronized evolution progression profile")
+
+    return repairs
+
+
+def identity_label(state):
+    special = state.get("special") if isinstance(state.get("special"), dict) else {}
+    world = state.get("world")
+    if world == "One Piece":
+        return special.get("Crew Role") or special.get("Archetype") or "Seafarer"
+    if world == "Hunter x Hunter":
+        license_status = special.get("Hunter License", "Unlicensed")
+        category = special.get("Nen Category", "Unknown")
+        return f"{license_status} · {category} Nen" if category not in {"", "Unknown", "None"} else str(license_status)
+    if world == "Naruto":
+        return special.get("Shinobi Rank") or special.get("Archetype") or "Shinobi"
+    if world == "Solo Max-Level Newbie":
+        return special.get("System Class") or special.get("Archetype") or "Player"
+    if world == "Overgeared":
+        return special.get("Class") or "Player"
+    if world == "Reincarnated as a Slime":
+        return special.get("Species") or state.get("race") or "Otherworlder"
+    if world == "Bleach":
+        return special.get("Shinigami Rank") or special.get("Archetype") or "Soul Reaper"
+    return (state.get("class_profile") or {}).get("name") or special.get("Archetype") or "Adventurer"

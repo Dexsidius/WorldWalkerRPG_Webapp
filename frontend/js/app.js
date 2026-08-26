@@ -710,6 +710,53 @@ function renderBleachReleases(special) {
   return `<section class="bleach-release-grid">${shikaiCard}${bankaiCard}</section>`;
 }
 
+function worldIdentityLabel(state) {
+  const special = state?.special || {}, world = state?.world;
+  if (world === "One Piece") return special["Crew Role"] || special.Archetype || "Seafarer";
+  if (world === "Hunter x Hunter") {
+    const license = special["Hunter License"] || "Unlicensed", category = special["Nen Category"] || "Unknown";
+    return !/^(?:unknown|none)$/i.test(category) ? `${license} · ${category} Nen` : license;
+  }
+  if (world === "Naruto") return special["Shinobi Rank"] || special.Archetype || "Shinobi";
+  if (world === "Solo Max-Level Newbie") return special["System Class"] || special.Archetype || "Player";
+  if (world === "Overgeared") return special.Class || "Player";
+  if (world === "Reincarnated as a Slime") return special.Species || state.race || "Otherworlder";
+  if (world === "Bleach") return special["Shinigami Rank"] || special.Archetype || "Soul Reaper";
+  return state?.class_profile?.name || special.Archetype || "Adventurer";
+}
+
+function renderWorldProgression(world, special, classProfile) {
+  const value = (raw, fallback = "Not established") => compactReadable(raw) || fallback;
+  const card = (eyebrow, title, rows, tone = "") => `<article class="world-system-card ${tone}"><header><small>${escapeHtml(eyebrow)}</small><h3>${escapeHtml(value(title))}</h3></header>${rows.filter(([,v]) => v !== undefined && v !== null && value(v, "") !== "").map(([label,v]) => `<div><b>${escapeHtml(label)}</b><span>${escapeHtml(value(v))}</span></div>`).join("")}</article>`;
+  if (world === "One Piece") {
+    const fruit = special["Devil Fruit Profile"] || {}, haki = special["Haki Profile"] || {};
+    const hakiLine = (name) => `${Number(haki[name]?.mastery || 0)} mastery${textList(haki[name]?.applications).length ? ` · ${textList(haki[name].applications).join(", ")}` : ""}`;
+    return `<section class="world-system-grid">${card("DEVIL FRUIT", fruit.name || special["Devil Fruit"], [["Type",fruit.type],["Abilities",fruit.abilities],["Limits",fruit.limitations],["Awakening",fruit.awakening_status]], "one-piece-system")}${card("HAKI", "Haki Development", [["Observation",hakiLine("Observation")],["Armament",hakiLine("Armament")],["Conqueror",hakiLine("Conqueror")],["Bounty",special.Bounty ?? 0]], "one-piece-system")}</section>`;
+  }
+  if (world === "Hunter x Hunter") {
+    const nen = special["Nen Profile"] || {}, hatsu = nen.hatsu_profile || {};
+    if ((nen.visibility || special["Nen Access"]) === "Undiscovered") return card("NEN", "Undiscovered", [["Current understanding","Aura terminology and techniques have not been learned in character."],["Discovery route","Find a legitimate teacher, survive an awakening, or encounter a setting-valid initiation."]], "hxh-system");
+    return `<section class="world-system-grid">${card("NEN TYPE", nen.category || special["Nen Category"], [["Ten",nen.ten],["Zetsu",nen.zetsu],["Ren",nen.ren],["Status",nen.visibility]], "hxh-system")}${card("HATSU", hatsu.name || special.Hatsu, [["Category mix",hatsu.category_mix],["Effect",hatsu.effect],["Activation",hatsu.activation],["Vows",hatsu.vows],["Limits",hatsu.limitations],["Growth",hatsu.growth_path]], "hxh-system")}</section>`;
+  }
+  if (world === "Naruto") {
+    const p = special["Shinobi Profile"] || {};
+    return `<section class="world-system-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system")}${card("CHAKRA & TECHNIQUES", p.kekkei_genkai && p.kekkei_genkai !== "None" ? p.kekkei_genkai : "Shinobi Development", [["Nature affinities",p.nature_affinities],["Known jutsu",p.known_jutsu],["Summons",p.summons],["Transformations",p.transformations]], "naruto-system")}</section>`;
+  }
+  if (world === "Solo Max-Level Newbie") {
+    const p = special["System Profile"] || {};
+    return `<section class="world-system-grid system-window-grid">${card("SYSTEM", `Floor ${p.floor ?? special.Floor ?? 0}`, [["Unspent stat points",p.unspent_stat_points],["Hidden conditions found",p.hidden_conditions],["Achievements",p.achievements]], "solo-system")}${card("ABILITY COPY", `${textList(p.copied_abilities).length} / ${p.copy_capacity || 1} slots`, [["Copied abilities",p.copied_abilities],["Active notices",p.active_system_notices]], "solo-system")}</section>`;
+  }
+  if (world === "Overgeared") {
+    const p = special["Satisfy Profile"] || {};
+    return `<section class="world-system-grid">${card("SATISFY CLASS", p.primary_class || special.Class, [["Rarity",p.class_rarity],["Secondary class",p.secondary_class],["Guild",p.guild]], "overgeared-system")}${card("PRODUCTION", `${p.crafting_mastery ?? 0} mastery`, [["Specialties",p.production_specialties],["Known recipes",p.known_recipes],["NPC affinity",p.npc_affinity]], "overgeared-system")}</section>${renderClassCard(classProfile)}`;
+  }
+  if (world === "Reincarnated as a Slime") {
+    const p = special["Evolution Profile"] || {};
+    return `<section class="world-system-grid">${card("EVOLUTION", p.species || special.Species, [["Stage",p.stage],["Naming",p.named_status],["Magicule capacity",p.magicule_capacity],["Next requirements",p.evolution_requirements]], "slime-system")}${card("SKILL TAXONOMY", "Acquired Abilities", [["Intrinsic",p.intrinsic_skills],["Extra",p.extra_skills],["Unique",p.unique_skills],["Ultimate",p.ultimate_skills],["Resistances",p.resistances]], "slime-system")}</section>`;
+  }
+  return "";
+}
+
 function loadPortraitImage(url) {
   const img = $("#portrait-img");
   if (!url || img.getAttribute("data-src") === url) return;
@@ -856,7 +903,7 @@ function renderState(state) {
   // when appearance, form, or visible equipment actually changes.
   renderAiPortrait(s);
   $("#portrait-name").textContent = s.name || "Traveler";
-  $("#portrait-class").textContent = s.class_profile?.name || (s.special && s.special.Archetype) || "Adventurer";
+  $("#portrait-class").textContent = worldIdentityLabel(s);
   const locationEl = $("#portrait-location");
   const locationText = (s.location || "").trim();
   if (locationText) { $("#portrait-location-text").textContent = locationText; locationEl.hidden = false; }
@@ -1026,7 +1073,7 @@ $("#btn-recap-continue").addEventListener("click", () => { closeModal("modal-cha
 // ---------------------------------------------------------------------------
 function renderStatusWindow(s) {
   $("#sw-name").textContent = s.name || "Traveler";
-  $("#sw-class").textContent = (s.special && s.special.Archetype) || "Adventurer";
+  $("#sw-class").textContent = worldIdentityLabel(s);
   $("#sw-meta").textContent = `${s.world_time || "Day 1"} · ${s.location || "Unknown"}`;
   setWidth($("#sw-bar-hp"), 100 * (s.hp ?? 0) / Math.max(1, s.hp_max ?? 100));
   $("#sw-hp-text").textContent = `${s.hp ?? 0} / ${s.hp_max ?? 100}`;
@@ -2820,7 +2867,8 @@ async function openJournal(tab) {
   const s = APP.state || {};
   if (tab === "party") {
     const comp = data.companions || [];
-    panel.innerHTML = comp.length ? comp.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Companion")}</b><br/>${escapeHtml(c.notes || c.role || "")}</div>`).join("") : `<div class="jrow">No companions have joined you yet.</div>` + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — Level ${s.level ?? 1} ${escapeHtml((s.special || {}).Archetype || "")}</div>`;
+    const playerSummary = s._uses_xp ? `Level ${s.level ?? 1} · ${worldIdentityLabel(s)}` : worldIdentityLabel(s);
+    panel.innerHTML = comp.length ? comp.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Companion")}</b><br/>${escapeHtml(c.notes || c.role || "")}</div>`).join("") : `<div class="jrow">No companions have joined you yet.</div>` + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — ${escapeHtml(playerSummary)}</div>`;
   } else if (tab === "search") {
     panel.innerHTML = `<div class="system-summary"><b>SEARCH YOUR CAMPAIGN</b><span>Find old actions, people, quests, skills, chapters, facts, and player corrections without scrolling through the entire Chronicle.</span></div><form id="campaign-search-form" class="campaign-search-form"><input id="campaign-search-query" type="search" minlength="2" placeholder="Try a name, place, ability, promise, or event" required><button class="btn-primary" type="submit">SEARCH</button></form><div id="campaign-search-results" class="campaign-search-results"><div class="jrow hint">Enter at least two characters to search locally. This makes no AI call.</div></div>`;
     setTimeout(() => $("#campaign-search-query")?.focus(), 0);
@@ -2851,6 +2899,7 @@ async function openJournal(tab) {
     const titles = data.titles || [];
     const isBleach = data.world === "Bleach";
     const classRow = isBleach ? "" : renderClassCard(data.class_profile);
+    const worldProgression = isBleach ? "" : renderWorldProgression(data.world, data.special || {}, data.class_profile || {});
     const kido = skills.filter(([name, detail]) => /^(?:Had[ōo]|Bakud[ōo])\s*#/i.test(name) || (detail && typeof detail === "object" && detail.kido));
     const releases = skills.filter(([name, detail]) => /^(?:Shikai|Bankai)\b/i.test(name) || (detail && typeof detail === "object" && detail.release_stage));
     const foundations = skills.filter((row) => !kido.includes(row) && !releases.includes(row));
@@ -2862,7 +2911,7 @@ async function openJournal(tab) {
       : '<div class="jrow hint">No titles earned yet.</div>';
     panel.innerHTML = isBleach
       ? `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button><h3>Zanpakutō Releases</h3>${renderBleachReleases(data.special || {})}<h3>Hadō & Bakudō</h3>${kido.length ? kido.map(([name, detail]) => renderSkillCard(name, detail)).join("") : '<div class="jrow hint">No numbered Kidō learned yet.</div>'}<h3>Soul Reaper Training</h3>${foundations.length ? foundations.map(([name, detail]) => renderSkillCard(name, detail)).join("") : '<div class="jrow hint">No additional training recorded.</div>'}<h3>Titles</h3>${titleRows}`
-      : `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button>${classRow ? `<h3>Class / Path</h3>${classRow}` : ""}<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+      : `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button>${worldProgression ? `<h3>World Progression</h3>${worldProgression}` : ""}${classRow && data.world !== "Overgeared" ? `<h3>Class / Path</h3>${classRow}` : ""}<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
     $("#btn-open-power-summary").addEventListener("click", openPowerSummary);
   } else if (tab === "achievements") {
     const achievements = data.achievements || [];

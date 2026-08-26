@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.9.1"
+APP_VERSION = "3.10.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -677,6 +677,26 @@ WORLD_STARTING_ERAS = {
 }
 
 
+def _normalize_builtin_timeline_contracts():
+    """Add secrecy and causal ordering without adding or moving any event."""
+    for world, timeline in CANON_TIMELINES.items():
+        if world == "Custom World":
+            continue
+        previous_title = ""
+        for event in timeline.get("events", []):
+            if not event.get("historical_only"):
+                # Timeline details are metagame spoilers until their date is
+                # reached.  Players can still opt into canon foreknowledge.
+                event.setdefault("spoiler", True)
+                if previous_title:
+                    event.setdefault("requires", [previous_title])
+                previous_title = str(event.get("title") or previous_title)
+            event.setdefault("scope", "wide" if event.get("major", False) else "personal")
+
+
+_normalize_builtin_timeline_contracts()
+
+
 def starting_eras_for(world):
     return WORLD_STARTING_ERAS.get(world, [])
 
@@ -1138,6 +1158,97 @@ MAJOR_CHARACTER_STARTS = {
 }
 
 
+_CANON_START_NORMALIZATION = {
+    "luffy_departure": {
+        "affiliations":[{"faction":"Pirates","rank":"Independent Captain","status":"active","joined":"Campaign start","notes":"Luffy has declared himself a pirate captain but has not recruited a crew."}],
+        "reputation":{"Pirates":8,"Marines":-3},
+        "active_canon_event":"Luffy leaves Foosha Village",
+        "active_event_context":"Luffy's supplies and tiny boat are ready at Foosha Village. The sea, weather and consequences are live; the voyage has not yet been decided.",
+        "active_event_prompt":"The shore is behind him and the East Blue is open ahead. What course does Luffy choose?",
+        "special_patch":{"Devil Fruit":"Gum-Gum Fruit (rubber body)","Crew":"Luffy's unnamed starting crew","Bounty":0,"Devil Fruit Profile":{"name":"Gum-Gum Fruit (rubber body)","type":"Paramecia (understood at this point as the Gum-Gum Fruit)","abilities":["Rubber physiology","Stretching strikes","Elastic momentum and rebounds"],"limitations":["Cannot swim","Seawater and Sea-Prism Stone suppress the user","Cuts and piercing attacks remain dangerous"],"counters":["Bladed weapons","Restraint","Haki once encountered"],"awakening_status":"Unawakened","awakening_requirements":["Far greater physical and mental mastery","A future story-valid awakening crisis"]}},
+    },
+    "zoro_shells": {
+        "reputation":{"Marines":-10,"Pirates":5},
+        "active_canon_event":"Shells Town upheaval",
+        "active_event_context":"Zoro remains restrained at the Marine base under Captain Morgan's corrupt rule. His execution pressure and the civilians around the base are active, not background flavor.",
+        "active_event_prompt":"The base is tightening around Zoro. How does he answer the immediate threat?",
+    },
+    "gon_departure": {
+        "position":"Hunter Exam applicant leaving Whale Island",
+        "special_patch":{"Hunter License":"Applicant","Nen Access":"Undiscovered"},
+        "active_canon_event":"Departure from Whale Island",
+        "active_event_context":"Gon has earned Mito's reluctant permission and is ready to leave Whale Island for the Hunter Exam. Nen remains completely unknown to him.",
+        "active_event_prompt":"The departing ship is taking passengers. What does Gon do before Whale Island disappears behind it?",
+    },
+    "kurapika_exam": {
+        "position":"Hunter Exam applicant",
+        "special_patch":{"Hunter License":"Applicant","Nen Access":"Undiscovered"},
+    },
+    "naruto_birth": {
+        "affiliations":[{"faction":"Konohagakure","rank":"Civilian dependent","status":"protected","joined":"Birth","notes":"A newborn under Konoha's protection during the Nine-Tails crisis."}],
+        "reputation":{"Konohagakure":0},
+        "active_canon_event":"Naruto's birth and the Nine-Tails attack",
+        "active_event_context":"Naruto has just been born while an attack develops around Kushina's seal. His agency is necessarily newborn-scale—attention, emotion, chakra response and survival—while adults act according to their own knowledge and priorities.",
+        "active_event_prompt":"Noise and violent chakra press into Naruto's first sensations. How does the newborn respond?",
+    },
+    "naruto_graduation": {
+        "reputation":{"Konohagakure":5},
+        "active_canon_event":"Academy graduation night — the Mizuki incident",
+        "active_event_context":"The graduation test and Mizuki's manipulation are now live. Naruto has not yet stolen the Forbidden Scroll or learned the Shadow Clone Technique.",
+        "active_event_prompt":"The instructors' decision has landed and Mizuki is waiting for an opening. What does Naruto do?",
+    },
+    "jinhyeok_tower": {
+        "active_canon_event":"Tower manifestation",
+        "active_event_context":"The former game has become lethal reality. Jinhyeok's knowledge is exceptional, but every remembered route must now be verified against a world where death is real.",
+        "active_event_prompt":"The first System notice is appearing and the crowd has not organized. What route does Jinhyeok take?",
+    },
+    "grid_pagma": {
+        "affiliations":[{"faction":"Players","rank":"Independent Player","status":"active","joined":"Account creation","notes":"An independent Satisfy player with no guild."}],
+        "reputation":{"Players":0,"Local Lords":-5},
+        "active_canon_event":"Pagma's legacy changes hands",
+        "active_event_context":"Pagma's Rare Book has been consumed and the legendary successor class is mechanically active. Earl Ashur's anger, Grid's debt and his lack of mastery all remain immediate pressures.",
+        "active_event_prompt":"The class window has changed and the consequences are already moving. What does Grid do first as Pagma's Descendant?",
+    },
+    "rimuru_awakens": {
+        "active_canon_event":"A new slime awakens",
+        "active_event_context":"Rimuru has only just become conscious as a slime. Great Sage and Predator exist, but the cave, body, senses and nearby presence are not yet understood.",
+        "active_event_prompt":"Sight is absent, the new body feels unfamiliar, and Great Sage can answer bounded questions. What does Rimuru test first?",
+    },
+}
+
+
+def _normalize_canon_character_starts():
+    for scenarios in MAJOR_CHARACTER_STARTS.values():
+        for scenario in scenarios:
+            patch = _CANON_START_NORMALIZATION.get(scenario.get("id"), {})
+            for key, value in patch.items():
+                if key == "special_patch":
+                    merged = dict(value)
+                    merged.update(scenario.get("special_patch") or {})
+                    # Structured additions are allowed to refine an existing
+                    # legacy field without replacing the preset's facts.
+                    if isinstance(value.get("Devil Fruit Profile"), dict):
+                        merged["Devil Fruit Profile"] = dict(value["Devil Fruit Profile"])
+                    scenario["special_patch"] = merged
+                else:
+                    scenario.setdefault(key, value)
+            # Canon starts use exact deterministic sheets.  Their previous
+            # minimums are the curated values, not a floor beneath a random
+            # original-character roll.
+            scenario.setdefault("stat_values", dict(scenario.get("stat_minimums") or {}))
+            scenario.setdefault("expanded_background", scenario.get("background", ""))
+            scenario.setdefault("affiliations", [])
+            scenario.setdefault("reputation", {})
+            for quest in scenario.get("starting_quests", []):
+                quest.setdefault("category", "main")
+                quest.setdefault("explanation", scenario.get("background", "The character begins at an established canon turning point."))
+                quest.setdefault("current_knowledge", list(scenario.get("knowledge") or [])[:5])
+                quest.setdefault("clear_conditions", list(quest.get("objectives") or [])[-1:])
+
+
+_normalize_canon_character_starts()
+
+
 def playable_characters_for(world):
     return MAJOR_CHARACTER_STARTS.get(world, [])
 
@@ -1184,6 +1295,9 @@ WORLD_START_OPTIONS = {
         {"label": "Whale Island (rural start)", "location": "Whale Island", "note": ""},
         {"label": "Yorknew City (urban start)", "location": "Yorknew City", "note": "Starting in the streets of Yorknew City."},
         {"label": "Hunter Exam Site (already an applicant)", "location": "Hunter Exam Site", "note": "Already en route to sit the Hunter Exam."},
+        {"label": "Heavens Arena (fighter or spectator)", "location": "Heavens Arena", "note": "Starting around the fighting tower as a competitor, worker, trainer, or visitor; Nen knowledge still depends on the background and era."},
+        {"label": "Kukuroo Mountain (testing gate region)", "location": "Kukuroo Mountain", "note": "Starting near the Zoldyck estate with a background explaining work, travel, training, or a deliberate attempt to reach the Testing Gate."},
+        {"label": "Greed Island (qualified entrant)", "location": "Greed Island", "note": "Starting as a qualified Greed Island player; choose a compatible era or accept the start as a deliberate divergence."},
     ],
     "Naruto": [
         {"label": "Konohagakure", "location": "Konohagakure", "note": ""},
@@ -1197,6 +1311,27 @@ WORLD_START_OPTIONS = {
     "Bleach": [
         {"label": "Shin'o Academy (senior student)", "location": "Shin'o Academy", "note": "A final-year Soul Reaper academy student preparing for graduation and division placement."},
         {"label": "Seireitei (recent graduate)", "location": "Seireitei", "note": "A newly graduated Soul Reaper awaiting interviews, recommendations and assignment to one of the thirteen divisions."},
+    ],
+    "Solo Max-Level Newbie": [
+        {"label":"Earth — Tower Entrance (manifestation)","location":"Earth — Tower Entrance","note":"Starting outside the newly manifested Tower before the first clear routes are established."},
+        {"label":"Floor 1 (opening scenario)","location":"Floor 1","note":"Starting inside the first live Tower scenario as a registered player."},
+    ],
+    "Overgeared": [
+        {"label":"Winston (starting city)","location":"Winston","note":"Starting among Winston's players, craftspeople and local political pressures."},
+        {"label":"Patrian (military city)","location":"Patrian","note":"Starting in the fortified city as a player, mercenary, crafter or traveler."},
+        {"label":"Reidan (frontier)","location":"Reidan","note":"Starting in the neglected frontier; select a compatible era or treat early access as a deliberate divergence."},
+        {"label":"Bairan (regional city)","location":"Bairan","note":"Starting in Bairan among guild, trade and adventuring opportunities."},
+        {"label":"Titan (capital)","location":"Titan","note":"Starting in the capital with access and obligations appropriate to the background."},
+        {"label":"Kesan Canyon (dangerous route)","location":"Kesan Canyon","note":"Starting on the canyon route as an explorer, mercenary, quest hunter or stranded traveler."},
+        {"label":"Temple of Yatan (dangerous start)","location":"Temple of Yatan","note":"Starting near an active Yatan-related danger; the background must explain why the character is there."},
+    ],
+    "Reincarnated as a Slime": [
+        {"label":"Great Jura Forest (new arrival)","location":"Great Jura Forest","note":"Starting unaligned in the Great Jura Forest."},
+        {"label":"Sealed Cave (isolated awakening)","location":"Great Jura Forest — Sealed Cave","note":"Starting inside the sealed cave with no automatic knowledge of its inhabitants or secrets."},
+        {"label":"Goblin Village (small settlement)","location":"Goblin Village","note":"Starting in or near the early goblin settlement as a resident, guest, captive or traveler."},
+        {"label":"Dwargon (armed nation)","location":"Dwargon","note":"Starting in Dwargon with legal access and status determined by the background."},
+        {"label":"Blumund (human town)","location":"Blumund","note":"Starting in the human town as a resident, adventurer, merchant, demi-human or concealed monster."},
+        {"label":"Tempest (established nation)","location":"Tempest","note":"Starting in established Tempest; select a compatible era or accept an alternate-history premise."},
     ],
 }
 
