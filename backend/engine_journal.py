@@ -268,7 +268,7 @@ class JournalMixin:
             s["special"]["Hidden Class"] = copy.deepcopy(s["class_profile"])
         s.update(portrait_view(self.state, self.settings))
         s["_stat_style"] = stat_style_for(self.state.get("world", "Custom World"))
-        s["_uses_xp"] = uses_xp_for(self.state.get("world", "Custom World"))
+        s["_uses_xp"] = uses_xp_for(self.state.get("world", "Custom World"), self.state.get("custom_world", ""))
         s["_gear_style"] = gear_style_for(self.state.get("world", "Custom World"))
         s["_power_profile"] = power_profile_for(
             self.state.get("world", "Custom World"), self.state.get("stats", {}),

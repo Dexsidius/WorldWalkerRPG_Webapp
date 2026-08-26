@@ -6,7 +6,7 @@ import copy, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
-from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_primer_for, world_supports_races, infer_race_from_background, WORLD_RACES, format_calendar_date, starting_eras_for, starting_era_by_id
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_primer_for, world_supports_races, infer_race_from_background, WORLD_RACES, format_calendar_date, starting_eras_for, starting_era_by_id, power_profile_for
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -60,14 +60,23 @@ STARTER_SKILL_DESCRIPTIONS = {
     ("One Piece", "Navigator"): "Charts courses, reads weather and currents, corrects a ship's heading, and recognizes common navigation hazards.",
     ("One Piece", "Shipwright"): "Inspects hulls and rigging, performs practical repairs, chooses suitable materials, and keeps a vessel seaworthy.",
     ("One Piece", "Medic"): "Stabilizes injuries, treats common illness, manages field supplies, and recognizes when specialist care is needed.",
+    ("One Piece", "Archaeologist"): "Studies scripts, ruins, artifacts, and historical context while documenting discoveries without pretending to read languages not yet learned.",
     ("Naruto", "Ninjutsu Student"): "Molds chakra, performs hand seals, uses basic transformations, and executes beginner ninjutsu without wasting control.",
     ("Naruto", "Taijutsu Specialist"): "Uses stance, footwork, timing, conditioning, and close-range combinations appropriate to a trained shinobi.",
     ("Naruto", "Medic"): "Applies chakra control to diagnosis, first aid, and safe treatment while recognizing injuries beyond current training.",
+    ("Naruto", "Sealing Specialist"): "Designs, reads, and safely tests beginner sealing formulae using chakra ink, prepared surfaces, and precise control.",
+    ("Naruto", "Sensor"): "Detects and distinguishes nearby chakra signatures within the character's trained range without granting omniscience.",
+    ("Naruto", "Puppet User"): "Controls a training puppet with chakra threads, maintains its mechanisms, and coordinates simple concealed tools.",
     ("Overgeared", "Blacksmith"): "Selects materials, controls heat, shapes and repairs equipment, and evaluates the causes of common production failures.",
     ("Overgeared", "Warrior"): "Uses weapon spacing, armor, stamina, and basic combat skills expected of a beginning Satisfy warrior.",
+    ("Overgeared", "Alchemist"): "Identifies common reagents, follows production recipes, controls brewing conditions, and diagnoses ordinary failures.",
     ("Hunter x Hunter", "Tracker"): "Reads tracks, prepares routes, notices environmental clues, and follows a quarry without assuming supernatural senses.",
+    ("Hunter x Hunter", "Beast Hunter"): "Studies dangerous fauna, reads habitats, prepares captures, and avoids mistaking fieldcraft for unlearned Nen.",
+    ("Hunter x Hunter", "Blacklist Hunter"): "Builds criminal dossiers, plans safe arrests, preserves evidence, and works through lawful Hunter channels.",
+    ("Solo Max-Level Newbie", "Trap Specialist"): "Recognizes mechanical and System trap patterns, tests routes, and disarms hazards when the required tools and timing allow it.",
     ("Bleach", "Zanjutsu Specialist"): "Uses foundational sword posture, distance, cuts, guards, and spiritual awareness without implying an earned release.",
     ("Reincarnated as a Slime", "Skill Analyst"): "Observes an ability's visible behavior, compares repeated effects, and forms practical hypotheses without bypassing unknown rules.",
+    ("Reincarnated as a Slime", "Magic Crafter"): "Shapes compatible materials with controlled magicules to repair, prototype, and improve setting-valid tools.",
 }
 
 
@@ -98,30 +107,37 @@ WORLD_ARCHETYPE_GEAR = {
         "Marksman": "Flintlock Pistol", "Navigator": "Compass and Rigging Knife",
         "Shipwright": "Carpenter's Hatchet and Toolkit", "Medic": "Medical Satchel and Scalpel",
         "Roguish Fighter": "Concealed Throwing Knives",
+        "Archaeologist": "Field Journal, Rubbing Paper, and Utility Knife",
     },
     "Hunter x Hunter": {
         "Martial Artist": "Wrapped Hand Guards", "Tracker": "Hunting Knife and Rope",
         "Strategist": "Field Notebook and Compass", "Infiltrator": "Lockpicks and Grappling Wire",
         "Medic": "Field Medical Kit", "Treasure Hunter": "Prybar and Lantern",
         "Information Broker": "Hidden Recorder and Contact Ledger",
+        "Beast Hunter": "Reinforced Capture Rope and Field Knife",
+        "Blacklist Hunter": "Restraining Wire and Bounty Dossier",
     },
     "Naruto": {
         "Taijutsu Specialist": "Wrapped Forearm Guards", "Ninjutsu Student": "Kunai and Shuriken Set",
         "Genjutsu Student": "Chakra Paper and Sealing Tags", "Scout": "Binoculars and Smoke Bombs",
         "Medic": "Medical Ninja Pouch", "Weapon Specialist": "Short Ninjatō",
         "Tactician": "Tactical Scroll Case",
+        "Samurai": "Iron Country Katana", "Sealing Specialist": "Blank Formula Scrolls and Chakra Ink",
+        "Sensor": "Signal Tags and Field Binoculars", "Puppet User": "Training Puppet and Chakra Thread Spools",
     },
     "Solo Max-Level Newbie": {
         "All-Rounder": "Balanced Steel Longsword", "Melee": "Iron Broadsword",
         "Ranged": "Reinforced Shortbow", "Caster": "Novice's Focus Wand",
         "Assassin": "Twin Curved Daggers", "Tank": "Kite Shield and Mace",
         "Support": "Beginner's Healing Wand",
+        "Trap Specialist": "Trap Kit and System-inspected Tools",
     },
     "Overgeared": {
         "Warrior": "Plain Iron Longsword", "Swordsman": "Balanced One-Handed Sword",
         "Archer": "Basic Recurve Bow", "Mage": "Apprentice's Wooden Staff",
         "Assassin": "Paired Daggers", "Blacksmith": "Smithing Hammer and Tongs",
         "Support": "Novice Healing Rod",
+        "Alchemist": "Beginner Alchemy Kit and Reagent Case",
     },
     "Custom World": {
         "Warrior": "Sword and Shield", "Scout": "Hunting Bow",
@@ -133,6 +149,7 @@ WORLD_ARCHETYPE_GEAR = {
         "Elementalist": "Elemental Affinity Core", "Beast-kin Warrior": "Bone-forged Claw Blade",
         "Diplomat/Leader": "Ceremonial Sash of Office", "Support/Healer": "Herbal Pouch and Regenerative Trait",
         "Assassin-type Monster": "Venomous Fangs",
+        "Magic Crafter": "Magicule-conductive Hand Tools",
     },
 }
 
@@ -214,6 +231,129 @@ WORLD_ABILITY_FORMS = {
          "begins narrow in scope and cannot bypass costs, counters, or prerequisites established by the setting",
          "practice its core use, discover its source, and earn broader applications through play"),
     ],
+}
+
+
+def _start_skill(name, description, rank="Trained", bonus=5):
+    return {name: {"rank": rank, "bonus": bonus, "description": description}}
+
+
+# Mechanical start packages.  These are intentionally data, not prose hidden
+# in the opening prompt: choosing an established rank or profession must alter
+# the saved campaign before the first model call is ever made.
+WORLD_ORIGIN_START_PACKAGES = {
+    "One Piece": {
+        "Marine Recruit": {
+            "position": "Marine Recruit", "title": "Marine Recruit",
+            "affiliations": [{"faction": "Marines", "rank": "Recruit", "status": "active", "joined": "Campaign start", "notes": "Assigned to a local Marine branch."}],
+            "reputation": {"Marines": 15, "Pirates": -5},
+            "special_patch": {"Crew": "Marines"},
+            "equipment": {"Weapon": "Marine-issue Flintlock and Cutlass"},
+            "skills": _start_skill("Marine Recruit Training", "Uses Marine drills, lawful arrest procedure, formation movement, and basic shipboard discipline."),
+        },
+        "Veteran Crew Member": {
+            "position": "Veteran Crewmate", "title": "Veteran Crewmate",
+            "stat_minimums": {"Endurance": 30, "Agility": 26, "Willpower": 28},
+            "skills": _start_skill("Grand Line Seamanship", "Handles violent weather, damage control, watches, and coordinated shipboard emergencies.", "Veteran", 7),
+        },
+        "Notorious Bounty-Head": {
+            "position": "Wanted Outlaw", "title": "Notorious Bounty-Head",
+            "stat_minimums": {"Strength": 32, "Agility": 32, "Willpower": 34},
+            "special_patch": {"Bounty": 30000000}, "reputation": {"Marines": -35, "Pirates": 15},
+            "skills": _start_skill("Wanted Survivor", "Recognizes pursuit patterns, conceals a trail, and survives clashes with bounty hunters and Marine patrols.", "Notorious", 8),
+        },
+    },
+    "Hunter x Hunter": {
+        "Licensed Hunter": {
+            "position": "Licensed Hunter", "title": "Licensed Hunter",
+            "affiliations": [{"faction": "Hunter Association", "rank": "Licensed Hunter", "status": "active", "joined": "Before campaign start", "notes": "Holds a valid Hunter License."}],
+            "reputation": {"Hunter Association": 25}, "special_patch": {"Hunter License": "Active"},
+            "equipment": {"Weapon": "Hunter License and Field Kit"},
+            "skills": _start_skill("Professional Hunter Access", "Uses Hunter-only information channels, restricted facilities, contracts, and legal privileges without guaranteeing cooperation.", "Licensed", 7),
+        },
+        "Veteran Hunter": {
+            "position": "Veteran Licensed Hunter", "title": "Veteran Hunter",
+            "affiliations": [{"faction": "Hunter Association", "rank": "Veteran Hunter", "status": "active", "joined": "Before campaign start", "notes": "An experienced professional with a valid Hunter License."}],
+            "reputation": {"Hunter Association": 45}, "special_patch": {"Hunter License": "Active", "Ten": 25, "Zetsu": 20, "Ren": 20},
+            "stat_minimums": {"Aura Control": 28, "Cunning": 30, "Willpower": 30},
+            "skills": _start_skill("Practical Nen Foundations", "Maintains Ten, enters Zetsu, produces Ren, and uses Gyo at a professionally trained but non-master level.", "Proficient", 8),
+        },
+    },
+    "Naruto": {
+        "Academy Graduate": {"position": "Genin", "title": "Genin", "special_patch": {"Shinobi Rank": "Genin"},
+            "skills": _start_skill("Genin Field Readiness", "Performs academy techniques, uses standard tools, follows mission protocol, and works in a three-person team.")},
+        "Uchiha Clan Child": {"title": "Uchiha Clan Child", "special_patch": {"Clan": "Uchiha", "Shinobi Rank": "Academy Student"},
+            "skills": _start_skill("Uchiha Foundations", "Practices the clan's fire-style preparation, shuriken discipline, and dōjutsu theory; a Sharingan is not assumed unless the background says it awakened.")},
+        "Iron Country Samurai-in-Training": {"position": "Samurai Apprentice", "title": "Iron Country Samurai Apprentice", "special_patch": {"Shinobi Rank": "Samurai Apprentice"},
+            "affiliations": [{"faction": "Iron Country", "rank": "Samurai Apprentice", "status": "active", "joined": "Campaign start", "notes": "Training under the Land of Iron's samurai tradition."}],
+            "equipment": {"Weapon": "Iron Country Katana"}, "skills": _start_skill("Samurai Sword Discipline", "Uses disciplined kenjutsu, armor movement, and chakra flow through a blade at an apprentice level.")},
+        "Rogue Ninja (Missing-nin)": {"position": "Missing-nin", "title": "Missing-nin", "special_patch": {"Shinobi Rank": "Missing-nin"},
+            "reputation": {"Konohagakure": -25}, "skills": _start_skill("Missing-nin Tradecraft", "Avoids village patrols, masks routes, recognizes hunter-nin procedure, and maintains equipment without official support.", "Experienced", 7)},
+        "Anbu Root Recruit": {"position": "Root Recruit", "title": "Root Recruit", "special_patch": {"Shinobi Rank": "Root Recruit"},
+            "affiliations": [{"faction": "Konohagakure", "rank": "Root Recruit", "status": "active", "joined": "Campaign start", "notes": "A covert recruit under Root discipline."}],
+            "stat_minimums": {"Taijutsu": 28, "Ninjutsu": 28, "Chakra Control": 28},
+            "skills": _start_skill("Root Conditioning", "Uses covert movement, coded orders, emotional control, and capture-or-eliminate procedure.", "Conditioned", 7)},
+        "Chunin on Active Duty": {"position": "Chunin", "title": "Chunin", "special_patch": {"Shinobi Rank": "Chunin"},
+            "stat_minimums": {"Taijutsu": 30, "Ninjutsu": 30, "Chakra Control": 30, "Intellect": 28},
+            "skills": _start_skill("Chunin Mission Command", "Leads small teams, assesses mission risk, writes reports, and applies trained shinobi fundamentals under pressure.", "Proficient", 7)},
+        "Jonin Squad Leader": {"position": "Jonin Squad Leader", "title": "Jonin Squad Leader", "special_patch": {"Shinobi Rank": "Jonin"},
+            "stat_minimums": {"Taijutsu": 48, "Ninjutsu": 48, "Chakra Control": 45, "Willpower": 42, "Intellect": 42},
+            "skills": _start_skill("Jonin Field Command", "Leads mission teams, adapts tactics under lethal pressure, teaches juniors, and applies broad shinobi experience.", "Jonin", 10)},
+    },
+    "Solo Max-Level Newbie": {
+        "Elite Ranker": {"position": "Former Tower of Trials Elite Ranker", "title": "Elite Ranker",
+            "stat_minimums": {"Intelligence": 32, "Wisdom": 32, "Luck": 28},
+            "special_patch": {"Pre-Tower Game Rank": "Elite", "Hidden Conditions Found": 0},
+            "skills": _start_skill("Tower Route Knowledge", "Remembers boss patterns, alternate routes, item interactions, and hidden-condition clues from the game; reality can still diverge.", "Master Game Knowledge", 10)},
+        "Veteran Gamer": {"special_patch": {"Pre-Tower Game Rank": "Veteran"},
+            "skills": _start_skill("Tower Systems Knowledge", "Understands the former game's interfaces, common encounters, and progression routes, while accepting that lethal reality may differ.", "Veteran", 7)},
+    },
+    "Overgeared": {
+        "Crafter": {"position": "Production Player", "special_patch": {"Class": "Crafter", "Crafting Mastery": 18},
+            "skills": _start_skill("Production Fundamentals", "Uses Satisfy's production interfaces, material grades, recipes, and quality feedback to make reliable beginner items.")},
+        "Blacksmith Apprentice": {"position": "Blacksmith Apprentice", "special_patch": {"Class": "Blacksmith", "Crafting Mastery": 25},
+            "skills": _start_skill("Blacksmithing Apprenticeship", "Forges and repairs common equipment with measured heat, material selection, and Satisfy's production timing.", "Apprentice", 6)},
+        "Veteran Adventurer": {"position": "Veteran Player", "special_patch": {"Class": "Veteran Adventurer"},
+            "stat_minimums": {"Strength": 28, "Dexterity": 28, "Constitution": 28},
+            "skills": _start_skill("Veteran Satisfy Combat", "Uses aggro, cooldowns, party roles, equipment swaps, and dungeon awareness developed through extensive play.", "Veteran", 8)},
+        "Renowned Craftsman": {"position": "Renowned Craftsman", "title": "Renowned Craftsman", "special_patch": {"Class": "Master Craftsman", "Crafting Mastery": 65},
+            "stat_minimums": {"Strength": 35, "Constitution": 35, "Intelligence": 40, "Wisdom": 36},
+            "skills": _start_skill("Renowned Production Mastery", "Designs advanced items, evaluates rare materials, manages complex production steps, and consistently reaches high item ratings.", "Master", 11)},
+    },
+    "Reincarnated as a Slime": {
+        "Reincarnated Otherworlder": {"title": "Reincarnated Otherworlder", "special_patch": {"Evolution Stage": "Newly Reincarnated"}},
+        "Veteran Tempest Officer": {"position": "Tempest Officer", "title": "Veteran Tempest Officer", "race": "Hobgoblin",
+            "affiliations": [{"faction": "Jura Forest Monsters", "rank": "Tempest Officer", "status": "active", "joined": "Before campaign start", "notes": "Serves the established nation of Tempest."}],
+            "reputation": {"Jura Forest Monsters": 55}, "special_patch": {"Species": "Hobgoblin", "Evolution Stage": "Named and Evolved", "Magicule Capacity": 40},
+            "stat_minimums": {"Magicule Control": 36, "Skill Mastery": 38, "Willpower": 40, "Presence": 36},
+            "skills": _start_skill("Tempest Officer Command", "Coordinates mixed-species teams, follows Tempest law, manages patrols, and responds to diplomatic or military incidents.", "Veteran", 9),
+            "required_era": "tempest_established", "required_start_day": 100, "recommended_location": "Tempest"},
+        "Named Monster of Renown": {"position": "Named Monster", "title": "Named Monster of Renown",
+            "special_patch": {"Evolution Stage": "Named and Evolved", "Magicule Capacity": 55},
+            "stat_minimums": {"Magicule Control": 42, "Skill Mastery": 42, "Instinct": 40, "Willpower": 42},
+            "skills": _start_skill("Named Monster Authority", "Combines an evolved body, strengthened magicule circulation, and earned presence among Jura's monsters.", "Renowned", 10)},
+    },
+}
+
+WORLD_LOCATION_START_PACKAGES = {
+    ("One Piece", "Shells Town"): {"special_patch": {"Home Sea": "East Blue"}},
+    ("Hunter x Hunter", "Hunter Exam Site"): {"special_patch": {"Hunter Exam Status": "Applicant"},
+        "quests": [{"name": "Pass the Hunter Exam", "status": "Active", "giver": "Hunter Association", "locations": ["Hunter Exam Site"],
+                    "objectives": ["Complete the current exam phase", "Qualify in the final phase"], "next_hint": "Report to the examiner and learn the current phase's rules."}]},
+    ("Naruto", "Amegakure"): {"special_patch": {"Home Village": "Amegakure"}},
+    ("Naruto", "Iron Country"): {"special_patch": {"Home Village": "Iron Country"}},
+}
+
+# Major groups can be known without being magically reachable. Membership
+# packages and seeded NPCs can still unlock the appropriate channel.
+WORLD_PUBLIC_CONTACTS = {
+    "One Piece": {"Marines", "World Government", "Revolutionary Army"},
+    "Hunter x Hunter": {"Hunter Association"},
+    "Naruto": {"Konohagakure", "Sunagakure", "Kirigakure", "Kumogakure", "Iwagakure", "Amegakure", "Iron Country"},
+    "Solo Max-Level Newbie": {"Players", "Major Guilds"},
+    "Overgeared": {"Players", "Local Lords", "Church", "Guilds", "Kingdom"},
+    "Reincarnated as a Slime": {"Jura Forest Monsters", "Free Guild"},
+    "Custom World": {"Local Faction"},
 }
 
 # When a player names the theme of a hidden class, preserve that theme instead
@@ -898,7 +1038,13 @@ Return JSON only, with no markdown."""
         if "uchiha" in text: skill_name = "Uchiha Fire and Dōjutsu Foundations"
         elif "medic" in text or "healer" in text: skill_name = f"{archetype or 'Field'} Healing Fundamentals"
         elif archetype: skill_name = f"{archetype} Fundamentals"
-        title = self.naruto_identity_title(origin, start_location) if world == "Naruto" else f"{origin or 'Local'} {archetype or 'Adventurer'}".strip()
+        if world == "Naruto":
+            title = self.naruto_identity_title(origin, start_location)
+        else:
+            title_parts = [str(origin or "Local").strip()]
+            if str(archetype or "Adventurer").strip().lower() not in title_parts[0].lower().split():
+                title_parts.append(str(archetype or "Adventurer").strip())
+            title = " ".join(title_parts)
         starter_description = starter_skill_description(world, archetype, skill_name)
         skills = {skill_name: {"rank": "Trained" if boost < 20 else "Exceptional", "bonus": 4 + boost // 10,
                                "description": starter_description,
@@ -942,7 +1088,118 @@ Return JSON only, with no markdown."""
                 "starting_currency": starting_currency, "_base_stats": base_stats,
                 "_base_learning_rate": learning_rate,
                 "_boost": boost, "_core_skill_name": skill_name,
+                "_background_supplied": bool(str(background or "").strip()),
                 **background_profile}
+
+    def starting_package_for(self, world, origin, archetype, start_location="", start_note=""):
+        """Return one coherent, mechanical package for an original start."""
+        package = {}
+        merge(package, WORLD_LOCATION_START_PACKAGES.get((world, start_location), {}))
+        merge(package, WORLD_ORIGIN_START_PACKAGES.get(world, {}).get(origin, {}))
+        note = str(start_note or "").lower()
+        if world == "One Piece" and "marine recruit" in note:
+            merge(package, WORLD_ORIGIN_START_PACKAGES[world]["Marine Recruit"])
+        if world == "Naruto":
+            village = start_location if start_location in {
+                "Konohagakure", "Sunagakure", "Kirigakure", "Kumogakure", "Iwagakure", "Amegakure"
+            } else ""
+            if "akatsuki" in note:
+                package["position"] = "Akatsuki Member"
+                package["title"] = "Akatsuki Member"
+                package["affiliations"] = [{"faction": "Akatsuki", "rank": "Member", "status": "active", "joined": "Campaign start", "notes": "Already recruited into Akatsuki."}]
+                merge(package.setdefault("special_patch", {}), {"Home Village": "None", "Shinobi Rank": "Missing-nin"})
+            elif "samurai-in-training" in note:
+                merge(package, WORLD_ORIGIN_START_PACKAGES[world]["Iron Country Samurai-in-Training"])
+            elif village and "samurai" not in origin.lower() and "rogue" not in origin.lower():
+                rank = str((package.get("special_patch") or {}).get("Shinobi Rank") or "Academy Student")
+                package.setdefault("affiliations", [{"faction": village, "rank": rank, "status": "active", "joined": "Campaign start", "notes": f"Registered with {village}."}])
+                package.setdefault("position", rank)
+                package["title"] = self.naruto_identity_title(origin, start_location)
+                merge(package.setdefault("special_patch", {}), {"Home Village": village})
+        return package
+
+    def apply_start_package_to_profile(self, world, profile, package):
+        profile = copy.deepcopy(profile)
+        package = copy.deepcopy(package or {})
+        stats = profile.setdefault("stats", {})
+        for ability, minimum in package.get("stat_minimums", {}).items():
+            if ability in stats:
+                stats[ability] = max(int(stats.get(ability, 1) or 1), int(minimum))
+        merge(profile.setdefault("skills", {}), package.get("skills", {}))
+        merge(profile.setdefault("equipment", {}), package.get("equipment", {}))
+        if package.get("title"):
+            profile["titles"] = [package["title"]]
+        if package.get("race"):
+            profile["race"] = package["race"]
+        if isinstance(package.get("class_profile"), dict):
+            profile["hidden_class"] = copy.deepcopy(package["class_profile"])
+        if (package.get("position") or package.get("affiliations")) and not profile.get("_background_supplied"):
+            position = str(package.get("position") or package.get("title") or "an established local role")
+            factions = [str(row.get("faction")) for row in package.get("affiliations", []) if isinstance(row, dict) and row.get("faction")]
+            training_rows = [str(row.get("description")) for row in package.get("skills", {}).values()
+                             if isinstance(row, dict) and row.get("description")]
+            affiliation_text = f" Their standing with {', '.join(factions)} is already established." if factions else ""
+            training_text = f" Their prior experience is concrete: {training_rows[0]}" if training_rows else ""
+            details = profile.setdefault("background_details", {})
+            motivation = str(details.get("motivation") or "They must decide how to use the opportunities and obligations this position creates.")
+            complication = str(details.get("starting_complication") or "Their title creates responsibilities as well as access.")
+            profile["expanded_background"] = f"They begin as {position}.{affiliation_text}{training_text} {motivation} {complication}".strip()
+            details["upbringing"] = f"Their established role as {position} defines their immediate place in the setting."
+            details["training_history"] = training_rows[0] if training_rows else "Training appropriate to the selected role."
+            details["key_connection"] = ", ".join(factions)
+        profile["start_package"] = package
+        profile["hp_max"], profile["resource_max"] = self.derive_pools(world, stats)
+        if package.get("stat_minimums") and profile.get("power_band") in {"Average beginner", "Trained starter"}:
+            power = power_profile_for(world, stats, str((package.get("special_patch") or {}).get("Archetype") or ""))
+            profile["power_band"] = power["overall"]["name"]
+            if power.get("lopsided"):
+                profile["power_notice"] = power.get("interpretation", "")
+        return profile
+
+    def resolve_original_start(self, world, origin, archetype, start_location, start_note, starting_era_id):
+        wd = WORLD_DATA[world]
+        start = str(start_location or wd["start"]).strip()
+        package = self.starting_package_for(world, origin, archetype, start, start_note)
+        era = starting_era_by_id(world, starting_era_id)
+        warnings = []
+        required_era = package.get("required_era")
+        if required_era:
+            required = starting_era_by_id(world, required_era)
+            options = starting_eras_for(world)
+            default_id = options[0].get("id") if options else ""
+            if required and (not starting_era_id or starting_era_id == default_id):
+                era = required
+                start = package.get("recommended_location") or start
+                warnings.append(f"{origin} begins in {required['label']} because this origin does not exist during the default era.")
+                package = self.starting_package_for(world, origin, archetype, start, start_note)
+            elif required and era and int(era.get("start_day", 0)) < int(package.get("required_start_day", 0)):
+                warnings.append(f"{origin} is not yet established in this era. The campaign will treat the title as a deliberate alternate-history premise.")
+        return start, era, package, warnings
+
+    def apply_start_package_to_state(self, package):
+        package = copy.deepcopy(package or {})
+        merge(self.state.setdefault("special", {}), package.get("special_patch", {}))
+        if package.get("position"):
+            self.state["position"] = str(package["position"])
+        if package.get("affiliations"):
+            self.state["affiliations"] = copy.deepcopy(package["affiliations"])
+        for faction, standing in package.get("reputation", {}).items():
+            self.state.setdefault("reputation", {})[faction] = standing
+        if package.get("quests"):
+            self.state.setdefault("quests", []).extend(copy.deepcopy(package["quests"]))
+        if package.get("conditions"):
+            self.state.setdefault("status", []).extend(str(x) for x in package["conditions"] if str(x).strip())
+        if package.get("knowledge"):
+            self.state.setdefault("narrative_memory", {}).setdefault("established_facts", []).extend(
+                str(x) for x in package["knowledge"] if str(x).strip()
+            )
+        for contact in package.get("contacts", []):
+            if isinstance(contact, dict) and contact.get("name"):
+                self.ensure_contact(contact["name"], contact.get("kind", "person"), contact)
+        for affiliation in self.state.get("affiliations", []):
+            if isinstance(affiliation, dict) and affiliation.get("faction"):
+                self.ensure_contact(affiliation["faction"], "group", {"status": "Affiliated", "can_contact": True})
+        normalize_quest_state_machine(self.state)
 
     def reroll_campaign_preview(self, preview, kind, background=""):
         """Reroll one creation component without disturbing the others."""
@@ -1028,8 +1285,12 @@ Return JSON only, with no markdown."""
                 stats[ability] = max(int(stats.get(ability, 1) or 1), int(minimum))
         if isinstance(scenario.get("skills"), dict) and scenario["skills"]:
             normalized["skills"] = copy.deepcopy(scenario["skills"])
+        if isinstance(scenario.get("equipment"), dict) and scenario["equipment"]:
+            normalized["equipment"] = copy.deepcopy(scenario["equipment"])
         if scenario.get("title"):
             normalized["titles"] = [scenario["title"]]
+        if scenario.get("race"):
+            normalized["race"] = scenario["race"]
         expanded = scenario.get("expanded_background") or scenario.get("background") or ""
         normalized["expanded_background"] = expanded
         companions = [npc.get("name") for npc in scenario.get("seed_npcs", []) if npc.get("is_companion")]
@@ -1052,7 +1313,20 @@ Return JSON only, with no markdown."""
         }
         normalized["generated_ability"] = None
         normalized["hidden_class"] = None
+        normalized["class_profile"] = copy.deepcopy(scenario.get("class_profile")) if isinstance(scenario.get("class_profile"), dict) else {}
+        package = {
+            "position": scenario.get("position", ""), "affiliations": copy.deepcopy(scenario.get("affiliations") or []),
+            "reputation": copy.deepcopy(scenario.get("reputation") or {}), "special_patch": copy.deepcopy(scenario.get("special_patch") or {}),
+            "quests": copy.deepcopy(scenario.get("starting_quests") or []), "conditions": copy.deepcopy(scenario.get("conditions") or []),
+            "knowledge": copy.deepcopy(scenario.get("knowledge") or []), "contacts": copy.deepcopy(scenario.get("contacts") or []),
+            "class_profile": copy.deepcopy(scenario.get("class_profile") or {}),
+            "race": scenario.get("race", ""),
+        }
+        normalized["start_package"] = package
         normalized["hp_max"], normalized["resource_max"] = self.derive_pools(world, stats)
+        power = power_profile_for(world, stats, scenario.get("archetype", ""))
+        normalized["power_band"] = power["overall"]["name"]
+        normalized["power_notice"] = power.get("interpretation", "") if power.get("lopsided") else ""
         return normalized
 
     def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id=""):
@@ -1068,13 +1342,19 @@ Return JSON only, with no markdown."""
         # An original character can begin in a different era of the same
         # world instead of always the default anchor — a canon-character
         # scenario (which already fixes its own start_day) always wins.
-        era = None if scenario else starting_era_by_id(world, starting_era_id)
-        start = str(start_location or wd["start"]).strip()
+        if scenario:
+            era, start, start_package, start_warnings = None, str(start_location or wd["start"]).strip(), {}, []
+        else:
+            start, era, start_package, start_warnings = self.resolve_original_start(
+                world, origin, archetype, start_location, start_note, starting_era_id,
+            )
         rolled = self.roll_starting_stats(world, archetype, stats or {})
         profile = self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start,
                                               allow_starting_specials=not bool(scenario))
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
+        else:
+            profile = self.apply_start_package_to_profile(world, profile, start_package)
         if scenario:
             start_day, canon_anchor = int(scenario.get("start_day")), scenario.get("background")
         elif era:
@@ -1087,7 +1367,7 @@ Return JSON only, with no markdown."""
             "origin": origin, "archetype": archetype, "start_location": start,
             "start_day": start_day, "canon_anchor": canon_anchor,
             "abilities": profile["stats"], "resource": wd["resource"], "appearance": appearance_desc,
-            "starting_profile": profile, "uses_xp": uses_xp_for(world),
+            "starting_profile": profile, "uses_xp": uses_xp_for(world, custom_world),
             "race": profile.get("race", ""), "race_options": WORLD_RACES.get(world, {}).get("options", []),
             "background": profile.get("expanded_background", background),
             "background_details": profile.get("background_details", {}),
@@ -1096,16 +1376,20 @@ Return JSON only, with no markdown."""
             "canon_character": scenario,
             "world_primer": world_primer_for(world, custom_world),
             "starting_era": era, "starting_era_options": starting_eras_for(world),
+            "start_warnings": start_warnings,
         }
 
     def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age=""):
         wd = WORLD_DATA[world]
         scenario = self.canon_character_scenario(world, canon_character_id) if canon_character_id else None
-        era = None if scenario else starting_era_by_id(world, starting_era_id)
         if scenario:
             name, background, appearance_desc = scenario["name"], scenario.get("background", ""), scenario.get("appearance", "")
             origin, archetype, start_location = scenario.get("origin", origin), scenario.get("archetype", archetype), scenario.get("location", start_location)
-        start = start_location.strip() or wd["start"]
+            era, start, start_package = None, start_location.strip() or wd["start"], {}
+        else:
+            start, era, start_package, _ = self.resolve_original_start(
+                world, origin, archetype, start_location, start_note, starting_era_id,
+            )
         rolled = copy.deepcopy(preview_stats) if isinstance(preview_stats, dict) else self.roll_starting_stats(world, archetype, stats)
         profile = copy.deepcopy(preview_profile) if isinstance(preview_profile, dict) else self.infer_starting_profile(
             world, origin, archetype, background, rolled, start_location=start,
@@ -1113,6 +1397,8 @@ Return JSON only, with no markdown."""
         )
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
+        else:
+            profile = self.apply_start_package_to_profile(world, profile, start_package)
         profile_stats = profile.get("stats") if isinstance(profile.get("stats"), dict) else rolled
         hp_max, resource_max = self.derive_pools(world, profile_stats)
         with self.lock:
@@ -1127,7 +1413,7 @@ Return JSON only, with no markdown."""
                 special=copy.deepcopy(wd["special"]), discovered_locations=[start],
                 stats=copy.deepcopy(profile_stats), skills=copy.deepcopy(profile.get("skills", {})),
                 titles=copy.deepcopy(profile.get("titles", [])), equipment=copy.deepcopy(profile.get("equipment", {})),
-                class_profile=copy.deepcopy(profile.get("hidden_class") or {}),
+                class_profile=copy.deepcopy(profile.get("class_profile") or profile.get("hidden_class") or {}),
                 hp=hp_max, hp_max=hp_max, resource=resource_max, resource_max=resource_max,
                 starting_power_band=profile.get("power_band", "Average beginner"),
                 starting_power_notice=profile.get("power_notice", ""),
@@ -1186,15 +1472,12 @@ Return JSON only, with no markdown."""
             if str(age).strip():
                 self.state["age"] = str(age).strip()
             self.state["codex"] = [{"name": start, "type": "Location", "notes": "Starting location."}]
-            # Major world polities/groups are contactable from day one, not
-            # only after the story happens to introduce them — the player can
-            # try reaching out to the Marines, a Hidden Village, the Hunter
-            # Association, a guild, etc. immediately, for whatever that's worth
-            # given their current standing and station in life.
+            # Knowing a faction exists does not grant a private line to it.
             for faction_name in wd["factions"]:
+                can_contact = faction_name in WORLD_PUBLIC_CONTACTS.get(world, set())
                 self.ensure_contact(faction_name, "group", {
-                    "status": "Known", "can_contact": True,
-                    "notes": ["A major faction/polity in this world — reachable from the start, though willingness to engage depends on your reputation and station."],
+                    "status": "Known", "can_contact": can_contact,
+                    "notes": ["A known major faction. A direct channel requires public access, membership, or an introduced contact."],
                 })
             # A canon character start with a real established cast (see
             # MAJOR_CHARACTER_STARTS's seed_npcs/seed_faction_rosters)
@@ -1219,7 +1502,11 @@ Return JSON only, with no markdown."""
                         "last_known_location": npc.get("last_known_location", start),
                         "recurring": True,
                     }
-                    self.ensure_contact(npc_name, "person", {"status": "Known", "can_contact": True})
+                    last_known = str(npc.get("last_known_location", start))
+                    contactable = npc.get("can_contact")
+                    if contactable is None:
+                        contactable = last_known.lower() not in {"unknown", "deceased"}
+                    self.ensure_contact(npc_name, "person", {"status": "Known", "can_contact": bool(contactable)})
                     if npc.get("is_companion"):
                         self.state.setdefault("companions", []).append({"name": npc_name, "role": npc.get("goal", "")})
                 rosters = scenario.get("seed_faction_rosters")
@@ -1231,6 +1518,7 @@ Return JSON only, with no markdown."""
                     self.state.setdefault("reputation", {})[faction] = standing
                 if scenario.get("title"):
                     self.state["titles"] = [scenario["title"]]
+            self.apply_start_package_to_state(profile.get("start_package", start_package))
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

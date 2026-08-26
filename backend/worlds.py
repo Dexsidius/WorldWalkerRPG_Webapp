@@ -3,10 +3,11 @@ WORLD_DATA / WORLD_EXPANSIONS / DIFFICULTIES / BASE_STATE so campaign
 mechanics and AI prompt schemas stay identical."""
 import datetime
 import math
+import re
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.7.2"
+APP_VERSION = "3.8.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -146,7 +147,7 @@ WORLD_DATA = {
     "One Piece": {
         "tagline": "Pirates, Marines, Haki, Devil Fruits, crews, bounties, and a living sea.",
         "resource": "Stamina",
-        "progression": ["Level","XP","Haki","Combat Style","Bounty","Crew","Reputation","Titles"],
+        "progression": ["Attributes","Haki","Combat Style","Bounty","Crew","Reputation","Titles"],
         "rules": "Honor One Piece world logic. Islands and seas matter. Marines, pirates, kingdoms and crews pursue their own motives. Devil Fruits are unique. Haki requires plausible awakening/training. Bounties respond to notoriety and government threat assessment. Canon may diverge permanently.",
         "start": "Foosha Village",
         # Yonko crews are this world's real polities, not just powerful
@@ -186,14 +187,17 @@ WORLD_DATA = {
             ("Sabaody",93,49,"archipelago",10), ("Zou",96,50,"island",10),
             ("Fishman Island",51,62,"island",11), ("Impel Down",41,56,"prison",12),
             ("Totto Land",15,49,"island",13), ("Marineford",45,54,"marine",13),
-            ("Wano Country",6,51,"nation",14)
+            ("Amazon Lily",29,61,"island",10), ("Punk Hazard",9,66,"island",11),
+            ("Dressrosa",12,62,"kingdom",12), ("Mary Geoise",50,43,"government",15),
+            ("Egghead Island",5,69,"island",14), ("Lulusia Kingdom",27,70,"kingdom",9),
+            ("Ohara",22,40,"historical",8), ("Wano Country",6,51,"nation",14)
         ],
         "special": {"Haki":{"Observation":0,"Armament":0,"Conqueror":0}, "Bounty":0, "Devil Fruit":"None", "Crew":"None"}
     },
     "Hunter x Hunter": {
         "tagline": "Hunters, Nen, dangerous exams, criminal underworlds, and unexplored frontiers.",
         "resource": "Aura",
-        "progression": ["Level","XP","Aura","Nen","Hatsu","Hunter Status","Reputation","Titles"],
+        "progression": ["Attributes","Aura","Nen","Hatsu","Hunter Status","Reputation","Titles"],
         "rules": "Honor Hunter x Hunter logic. Nen is not casually known by ordinary people and must be learned plausibly. Track Ten, Zetsu, Ren, Hatsu, aura and Nen category only after discovery. Vows and limitations can create power with real costs. Hunters, mafia, assassins and the Association act independently.",
         "start": "Yorknew City",
         "factions": {"Hunter Association":0,"Yorknew Mafia":0,"Phantom Troupe":0,"Zoldyck Family":0},
@@ -203,14 +207,16 @@ WORLD_DATA = {
             ("Heavens Arena",58,38,"arena",6), ("Meteor City",18,62,"city",8),
             ("Greed Island",78,42,"island",9), ("NGL",70,22,"region",10),
             ("East Gorteau",55,16,"nation",11), ("Hunter Association HQ",37,23,"hq",7),
-            ("Dark Continent Route",16,12,"frontier",15)
+            ("Dark Continent Route",16,12,"frontier",15),
+            ("Route to the Exam",67,67,"route",2), ("Exam Ship",70,73,"ship",2),
+            ("Zevil Island",63,50,"island",5)
         ],
-        "special": {"Nen Category":"Unknown","Ten":0,"Zetsu":0,"Ren":0,"Hatsu":"Undeveloped","Aura Control":0}
+        "special": {"Nen Category":"Unknown","Ten":0,"Zetsu":0,"Ren":0,"Hatsu":"Undeveloped"}
     },
     "Naruto": {
         "tagline": "Shinobi villages, chakra, missions, bloodlines, rival nations, and hidden techniques.",
         "resource": "Chakra",
-        "progression": ["Level","XP","Chakra","Jutsu","Rank","Village Reputation","Titles"],
+        "progression": ["Attributes","Chakra","Jutsu","Rank","Village Reputation","Titles"],
         "rules": "Honor Naruto world logic. Chakra, elemental affinities, clan techniques, ranks, missions and village politics matter. Jutsu require training, inheritance, instruction or legitimate copying conditions. Powerful bloodlines are rare. Villages remember betrayal, service and classified knowledge.",
         "start": "Konohagakure",
         # Amegakure and Iron Country are already on this world's own map
@@ -232,9 +238,11 @@ WORLD_DATA = {
             ("Kumogakure",64,24,"village",7), ("Iwagakure",24,23,"village",7),
             ("Valley of the End",44,44,"landmark",6), ("Forest of Death",46,62,"training",5),
             ("Land of Waves",40,89,"region",4), ("Amegakure",32,56,"village",8),
-            ("Iron Country",56,32,"nation",8)
+            ("Iron Country",56,32,"nation",8), ("Kannabi Bridge",31,44,"landmark",7),
+            ("Land of Rice Fields",51,40,"region",5), ("Fourth War Front",60,46,"battlefield",12),
+            ("Kaguya's Dimension",92,8,"dimension",15)
         ],
-        "special": {"Shinobi Rank":"Civilian","Nature Affinity":"Unknown","Chakra Control":0,"Known Jutsu":[],"Clan":"None"}
+        "special": {"Shinobi Rank":"Civilian","Nature Affinity":"Unknown","Known Jutsu":[],"Clan":"None"}
     },
     "Solo Max-Level Newbie": {
         "tagline": "Tower floors, hidden quests, achievements, copied abilities, artifacts, and exploitable secrets.",
@@ -256,14 +264,15 @@ WORLD_DATA = {
         "map": [
             ("Winston",22,65,"city",2), ("Patrian",38,58,"city",4), ("Reidan",52,68,"city",6),
             ("Bairan",34,42,"city",5), ("Titan",58,42,"capital",8), ("Frontier",78,60,"region",8),
-            ("Saharan Empire",70,27,"empire",10), ("Northern Frontier",40,20,"region",10)
+            ("Saharan Empire",70,27,"empire",10), ("Northern Frontier",40,20,"region",10),
+            ("Kesan Canyon",29,71,"region",5), ("Temple of Yatan",18,78,"dungeon",7)
         ],
         "special": {"Class":"Beginner","Secondary Class":"None","Crafting Mastery":0,"Guild":"None","NPC Affinity":{}}
     },
     "Reincarnated as a Slime": {
         "tagline": "Magicules, named skills, monster evolution, demon lords, and a newborn nation in the Great Jura Forest.",
         "resource": "Magicule",
-        "progression": ["Level","XP","Magicule Capacity","Named Skills","Evolution Stage","Reputation","Titles"],
+        "progression": ["Attributes","Magicule Capacity","Named Skills","Evolution Stage","Reputation","Titles"],
         "rules": "Honor Tensura world logic. Magicules fuel skills and evolution. Named/Unique/Ultimate Skills are rare and earned through insight, naming, or extraordinary circumstance — never handed out casually. Monsters and demi-humans have species-based traits; evolution requires a genuine trigger (naming, mass magicule intake, a true crisis, or a Demon Lord's Seed/Awakening). Analytical skills akin to Great Sage, if present, must be foreshadowed and earned. Human kingdoms, demon lords and monster nations pursue independent agendas.",
         "start": "Great Jura Forest",
         "factions": {"Jura Forest Monsters": 0, "Kingdom of Falmuth": 0, "Demon Lords": 0, "Free Guild": 0},
@@ -271,7 +280,8 @@ WORLD_DATA = {
             ("Great Jura Forest",50,60,"forest",1), ("Goblin Village",42,55,"settlement",2),
             ("Blumund",78,60,"town",2), ("Kingdom of Falmuth",70,78,"kingdom",3),
             ("Dwargon",30,40,"nation",5), ("Sorcerous Dynasty of Thalion",20,25,"nation",6),
-            ("Demon Lord's Domain",65,20,"territory",8), ("Tempest",50,58,"nation",10)
+            ("Demon Lord's Domain",65,20,"territory",8), ("Tempest",50,58,"nation",10),
+            ("Great Jura Forest — Sealed Cave",47,48,"cave",4), ("Dragon Peak",42,19,"landmark",9)
         ],
         "special": {"Named Skills":[], "Evolution Stage":"Unnamed", "Magicule Capacity":0, "Species":"Unknown"}
     },
@@ -339,25 +349,25 @@ CANON_TIMELINES = {
         {"major": False, "day": 17, "title": "Reverse Mountain and Laboon's promise", "location": "Reverse Mountain", "summary": "The crew crosses into the Grand Line proper via Reverse Mountain, and Luffy promises the whale Laboon they'll return for a rematch after circling the world."},
         {"major": False, "day": 18, "title": "Little Garden and Vivi's true identity", "location": "Little Garden", "summary": "The crew befriends the giants Dorry and Brogy, and Vivi is revealed as Alabasta's princess, secretly infiltrating Baroque Works from within."},
         {"day": 20, "title": "Drum Island — Chopper joins", "location": "Drum Island", "summary": "Wapol's tyranny is overthrown with Dr. Kureha's help, and the reindeer doctor Tony Tony Chopper joins the crew."},
-        {"day": 31, "title": "Operation Utopia and Crocodile's defeat", "location": "Alabasta — Alubarna", "summary": "Crocodile's plot to seize the kingdom through civil war is exposed and defeated; Vivi's homeland is saved, though she stays behind rather than continue the voyage."},
+        {"day": 31, "title": "Operation Utopia and Crocodile's defeat", "location": "Alabasta", "summary": "Crocodile's plot to seize the kingdom through civil war is exposed and defeated; Vivi's homeland is saved, though she stays behind rather than continue the voyage."},
         {"day": 36, "title": "Skypiea's golden bell rings", "location": "Skypiea", "summary": "The self-proclaimed god Enel is defeated and driven from Skypiea; the ancient bell of Shandora is rung for the whole world to hear, ending a four-century war."},
         {"major": False, "day": 45, "title": "Water 7 — the search for Robin", "location": "Water 7", "summary": "Nico Robin's history as Ohara's last scholar and the government's fear of the Rio Poneglyph begin surfacing as CP9 closes in."},
         {"day": 47, "title": "Enies Lobby raid — war on the World Government", "location": "Enies Lobby", "summary": "The crew storms the Government's judicial island to rescue Robin, defeats CP9's Rob Lucci, and burns their own flag in open defiance of the World Government. Shipwright Franky joins the crew."},
         {"day": 52, "title": "Thriller Bark — Moria defeated", "location": "Thriller Bark", "summary": "The Warlord Gecko Moria is defeated after his zombie-army scheme is unraveled; the skeleton musician Brook joins the crew, completing the original Straw Hat lineup."},
-        {"day": 59, "title": "Sabaody Archipelago incident", "location": "Sabaody Archipelago", "summary": "A clash with a Celestial Dragon draws admiral-level attention; the Warlord Bartholomew Kuma disperses the entire crew across the world to save them from annihilation, ending Part 1 of the voyage."},
+        {"day": 59, "title": "Sabaody Archipelago incident", "location": "Sabaody", "summary": "A clash with a Celestial Dragon draws admiral-level attention; the Warlord Bartholomew Kuma disperses the entire crew across the world to save them from annihilation, ending Part 1 of the voyage."},
         {"major": False, "day": 67, "title": "Impel Down infiltration", "location": "Impel Down", "summary": "Luffy infiltrates the great undersea prison to save his brother Ace, breaking out an army of dangerous allies and enemies alike in the process."},
         {"day": 68, "title": "The Battle of Marineford", "location": "Marineford", "summary": "The Whitebeard Pirates clash with the full might of the Marines and Warlords to save Ace from execution, in the largest war the world has seen in decades."},
         {"day": 68, "title": "Ace's death", "location": "Marineford", "summary": "Portgas D. Ace dies shielding Luffy from Admiral Akainu's attack, moments after Whitebeard himself falls in the same battle — a loss that breaks Luffy and reshapes the balance of power in the world."},
-        {"major": False, "day": 82, "title": "Luffy begins two years of training", "location": "Amazon Lily / Rusukaina", "summary": "Still reeling from Ace's death, Luffy accepts Rayleigh's offer of two years of solitary training before the crew reunites."},
-        {"major": False, "day": 733, "title": "Reunion at Sabaody", "location": "Sabaody Archipelago", "summary": "After two years of separate training, the Straw Hat Pirates reunite at Sabaody Archipelago, each dramatically stronger and ready for the Grand Line's second half."},
+        {"major": False, "day": 82, "title": "Luffy begins two years of training", "location": "Amazon Lily", "summary": "Still reeling from Ace's death, Luffy accepts Rayleigh's offer of two years of solitary training before the crew reunites."},
+        {"major": False, "day": 733, "title": "Reunion at Sabaody", "location": "Sabaody", "summary": "After two years of separate training, the Straw Hat Pirates reunite at Sabaody Archipelago, each dramatically stronger and ready for the Grand Line's second half."},
         {"day": 734, "title": "Fishman Island saved", "location": "Fishman Island", "summary": "Hordy Jones's coup and his New Fishman Pirates are defeated; a lasting alliance between the surface and Fishman Island begins."},
         {"day": 735, "title": "Punk Hazard incident", "location": "Punk Hazard", "summary": "Caesar Clown's poison-gas weapons project is stopped and an alliance is formed with Trafalgar Law against Doflamingo and Kaido."},
         {"day": 736, "title": "Dressrosa liberated", "location": "Dressrosa", "summary": "The Warlord Donquixote Doflamingo is defeated and his decade-long tyranny over Dressrosa ends; the Straw Hat Grand Fleet is born from the allies made here."},
         {"major": False, "day": 748, "title": "The Alliance forms at Zou", "location": "Zou", "summary": "The Ninja–Pirate–Mink–Samurai Alliance forms against Kaido as the crew learns Sanji has been called to an arranged marriage on Whole Cake Island."},
-        {"day": 758, "title": "Whole Cake Island — the Tea Party interrupted", "location": "Whole Cake Island — Totto Land", "summary": "Sanji is pulled from his arranged wedding to the Big Mom Pirates in a narrow, costly escape that earns the crew Big Mom's undying wrath."},
+        {"day": 758, "title": "Whole Cake Island — the Tea Party interrupted", "location": "Totto Land", "summary": "Sanji is pulled from his arranged wedding to the Big Mom Pirates in a narrow, costly escape that earns the crew Big Mom's undying wrath."},
         {"major": False, "day": 760, "title": "Landing in Wano", "location": "Wano Country", "summary": "The crew arrives in the isolated shogunate of Wano and begins secretly allying with the Kozuki retainers to bring down Kaido, just as the Reverie convenes overseas."},
         {"day": 763, "title": "Nefertari Cobra's death and Imu's reveal", "location": "Mary Geoise", "summary": "King Cobra is killed after stumbling onto the truth of Imu, the world's hidden ruler — a secret the Celestial Dragons have kept for 800 years."},
-        {"day": 774, "title": "The Raid on Onigashima — Wano liberated", "location": "Wano — Onigashima", "summary": "The Alliance defeats Kaido and Big Mom in an all-night raid; Luffy awakens his Devil Fruit's true Nika form, the puppet shogun Orochi falls, and Momonosuke is restored as Wano's rightful shogun."},
+        {"day": 774, "title": "The Raid on Onigashima — Wano liberated", "location": "Wano Country", "summary": "The Alliance defeats Kaido and Big Mom in an all-night raid; Luffy awakens his Devil Fruit's true Nika form, the puppet shogun Orochi falls, and Momonosuke is restored as Wano's rightful shogun."},
         {"day": 792, "title": "Lulusia Kingdom is destroyed", "location": "Lulusia Kingdom", "summary": "Imu orders the Government's ancient weapon fired on Lulusia using the Mother Flame, erasing the entire kingdom without warning."},
         {"day": 797, "title": "Egghead Island incident", "location": "Egghead Island", "summary": "Dr. Vegapunk's hidden truths come to light as CP0, an Admiral, and the shadowy St. Saturn move directly against the Straw Hats — an unprecedented direct confrontation between the crew and the world's ruling powers."},
     ]},
@@ -377,8 +387,8 @@ CANON_TIMELINES = {
         {"major": False, "day": 18, "title": "Zevil Island's numbered hunt", "location": "Zevil Island", "summary": "Applicants hunt one another for numbered tags, and Killua's unnervingly casual lethality becomes hard to ignore."},
         {"day": 24, "title": "Exam final phase", "location": "Hunter Exam Site", "summary": "One-on-one battles decide the last Hunters of the year, including Hisoka's brutal match; the survivors receive their licenses."},
         {"major": False, "day": 26, "title": "Hisoka's promise", "location": "Hunter Exam Site", "summary": "Hisoka spares Gon and Killua after the exam, promising a real fight once they've grown strong enough to be worth killing."},
-        {"major": False, "day": 30, "title": "Gon and Killua's bond forms", "location": "Various", "summary": "Fresh from the exam, Gon and Killua begin traveling and training together."},
-        {"major": False, "day": 35, "title": "A call back to the Zoldyck estate", "location": "Various", "summary": "Killua is quietly summoned home, forcing an early test of how much his new friendships actually mean to him."},
+        {"major": False, "day": 30, "title": "Gon and Killua's bond forms", "location": "Route to the Exam", "summary": "Fresh from the exam, Gon and Killua begin traveling and training together."},
+        {"major": False, "day": 35, "title": "A call back to the Zoldyck estate", "location": "Route to the Exam", "summary": "Killua is quietly summoned home, forcing an early test of how much his new friendships actually mean to him."},
         {"day": 40, "title": "Kukuroo Mountain visit", "location": "Kukuroo Mountain", "summary": "New Hunters challenge the Testing Gate and the Zoldyck estate's defenses."},
         {"major": False, "day": 41, "title": "Silva and Kikyo size up the visitors", "location": "Kukuroo Mountain", "summary": "Killua's parents coldly assess Gon and his companions, unconvinced their son's new path is anything but a phase."},
         {"major": False, "day": 55, "title": "Zushi and the discovery of Nen", "location": "Heavens Arena", "summary": "A young floor climber named Zushi and his teacher Wing introduce Gon and Killua to Nen, a hidden discipline that changes everything about how they fight."},
@@ -387,6 +397,12 @@ CANON_TIMELINES = {
         {"major": False, "day": 100, "title": "Reunion before Yorknew", "location": "Yorknew City", "summary": "The four companions reunite ahead of the Yorknew auction, each pursuing their own goal in the city."},
         {"major": False, "day": 170, "title": "The Phantom Troupe converges", "location": "Yorknew City", "summary": "Members of the infamous Phantom Troupe quietly gather in Yorknew ahead of the auction, drawn by rumors of a Kurta-scarlet-eyed item on the block."},
         {"day": 180, "title": "Yorknew auction crisis", "location": "Yorknew City", "summary": "The underground auction and Phantom Troupe converge in Yorknew City."},
+        {"day": 190, "title": "Greed Island recruitment", "location": "Yorknew City", "summary": "Battera's agents recruit capable Hunters to enter Greed Island, turning the game's scarce copies into the next major objective."},
+        {"day": 230, "title": "Greed Island's final challenge", "location": "Greed Island", "summary": "The remaining players race to complete Greed Island while the Bomber crisis forces allies into a decisive confrontation."},
+        {"day": 270, "title": "Chimera Ant outbreak", "location": "NGL", "summary": "The Hunter Association confirms a fast-evolving Chimera Ant threat in the NGL and deploys a small extermination team."},
+        {"day": 330, "title": "East Gorteau palace invasion", "location": "East Gorteau", "summary": "Hunters assault the Royal Palace to separate the Chimera Ant Royal Guard from the King before a mass selection can begin."},
+        {"day": 365, "title": "Chairman Election", "location": "Hunter Association HQ", "summary": "The Association holds a contentious election for its next chairman while Hunters confront the cost of the Chimera Ant campaign."},
+        {"day": 430, "title": "Dark Continent preparations", "location": "Dark Continent Route", "summary": "V5, the Hunter Association, and Kakin begin competing preparations for an expedition beyond the known world."},
     ]},
     "Naruto": {"start_day": -7, "anchor": "Seven days before Naruto's Academy graduation", "events": [
         # Day numbers below are calibrated against the Narutopedia community
@@ -415,7 +431,7 @@ CANON_TIMELINES = {
         {"day": -4380, "title": "Naruto's birth and the Nine-Tails attack", "location": "Konohagakure", "banner": "nine_tails_attack_on_konoha", "scope": "wide", "summary": "Naruto is born as Obito's attack breaks Kushina's seal; Minato and Kushina confront the Nine-Tails while Konoha fights for survival."},
         {"major": False, "day": -4233, "title": "Might Duy's sacrifice", "location": "Land of Fire", "summary": "Might Duy rescues Guy, Ebisu, and Genma from the Seven Swordsmen of the Mist, killing two of them before dying from opening the Eight Gates."},
         {"major": False, "day": -3233, "title": "The Hyūga Affair", "location": "Konohagakure", "summary": "After Hiashi Hyūga kills a Kumogakure envoy in retaliation for an attempted kidnapping, his twin brother Hizashi sacrifices his own life under the branch seal to satisfy the peace treaty."},
-        {"day": -1603, "title": "The Uchiha Massacre", "location": "Konohagakure — Uchiha District", "banner": "uchiha_massacre", "summary": "Itachi Uchiha kills nearly his entire clan in a single night under Konoha's own order to prevent a coup, sparing only his younger brother Sasuke. The truth behind why is hidden from the village for years."},
+        {"day": -1603, "title": "The Uchiha Massacre", "location": "Konohagakure", "banner": "uchiha_massacre", "summary": "Itachi Uchiha kills nearly his entire clan in a single night under Konoha's own order to prevent a coup, sparing only his younger brother Sasuke. The truth behind why is hidden from the village for years."},
         {"day": 0, "title": "Academy graduation night — the Mizuki incident", "location": "Konohagakure", "summary": "Naruto's graduation is followed the same night by Mizuki's betrayal: he tricks Naruto into stealing the Forbidden Scroll of Seals before being stopped, and the new genin generation begins forming."},
         {"major": False, "day": 2, "title": "Ninja Registration Day", "location": "Konohagakure", "summary": "Naruto is formally registered as a shinobi of the Hidden Leaf, and meets Konohamaru for the first time."},
         {"major": False, "day": 3, "title": "The Graduation Ceremony", "location": "Konohagakure", "summary": "Twenty-seven students graduate into nine three-person genin teams."},
@@ -442,13 +458,13 @@ CANON_TIMELINES = {
         {"day": 1076, "title": "Gaara's death and rescue", "location": "Sunagakure", "banner": "gaara_rescue", "summary": "Akatsuki's Deidara and Sasori extract Shukaku from Gaara, killing him; Sakura and Chiyo defeat Sasori, and Chiyo sacrifices her own life to revive Gaara — the crew's first direct confrontation with Akatsuki."},
         {"major": False, "day": 1337, "title": "Asuma Sarutobi's death", "location": "Land of Fire", "summary": "Hidan of Akatsuki kills Asuma Sarutobi before Shikamaru's team avenges him."},
         {"day": 1360, "title": "Jiraiya's death in Amegakure", "location": "Amegakure", "summary": "Jiraiya infiltrates Amegakure to learn the truth behind Pain, fights Pain and Konan, and dies delivering crucial intelligence back to Konoha with his final moments."},
-        {"day": 1361, "title": "Itachi Uchiha's death", "location": "Land of Fire border", "summary": "Sasuke finally confronts and kills Itachi in single combat; Itachi, already dying of illness, ensures his brother survives the fight."},
-        {"day": 1400, "title": "Itachi's Truth", "location": "Various", "banner": "itachis_truth", "summary": "In the aftermath of Itachi's death, the truth of the Uchiha Massacre comes to light: Itachi acted under Konoha's own order to prevent a coup, sacrificing his name and his brother's hatred to protect the village he loved."},
+        {"day": 1361, "title": "Itachi Uchiha's death", "location": "Land of Fire", "summary": "Sasuke finally confronts and kills Itachi in single combat; Itachi, already dying of illness, ensures his brother survives the fight."},
+        {"day": 1400, "title": "Itachi's Truth", "location": "Land of Fire", "banner": "itachis_truth", "summary": "In the aftermath of Itachi's death, the truth of the Uchiha Massacre comes to light: Itachi acted under Konoha's own order to prevent a coup, sacrificing his name and his brother's hatred to protect the village he loved."},
         {"day": 1409, "title": "Pain's Assault on Konoha", "location": "Konohagakure", "banner": "pains_assault_on_konoha", "scope": "wide", "summary": "Pain launches a full assault on Konohagakure in pursuit of Naruto, leveling much of the village within minutes."},
         {"day": 1409, "title": "Naruto vs. Pain", "location": "Konohagakure", "banner": "naruto_vs_pain", "summary": "Naruto confronts Pain directly, ultimately learning Nagato's true identity and choosing to spare him — a choice that reshapes the Akatsuki leader's own resolve as he sacrifices himself to revive the villagers he killed."},
-        {"major": False, "day": 1410, "title": "The Five Kage Summit", "location": "Land of Iron", "summary": "The Five Kage meet to decide how to respond to Akatsuki, only for Sasuke to attack the summit himself; the masked Akatsuki leader declares the Fourth Shinobi World War in the chaos that follows."},
-        {"day": 1420, "title": "Obito's Reveal", "location": "War Front", "banner": "obitos_reveal", "summary": "The masked man behind Akatsuki's true plan is revealed to be Obito Uchiha, Kakashi's presumed-dead teammate, radically reframing the entire war's cause."},
-        {"day": 1684, "title": "The Fourth Shinobi World War begins", "location": "Allied Shinobi Forces Camp", "scope": "wide", "summary": "The Allied Shinobi Forces mobilize against Akatsuki's reanimated army, opening the war that will decide the future of the shinobi world."},
+        {"major": False, "day": 1410, "title": "The Five Kage Summit", "location": "Iron Country", "summary": "The Five Kage meet to decide how to respond to Akatsuki, only for Sasuke to attack the summit himself; the masked Akatsuki leader declares the Fourth Shinobi World War in the chaos that follows."},
+        {"day": 1420, "title": "Obito's Reveal", "location": "Fourth War Front", "banner": "obitos_reveal", "summary": "The masked man behind Akatsuki's true plan is revealed to be Obito Uchiha, Kakashi's presumed-dead teammate, radically reframing the entire war's cause."},
+        {"day": 1684, "title": "The Fourth Shinobi World War begins", "location": "Fourth War Front", "scope": "wide", "summary": "The Allied Shinobi Forces mobilize against Akatsuki's reanimated army, opening the war that will decide the future of the shinobi world."},
         {"day": 1685, "title": "Kaguya's Appearance", "location": "Kaguya's Dimension", "banner": "kaguyas_appearance", "summary": "Obito casts the Infinite Tsukuyomi, but Black Zetsu's betrayal uses him to revive Kaguya Ōtsutsuki instead — a threat beyond anything the shinobi world has faced, who kills Obito himself moments later."},
         {"day": 1686, "title": "Naruto and Sasuke vs. Kaguya", "location": "Kaguya's Dimension", "banner": "naruto_and_sasuke_vs_kaguya", "summary": "Naruto and a reconciled Sasuke seal Kaguya away for good, ending the Fourth Shinobi World War and the immediate threat to the entire world; Madara dies as the Ten-Tails is removed from him."},
         {"day": 1687, "title": "Naruto vs. Sasuke — Final Valley", "location": "Valley of the End", "banner": "naruto_vs_sasuke_final_valley", "summary": "With the war won, Naruto and Sasuke settle their own long rivalry in a final, defining battle at the Valley of the End, each losing an arm before finally reconciling."},
@@ -461,14 +477,14 @@ CANON_TIMELINES = {
         {"day": 0, "title": "Tower manifestation", "location": "Earth — Tower Entrance", "summary": "The Tower of Trials manifests in reality and humanity receives its first scenario, with a deadline for every player to clear each floor or face annihilation."},
         {"day": 1, "title": "First-floor scenario", "location": "Floor 1", "summary": "Players enter the opening floor while hidden conditions and first achievements become available to those who know to look."},
         {"major": False, "day": 1, "title": "Park Hana's ambush", "location": "Floor 1", "summary": "A desperate rival named Park Hana tries to stab Kang Jinhyuk in the Floor 1 labyrinth and is instead beaten and drawn into his growing circle."},
-        {"major": False, "day": 2, "title": "The National Museum incident", "location": "Seoul — National Museum", "summary": "Min Jeong-woo attempts to steal a priceless map while Yu-ri Lee moves to stop him; someone with full foreknowledge of the game quietly benefits without being drawn into the fight."},
+        {"major": False, "day": 2, "title": "The National Museum incident", "location": "Earth — Tower Entrance", "summary": "Min Jeong-woo attempts to steal a priceless map while Yu-ri Lee moves to stop him; someone with full foreknowledge of the game quietly benefits without being drawn into the fight."},
         {"major": False, "day": 3, "title": "The first deaths", "location": "Floor 1", "summary": "Casual players who underestimate the Tower begin dying in earnest, and the scale of the threat becomes impossible to deny."},
         {"major": False, "day": 5, "title": "Old instincts, new stakes", "location": "Floor 1", "summary": "A former streamer's old audience-building instincts resurface, this time backed by real, lethal consequences instead of a game score."},
         {"day": 7, "title": "Guild consolidation", "location": "Earth — Tower Entrance", "summary": "Major guilds and governments compete to control information, recruits, and early rewards."},
         {"major": False, "day": 10, "title": "Corporate scouting begins", "location": "Earth — Tower Entrance", "summary": "Goinmul Corporation and rival organizations start quietly identifying and recruiting standout early clearers."},
         {"major": False, "day": 14, "title": "First real boss attempts", "location": "Floor 1", "summary": "The strongest early clearers begin serious attempts on the floor's boss, exposing mechanics ordinary players never find."},
         {"day": 20, "title": "Early boss race", "location": "Floor 5", "summary": "Leading players race for first-clear rewards and concealed boss conditions."},
-        {"major": False, "day": 25, "title": "Hidden achievement hunting", "location": "Floor 1-2", "summary": "Someone with complete foreknowledge of the game methodically claims hidden achievements no ordinary player would think to look for."},
+        {"major": False, "day": 25, "title": "Hidden achievement hunting", "location": "Floor 2", "summary": "Someone with complete foreknowledge of the game methodically claims hidden achievements no ordinary player would think to look for."},
         {"major": False, "day": 30, "title": "The gap widens", "location": "Floor 2", "summary": "The fastest climbers reach Floor 2 well ahead of the pack, and the divide between top players and everyone else becomes stark public knowledge."},
     ]},
     "Overgeared": {"start_day": -3, "anchor": "Three days before Grid discovers Pagma's legacy", "events": [
@@ -481,7 +497,7 @@ CANON_TIMELINES = {
         {"major": False, "day": 15, "title": "Kesan Canyon expedition", "location": "Kesan Canyon", "summary": "Searching for Pagma's Swordsmanship, Grid discovers how to combine Skills into new, more powerful fused techniques."},
         {"major": False, "day": 22, "title": "Whispers of an unusual player", "location": "Winston", "summary": "Rumors begin spreading among competing guilds of an oddly overpowered low-level player operating out of Winston."},
         {"day": 30, "title": "Guild attention grows", "location": "Winston", "summary": "Major players and guilds begin pursuing rumors of exceptional crafted equipment."},
-        {"major": False, "day": 45, "title": "An ancient lich takes notice", "location": "Winston region", "summary": "The arrogant, ancient lich Braham takes a distant, contemptuous interest in Grid's unorthodox mastery of Pagma's forbidden techniques."},
+        {"major": False, "day": 45, "title": "An ancient lich takes notice", "location": "Winston", "summary": "The arrogant, ancient lich Braham takes a distant, contemptuous interest in Grid's unorthodox mastery of Pagma's forbidden techniques."},
         {"major": False, "day": 60, "title": "Piaro's revenge, revisited", "location": "Kesan Canyon", "summary": "Now stronger, Grid returns to Piaro to finally take up the revenge quest he once had to refuse."},
         {"major": False, "day": 62, "title": "Piaro relocates to Reidan", "location": "Reidan", "summary": "Piaro leaves his hermitage in Kesan Canyon to train Grid directly at Reidan, the first of his knightly techniques passed on in earnest."},
         {"major": False, "day": 75, "title": "Guild recruitment pressure", "location": "Winston", "summary": "Large guilds attempt to recruit or quietly pressure the increasingly notable Grid into joining their ranks."},
@@ -504,11 +520,15 @@ CANON_TIMELINES = {
         {"major": False, "day": 52, "title": "A first cautious trade route", "location": "Dwargon", "summary": "A tentative trade relationship opens between the settlement and its dwarven neighbors, the first sign of real nationhood."},
         {"major": False, "day": 60, "title": "The Orc Disaster gathers", "location": "Great Jura Forest", "summary": "A starving Orc Lord's forces begin threatening every settlement in the forest, forcing old rivals into uneasy alliance."},
         {"major": False, "day": 65, "title": "Old rivals debate war", "location": "Great Jura Forest", "summary": "Leaders across the forest argue over how — or whether — to respond together to the swelling Orc threat."},
-        {"major": False, "day": 70, "title": "The Orc Lord falls", "location": "Great Jura Forest", "summary": "The Orc Lord is defeated; a mass-naming on a catastrophic scale triggers a Demon Lord-tier awakening, and the Dragon Peak Demon Lord Milim Nava takes notice."},
+        {"major": False, "day": 70, "title": "The Orc Lord falls", "location": "Great Jura Forest", "summary": "The Orc Disaster is defeated and its surviving people are accepted into the growing alliance, dramatically expanding the settlement and drawing the attention of nearby powers."},
         {"major": False, "day": 74, "title": "A Demon Lord's idle curiosity", "location": "Dragon Peak", "summary": "Rumors of an upstart monster settlement and its unusual leader first reach Milim Nava, who finds the idea more entertaining than threatening."},
         {"major": False, "day": 80, "title": "Benimaru steps up", "location": "Tempest", "summary": "The hobgoblin Benimaru distinguishes himself organizing the settlement's defenders in the Orc Disaster's aftermath."},
         {"major": False, "day": 90, "title": "New specialists arrive", "location": "Tempest", "summary": "Additional dwarven craftsmen round out the settlement's early industry, from potion-brewing to construction."},
         {"day": 100, "title": "Tempest emerges", "location": "Tempest", "summary": "A multi-species settlement begins to become a recognized nation."},
+        {"major": False, "day": 130, "title": "Demon Lord Milim visits", "location": "Tempest", "summary": "Milim Nava arrives in Tempest out of curiosity, creating both an extraordinary opportunity and a dangerous diplomatic test."},
+        {"day": 180, "title": "Falmuth invades Tempest", "location": "Tempest", "summary": "Falmuth's army and allied otherworlders attack Tempest under an anti-monster barrier, turning political hostility into a national catastrophe."},
+        {"day": 184, "title": "Harvest Festival", "location": "Tempest", "summary": "A Demon Lord awakening and mass resurrection transform Tempest's leadership, people, and standing among the world's great powers."},
+        {"day": 200, "title": "Walpurgis", "location": "Demon Lord's Domain", "summary": "The Demon Lords convene as Clayman's schemes collapse and Tempest's new place in the balance of power is formally tested."},
     ]},
     # Day numbers below are the best available reconstruction, not a single
     # manga-stated day-by-day countdown — the source is precise about
@@ -559,14 +579,60 @@ WORLD_STARTING_ERAS = {
          "anchor": "During the closing stretch of the Third Shinobi World War, shortly before the Kannabi Bridge mission — Kakashi, Obito and Rin's generation are still on the front lines."},
         {"id": "before_naruto_birth", "label": "A week before Naruto's birth", "start_day": -4387,
          "anchor": "One week before Kushina gives birth to Naruto and the Nine-Tails attacks the village."},
+        {"id": "uchiha_massacre_eve", "label": "Eve of the Uchiha Massacre", "start_day": -1604,
+         "anchor": "One day before Itachi's mission destroys the Uchiha clan and permanently changes Konoha's political balance."},
+        {"id": "shippuden_return", "label": "Naruto Returns to Konoha", "start_day": 1068,
+         "anchor": "One day before Naruto returns from his training journey and the Akatsuki move openly against the jinchuriki."},
+        {"id": "fourth_war_eve", "label": "Eve of the Fourth Shinobi World War", "start_day": 1683,
+         "anchor": "The Allied Shinobi Forces are assembling one day before the Fourth Shinobi World War begins."},
     ],
     "One Piece": [
         {"id": "east_blue_departure", "label": "East Blue Departure (default)", "start_day": -7,
          "anchor": "Seven days before Luffy leaves Foosha Village."},
         {"id": "year_before_departure", "label": "One year before Luffy's departure", "start_day": -367,
          "anchor": "One year before Luffy leaves Foosha Village — still growing up there, well before the East Blue voyage begins."},
-        {"id": "rogers_execution", "label": "Gold Roger's execution", "start_day": -7920,
+        {"id": "rogers_execution", "label": "Gold Roger's execution", "start_day": -7799,
          "anchor": "Twenty-two years before Luffy sets sail, on the day Gold Roger is executed at Loguetown and the Great Pirate Era begins."},
+        {"id": "marineford_eve", "label": "Eve of the Summit War", "start_day": 67,
+         "anchor": "The day before the Battle of Marineford, while Ace awaits execution and the world's great powers converge."},
+        {"id": "new_world_reunion", "label": "Straw Hat Reunion", "start_day": 732,
+         "anchor": "One day before the Straw Hats reunite at Sabaody after two years of training."},
+    ],
+    "Hunter x Hunter": [
+        {"id": "hunter_exam", "label": "Hunter Exam Journey (default)", "start_day": -7,
+         "anchor": "Seven days before Gon leaves Whale Island to pursue the Hunter Exam."},
+        {"id": "yorknew_buildup", "label": "Yorknew Auction Buildup", "start_day": 160,
+         "anchor": "Ten days before the Phantom Troupe converges on Yorknew and the underground auction crisis begins."},
+        {"id": "greed_island", "label": "Greed Island Recruitment", "start_day": 190,
+         "anchor": "As Hunters and collectors begin recruiting capable players for Greed Island."},
+        {"id": "chimera_ant_outbreak", "label": "Chimera Ant Outbreak", "start_day": 270,
+         "anchor": "At the first confirmed signs of the Chimera Ant threat in the NGL."},
+    ],
+    "Solo Max-Level Newbie": [
+        {"id": "tower_manifestation", "label": "Tower Manifestation (default)", "start_day": -3,
+         "anchor": "Three days before the Tower of Trials becomes reality."},
+        {"id": "guild_race", "label": "Early Guild Race", "start_day": 7,
+         "anchor": "A week after manifestation, as guilds and corporations compete for early-floor advantages."},
+        {"id": "first_boss_race", "label": "First Major Boss Race", "start_day": 19,
+         "anchor": "One day before the first major multi-group race for a floor boss and its rewards."},
+    ],
+    "Overgeared": [
+        {"id": "pagma_legacy", "label": "Pagma's Legacy (default)", "start_day": -3,
+         "anchor": "Three days before Grid discovers Pagma's legacy in Satisfy."},
+        {"id": "satisfy_launch", "label": "Satisfy Launch", "start_day": -365,
+         "anchor": "The worldwide launch of Satisfy, before its player economy and famous guilds are established."},
+        {"id": "reidan_frontier", "label": "Reidan Frontier Era", "start_day": 89,
+         "anchor": "One day before Reidan's neglected frontier becomes a major opportunity for players, soldiers, and crafters."},
+    ],
+    "Reincarnated as a Slime": [
+        {"id": "reincarnation", "label": "Rimuru's Reincarnation (default)", "start_day": -7,
+         "anchor": "Seven days before Satoru Mikami is reincarnated in the Great Jura Forest."},
+        {"id": "orc_disaster_eve", "label": "Orc Disaster Eve", "start_day": 59,
+         "anchor": "One day before the Orc Disaster's army becomes the forest's central crisis."},
+        {"id": "tempest_established", "label": "Tempest Established", "start_day": 100,
+         "anchor": "Tempest has emerged as a recognized monster nation with new specialists and trade ambitions."},
+        {"id": "demon_lord_crisis", "label": "Demon Lord Crisis", "start_day": 179,
+         "anchor": "As Falmuth's hostility and Demon Lord politics place Tempest on the edge of a transformative crisis."},
     ],
     "Bleach": [
         {"id": "rukia_arrival", "label": "Rukia's Arrival in Karakura Town (default)", "start_day": -3,
@@ -802,6 +868,15 @@ def world_primer_for(world, custom_world_text=""):
 MAJOR_CHARACTER_STARTS = {
     "One Piece": [
         {"id":"luffy_departure","name":"Monkey D. Luffy","label":"Luffy — leaving Foosha Village","start_day":0,"location":"Foosha Village","age":17,"origin":"Foosha Village","archetype":"Brawler","appearance":"A lean young pirate with black hair, a straw hat, red vest, shorts, sandals, and a small scar under one eye.","background":"The morning he intends to begin his pirate voyage.",
+         "title":"Aspiring Pirate King","position":"Captain of a one-person pirate crew",
+         "stat_minimums":{"Strength":42,"Agility":40,"Endurance":52,"Willpower":58,"Instinct":40,"Charisma":38},
+         "equipment":{"Weapon":"Shanks' Straw Hat"},
+         "special_patch":{"Devil Fruit":"Gum-Gum Fruit (rubber body)","Crew":"Luffy's unnamed starting crew","Bounty":0},
+         "skills":{
+             "Gum-Gum Fruit":{"rank":"Experienced","bonus":9,"description":"A rubber body resists ordinary blunt impacts and enables stretching attacks, rebounds, and unconventional movement; blades, piercing attacks, Haki, drowning, and Sea-Prism Stone remain dangerous."},
+             "Gum-Gum Combat":{"rank":"Self-Taught","bonus":8,"description":"Uses named stretching punches, kicks, grapples, and elastic momentum developed through years of practice."},
+             "Monstrous Determination":{"rank":"Exceptional","bonus":8,"description":"Keeps acting through fear, pain, and overwhelming opposition when a chosen friend or dream is at stake."}},
+         "starting_quests":[{"name":"Begin the Journey to Pirate King","status":"Active","giver":"Personal Dream","locations":["Foosha Village"],"objectives":["Leave Foosha Village by sea","Recruit a first trusted crewmate"],"next_hint":"Secure a seaworthy departure and choose the first destination."}],
          # Ace and Sabo are real, alive relationships from Luffy's own
          # background, but neither is present at the dock this morning —
          # not seeded as npc_memories to avoid implying they're currently
@@ -816,6 +891,15 @@ MAJOR_CHARACTER_STARTS = {
              {"name":"Sabo","attitude":"Beloved sworn brother, believed dead","goal":"As far as Luffy knows, Sabo died protecting him as a child — settled grief, not an open mystery.","is_companion":False,"last_known_location":"Unknown"},
          ]},
         {"id":"zoro_shells","name":"Roronoa Zoro","label":"Zoro — prisoner at Shells Town","start_day":3,"location":"Shells Town","age":19,"origin":"Bounty Hunter","archetype":"Swordsman","appearance":"A muscular green-haired swordsman wearing simple travel clothes and carrying three swords when armed.","background":"Imprisoned at the Marine base after protecting civilians.",
+         "title":"Pirate Hunter","position":"Imprisoned bounty hunter",
+         "stat_minimums":{"Strength":50,"Agility":45,"Endurance":52,"Willpower":58,"Instinct":38},
+         "equipment":{"Weapon":"Wado Ichimonji and two katana (confiscated at the Marine base)"},
+         "conditions":["Bound to the execution-yard post; weapons confiscated"],
+         "skills":{
+             "Three-Sword Style":{"rank":"Expert","bonus":10,"description":"Fights with a sword in each hand and a third in his mouth, combining unusual angles, powerful cuts, and relentless pressure."},
+             "Single- and Two-Sword Style":{"rank":"Expert","bonus":9,"description":"Maintains formidable swordsmanship even when fewer than three blades are available."},
+             "Iron Will":{"rank":"Exceptional","bonus":8,"description":"Endures injury, deprivation, and intimidation without abandoning his promise to become the world's greatest swordsman."}},
+         "starting_quests":[{"name":"Survive Morgan's Sentence","status":"Active","giver":"Shells Town Crisis","locations":["Shells Town"],"objectives":["Escape or overturn the execution order","Recover the three swords"],"next_hint":"Watch the Marine yard and decide whether to trust the strange boy asking about you."}],
          "seed_npcs":[
              {"name":"Kuina","attitude":"Deceased childhood rival, deeply formative","goal":"Died young in an accidental fall; the vow they made — that one of them would become the world's greatest swordsman — is why Zoro carries Wado Ichimonji and why he fights at all.","is_companion":False,"last_known_location":"Deceased"},
              {"name":"Koshiro","attitude":"Respected old teacher","goal":"Runs his dojo back home; gave Zoro Kuina's sword when he set out.","is_companion":False,"last_known_location":"Unknown"},
@@ -823,17 +907,40 @@ MAJOR_CHARACTER_STARTS = {
     ],
     "Hunter x Hunter": [
         {"id":"gon_departure","name":"Gon Freecss","label":"Gon — leaving Whale Island","start_day":0,"location":"Whale Island","age":12,"origin":"Whale Island","archetype":"Tracker","appearance":"A small athletic boy with spiky black-green hair, bright brown eyes, a green jacket and shorts, and sturdy boots.","background":"The morning he leaves Whale Island to pursue the Hunter Exam.",
+         "title":"Whale Island Prodigy","stat_minimums":{"Strength":38,"Agility":44,"Cunning":34,"Willpower":48,"Charisma":34},
+         "equipment":{"Weapon":"Gon's Fishing Rod"},
+         "special_patch":{"Hunter License":"None","Nen Category":"Unknown"},
+         "skills":{
+             "Whale Island Fieldcraft":{"rank":"Prodigy","bonus":9,"description":"Tracks animals, reads forests and weather, climbs, fishes, and survives with senses sharpened by a wild island childhood."},
+             "Exceptional Senses":{"rank":"Innate","bonus":8,"description":"Notices scents, sounds, movement, and emotional cues far beyond an ordinary child, though it is not omniscience or Nen."},
+             "Fishing Rod Combat":{"rank":"Creative","bonus":7,"description":"Uses the rod's line, hook, reach, and leverage to retrieve objects, redirect movement, and surprise opponents."}},
+         "starting_quests":[{"name":"Reach and Pass the Hunter Exam","status":"Active","giver":"Personal Promise","locations":["Whale Island","Route to the Exam","Hunter Exam Site"],"objectives":["Leave Whale Island","Find the hidden exam route","Pass the Hunter Exam"],"next_hint":"Board the departing ship and prove to its captain that the journey is serious."}],
          "seed_npcs":[
              {"name":"Mito Freecss","attitude":"Devoted guardian","goal":"Raised Gon on Whale Island; worries about him constantly but let him go.","is_companion":False,"last_known_location":"Whale Island"},
              {"name":"Ging Freecss","attitude":"Absent father, the reason for this whole journey","goal":"A legendary Hunter whose whereabouts Gon doesn't actually know — finding him is the real destination.","is_companion":False,"last_known_location":"Unknown"},
          ]},
         {"id":"kurapika_exam","name":"Kurapika","label":"Kurapika — Hunter Exam journey","start_day":1,"location":"Hunter Exam Route","age":17,"origin":"Kurta Survivor","archetype":"Strategist","appearance":"A slight blond teenager with gray-brown eyes and a blue-and-gold traditional tunic.","background":"Traveling toward the Hunter Exam while pursuing information about the Kurta eyes.",
+         "title":"Last Known Kurta","stat_minimums":{"Strength":34,"Agility":38,"Cunning":46,"Willpower":52,"Charisma":36},
+         "equipment":{"Weapon":"Paired Wooden Training Sticks"},
+         "special_patch":{"Hunter License":"Applicant","Nen Category":"Unknown","Kurta Eyes":"Scarlet when emotionally agitated"},
+         "skills":{
+             "Kurta Scarlet Eyes":{"rank":"Latent","bonus":8,"description":"Intense emotion turns the eyes scarlet and heightens physical performance; Nen-specific effects are not available before Nen is learned."},
+             "Analytical Combat":{"rank":"Exceptional","bonus":8,"description":"Studies rules, motives, terrain, and tells to construct precise plans and exploit contradictions."},
+             "Kurta Cultural Knowledge":{"rank":"Last Survivor","bonus":7,"description":"Understands the Kurta clan's language, customs, taboos, and the significance of the stolen Scarlet Eyes."}},
+         "knowledge":["The Phantom Troupe is responsible for the Kurta massacre, but individual members and their location are not yet known."],
+         "starting_quests":[{"name":"Become a Hunter and Recover the Scarlet Eyes","status":"Active","giver":"Kurapika's Vow","locations":["Hunter Exam Site","Yorknew City"],"objectives":["Reach the Hunter Exam","Earn a Hunter License","Find a first reliable lead on the stolen Scarlet Eyes"],"next_hint":"Continue along the exam route while evaluating other applicants as possible allies or threats."}],
          "seed_npcs":[
              {"name":"Pairo","attitude":"Deceased childhood best friend","goal":"Killed in the Phantom Troupe's massacre of the Kurta clan — the reason Kurapika became a Hunter at all.","is_companion":False,"last_known_location":"Deceased"},
          ]}
     ],
     "Naruto": [
         {"id":"naruto_birth","name":"Naruto Uzumaki","label":"Naruto — night of his birth","start_day":-4380,"location":"Konohagakure","age":0,"origin":"Uzumaki newborn","archetype":"Unformed Potential","appearance":"A newborn boy with fine blond hair and three faint whisker-like marks on each cheek.","background":"The night of his birth, before the Nine-Tails attack reshapes the village and his life.",
+         "title":"Newborn Uzumaki","position":"Newborn civilian",
+         "stat_minimums":{"Willpower":20}, "equipment":{"Keepsake":"Newborn blanket"},
+         "special_patch":{"Shinobi Rank":"Civilian","Clan":"Uzumaki","Jinchuriki":"Nine-Tails seal not yet completed","Known Jutsu":[],"Nature Affinity":"Unknown"},
+         "conditions":["Newborn: cannot independently travel, train, fight, or speak"],
+         "skills":{"Uzumaki Life Force":{"rank":"Dormant Heritage","bonus":4,"description":"Carries unusually strong vitality and chakra potential inherited from the Uzumaki line; as a newborn this is potential, not trained power."}},
+         "starting_quests":[{"name":"Survive the Nine-Tails Attack","status":"Active","giver":"Immediate Crisis","locations":["Konohagakure"],"objectives":["Remain protected during the attack","Survive the sealing crisis"],"next_hint":"The adults responsible for Naruto must react as the masked intruder strikes."}],
          # Minato and Kushina are both alive for the first part of this very
          # night before the Reaper Death Seal and the Nine-Tails extraction
          # kill them — deliberately NOT seeded as ongoing npc_memories
@@ -842,11 +949,15 @@ MAJOR_CHARACTER_STARTS = {
          # Hiruzen survives and becomes Naruto's real ongoing guardian
          # figure, so he's the one seeded here.
          "seed_npcs":[
+             {"name":"Minato Namikaze","attitude":"Loving father and active Fourth Hokage","goal":"Protect Kushina, Naruto, and Konoha during the attack unfolding tonight.","is_companion":False,"last_known_location":"Konohagakure"},
+             {"name":"Kushina Uzumaki","attitude":"Loving mother, alive at campaign start","goal":"Keep newborn Naruto alive while the Nine-Tails seal is attacked.","is_companion":False,"last_known_location":"Konohagakure"},
              {"name":"Hiruzen Sarutobi","attitude":"Steps in as guardian figure","goal":"The Third Hokage, present in the village tonight — becomes the closest thing Naruto has to a guardian going forward.","is_companion":False,"last_known_location":"Konohagakure"},
          ]},
         {"id":"yahiko_akatsuki","name":"Yahiko","label":"Yahiko — founding the Akatsuki","start_day":-5221,"location":"Amegakure","age":17,"origin":"Amegakure War Orphan","archetype":"Ninjutsu Student","appearance":"A lean orange-haired young shinobi with determined eyes, rain gear, and a forehead protector worn openly.","background":"On the eve of founding the original Akatsuki, Yahiko works beside Nagato and Konan to turn their shared dream of peace into an organization that can protect Amegakure without serving the great villages.",
           "expanded_background":"Orphaned by the wars that consumed Amegakure, Yahiko survived alongside Nagato and Konan before the three trained under Jiraiya for three years. Jiraiya has since returned to Konoha, leaving Yahiko to put those lessons into practice. Now Yahiko is preparing to found the original Akatsuki as a peace movement: protecting civilians, uniting ordinary people, and breaking Amegakure's cycle of exploitation without surrendering its independence.",
           "title":"Akatsuki Founder","position":"Founder and Leader of the Akatsuki",
+          "equipment":{"Weapon":"Amegakure Kunai Set and Rain Cloak"},
+          "special_patch":{"Shinobi Rank":"Akatsuki Leader","Home Village":"Amegakure","Known Jutsu":["Water Release Ninjutsu"]},
           "affiliations":[{"faction":"Akatsuki","rank":"Founder and Leader","status":"active","joined":"Campaign start","notes":"Co-founded the original Amegakure peace movement with Nagato and Konan."}],
           "reputation":{"Akatsuki":80,"Amegakure":20},
           "stat_minimums":{"Taijutsu":40,"Ninjutsu":48,"Genjutsu":30,"Chakra Control":42,"Willpower":45,"Intellect":38},
@@ -855,6 +966,7 @@ MAJOR_CHARACTER_STARTS = {
               "Amegakure Fieldcraft":{"rank":"Veteran Survivor","bonus":6,"description":"Navigates the Hidden Rain's towers, pipes, flooded alleys, patrol routes, and civilian networks while recognizing the dangers created by prolonged war.","limitation":"Local knowledge does not guarantee safe passage through territory controlled by Hanzō's forces.","growth_path":"Build a trusted intelligence network and learn how rival cells operate."},
               "Shinobi Fundamentals":{"rank":"Trained","bonus":5,"description":"Uses chakra control, hand seals, taijutsu, shinobi tools, stealth, and team tactics at the level expected after Jiraiya's instruction.","limitation":"Fundamentals support advanced techniques but do not replace specialized mastery.","growth_path":"Apply the fundamentals under pressure and develop techniques suited to Yahiko's leadership and Water Release."}
           },
+          "starting_quests":[{"name":"Found the Original Akatsuki","status":"Active","giver":"Yahiko's Dream","locations":["Amegakure"],"objectives":["Establish the movement's founding principles","Protect Amegakure civilians without serving a great village","Recruit the first trustworthy supporters"],"next_hint":"Meet with Nagato and Konan to decide the organization's first public act."}],
          # The original Akatsuki was a three-person operation — Yahiko,
          # Nagato, and Konan — trained together for three years by Jiraiya
          # after being orphaned in the Second Shinobi World War. Kakuzu and
@@ -872,23 +984,61 @@ MAJOR_CHARACTER_STARTS = {
          ],
          "seed_faction_rosters":{"Akatsuki":["Yahiko","Nagato","Konan"]}},
         {"id":"naruto_graduation","name":"Naruto Uzumaki","label":"Naruto — Academy graduation night","start_day":0,"location":"Konohagakure","age":12,"origin":"Academy Student","archetype":"Ninjutsu Student","appearance":"A short blond academy student with blue eyes, whisker-like cheek marks, goggles, and an orange-and-blue outfit.","background":"The day of the Academy graduation and the Scroll of Seals incident.",
+         "title":"Academy Student","position":"Academy Student awaiting the graduation test",
+         "affiliations":[{"faction":"Konohagakure","rank":"Academy Student","status":"active","joined":"Before campaign start","notes":"Enrolled in Konoha's Academy and awaiting the graduation test."}],
+         "stat_minimums":{"Taijutsu":28,"Ninjutsu":24,"Genjutsu":12,"Chakra Control":14,"Willpower":48,"Intellect":22},
+         "equipment":{"Weapon":"Goggles and Academy practice pouch"},
+         "special_patch":{"Shinobi Rank":"Academy Student","Clan":"Uzumaki","Jinchuriki":"Nine-Tails (identity concealed)","Known Jutsu":["Transformation Technique","Substitution Technique"],"Chakra Reserve":"Exceptional"},
+         "skills":{
+             "Uzumaki Chakra Reserves":{"rank":"Exceptional Potential","bonus":9,"description":"Possesses enormous stamina and chakra reserves, but poor control makes ordinary techniques inefficient and unreliable."},
+             "Transformation Technique":{"rank":"Creative","bonus":6,"description":"Uses the basic transformation with unusual creativity and enthusiasm."}},
+         "knowledge":["Mizuki has not yet revealed his plan, and Naruto has not yet learned the Shadow Clone Technique from the Forbidden Scroll."],
+         "starting_quests":[{"name":"Graduate from the Academy","status":"Active","giver":"Naruto's Goal","locations":["Konohagakure"],"objectives":["Complete or overcome the graduation test","Respond to Mizuki's manipulation","Earn recognition as a genin"],"next_hint":"Attend the graduation test and react to the instructors' decision."}],
          # Sasuke and Sakura are known classmates at this point but NOT yet
          # teammates — Team 7 doesn't form until a few days after this, so
          # they're deliberately left unseeded rather than implied to
          # already be companions.
          "seed_npcs":[
              {"name":"Iruka Umino","attitude":"Devoted teacher","goal":"His Academy instructor, central to this exact day's events — protects Naruto during the Scroll of Seals incident and gives him his own forehead protector.","is_companion":False,"last_known_location":"Konohagakure"},
-             {"name":"Mizuki","attitude":"Just revealed as a traitor, hostile","goal":"A fellow instructor exposed this same night as working for Orochimaru; defeated and captured, not a free threat any longer.","is_companion":False,"last_known_location":"Konohagakure"},
+             {"name":"Mizuki","attitude":"Friendly instructor masking selfish intent","goal":"Manipulate Naruto into stealing the Forbidden Scroll later tonight.","is_companion":False,"last_known_location":"Konohagakure"},
          ]}
     ],
     "Solo Max-Level Newbie": [
-        {"id":"jinhyeok_tower","name":"Kang Jinhyeok","label":"Jinhyeok — Tower manifestation","start_day":0,"location":"Earth — Tower Entrance","age":27,"origin":"Veteran Gamer","archetype":"All-Rounder","appearance":"A sharp-eyed young Korean man with dark hair, practical modern clothing, and a calm calculating expression.","background":"The day the Tower of Trials becomes reality."}
+        {"id":"jinhyeok_tower","name":"Kang Jinhyeok","label":"Jinhyeok — Tower manifestation","start_day":0,"location":"Earth — Tower Entrance","age":27,"origin":"Veteran Gamer","archetype":"All-Rounder","appearance":"A sharp-eyed young Korean man with dark hair, practical modern clothing, and a calm calculating expression.","background":"The day the Tower of Trials becomes reality.",
+         "title":"Only Player to Clear the Game","position":"Independent player with complete pre-manifestation game knowledge",
+         "stat_minimums":{"Strength":30,"Dexterity":34,"Constitution":28,"Intelligence":52,"Wisdom":48,"Luck":36},
+         "equipment":{"Weapon":"Practical Survival Knife and Smartphone Notes"},
+         "special_patch":{"Pre-Tower Game Rank":"Sole Clearer","Hidden Conditions Found":0,"Copied Abilities":[],"Achievements":[],"Floor":0},
+         "skills":{
+             "Tower Encyclopedia":{"rank":"Complete Game Knowledge","bonus":12,"description":"Remembers floor layouts, bosses, NPC routes, items, hidden conditions, and exploits from the completed game, while tracking any differences in reality."},
+             "Adaptive Combat":{"rank":"Elite Gamer","bonus":9,"description":"Reads patterns quickly, switches tactics and equipment, and turns System feedback into efficient combat decisions."},
+             "Hidden Route Planning":{"rank":"Master","bonus":11,"description":"Sequences prerequisites and timing windows to pursue alternate clears and rare rewards before rivals understand they exist."}},
+         "knowledge":["The Tower's former game routes, including many hidden conditions and boss patterns, are remembered but must be revalidated in lethal reality."],
+         "starting_quests":[{"name":"Exploit the First Scenario","status":"Active","giver":"Personal Foreknowledge","locations":["Earth — Tower Entrance","Floor 1"],"objectives":["Enter the Tower before the crowd consolidates","Secure a high-value hidden condition","Survive the first-floor scenario"],"next_hint":"Compare the manifested entrance and System notice against the remembered opening route."}]}
     ],
     "Overgeared": [
-        {"id":"grid_pagma","name":"Grid","label":"Grid — Pagma's legacy turning point","start_day":0,"location":"Winston","age":26,"origin":"New Player","archetype":"Blacksmith","appearance":"A dark-haired young man with a stubborn expression, novice adventuring gear, and worn blacksmith tools.","background":"At the turning point where Pagma's legacy can change his life in Satisfy."}
+        {"id":"grid_pagma","name":"Grid","label":"Grid — Pagma's legacy turning point","start_day":0,"location":"Winston","age":26,"origin":"New Player","archetype":"Blacksmith","appearance":"A dark-haired young man with a stubborn expression, novice adventuring gear, and worn blacksmith tools.","background":"Immediately after choosing to use Pagma's Rare Book and becoming Pagma's Descendant.",
+         "title":"Pagma's Descendant","position":"Legendary-class production player",
+         "stat_minimums":{"Strength":32,"Dexterity":24,"Constitution":30,"Intelligence":28,"Wisdom":20,"Luck":18},
+         "equipment":{"Weapon":"Beginner Smithing Hammer","Quest Item":"Pagma's Rare Book (consumed)"},
+         "special_patch":{"Class":"Pagma's Descendant","Crafting Mastery":35,"Secondary Class":"None","Guild":"None"},
+         "class_profile":{"name":"Pagma's Descendant","kind":"Successor Class","rank":"Legendary","description":"A legendary successor class carrying Pagma's blacksmithing legacy and the potential to unite production with swordsmanship.","effect":"Unlocks legendary production growth, class quests, and Pagma-linked techniques as their real prerequisites are met.","limitation":"Grid begins inexperienced, financially desperate, and far below Pagma's mastery; class potential is not instant mastery.","growth_path":"Forge rated equipment, complete class quests, discover Pagma's techniques, and build relationships with craftsmen and NPCs.","signature_skill":"Legendary Blacksmithing","stat_bonuses":{},"learning_multiplier":1.15},
+         "skills":{
+             "Legendary Blacksmithing":{"rank":"Newly Awakened","bonus":9,"description":"Uses Pagma's production framework to create rated equipment with exceptional long-term potential; present output still depends on Grid's materials, designs, and execution."},
+             "Blacksmith's Appraisal":{"rank":"Beginner","bonus":5,"description":"Reads an item's materials, condition, rating, and production clues through the Satisfy interface."}},
+         "starting_quests":[{"name":"Earl Ashur's Anger","status":"Active","giver":"Class Turning Point","locations":["Winston"],"objectives":["Survive the consequences of keeping Pagma's legacy","Forge a first item as Pagma's Descendant","Find a viable route out of immediate debt"],"next_hint":"Inspect the newly unlocked class information and prepare for Earl Ashur's response."}]}
     ],
     "Reincarnated as a Slime": [
-        {"id":"rimuru_awakens","name":"Rimuru Tempest","label":"Rimuru — awakening in the cave","start_day":0,"location":"Great Jura Forest — Sealed Cave","age":0,"origin":"Reincarnated Otherworlder","archetype":"Skill Analyst","appearance":"A small translucent blue slime with a soft internal glow and an expressive, fluid silhouette.","background":"The first moments after reincarnating inside the Sealed Cave."}
+        {"id":"rimuru_awakens","name":"Rimuru Tempest","label":"Rimuru — awakening in the cave","start_day":0,"location":"Great Jura Forest — Sealed Cave","age":0,"origin":"Reincarnated Otherworlder","archetype":"Skill Analyst","appearance":"A small translucent blue slime with a soft internal glow and an expressive, fluid silhouette.","background":"The first moments after reincarnating inside the Sealed Cave.",
+         "title":"Newly Reincarnated Slime","position":"Unaligned monster in the Sealed Cave","race":"Slime",
+         "stat_minimums":{"Magicule Control":38,"Skill Mastery":48,"Instinct":28,"Insight":44,"Willpower":38,"Presence":18},
+         "equipment":{"Natural Trait":"Slime Body"},
+         "special_patch":{"Species":"Slime","Evolution Stage":"Newborn Slime","Magicule Capacity":55,"Named Skills":["Great Sage","Predator"]},
+         "skills":{
+             "Great Sage":{"rank":"Unique Skill","bonus":11,"description":"Analyzes observed phenomena, manages thought acceleration, and provides clear internal answers when sufficient information exists; it cannot invent missing facts."},
+             "Predator":{"rank":"Unique Skill","bonus":11,"description":"Stores absorbed targets in an internal space, analyzes compatible matter or abilities, and may reproduce valid results after successful analysis."},
+             "Slime Physiology":{"rank":"Intrinsic","bonus":8,"description":"A shapeless body does not need ordinary breathing, food, or sleep and can alter form within its current mass and control."}},
+         "starting_quests":[{"name":"Understand the Sealed Cave","status":"Active","giver":"New Existence","locations":["Great Jura Forest — Sealed Cave"],"objectives":["Learn how the slime body moves and senses","Test Great Sage and Predator safely","Discover another presence within the cave"],"next_hint":"Move through the cave while asking Great Sage what can be confirmed about the new body."}]}
     ],
     "Bleach": [
         {"id":"ichigo_series_start","name":"Ichigo Kurosaki","label":"Ichigo — the night Rukia arrives","start_day":0,"location":"Kurosaki Clinic","age":15,"origin":"Karakura High Student","archetype":"Zanjutsu Specialist","appearance":"A tall, lean, strongly-built first-year high schooler with spiky orange hair and a near-permanent scowl often mistaken for delinquency, wearing the standard black Karakura High uniform.","background":"The mid-May night a Hollow attacks the Kurosaki family and Rukia Kuchiki, badly wounded defending them, transfers her own Shinigami powers to him — an act normally forbidden by Soul Society law. He has been able to see spirits his whole life, but this is the moment everything actually changes.",
@@ -999,7 +1149,7 @@ WORLD_EXPANSIONS = {
         "economy_notes":"Canon reference scale: a cheap meal or basic supplies run tens to low hundreds of Berries; a decent weapon or a few days' lodging is in the low thousands; a serious ship upgrade or rare item reaches the tens of thousands to low millions. Bounties (not liquid cash, but the setting's main power/wealth signal) scale from ~30,000,000 for a newly-dangerous rookie into the hundreds of millions for known threats, and Yonko-tier figures sit at 4,000,000,000+ Berries. A Yonko or a World Government-backed noble's actual liquid wealth is billions; an ordinary adventurer's is not — keep the player's own numbers grounded in their actual station even as the setting's upper end is enormous.",
         "origins":["East Blue Civilian","Island Martial Artist","Dockworker","Bounty-Hunter Trainee","Runaway Noble","Aspiring Pirate","Marine Recruit",
                    "Veteran Crew Member","Notorious Bounty-Head"],
-        "archetypes":["Brawler","Swordsman","Marksman","Navigator","Shipwright","Medic","Roguish Fighter"],
+        "archetypes":["Brawler","Swordsman","Marksman","Navigator","Shipwright","Medic","Roguish Fighter","Archaeologist"],
         "training":["Physical Conditioning","Weapon Mastery","Observation Drills","Armament Conditioning","Navigation","Seamanship"],
         "shop_types":["General Store","Weapon Shop","Ship Supply","Tavern","Black Market"],
         "loot":["Berries","Rations","Weapon Materials","Log Pose Lead","Rare Ingredient","Treasure Map Fragment"],
@@ -1011,7 +1161,7 @@ WORLD_EXPANSIONS = {
         "economy_notes":"Canon reference scale: Jenny tracks roughly 1:1 with real-world yen, so treat amounts like everyday yen prices — a meal or simple supplies run hundreds to a few thousand Jenny, ordinary lodging or gear in the low thousands to tens of thousands. Licensed Hunters receive major government stipends and access, worth a lifetime total in the billions — becoming a Hunter is itself treated as a life-changing financial event, not just a title. High-stakes rewards, auction items, and major bounties can reach into the hundreds of millions to billions of Jenny for the setting's biggest names.",
         "origins":["Yorknew Local","Rural Prodigy","Martial-Arts Student","Street Survivor","Merchant Family","Exam Aspirant",
                    "Licensed Hunter","Veteran Hunter"],
-        "archetypes":["Martial Artist","Tracker","Strategist","Infiltrator","Medic","Treasure Hunter","Information Broker"],
+        "archetypes":["Martial Artist","Tracker","Strategist","Infiltrator","Medic","Treasure Hunter","Information Broker","Beast Hunter","Blacklist Hunter"],
         "training":["Ten Practice","Zetsu Practice","Ren Endurance","Gyo Focus","Combat Conditioning","Hatsu Theory"],
         "shop_types":["General Market","Auction Contact","Martial-Arts Supplier","Information Broker","Hunter Shop"],
         "loot":["Jenny","Medical Supplies","Auction Lead","Rare Material","Hunter Intel","Training Notes"],
@@ -1024,7 +1174,7 @@ WORLD_EXPANSIONS = {
         "origins":["Civilian Academy Hopeful","Shinobi Clan Child","Orphan Trainee","Merchant Family","Border-Village Youth","Academy Graduate",
                    "Uchiha Clan Child","Iron Country Samurai-in-Training","Rogue Ninja (Missing-nin)","Anbu Root Recruit",
                    "Chunin on Active Duty","Jonin Squad Leader"],
-        "archetypes":["Taijutsu Specialist","Ninjutsu Student","Genjutsu Student","Scout","Medic","Weapon Specialist","Tactician","Samurai"],
+        "archetypes":["Taijutsu Specialist","Ninjutsu Student","Genjutsu Student","Scout","Medic","Weapon Specialist","Tactician","Samurai","Sealing Specialist","Sensor","Puppet User"],
         "training":["Chakra Control","Tree Walking","Water Walking","Taijutsu Drills","Shurikenjutsu","Nature Transformation"],
         "shop_types":["Ninja Tools","General Store","Medic Supplies","Scroll Shop","Black Market"],
         "loot":["Ryo","Kunai","Shuriken","Explosive Tags","Medic Supplies","Technique Notes"],
@@ -1035,7 +1185,7 @@ WORLD_EXPANSIONS = {
         "currency":"Coins", "currency_baseline":300,
         "economy_notes":"Tower/gamer-fiction economy: nominal numbers run much higher than a real-world equivalent — early floors deal in tens to low hundreds of Coins for basic gear and potions, but drops, clears, and player-market trades scale fast, reaching the thousands to tens of thousands by mid-tower and far beyond at high floors and for named/unique gear. A player actively clearing floors, selling drops, or completing floor quests should see Coins move often and in escalating amounts as they climb, not stay flat.",
         "origins":["Veteran Gamer","Competitive Raider","Puzzle Specialist","Martial Artist","Streamer","Ordinary Survivor","Elite Ranker"],
-        "archetypes":["All-Rounder","Melee","Ranged","Caster","Assassin","Tank","Support"],
+        "archetypes":["All-Rounder","Melee","Ranged","Caster","Assassin","Tank","Support","Trap Specialist"],
         "training":["Stat Optimization","Weapon Mastery","Mana Control","Skill Repetition","Boss Pattern Study","Hidden-Condition Research"],
         "shop_types":["Tower Shop","Player Market","Artifact Broker","Potion Merchant","Secret Merchant"],
         "loot":["Coins","Potions","Skill Stone","Artifact Fragment","Monster Core","Hidden-Key Fragment"],
@@ -1046,7 +1196,7 @@ WORLD_EXPANSIONS = {
         "currency":"Gold", "currency_baseline":200,
         "economy_notes":"Canon reference scale: this is a VRMMO economy with real, large numbers — basic potions/repairs/travel run single-to-low-double-digit Gold, decent crafted gear reaches the hundreds to low thousands, and a genuinely notable item or a solid raid/dungeon haul can be worth millions of Gold (canon examples: a single named weapon valued around 8,000,000 Gold; a guild's raid haul around 21,000,000 Gold). A crafter, trader, or active dungeon-clearer should see Gold swing by real, escalating amounts — a beginning adventurer's numbers and a renowned blacksmith's or top guild's are different orders of magnitude entirely.",
         "origins":["New Player","Crafter","Mercenary Player","Merchant","Blacksmith Apprentice","Quest Hunter","Veteran Adventurer","Renowned Craftsman"],
-        "archetypes":["Warrior","Swordsman","Archer","Mage","Assassin","Blacksmith","Support"],
+        "archetypes":["Warrior","Swordsman","Archer","Mage","Assassin","Blacksmith","Support","Alchemist"],
         "training":["Weapon Proficiency","Blacksmithing","Crafting","Skill Grinding","Stat Training","NPC Affinity"],
         "shop_types":["Smithy","General Store","Auction House","Potion Shop","Guild Market"],
         "loot":["Gold","Ore","Crafting Material","Recipe","Equipment","Quest Item"],
@@ -1080,7 +1230,7 @@ WORLD_EXPANSIONS = {
         "economy_notes":"Canon reference scale: one Gold Coin is worth roughly $1000 — most ordinary people never handle one directly, transacting instead in smaller silver/copper-equivalent amounts for daily life. Treat routine purchases (a meal, simple supplies, a night's lodging) as costing a small fraction of a Gold Coin or a handful at most; only real purchases — good gear, trade goods, services from a named merchant or nation — should move whole Gold Coins, and a large transaction (a guild/nation-level deal, rare materials, a significant commission) can run into the hundreds or thousands.",
         "origins":["Reincarnated Otherworlder","Native Monster","Isekai'd Human","Orphaned Demi-Human","Failed Hero Candidate","Displaced Noble",
                    "Veteran Tempest Officer","Named Monster of Renown"],
-        "archetypes":["Brawler Monster","Skill Analyst","Elementalist","Beast-kin Warrior","Diplomat/Leader","Support/Healer","Assassin-type Monster"],
+        "archetypes":["Brawler Monster","Skill Analyst","Elementalist","Beast-kin Warrior","Diplomat/Leader","Support/Healer","Assassin-type Monster","Magic Crafter"],
         "training":["Magicule Circulation","Skill Synthesis Practice","Combat Instinct Drills","Insight Meditation","Leadership & Diplomacy","Elemental Control"],
         "shop_types":["Goblin Village Market","Dwarven Craftsmen","Blumund Trade Post","Black Market Artifacts","Tempest Bazaar"],
         "loot":["Gold Coin","Magic Crystal","Monster Core","Dwarven-forged Gear","Rare Ingredient","Demon Lord Insignia"],
@@ -1129,7 +1279,9 @@ WORLD_STAT_STYLE = {
 WORLD_XP_MODE = {"Solo Max-Level Newbie": True, "Overgeared": True}
 
 
-def uses_xp_for(world):
+def uses_xp_for(world, custom_world_text=""):
+    if world == "Custom World":
+        return bool(re.search(r"\b(xp|experience points?|level(?:s|ing|led| up)?)\b", str(custom_world_text or ""), re.I))
     return bool(WORLD_XP_MODE.get(world, False))
 
 # How much itemization matters to this world. "full" worlds (gear-driven
@@ -1165,27 +1317,33 @@ ARCHETYPE_PRIMARY_STAT = {
         "Brawler": ["Strength"], "Swordsman": ["Agility", "Strength"], "Marksman": ["Instinct", "Agility"],
         "Navigator": ["Instinct", "Willpower"], "Shipwright": ["Endurance", "Strength"],
         "Medic": ["Willpower", "Instinct"], "Roguish Fighter": ["Agility", "Instinct"],
+        "Archaeologist": ["Instinct", "Charisma"],
     },
     "Hunter x Hunter": {
         "Martial Artist": ["Strength", "Agility"], "Tracker": ["Cunning", "Agility"],
         "Strategist": ["Cunning", "Willpower"], "Infiltrator": ["Agility", "Cunning"],
         "Medic": ["Willpower", "Cunning"], "Treasure Hunter": ["Cunning", "Agility"],
-        "Information Broker": ["Charisma", "Cunning"],
+        "Information Broker": ["Charisma", "Cunning"], "Beast Hunter": ["Cunning", "Strength"],
+        "Blacklist Hunter": ["Cunning", "Willpower"],
     },
     "Naruto": {
         "Taijutsu Specialist": ["Taijutsu"], "Ninjutsu Student": ["Ninjutsu"], "Genjutsu Student": ["Genjutsu"],
         "Scout": ["Intellect", "Chakra Control"], "Medic": ["Chakra Control", "Intellect"],
         "Weapon Specialist": ["Taijutsu", "Chakra Control"], "Tactician": ["Intellect", "Willpower"],
+        "Sealing Specialist": ["Chakra Control", "Intellect"], "Sensor": ["Chakra Control", "Intellect"],
+        "Puppet User": ["Chakra Control", "Intellect"], "Samurai": ["Taijutsu", "Willpower"],
     },
     "Solo Max-Level Newbie": {
         "All-Rounder": ["Strength", "Dexterity", "Intelligence"], "Melee": ["Strength", "Constitution"],
         "Ranged": ["Dexterity", "Wisdom"], "Caster": ["Intelligence", "Wisdom"], "Assassin": ["Dexterity", "Luck"],
         "Tank": ["Constitution", "Strength"], "Support": ["Wisdom", "Intelligence"],
+        "Trap Specialist": ["Intelligence", "Luck"],
     },
     "Overgeared": {
         "Warrior": ["Strength", "Constitution"], "Swordsman": ["Dexterity", "Strength"],
         "Archer": ["Dexterity", "Wisdom"], "Mage": ["Intelligence", "Wisdom"], "Assassin": ["Dexterity", "Luck"],
         "Blacksmith": ["Strength", "Constitution"], "Support": ["Wisdom", "Intelligence"],
+        "Alchemist": ["Intelligence", "Wisdom"],
     },
     "Custom World": {
         "Warrior": ["Strength", "Constitution"], "Scout": ["Dexterity", "Wisdom"], "Scholar": ["Intelligence"],
@@ -1195,7 +1353,7 @@ ARCHETYPE_PRIMARY_STAT = {
         "Brawler Monster": ["Instinct", "Magicule Control"], "Skill Analyst": ["Insight", "Skill Mastery"],
         "Elementalist": ["Magicule Control", "Skill Mastery"], "Beast-kin Warrior": ["Instinct", "Willpower"],
         "Diplomat/Leader": ["Presence", "Willpower"], "Support/Healer": ["Insight", "Presence"],
-        "Assassin-type Monster": ["Instinct", "Insight"],
+        "Assassin-type Monster": ["Instinct", "Insight"], "Magic Crafter": ["Skill Mastery", "Insight"],
     },
     "Bleach": {
         "Zanjutsu Specialist": ["Zanjutsu", "Hoho"], "Kido Caster": ["Kido", "Reiatsu Control"],

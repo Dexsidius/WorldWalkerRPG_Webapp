@@ -3270,7 +3270,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("Big Mom Pirates", game.state["factions"])
         self.assertIn("Kaido's Beasts Pirates", game.state["factions"])
         self.assertIn("Big Mom Pirates", game.state["contacts"])
-        self.assertTrue(game.state["contacts"]["Big Mom Pirates"]["can_contact"])
+        self.assertFalse(game.state["contacts"]["Big Mom Pirates"]["can_contact"])
         # They're seeded, so tick_world_clocks should pick them up as real
         # faction clocks on the very first tick, not wait for the AI to
         # happen to introduce them in prose first.

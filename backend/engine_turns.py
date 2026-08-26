@@ -604,7 +604,7 @@ Return ONLY valid JSON."""
                 for field in canon_locked:
                     if field in before:
                         self.state[field] = copy.deepcopy(before[field])
-            if not uses_xp_for(self.state.get("world")):
+            if not uses_xp_for(self.state.get("world"), self.state.get("custom_world", "")):
                 self.state["xp"], self.state["level"], self.state["xp_next"] = before.get("xp", 0), before.get("level", 1), before.get("xp_next", 100)
             else:
                 self.apply_system_xp(before, context.get("actions", []) if not is_opening else [], context.get("rolls", []),
@@ -925,7 +925,7 @@ Return ONLY valid JSON."""
         the reward or inflate it arbitrarily. Duration matters most for repeated
         practice; challenge and outcome matter most for risky actions.
         """
-        if not uses_xp_for(self.state.get("world")):
+        if not uses_xp_for(self.state.get("world"), self.state.get("custom_world", "")):
             return 0, []
         actions = [str(x).strip() for x in (actions or []) if str(x).strip()]
         if not actions:
@@ -981,7 +981,7 @@ Return ONLY valid JSON."""
 
     def apply_system_xp(self, before, actions, rolls=None, elapsed_minutes=5, intensity="normal", events=None):
         """Apply XP, carry overflow, and grant automatic level-up stats."""
-        if not uses_xp_for(self.state.get("world")):
+        if not uses_xp_for(self.state.get("world"), self.state.get("custom_world", "")):
             return {"xp_awarded": 0, "levels_gained": 0, "stat_gains": {}, "reasons": []}
         # XP, levels and base stats are application-controlled in System worlds.
         self.state["xp"] = max(0, int(before.get("xp", 0) or 0))
@@ -1026,7 +1026,7 @@ Return ONLY valid JSON."""
             old = b.get("stats", {}).get(stat)
             if isinstance(value, (int, float)) and isinstance(old, (int, float)) and value != old:
                 stat_changes.append((stat, int(value) - int(old), int(value)))
-        if stat_changes and uses_xp_for(a.get("world")) and a.get("level") != b.get("level"):
+        if stat_changes and uses_xp_for(a.get("world"), a.get("custom_world", "")) and a.get("level") != b.get("level"):
             msgs.append("LEVEL STATS: " + ", ".join(f"{name} {delta:+d}" for name, delta, _ in stat_changes))
         else:
             msgs.extend(f"{stat.upper()} {delta:+d}  → {value}" for stat, delta, value in stat_changes)
