@@ -17,7 +17,9 @@ from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_cat
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks)
 from simulation import (deterministic_assessment, prioritize_updates,
-                        advance_npc_intentions, record_simulation_events)
+                        advance_npc_intentions, record_simulation_events,
+                        agency_bypasses_check, explicit_world_method,
+                        player_favoring_difficulty)
 from director import (build_cause_effect, ensure_productive_failures,
                       maybe_offer_relationship_scene, update_campaign_direction)
 from simulation_integrity import (parse_action_goals, register_action_goals,
@@ -30,6 +32,23 @@ from simulation_integrity import (parse_action_goals, register_action_goals,
 # consume before its claimed stop is honored — see run_time_skip's event_mode
 # branch.
 EVENT_STEP_FLOOR_MINUTES = 1440
+
+# Broad, rigorous combat blocks improve the whole fighting foundation on
+# player-favoring difficulties. Nightmare intentionally keeps the old
+# single-stat progression behavior.
+WORLD_COMBAT_FOUNDATIONS = {
+    "One Piece": ["Strength", "Agility", "Endurance", "Instinct", "Willpower"],
+    "Hunter x Hunter": ["Strength", "Agility", "Aura Control", "Willpower"],
+    "Naruto": ["Taijutsu", "Ninjutsu", "Chakra Control", "Willpower"],
+    "Solo Max-Level Newbie": ["Strength", "Dexterity", "Constitution", "Wisdom"],
+    "Overgeared": ["Strength", "Dexterity", "Constitution", "Wisdom"],
+    "Reincarnated as a Slime": ["Instinct", "Magicule Control", "Skill Mastery", "Willpower"],
+    "Bleach": ["Zanjutsu", "Hoho", "Reiatsu Control", "Willpower"],
+    "Custom World": ["Strength", "Dexterity", "Constitution", "Willpower"],
+}
+BROAD_TRAINING_RE = re.compile(
+    r"\b(rigorous|comprehensive|all[- ]around|combat training|combat drills|every combat|"
+    r"all combat|train(?:ing)? (?:myself|my body|all|every)|conditioning regimen)\b", re.I)
 
 DEFAULT_SETTINGS = {
     "provider": "local",
@@ -272,12 +291,26 @@ class TimeSkipMixin:
         chance = self._power_goal_chance(tracker["days_invested"])
         matching_roll = next((row for row in (roll_results or []) if isinstance(row, dict)
                               and row.get("major_event") and str(row.get("action") or "").strip().lower() == key), None)
-        # Production power leaps always receive a visible major d100 check.
-        # The older chance fallback remains only for legacy/custom callers
-        # that supply no roll at all.
-        mechanical_success = bool(matching_roll.get("success")) if matching_roll else random.random() < chance
+        planned_method = explicit_world_method(keyword_order)
+        favoring_mode = player_favoring_difficulty(self.state)
+        # A player who supplies a real in-world route on a lower difficulty
+        # is promising a progression story, not requesting repeated permission
+        # to progress. The thresholds are intentionally generous while still
+        # giving the fiction enough elapsed time to show the work.
+        assured_days = {"Story": 3, "Adventurer": 7, "Veteran": 14}.get(
+            self.state.get("difficulty"), 37
+        )
+        assured_success = bool(
+            favoring_mode and planned_method and tracker["days_invested"] >= assured_days
+        )
+        mechanical_success = (
+            assured_success or
+            (bool(matching_roll.get("success")) if matching_roll else random.random() < chance)
+        )
         return {"order": keyword_order, "days_invested": round(tracker["days_invested"], 1), "chance": round(chance, 3),
                 "mechanical_success": mechanical_success, "roll_based": bool(matching_roll),
+                "planned_method": planned_method, "assured_by_agency_policy": assured_success,
+                "assured_days": assured_days if favoring_mode and planned_method else None,
                 "roll_total": matching_roll.get("total") if matching_roll else None,
                 "roll_difficulty": matching_roll.get("difficulty") if matching_roll else None}
 
@@ -361,10 +394,10 @@ class TimeSkipMixin:
             "planned_actions": clean_orders, "intensity": intensity, "state": self.trimmed_state_for_ai(" ".join(clean_orders)),
             "time_budget": budget, "continuing_previous_orders": continuing_previous_orders,
             "requirements": [
-                "Create a d100 check ONLY for an extremely difficult or seemingly impossible attempt, a genuinely lethal undertaking, or a major leap into a new power tier.",
-                "Ordinary political, strategic, social, investigative, travel, crafting, and focused training actions receive no check and resolve successfully to their plausible stated scope; consequences and NPC reactions still matter.",
+                "On Nightmare, create a d100 check only for an extremely difficult/seemingly impossible attempt, lethal undertaking, or major power-tier leap. On every lower difficulty, a diplomatic action or a specifically explained setting-valid method receives no arbitrary check unless a literal world-rule contradiction or lethal danger remains.",
+                "Ordinary political, strategic, social, investigative, travel, crafting, and focused training actions receive no check and accomplish their plausible player-controlled objective; challenge comes from concrete NPC/faction/world responses.",
                 "Do not roll any dice yourself.",
-                "Routine or long repetitive training receives no roll. Only an attempted extraordinary power leap, transformation, evolution, or tier change creates one major manual check.",
+                "Routine or long repetitive training receives no roll. Nightmare retains major checks for extraordinary power leaps. Below Nightmare, a named effect plus a plausible in-world training method progresses automatically and completes once the allocated time is sufficient.",
                 "Treat planned_actions as an ordered itinerary. Carry them out in listed order across the available duration; do not flatten them into one repeated activity.",
                 "Compare the concrete time_budget against the itinerary. Insufficient time makes rushed attempts harder and leaves later actions deferred rather than magically completed.",
                 "Apply time_difficulty_modifier to checks affected by rushing. If an action cannot even begin in sequence, list it in deferred_actions and create no roll for it.",
@@ -405,6 +438,22 @@ class TimeSkipMixin:
             authored_deferred = assessment.get("deferred_actions") if isinstance(assessment.get("deferred_actions"), list) else []
             assessment["deferred_actions"] = moment_deferred + [x for x in authored_deferred if x not in moment_deferred]
         checks = assessment.get("checks", []) if isinstance(assessment.get("checks"), list) else []
+        if player_favoring_difficulty(self.state):
+            retained_checks = []
+            for check_index, check in enumerate(checks):
+                if not isinstance(check, dict):
+                    continue
+                try:
+                    authored_index = int(check.get("action_index", check_index))
+                except (TypeError, ValueError):
+                    authored_index = check_index
+                authored_index = max(0, min(authored_index, max(0, len(clean_orders) - 1)))
+                authored_action = clean_orders[authored_index] if clean_orders else str(check.get("reason") or "")
+                if agency_bypasses_check(self.state, authored_action, check):
+                    continue
+                retained_checks.append(check)
+            checks = retained_checks
+            assessment["checks"] = checks
         previews = []
         for index, check in enumerate(checks):
             if not isinstance(check, dict):
@@ -548,6 +597,7 @@ class TimeSkipMixin:
                 "When information reaches named NPCs, add a concise information_events record with its fact, source, channel, recipients, delay, and confidence. Do not teach an NPC a fact merely because the narrator knows it.",
                 "Treat the player as one actor inside an independently moving world, not as its automatic protagonist. Keep the current simulation scale grounded in the character's actual reach while still advancing distant NPC and faction agendas.",
                 "The player's planned actions are an ordered itinerary: attempt each in sequence and distribute the available time sensibly.",
+                "Below Nightmare, accomplish every logically possible player-controlled action. For diplomacy and strategy, put difficulty in the NPC/faction response—conditions, counteroffers, obligations, suspicion, countermoves or betrayal—not in a vague claim that the player failed to act or persuade. NPCs retain their canon motives and may still reject an ultimate demand in character after the player's move meaningfully lands.",
                 "Never complete a deferred action. If time expires during an action, describe partial progress and keep the unfinished or unstarted action in deferred_actions.",
                 "Training intensity must affect gains, fatigue, injury risk, resources, and sustainability.",
                 "Respect travel times, sleep, recovery, money, food, healing, social obligations, faction responses, lore, and world chronology.",
@@ -560,7 +610,7 @@ class TimeSkipMixin:
                 "Return no more than simulation_profile.max_updates update cards. Keep every major reaction distinct, but combine routine distant movement into one concise wider-world update instead of repeating the same development through quests, leads, clocks, advisor language, and world feed.",
                 "Generate meaningful world movement on EVERY Advance, including turns with no new player action or turns that merely continue standing orders. Significant personal story beats and major world events are hard stop points. If one reaches the player's actual position or reasonably requires their decision, stop there and return a concrete, in-character intervention_prompt for the normal Chronicle/Action Chat.",
                 "Prior player actions and promises continue affecting outcomes.",
-                "If power_goal_progress.order is present and power_goal_progress.mechanical_success is true, the major d100 succeeded: conclude with the character genuinely gaining that power/ability. Give a concrete, lore-consistent story cause grounded in the accumulated training (mentor insight, pressure, affinity, realization, adaptation, rare opportunity, or another setting-valid cause), set goal_status.achieved=true, and persist the new capability. If its roll failed, award substantial foundation/proficiency from the training but do not grant the tier leap yet; explain what almost worked and give a useful next step.",
+                "If power_goal_progress.order is present and power_goal_progress.mechanical_success is true, conclude with the character genuinely gaining that power/ability. This may be an agency-assured result rather than a roll. Give a concrete lore-consistent cause grounded in accumulated training, set goal_status.achieved=true, and persist the capability. If it is false, award substantial foundation/proficiency; mention a failed roll only when roll_based is true, otherwise explain that the elapsed time has not yet reached the supplied route's next concrete milestone.",
                 "If an interruption is important enough that the player would reasonably stop and choose what to do, end the skip EARLY and return interrupted=true with the amount of time actually elapsed.",
                 "Treat action wording such as 'until', 'master', 'learn', 'find', 'reach', 'finish', 'complete', or another clear result as a goal condition. If that goal is achieved before the requested duration ends, stop immediately on the day/minute of completion, set goal_status.achieved=true, and return only the actual elapsed time.",
                 "If a stated goal is not achieved by the end of the requested duration, set goal_status.achieved=false and explain the concrete in-world cause: insufficient insight, teacher/resources, injury, interruption, failed milestone, difficulty, or another setting-valid reason. Include a useful next_hint grounded in what the character learned.",
@@ -936,6 +986,10 @@ class TimeSkipMixin:
         base_rate = rates.get(str(intensity).lower(), .45)
         tuning = normalize_tuning(self.state)
         base_rate *= float(tuning.get("training_rate", 1.0) or 1.0)
+        if player_favoring_difficulty(self.state):
+            base_rate *= {"Story": 1.35, "Adventurer": 1.25, "Veteran": 1.10}.get(
+                self.state.get("difficulty"), 1.0
+            )
         growth_profile = self.state.get("special", {}).get("Growth Profile", {})
         try:
             learning_rate = clamp(float(growth_profile.get("learning_rate", 1.0)), .6, 1.75)
@@ -961,6 +1015,20 @@ class TimeSkipMixin:
                 breakthrough = True
             multiplier = random.uniform(2.2, 4.0) if breakthrough else 1.0
             gained_points = days * base_rate * factor * focused * multiplier * learning_rate
+            if player_favoring_difficulty(self.state):
+                # Daily work stays fully counted, but mastery naturally
+                # broadens and slows instead of adding the same whole stat
+                # amount forever. This keeps a six-month Naruto regimen near
+                # the intended jōnin benchmark rather than catapulting an
+                # ordinary fighter beyond the world's greatest characters.
+                intensity_curve = {"light": .70, "normal": 1.0, "intense": 1.10, "extreme": 1.25}.get(
+                    str(intensity).lower(), 1.0
+                )
+                long_term_cap = 20.0 * ((max(.05, days) / 30.0) ** .62) * intensity_curve
+                long_term_cap *= max(.8, learning_rate ** .5)
+                if breakthrough:
+                    long_term_cap *= 2.5
+                gained_points = min(gained_points, long_term_cap)
             old_fraction = float(self.state.get("ability_progress", {}).get(ability, 0) or 0)
             total_points = old_fraction + gained_points
             current = int(self.state.get("stats", {}).get(ability, 1) or 1)
@@ -975,6 +1043,20 @@ class TimeSkipMixin:
                 proposed = int(stat_patch.get(ability, current) or current)
                 stat_patch[ability] = max(proposed, current + stat_gain)
                 applied_stat_gain = stat_patch[ability] - current
+            support_gains = {}
+            broad_training = bool(BROAD_TRAINING_RE.search(action))
+            if broad_training and player_favoring_difficulty(self.state) and not xp_mode:
+                for support in WORLD_COMBAT_FOUNDATIONS.get(self.state.get("world"), []):
+                    if support == ability or support not in self.state.get("stats", {}):
+                        continue
+                    support_fraction = float(self.state.get("ability_progress", {}).get(support, 0) or 0)
+                    support_total = support_fraction + gained_points * .38
+                    support_gain = int(support_total)
+                    progress_patch[support] = round(support_total - support_gain, 3)
+                    support_current = int(self.state.get("stats", {}).get(support, 1) or 1)
+                    support_proposed = int(stat_patch.get(support, support_current) or support_current)
+                    stat_patch[support] = max(support_proposed, support_current + support_gain)
+                    support_gains[support] = stat_patch[support] - support_current
             entry = {"action": action, "ability": ability, "effective_training_days": round(days, 2),
                      "stat_gain": applied_stat_gain, "breakthrough": breakthrough,
                      "learning_rate_multiplier": round(learning_rate, 2),
@@ -982,7 +1064,21 @@ class TimeSkipMixin:
                                      if breakthrough else
                                      (f"{round(days, 1)} effective daily sessions built proficiency; System XP and levels govern base stats."
                                       if xp_mode else f"{round(days, 1)} effective daily sessions accumulated at the character's {learning_rate:.2f}× aptitude rate."))}
+            if support_gains:
+                entry["support_stat_gains"] = support_gains
             progression_events.append(entry)
+            if (self.state.get("world") == "Naruto" and broad_training and days >= 150
+                    and player_favoring_difficulty(self.state)):
+                patch.setdefault("special", {})["Combat Benchmark"] = {
+                    "tier": "Jōnin-level combatant",
+                    "official_rank": False,
+                    "basis": f"{round(days, 1)} days of rigorous, broad shinobi training",
+                    "description": "Combat capability comparable to a capable jōnin; this does not itself grant an official village appointment.",
+                }
+                data.setdefault("events", []).append({
+                    "type": "training",
+                    "message": "Combat benchmark reached: jōnin-level capability (not an automatic official rank).",
+                })
             if breakthrough:
                 data.setdefault("updates", []).append({"sequence": 900 + index, "type": "consequence",
                     "title": "Lore Breakthrough", "related_action": action,

@@ -16,7 +16,8 @@ from reliability import update_narrative_memory, record_progression_ledger, adva
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks, record_purchase_offer)
-from simulation import advance_npc_intentions, record_simulation_events
+from simulation import (advance_npc_intentions, record_simulation_events,
+                        normalize_assessment_for_agency)
 from simulation_integrity import (register_action_goals, reconcile_action_goals,
                                   validate_turn_response, refresh_npc_schedules,
                                   transmit_information)
@@ -166,7 +167,7 @@ BACKGROUND_HOMES = (
 class TurnsMixin:
     def assess(self, action):
         p = {"task": "assess_action", "action": action, "state": self.trimmed_state_for_ai(),
-             "schema": {"requires_check": "bool", "impossible": "bool", "reason": "exact blocking prerequisite/rule and, if fixable, what must change; under 28 words",
+             "schema": {"requires_check": "bool", "impossible": "bool", "hard_rule_block": "true only for a literal physical, metaphysical, prerequisite, or established-state contradiction; never for NPC reluctance, low odds, canon divergence, rank, or social resistance", "reason": "exact blocking prerequisite/rule and, if fixable, what must change; under 28 words",
                         "prerequisite_track": "object with name/source_feat/status/known_requirements/met_requirements/missing_requirements/next_steps/notes when pursuing a notable capability, otherwise null",
                         "ability": self.ability_enum(), "skill": "name or null",
                         "difficulty_min": "1-100 lower edge for an average relevant character", "difficulty_max": "1-100 upper edge; application randomly samples this range",
@@ -176,8 +177,10 @@ class TurnsMixin:
                         "major_reason": "short reason or empty",
                         "lethal_risk": "none|low|moderate|high|extreme", "lethal_warning": "specific warning or empty, under 20 words",
                         "stakes": "success/failure stakes, under 25 words total"}}
-        extra = self.gm_context(action) + " Assess only. Do not narrate or roll. Set requires_check=true ONLY for an extremely difficult or seemingly impossible attempt, a lethal undertaking, or a major power-tier leap. Ordinary political, strategic, social, investigative, crafting, travel, and focused training actions automatically resolve without dice. A hard world-rule contradiction is impossible rather than rollable. This is d100, never d20/D&D. Difficulty reflects the average relevant character, never player scaling. Mark major_event for power leaps, evolutions, transformations, and climactic confrontations. Keep fields terse."
-        assessment = self.ai.request(extra, p, max_output_tokens=700)
+        extra = self.gm_context(action) + " Assess only. Do not narrate or roll. Set requires_check=true ONLY for an extremely difficult or seemingly impossible attempt, a lethal undertaking, or a major power-tier leap. Ordinary political, strategic, social, investigative, crafting, travel, and focused training actions automatically resolve without dice. On every difficulty below Nightmare, a diplomatic action or a specific setting-valid method is resolved through consequences and NPC reactions, not an arbitrary failure check. Set hard_rule_block=true only for a literal rule/state contradiction; NPC refusal or canon reluctance is a reaction, not impossibility. This is d100, never d20/D&D. Difficulty reflects the average relevant character, never player scaling. Mark major_event for power leaps, evolutions, transformations, and climactic confrontations. Keep fields terse."
+        assessment = normalize_assessment_for_agency(
+            self.state, action, self.ai.request(extra, p, max_output_tokens=700)
+        )
         self.last_assessment = copy.deepcopy(assessment)
         return assessment
 
@@ -341,7 +344,9 @@ class TurnsMixin:
         When the player confirms a lethal action, the frontend sends back the
         exact assessment it was shown so we never silently re-roll the GM's
         judgement of the danger."""
-        assessment = cached_assessment or self.assess(action)
+        assessment = normalize_assessment_for_agency(
+            self.state, action, cached_assessment or self.assess(action)
+        )
         self.last_assessment = copy.deepcopy(assessment)
         self.upsert_prerequisite_track(assessment.get("prerequisite_track"))
         if assessment.get("impossible"):

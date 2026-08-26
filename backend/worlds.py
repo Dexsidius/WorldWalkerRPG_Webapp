@@ -5,7 +5,7 @@ import datetime
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.7.0"
+APP_VERSION = "3.7.1"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -36,11 +36,11 @@ def power_tier_reference():
 
 DIFFICULTIES = {
     "Story": {"difficulty_shift": -15, "dc_shift": -3, "enemy_edge": -2, "death": "rare", "freedom": "very high",
-              "description": "Heroic d100 play with generous odds and frequent recovery. Death is rare unless you deliberately embrace lethal danger."},
+              "description": "Strong power-fantasy play. Possible plans succeed readily; drama comes from consequences and character reactions. Death is rare unless deliberately embraced."},
     "Adventurer": {"difficulty_shift": -6, "dc_shift": 0, "enemy_edge": 0, "death": "possible", "freedom": "high",
-                   "description": "Fair d100 play. Relevant training and titles noticeably improve the odds without making danger meaningless."},
+                   "description": "Heroic play with responsive opposition. Plausible actions and sustained growth succeed; danger and NPC countermoves still matter."},
     "Veteran": {"difficulty_shift": 5, "dc_shift": 3, "enemy_edge": 2, "death": "likely", "freedom": "high",
-                "description": "Demanding d100 checks, capable opposition, resource pressure, and meaningful risk of death."},
+                "description": "Capable, dangerous opposition and meaningful risk of death, while logically possible player plans still receive decisive results."},
     "Nightmare": {"difficulty_shift": 15, "dc_shift": 6, "enemy_edge": 4, "death": "severe", "freedom": "total",
                   "description": "Brutal simulation. Contextual difficulties are much higher and fatal mistakes are common."},
 }

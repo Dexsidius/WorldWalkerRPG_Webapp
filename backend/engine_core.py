@@ -690,6 +690,20 @@ Return ONLY valid JSON. No markdown fences."""
             return result
         return snapshot
 
+    def player_agency_rules(self):
+        """Difficulty-specific agency contract shared by every narrator role."""
+        if self.state.get("difficulty") == "Nightmare":
+            return """NIGHTMARE AGENCY POLICY
+- Keep the existing strict simulation: plausible actions may fail, major gains remain demanding, and scarce leverage or hostile opposition can defeat a plan.
+- Even here, resolve the action concretely and express resistance through world facts and character behavior rather than vague GM refusal."""
+        return """PLAYER-FAVORING AGENCY POLICY (OVERRIDES GENERIC CAUTION)
+- This difficulty supports a power fantasy. If the requested result is possible under this world's rules, bias decisively toward accomplishing it. Do not protect canon power curves, expected pacing, rank hierarchy, or the original plot from the player's valid choices.
+- Political, strategic, diplomatic and social actions do not fail as abstract persuasion attempts. The player's meeting, argument, leverage, proposal, organizing, deception or negotiation lands and changes the situation. Challenge them with the response: acceptance with consequences, a counteroffer, conditions, obligation, suspicion, retaliation, competing factions, or a later betrayal.
+- NPC agency remains absolute. A canon character does not become mind-controlled or abandon core motives without cause. If they reject the ultimate request, make that an in-character decision after the player's action meaningfully lands, and reveal a concrete condition, concession, relationship change or next pressure—never merely say the player 'failed to persuade.'
+- When the player names the intended effect and supplies a logically possible setting-valid method, carry it through. Only block it for a literal physical/metaphysical impossibility, a mutually exclusive established fact, or a truly absent prerequisite with no logical substitute. Low odds, lack of canon precedent, social rank and being ahead of the original protagonist are not impossibility.
+- Sustained training has no arbitrary canon ceiling. Award large, visible, mechanically recorded growth proportional to every day invested. A rigorous six-month Naruto training block can make Yahiko a jōnin-level combatant without automatically granting the official village rank. Comparable commitments in other worlds should cross comparable tiers.
+- A named power goal with a plausible method becomes progression, not repeated permission checks. If the time is sufficient, grant it with a lore-consistent cause; if time is genuinely too short, award substantial foundation and state the earliest plausible milestone without calling the training a failure."""
+
     def task_rules(self, purpose="moment", action_hint=""):
         """Compact authoritative rules for one AI job.
 
@@ -704,6 +718,7 @@ Return ONLY valid JSON. No markdown fences."""
         tuning = normalize_tuning(self.state)
         profile = progression_preset_for(self.state.get("world"))
         narration = self.settings.get("narration", "Concise")
+        agency_rules = self.player_agency_rules()
         shared = f"""You are the authoritative Game Master for a persistent Worldwalker RPG campaign.
 WORLD: {self.state['world']}
 WORLD RULES: {wd['rules']}
@@ -724,6 +739,7 @@ AUTHORITATIVE CORE
 - State changes must match prose: wounds change HP, resource use changes the correct pool, purchases change money/inventory, completed objectives change quests, travel changes location, and learned skills include a clear effect, limitation/cost and growth path.
 - Every authored skill may include combat_usable (boolean) and effect_type (damage|heal|debuff|utility). Profession, knowledge, navigation and crafting skills are combat_usable=false unless they have a specific combat application.
 - An initiated attack or unavoidable incoming attack begins structured combat immediately. Do not insert an extra negotiation/event-chat gate once violence is committed. A previously accepted danger scenario does not warn again unless the new action itself could kill the player.
+{agency_rules}
 - Starting a quest requires a readable briefing with objective, cause/giver, known location, risks, first step, current knowledge and clear completion conditions.
 - End with exactly three optional, current, state-grounded suggestions written as concrete verb + specific known target + purpose. Never suggest traveling to the current location, contacting an unknown person, or continuing an encounter that has ended.
 - Return one valid JSON object. Omit empty optional fields and empty arrays/objects instead of echoing the entire schema. Never write application-owned ledgers or diagnostics in state_patch.{self._scale_lock_rule()}
