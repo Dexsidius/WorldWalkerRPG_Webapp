@@ -1,12 +1,21 @@
 # Worldwalker RPG — Web/Desktop Rebuild
 
 A from-scratch UI rebuild of Worldwalker RPG on top of the original game engine
-logic. Same local-AI-driven, freeform text RPG across seven settings (One Piece,
-Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Slime, Custom World) —
+logic. Same local-AI-driven, freeform text RPG across eight settings (One Piece,
+Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Slime, Bleach, Custom World) —
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.7.1** (schema 13). Version 3.7 is intended for fresh campaigns.
+Current app/save version: **3.7.2** (schema 13). Version 3.7 is intended for fresh campaigns.
+
+Version 3.7.2 unifies current-stat interpretation across the Power Summary,
+Advisor, and GM. Extreme specialties remain powerful without being mistaken
+for balanced reality-bending capability, and the Power Summary now opens above
+the Journal. Focused training develops related and secondary stats, plain
+training builds the full sheet, and world-valid accelerated methods can produce
+exceptional growth. Configured AI models now author original, canon-balanced
+starting classes, bloodlines, abilities, and matching starting techniques;
+offline creation retains safe world-valid fallbacks.
 
 Version 3.7.1 makes Story, Adventurer, and Veteran explicitly player-favoring:
 possible actions resolve decisively, diplomacy is challenged through NPC and

@@ -691,6 +691,8 @@ function renderClassCard(rawClass) {
     ["Signature skill", cls.signature_skill],
     ["Limits", cls.limitation],
     ["Advancement", cls.growth_path],
+    ["World-scale balance", cls.canon_balance],
+    ["Why it is rare", cls.rarity_reason],
   ].map(([label, value]) => [label, compactReadable(value)]).filter(([, value]) => value);
   const discovery = cls.discovery && typeof cls.discovery === "object" ? cls.discovery : null;
   const discoveryRow = discovery ? `<div class="class-discovery"><div><b>Discovery</b><span>${escapeHtml(discovery.stage || "dormant")} · ${escapeHtml(discovery.progress ?? 0)}%</span></div><i style="width:${Math.max(0, Math.min(100, Number(discovery.progress || 0)))}%"></i>${textList(discovery.reveal_requirements).length ? `<small>${textList(discovery.reveal_requirements).map(escapeHtml).join(" · ")}</small>` : ""}</div>` : "";
@@ -2621,24 +2623,34 @@ const POWER_TIERS = [
   [9, "Cataclysmic", "Can reshape a region or end a war single-handedly."],
   [10, "Reality-Bending", "Power that strains or breaks the setting's normal rules entirely."],
 ];
-const POWER_TIER_THRESHOLDS = [20, 35, 50, 65, 80, 95, 110, 130, 160, 200];
+const POWER_TIER_THRESHOLDS = [20, 35, 50, 65, 90, 130, 200, 350, 600, 1000];
+
+function powerTierFromScore(score) {
+  const numeric = Math.max(0, Number(score) || 0);
+  let index = 0;
+  for (const threshold of POWER_TIER_THRESHOLDS) { if (numeric >= threshold) index++; else break; }
+  const [, name, description] = POWER_TIERS[index];
+  return { index, name, description, score: numeric };
+}
 
 function estimatePowerTier(stats) {
   const values = Object.values(stats || {}).map(Number).filter((n) => Number.isFinite(n));
-  const avg = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-  let index = 0;
-  for (const threshold of POWER_TIER_THRESHOLDS) { if (avg >= threshold) index++; else break; }
-  const [, name, description] = POWER_TIERS[index];
-  return { index, name, description, avg };
+  const score = values.length ? values.length / values.reduce((total, value) => total + (1 / Math.max(1, value)), 0) : 0;
+  return powerTierFromScore(score);
 }
 
 function openPowerSummary() {
   const s = APP.state || {};
-  const tier = estimatePowerTier(s.stats);
+  const profile = s._power_profile || {};
+  const tier = profile.combat || estimatePowerTier(s.stats);
+  const overall = profile.overall || estimatePowerTier(s.stats);
+  const peak = profile.peak || {};
+  const axes = profile.axes || {};
+  const maxStat = Math.max(1, ...Object.values(s.stats || {}).map(Number).filter(Number.isFinite));
   const statRows = Object.entries(s.stats || {})
     .sort((a, b) => Number(b[1]) - Number(a[1]))
     .map(([name, value]) => {
-      const pct = Math.max(2, Math.min(100, Number(value) || 0));
+      const pct = Math.max(2, Math.min(100, (Number(value) || 0) / maxStat * 100));
       return `<div class="power-stat-row"><i class="a-icon">${abilityIcon(name)}</i><span>${escapeHtml(name)}</span>
         <div class="clock-track"><i style="width:${pct}%"></i></div><b>${escapeHtml(value)}</b></div>`;
     }).join("") || '<div class="hint">No stats recorded yet.</div>';
@@ -2649,9 +2661,15 @@ function openPowerSummary() {
       <div><b>${escapeHtml(s.name || "Traveler")}</b><span>${escapeHtml(s.world || "")}${s.position ? ` · ${escapeHtml(s.position)}` : ""}</span></div>
     </div>
     <div class="power-tier-card">
-      <div class="power-tier-badge">Tier ${tier.index} · ${escapeHtml(tier.name)}</div>
+      <div class="power-tier-badge">Balanced Combat · Tier ${escapeHtml(tier.index)} · ${escapeHtml(tier.name)}</div>
       <p>${escapeHtml(tier.description)}</p>
-      <small>Estimated from current stats, not an official ranking — ask the Advisor for a real read grounded in the campaign.</small>
+      <div class="power-axis-grid">
+        <span><b>Peak</b>${escapeHtml(peak.stat || "—")} ${escapeHtml(peak.value ?? "—")}</span>
+        <span><b>Offense</b>${escapeHtml(axes.offense?.stat || "—")} ${escapeHtml(axes.offense?.value ?? "—")}</span>
+        <span><b>Speed</b>${escapeHtml(axes.speed?.stat || "—")} ${escapeHtml(axes.speed?.value ?? "—")}</span>
+        <span><b>Defense</b>${escapeHtml(axes.defense?.stat || "—")} ${escapeHtml(axes.defense?.value ?? "—")}</span>
+      </div>
+      <small>Overall foundation: Tier ${escapeHtml(overall.index)} · ${escapeHtml(overall.name)} (balanced score ${escapeHtml(overall.score ?? "—")}). Peak output is not treated as every stat. ${escapeHtml(profile.interpretation || "")}</small>
     </div>
     <div class="power-stat-list">${statRows}</div>
     ${classCard}
@@ -3525,8 +3543,9 @@ function renderCampaignPreview(p, payload) {
     const loadout = [...(profile.titles || []).map((x) => `Title: ${x}`), ...Object.keys(profile.skills || {}).filter((x) => x !== concealedSignature).map((x) => `Skill: ${x}`), ...Object.values(profile.equipment || {}).map((x) => `Gear: ${x}`)];
     const startingAbility = profile.generated_ability || null;
     const ability = startingAbility && startingAbility.details ? startingAbility.details : {};
+    const startingTechniques = startingAbility && Array.isArray(startingAbility.additional_skills) ? startingAbility.additional_skills : [];
     const growth = profile.growth_profile || {};
-    const abilityCard = startingAbility ? `<section class="generated-ability"><b>STARTING ABILITY — ${escapeHtml(startingAbility.name)}</b><span>${escapeHtml(ability.effect || ability.description || "")}</span><span><strong>In-world origin:</strong> ${escapeHtml(ability.origin || "A rare talent that has begun to surface.")}</span><span><strong>Limit:</strong> ${escapeHtml(ability.limitation || "Must be developed through play.")}</span><span><strong>Growth:</strong> ${escapeHtml(ability.growth_path || "Practice and suitable guidance.")}</span></section>` : "";
+    const abilityCard = startingAbility ? `<section class="generated-ability"><b>STARTING ABILITY — ${escapeHtml(startingAbility.name)}</b>${ability.kind ? `<span><strong>Type:</strong> ${escapeHtml(ability.kind)}</span>` : ""}<span>${escapeHtml(ability.effect || ability.description || "")}</span>${startingTechniques.length ? `<span><strong>Starting techniques:</strong> ${startingTechniques.map((row) => escapeHtml(row.name || "")).filter(Boolean).join(" · ")}</span>` : ""}<span><strong>In-world origin:</strong> ${escapeHtml(ability.origin || "A rare talent that has begun to surface.")}</span><span><strong>Limit:</strong> ${escapeHtml(ability.limitation || "Must be developed through play.")}</span><span><strong>Growth:</strong> ${escapeHtml(ability.growth_path || "Practice and suitable guidance.")}</span>${ability.canon_balance ? `<span><strong>World-scale balance:</strong> ${escapeHtml(ability.canon_balance)}</span>` : ""}</section>` : "";
     const classCard = profile.hidden_class ? renderClassCard(profile.hidden_class) : "";
     const primer = p.world_primer || {};
     const primerCard = `<section class="world-primer"><div class="world-primer-kicker">WHAT YOU'RE GETTING INTO — NO SPOILERS</div><p class="world-primer-premise">${escapeHtml(primer.premise || "")}</p><div class="world-primer-row"><b>Tone</b><span>${escapeHtml(primer.tone || "")}</span></div><div class="world-primer-row"><b>How power works</b><span>${escapeHtml(primer.power_system || "")}</span></div>${(primer.factions || []).length ? `<div class="world-primer-row"><b>Major powers</b><ul>${primer.factions.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul></div>` : ""}${(primer.locations || []).length ? `<div class="world-primer-row"><b>Where the story ranges</b><ul>${primer.locations.map((l) => `<li>${escapeHtml(l)}</li>`).join("")}</ul></div>` : ""}<p class="world-primer-starting-note">${escapeHtml(primer.starting_note || "")}</p></section>`;

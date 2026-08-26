@@ -6,7 +6,7 @@ import copy, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
-from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, power_profile_for
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -270,6 +270,10 @@ class JournalMixin:
         s["_stat_style"] = stat_style_for(self.state.get("world", "Custom World"))
         s["_uses_xp"] = uses_xp_for(self.state.get("world", "Custom World"))
         s["_gear_style"] = gear_style_for(self.state.get("world", "Custom World"))
+        s["_power_profile"] = power_profile_for(
+            self.state.get("world", "Custom World"), self.state.get("stats", {}),
+            self.state.get("special", {}).get("Archetype", ""),
+        )
         s["_app_version"] = APP_VERSION
         s["_last_autosave"] = self.state.get("last_autosave", self.last_autosave)
         deadline = self.state.get("tower_floor_deadline_day")
