@@ -173,20 +173,24 @@ class PersistenceMixin:
 
     def save_bundle(self, kind="manual"):
         self.state["campaign_last_saved_version"] = APP_VERSION
+        checkpoint_limit = 3 if kind == "autosave" else 6
         return {
             "version": APP_VERSION,
             "schema_version": self.state.get("schema_version", 4),
             "save_kind": kind,
             "saved_at": datetime.now().isoformat(timespec="seconds"),
             "campaign": {"name": self.state.get("name", "Traveler"), "world": self.state.get("world", "World"), "turn": self.state.get("turn", 0), "world_time": self.state.get("world_time", "")},
-            "state": self.state, "history": self.history,
-            "checkpoints": self.checkpoints[-12:], "story_log": self.story_log, "system_log": self.system_log,
+            "state": self.state, "history": self.history[-1000:],
+            "checkpoints": self.checkpoints[-checkpoint_limit:], "story_log": self.story_log, "system_log": self.system_log[-1000:],
         }
 
     def write_save_atomic(self, path, kind="manual"):
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(path.suffix + ".tmp")
-        temporary.write_text(json.dumps(self.save_bundle(kind), indent=2, ensure_ascii=False), encoding="utf-8")
+        bundle = self.save_bundle(kind)
+        encoded = (json.dumps(bundle, ensure_ascii=False, separators=(",", ":"))
+                   if kind == "autosave" else json.dumps(bundle, indent=2, ensure_ascii=False))
+        temporary.write_text(encoded, encoding="utf-8")
         temporary.replace(path)
 
     def save(self):
@@ -283,11 +287,11 @@ class PersistenceMixin:
             "campaign": {"name": imported_state.get("name", "Traveler"), "world": imported_state.get("world", "World"),
                          "turn": imported_state.get("turn", 0), "world_time": imported_state.get("world_time", "")},
             "state": imported_state, "history": bundle.get("history", [])[-1000:],
-            "checkpoints": bundle.get("checkpoints", [])[-12:], "story_log": bundle.get("story_log", []),
+            "checkpoints": bundle.get("checkpoints", [])[-6:], "story_log": bundle.get("story_log", []),
             "system_log": bundle.get("system_log", [])[-1000:], "imported_from_version": source_version,
         }
         temporary = target.with_suffix(".tmp")
-        temporary.write_text(json.dumps(clean, indent=2, ensure_ascii=False), encoding="utf-8")
+        temporary.write_text(json.dumps(clean, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         temporary.replace(target)
         return {"id": target.stem, "version": source_version}
 

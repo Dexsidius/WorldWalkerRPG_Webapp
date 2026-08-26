@@ -416,6 +416,17 @@ BACKGROUND_HOMES = (
 
 
 class CampaignMixin:
+    @staticmethod
+    def combat_skill_metadata(name, effect=""):
+        blob = f"{name} {effect}".lower()
+        usable = bool(re.search(
+            r"\b(attack|strike|combat|fight|weapon|jutsu|spell|blast|projectile|trap|bind|stun|"
+            r"heal|restore|shield|guard|weaken|poison|haki|nen|chakra pulse|damage)\b", blob
+        ))
+        if re.search(r"\b(navigat|chart|craft|smith|cook|merchant|account|history|research)\b", blob) and not re.search(r"\b(attack|combat|trap|heal|shield|damage)\b", blob):
+            usable = False
+        return {"combat_usable": usable, "effect_type": "damage" if usable else "utility"}
+
     def roll_starting_stats(self, world, archetype, player_stats):
         """Generate an open-ended, world-relative starting profile.
 
@@ -502,9 +513,7 @@ class CampaignMixin:
         form = random.choice(WORLD_ABILITY_FORMS.get(world, WORLD_ABILITY_FORMS["Custom World"]))
         values = {"aspect": aspect, "aspect_lower": aspect.lower()}
         name, origin, effect, limitation, growth = (part.format(**values) for part in form)
-        return {
-            "name": name,
-            "details": {
+        details = {
                 "rank": "Awakened" if boost >= 20 else "Nascent",
                 "bonus": 3 + boost // 20,
                 "description": effect.capitalize() + ".",
@@ -512,7 +521,11 @@ class CampaignMixin:
                 "effect": effect.capitalize() + ".",
                 "limitation": limitation.capitalize() + ".",
                 "growth_path": growth.capitalize() + ".",
-            },
+            }
+        details.update(self.combat_skill_metadata(name, effect))
+        return {
+            "name": name,
+            "details": details,
         }
 
     def generate_hidden_class(self, world, background, boost, primary_stats, stats, concealed=False):
@@ -563,6 +576,7 @@ class CampaignMixin:
                 "limitation": limitation,
                 "growth_path": growth,
                 "class_feature": name,
+                **self.combat_skill_metadata(signature, effect),
             },
         }
 
@@ -596,11 +610,8 @@ class CampaignMixin:
         else:
             motivation = "They want to turn an uncertain beginning into earned capability and decide what place they will claim in the world."
 
-        training = (
-            f"They learned the practical foundations of {role_label.lower()} work through uneven but persistent practice, "
-            f"with the strongest early emphasis on {', '.join(primary_stats[:2]) if primary_stats else 'the fundamentals their role demands'}."
-        )
-        relationship = f"Along the way, {mentor_name}—{mentor}—became an important source of guidance, friction, and unfinished expectations."
+        training = starter_skill_description(world, archetype, f"{role_label} Fundamentals").rstrip(".") + "."
+        relationship = f"{mentor_name}, {mentor}, became an important source of guidance, friction, and unfinished expectations."
         complication = (
             "Their potential is ahead of their experience, so judgment, resources, and reliable control remain real obstacles."
             if boost >= 20 else
@@ -626,7 +637,7 @@ class CampaignMixin:
         return {
             "expanded_background": expanded,
             "background_details": {
-                "upbringing": f"Raised around {origin_label} with expectations suited to a {role_label}. {home_context}",
+                "upbringing": home_context,
                 "training_history": training,
                 "key_connection": relationship,
                 "formative_event": formative_event.capitalize() + ".",
@@ -724,8 +735,10 @@ class CampaignMixin:
         elif "medic" in text or "healer" in text: skill_name = f"{archetype or 'Field'} Healing Fundamentals"
         elif archetype: skill_name = f"{archetype} Fundamentals"
         title = self.naruto_identity_title(origin, start_location) if world == "Naruto" else f"{origin or 'Local'} {archetype or 'Adventurer'}".strip()
+        starter_description = starter_skill_description(world, archetype, skill_name)
         skills = {skill_name: {"rank": "Trained" if boost < 20 else "Exceptional", "bonus": 4 + boost // 10,
-                               "description": starter_skill_description(world, archetype, skill_name)}}
+                               "description": starter_description,
+                               **self.combat_skill_metadata(skill_name, starter_description)}}
         hidden_class = None
         generated_ability = None
         class_requested = allow_starting_specials and self.hidden_class_requested(background)
@@ -1090,7 +1103,7 @@ class CampaignMixin:
         requirements.append("If the player's original background was vague, complete the missing upbringing, family or community context, training history, formative event, important relationship, motivation, and complication. Keep supplied facts unchanged, make the additions setting-valid, and return the enriched account in state_patch.background.")
         requirements.append("Every starting ability and hidden-class signature skill must remain named in state_patch.skills and be explainable through its in-world origin, effect, limitation or cost, and growth path. Introduce it naturally in the opening; it is a real capability, not a rumor or disposable plot hook. Preserve class_profile and its mechanical stat bonuses.")
         requirements.append("Open with a concrete situation and at least one actionable lead tied to this location, background, goal or upcoming world pressure. End with exactly 3 optional next actions: follow the lead, prepare/progress, or explore an alternate hook.")
-        p = {"task": "opening", "state": self.trimmed_state_for_ai(), "requirements": requirements,
+        p = {"task": "opening", "state": self.task_state_for_ai("opening"), "requirements": requirements,
              "schema": {"narrative": "1 short paragraph, 3-5 sentences, ending with an open situation",
                         "state_patch": "persistent changes including appearance/portrait_traits when relevant",
                         "events": "system notifications", "timeline_event": "major event or empty",
@@ -1101,5 +1114,5 @@ class CampaignMixin:
         # responses are now repaired automatically (see repair_truncated_json),
         # so this no longer needs to be oversized purely as insurance against
         # a cut-off reply.
-        data = self.request_with_narrative(self.gm_context("campaign opening starting location origin archetype"), p, 1500)
+        data = self.request_with_narrative(self.task_context("opening", "campaign opening starting location origin archetype"), p, 1500)
         return self.apply_resolution(data, is_opening=True)

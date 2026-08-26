@@ -247,13 +247,18 @@ WORLD_NEUTRAL_SCENES = {
 def scene_category(state):
     location = str(state.get("location", ""))
     combat = state.get("combat", {}) if isinstance(state.get("combat"), dict) else {}
-    enemy = combat.get("enemy") if combat else None
+    # A completed fight intentionally keeps its mechanical log around until
+    # the final narration pass can consume it.  That inactive record is not a
+    # live scene signal: otherwise a character who fled, returned home and
+    # trained could still receive battlefield art after a reload.
+    active_combat = bool(combat.get("active"))
+    enemy = combat.get("enemy") if active_combat else None
     enemy = enemy if isinstance(enemy, dict) else {}
     enemy_blob = str(enemy.get("name", "")).lower()
     monster_words = ("monster", "beast", "demon", "goblin", "orc", "undead", "slime", "dragon", "horde")
-    if combat and enemy and not enemy.get("is_group") and not any(k in enemy_blob for k in monster_words):
+    if active_combat and enemy and not enemy.get("is_group") and not any(k in enemy_blob for k in monster_words):
         return "duel"
-    if combat and enemy and (enemy.get("is_group") or any(k in enemy_blob for k in monster_words)):
+    if active_combat and enemy and (enemy.get("is_group") or any(k in enemy_blob for k in monster_words)):
         return "monster_battlefield"
     # Outside active combat, the player's current physical location is the
     # strongest signal. Old timeline entries may mention wars and monsters,
@@ -307,7 +312,7 @@ def scene_art_confidence(state, category=None):
     location = str(state.get("location", "")).strip()
     if state.get("active_canon_event"):
         return {"score": 100, "label": "Exact event", "reason": "A dedicated active-event banner has priority."}
-    if isinstance(state.get("combat"), dict) and state.get("combat"):
+    if isinstance(state.get("combat"), dict) and state.get("combat", {}).get("active"):
         return {"score": 98, "label": "Combat match", "reason": "Active combat and opponent type determine the scene."}
     lowered = location.lower()
     local_detail_words = ("merchant", "stall", "shop", "bazaar", "market", "alley", "street", "inn", "tavern", "restaurant")

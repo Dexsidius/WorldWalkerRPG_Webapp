@@ -518,12 +518,10 @@ class TimeSkipMixin:
             "standing_plan": assessment.get("standing_plan", orders),
             "continuing_previous_orders": bool(assessment.get("continuing_previous_orders")),
             "intensity": intensity, "assessment": assessment, "dice_results": results,
-            "state_before": self.trimmed_state_for_ai(" ".join(str(x) for x in orders or [])),
+            "state_before": self.task_state_for_ai("time_skip", " ".join(str(x) for x in orders or [])),
             "simulation_profile": self.simulation_profile(),
             "structured_action_goals": active_goals,
             "authoritative_travel_plans": assessment.get("travel_plans", []),
-            "canon_dependency_graph": canon_dependency_graph(self.state),
-            "npc_commitment_schedules": self.state.get("npc_schedules", {}),
             "moment_mode": {"enabled": moment_mode, "max_elapsed_minutes": 1440, "instruction": "Resolve only the next immediate meaningful beat"},
             "live_event_scene": bool(moment_mode and self.state.get("active_canon_event")),
             "active_event_context": self.state.get("active_event_context", ""),
@@ -598,9 +596,23 @@ class TimeSkipMixin:
                 "suggested_actions": ["exactly 3 concrete optional actions written as verb + target + purpose: strongest lead, growth/preparation, alternate hook. Each must name a SPECIFIC person, place, faction, item, or thread that actually exists in this campaign right now — never generic filler like 'look for rumors' or 'train' with no real target. Vary the scale honestly: one can be a single moment, another can openly span several days or a longer project ('spend the next few days...', 'seek out ... over the coming weeks') when that's genuinely what the lead calls for — don't force everything into an instant."]
             }
         }
+        # The detailed behavior lives in task_rules("time_skip"). Keep only
+        # per-request switches here instead of resending a second 40-item
+        # rulebook inside the user payload on every Advance.
+        payload["requirements"] = [
+            "Honor planned_actions in order and retain every unfinished action in deferred_actions.",
+            "Use the supplied assessment, travel plans, dice/minigame results, canon boundary, danger state and action goals exactly.",
+            "Moment resolves one beat (maximum 24 hours); longer skips cover the whole allowed interval with dated chronological updates.",
+            "Stop at the earliest achieved explicit goal, committed combat, significant personal decision, or supplied major/canon boundary.",
+            "Next Major Event ignores routine conversations, errands, rumors and incremental growth; stop only for a real tier change, defining goal, lethal conflict, world-changing event or major canon event.",
+            "Training gains scale with actual sessions, intensity, aptitude, instruction, resources and recovery; do not compress a month into one session.",
+            "Return sparse JSON: omit empty optional fields, empty arrays and empty objects.",
+        ]
         use_major_model = bool(event_mode or canon_stop or any(bool(chk.get("major_event")) for chk in checks))
         narrator_client = self.ai_major if use_major_model and self.settings.get("major_event_model") else self.ai
-        request_args = (self.gm_context(" ".join(str(x) for x in orders or [])), payload, 2800)
+        task = "major_event" if (event_mode or canon_stop) else ("moment" if moment_mode else "time_skip")
+        max_tokens = 1400 if moment_mode else (2400 if task == "major_event" else 2200)
+        request_args = (self.task_context(task, " ".join(str(x) for x in orders or [])), payload, max_tokens)
         # Preserve compatibility with test and plug-in sessions that override
         # request_with_narrative using the original three-argument signature.
         data = (self.request_with_narrative(*request_args, client=narrator_client)
@@ -756,6 +768,9 @@ class TimeSkipMixin:
             goal_elapsed = goal_status.get("elapsed") if isinstance(goal_status.get("elapsed"), dict) else {}
             if goal_elapsed.get("amount") is not None and goal_elapsed.get("unit"):
                 data["elapsed"] = goal_elapsed
+            effective_elapsed = data.get("elapsed") if isinstance(data.get("elapsed"), dict) else {}
+            achieved_minutes = self.duration_minutes(effective_elapsed.get("amount", 0), effective_elapsed.get("unit", "minutes"))
+            requested_minutes = self.duration_minutes(amount, unit)
             if event_mode:
                 data["major_event_reached"] = True
                 data["major_event_kind"] = "personal"
@@ -763,6 +778,16 @@ class TimeSkipMixin:
                 data["interrupted"] = False
                 data["interruption_kind"] = ""
                 data["interruption_reason"] = ""
+            elif requested_minutes > 0 and achieved_minutes >= requested_minutes:
+                # Completing the exact work requested at the natural end of
+                # its allotted time is a successful time skip, not an
+                # interruption. Reserve the interruption card for genuine
+                # early stops where unused time remains.
+                data["interrupted"] = False
+                data["interruption_kind"] = ""
+                data["interruption_reason"] = ""
+                data["interruption_context"] = ""
+                data["intervention_prompt"] = ""
             else:
                 data["interrupted"] = True
                 data["interruption_kind"] = data.get("interruption_kind") or "goal_complete"
@@ -1324,7 +1349,9 @@ class TimeSkipMixin:
                 self.state["active_event_context"] = ""
                 self.state["active_event_prompt"] = ""
             context = progression_context if isinstance(progression_context, dict) else {}
-            self.ensure_quest_briefings(before, "; ".join(str(x) for x in context.get("actions", [])))
+            self.ensure_quest_briefings(before, " ".join(part for part in (
+                "; ".join(str(x) for x in context.get("actions", [])), str(data.get("narrative") or "")
+            ) if part.strip()))
             completed_quests = normalize_quest_state_machine(self.state)
             elapsed_minutes = self.duration_minutes(elapsed_amount, elapsed_unit)
             self.append_training_summary(before, context.get("actions", []), elapsed_minutes, context.get("rolls", []))
