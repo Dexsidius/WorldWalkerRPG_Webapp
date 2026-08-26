@@ -46,9 +46,75 @@ WORLD_COMBAT_FOUNDATIONS = {
     "Bleach": ["Zanjutsu", "Hoho", "Reiatsu Control", "Willpower"],
     "Custom World": ["Strength", "Dexterity", "Constitution", "Willpower"],
 }
+WORLD_TRAINING_SYNERGIES = {
+    "Naruto": {
+        "Ninjutsu": {"Chakra Control": .28, "Willpower": .12, "Intellect": .10},
+        "Taijutsu": {"Willpower": .24, "Chakra Control": .12, "Intellect": .08},
+        "Genjutsu": {"Intellect": .28, "Chakra Control": .24, "Willpower": .10},
+        "Chakra Control": {"Ninjutsu": .22, "Genjutsu": .12, "Willpower": .10},
+        "Willpower": {"Taijutsu": .14, "Chakra Control": .14, "Ninjutsu": .08},
+        "Intellect": {"Genjutsu": .18, "Chakra Control": .12, "Ninjutsu": .08},
+    },
+    "One Piece": {
+        "Strength": {"Endurance": .24, "Agility": .12},
+        "Agility": {"Instinct": .22, "Endurance": .12},
+        "Instinct": {"Agility": .20, "Willpower": .12},
+        "Willpower": {"Endurance": .16, "Instinct": .12},
+    },
+    "Hunter x Hunter": {
+        "Aura Control": {"Willpower": .24, "Cunning": .12},
+        "Strength": {"Agility": .16, "Willpower": .12},
+        "Agility": {"Strength": .12, "Cunning": .14},
+        "Cunning": {"Aura Control": .14, "Willpower": .10},
+    },
+    "Bleach": {
+        "Zanjutsu": {"Hoho": .18, "Reiatsu Control": .16, "Willpower": .10},
+        "Hoho": {"Zanjutsu": .14, "Reiatsu Control": .12},
+        "Kido": {"Reiatsu Control": .28, "Willpower": .12},
+        "Reiatsu Control": {"Kido": .18, "Willpower": .12},
+    },
+}
 BROAD_TRAINING_RE = re.compile(
     r"\b(rigorous|comprehensive|all[- ]around|combat training|combat drills|every combat|"
     r"all combat|train(?:ing)? (?:myself|my body|all|every)|conditioning regimen)\b", re.I)
+PLAIN_TRAINING_RE = re.compile(
+    r"^\s*(?:i\s+)?(?:just\s+)?(?:train|practice|work\s*out)(?:\s+(?:hard|intensely|rigorously|"
+    r"every\s+day|daily))?[.!]*\s*$", re.I)
+
+# These are accelerators, not prerequisites. A detailed player-authored method
+# always helps on player-favoring difficulties; particularly effective methods
+# that actually exist in the selected setting can support extraordinary growth.
+WORLD_ACCELERATED_TRAINING_METHODS = {
+    "Naruto": (
+        (re.compile(r"\bshadow clone|kage bunshin\b", re.I), 4.5, "parallel shadow-clone experience"),
+        (re.compile(r"\bsage training|natural energy|mount myoboku\b", re.I), 3.0, "sage-method training"),
+        (re.compile(r"\bseal(?:ed)? training (?:room|space)|time dilation\b", re.I), 3.5, "time-compressed seal training"),
+    ),
+    "One Piece": (
+        (re.compile(r"\bhaki-coated|haki mentor|rayleigh|near-death battle\b", re.I), 2.8, "high-pressure Haki development"),
+        (re.compile(r"\bseastone|kairoseki\b", re.I), 2.2, "seastone resistance training"),
+    ),
+    "Hunter x Hunter": (
+        (re.compile(r"\bnen vow|restriction and covenant|risk my life\b", re.I), 3.2, "a binding Nen condition"),
+        (re.compile(r"\bbiscuit|bisky|nen master\b", re.I), 2.2, "expert Nen instruction"),
+    ),
+    "Bleach": (
+        (re.compile(r"\bdangai|time-compressed|inner world\b", re.I), 3.5, "time-compressed spiritual training"),
+        (re.compile(r"\bzanpakuto spirit|bankai method\b", re.I), 2.5, "direct Zanpakuto communion"),
+    ),
+    "Solo Max-Level Newbie": (
+        (re.compile(r"\bhidden dungeon|experience multiplier|system exploit\b", re.I), 3.0, "a system-recognized accelerated route"),
+    ),
+    "Overgeared": (
+        (re.compile(r"\bhidden quest|legendary class|production mastery\b", re.I), 2.5, "a class-aligned mastery route"),
+    ),
+    "Reincarnated as a Slime": (
+        (re.compile(r"\bskill synthesis|predator|great sage|raphael|magicule-rich\b", re.I), 3.0, "skill-assisted accelerated development"),
+    ),
+}
+AMBITIOUS_TRAINING_RE = re.compile(
+    r"\b(astronomical|exponential|massive|enormous|rapid(?:ly)?|huge leap|breakthrough|"
+    r"master|perfect|transcend|kage[- ]level|jonin[- ]level|yonko[- ]level|captain[- ]level)\b", re.I)
 
 DEFAULT_SETTINGS = {
     "provider": "local",
@@ -975,6 +1041,28 @@ class TimeSkipMixin:
                 # a location-wide catastrophe.
                 "scope": event.get("scope", "personal")}
 
+    def _training_method_profile(self, action):
+        """Return a transparent acceleration factor for a concrete method.
+
+        Generic detail earns a modest benefit. Large multipliers require a
+        method recognized in the active world's own rules, keeping spectacular
+        growth available without treating a bare wish as a training engine.
+        """
+        text = str(action or "")
+        if not player_favoring_difficulty(self.state) or not explicit_world_method(text):
+            return {"multiplier": 1.0, "reason": "ordinary training"}
+        multiplier, reason = 1.45, "a specific player-authored training method"
+        if AMBITIOUS_TRAINING_RE.search(text):
+            multiplier, reason = 1.75, "a specific method aimed at an exceptional result"
+        for pattern, candidate, candidate_reason in WORLD_ACCELERATED_TRAINING_METHODS.get(
+                self.state.get("world"), ()):
+            if pattern.search(text) and candidate > multiplier:
+                multiplier, reason = candidate, candidate_reason
+        if multiplier >= 2.2 and AMBITIOUS_TRAINING_RE.search(text):
+            multiplier = min(6.0, multiplier * 1.25)
+            reason += " aligned to the named high-level goal"
+        return {"multiplier": round(multiplier, 2), "reason": reason}
+
     def enforce_training_progress(self, data, results, amount, unit, orders, intensity):
         """Guarantee that long training represents repeated daily work even if
         a narrator model under-awards the mechanical state patch."""
@@ -1004,7 +1092,23 @@ class TimeSkipMixin:
         for index, action in enumerate(training_orders):
             result = next((row for row in checks if isinstance(row, dict)
                            and str(row.get("action") or "").strip().lower() == action.strip().lower()), None)
-            ability = (result or {}).get("ability") or (primary_stats_for(self.state.get("world"), self.state.get("special", {}).get("Archetype", "")) or list(self.state.get("stats", {})))[0]
+            current_stats = self.state.get("stats", {})
+            plain_training = bool(PLAIN_TRAINING_RE.match(action))
+            mentioned_stat = next(
+                (name for name in current_stats if name.lower() in action.lower()), None
+            )
+            suggested_ability = (result or {}).get("ability")
+            if suggested_ability not in current_stats:
+                suggested_ability = None
+            if plain_training and current_stats:
+                # A bare "I train" means general development. Start with the
+                # weakest foundation, then distribute meaningful work to every
+                # other stat below instead of silently treating it as Ninjutsu.
+                ability = min(current_stats, key=lambda name: float(current_stats.get(name, 0) or 0))
+            else:
+                ability = (suggested_ability or mentioned_stat or
+                           (primary_stats_for(self.state.get("world"), self.state.get("special", {}).get("Archetype", ""))
+                            or list(current_stats))[0])
             factor = 1.25 if not result else 1.55 if result.get("success") else .70
             focused = 1.2 if re.search(r"\b(until|daily|every day|focus|specific|master|learn|improve)\b", action, re.I) else 1.0
             breakthrough = bool((result or {}).get("breakthrough"))
@@ -1014,7 +1118,16 @@ class TimeSkipMixin:
             if not breakthrough and random.random() < 1 - ((1 - per_day_breakthrough) ** max(1, days)):
                 breakthrough = True
             multiplier = random.uniform(2.2, 4.0) if breakthrough else 1.0
-            gained_points = days * base_rate * factor * focused * multiplier * learning_rate
+            method_profile = self._training_method_profile(action)
+            method_multiplier = float(method_profile["multiplier"])
+            current = int(current_stats.get(ability, 1) or 1)
+            # Weak foundations improve somewhat faster, while very high stats
+            # still advance instead of hitting a hidden wall. A credible
+            # accelerated method can overwhelm this gentle mastery curve.
+            current_skill_modifier = (clamp((80.0 / max(20.0, current)) ** .08, .78, 1.18)
+                                      if player_favoring_difficulty(self.state) else 1.0)
+            gained_points = (days * base_rate * factor * focused * multiplier *
+                             learning_rate * current_skill_modifier * method_multiplier)
             if player_favoring_difficulty(self.state):
                 # Daily work stays fully counted, but mastery naturally
                 # broadens and slows instead of adding the same whole stat
@@ -1026,12 +1139,12 @@ class TimeSkipMixin:
                 )
                 long_term_cap = 20.0 * ((max(.05, days) / 30.0) ** .62) * intensity_curve
                 long_term_cap *= max(.8, learning_rate ** .5)
+                long_term_cap *= method_multiplier
                 if breakthrough:
                     long_term_cap *= 2.5
                 gained_points = min(gained_points, long_term_cap)
             old_fraction = float(self.state.get("ability_progress", {}).get(ability, 0) or 0)
             total_points = old_fraction + gained_points
-            current = int(self.state.get("stats", {}).get(ability, 1) or 1)
             if xp_mode:
                 # System worlds retain proficiency progress, but base stats are
                 # awarded only by the deterministic level-up routine.
@@ -1044,13 +1157,41 @@ class TimeSkipMixin:
                 stat_patch[ability] = max(proposed, current + stat_gain)
                 applied_stat_gain = stat_patch[ability] - current
             support_gains = {}
-            broad_training = bool(BROAD_TRAINING_RE.search(action))
-            if broad_training and player_favoring_difficulty(self.state) and not xp_mode:
-                for support in WORLD_COMBAT_FOUNDATIONS.get(self.state.get("world"), []):
-                    if support == ability or support not in self.state.get("stats", {}):
+            broad_training = plain_training or bool(BROAD_TRAINING_RE.search(action))
+            if player_favoring_difficulty(self.state) and not xp_mode:
+                # Even narrow practice uses the rest of the character: base
+                # conditioning and experience move every stat a little, while
+                # direct prerequisites receive a much larger share. Broad
+                # combat regimens raise the whole fighting foundation.
+                support_weights = {}
+                current_values = [float(value or 0) for value in current_stats.values()]
+                current_center = sorted(current_values)[len(current_values) // 2] if current_values else 1.0
+                for name in current_stats:
+                    if name == ability:
+                        continue
+                    if plain_training:
+                        # General practice is deliberately balanced. Lagging
+                        # stats catch up a little faster; specialties still
+                        # receive maintenance growth proportional to time.
+                        relative = clamp((max(1.0, current_center) /
+                                          max(1.0, float(current_stats.get(name, 1) or 1))) ** .18,
+                                         .75, 1.35)
+                        support_weights[name] = .55 * relative
+                    else:
+                        support_weights[name] = .12 if broad_training else .06
+                if broad_training and not plain_training:
+                    for name in WORLD_COMBAT_FOUNDATIONS.get(self.state.get("world"), []):
+                        if name != ability:
+                            support_weights[name] = max(support_weights.get(name, 0), .38)
+                elif not plain_training:
+                    for name, weight in WORLD_TRAINING_SYNERGIES.get(self.state.get("world"), {}).get(ability, {}).items():
+                        if name != ability:
+                            support_weights[name] = max(support_weights.get(name, 0), weight)
+                for support, weight in support_weights.items():
+                    if support not in self.state.get("stats", {}):
                         continue
                     support_fraction = float(self.state.get("ability_progress", {}).get(support, 0) or 0)
-                    support_total = support_fraction + gained_points * .38
+                    support_total = support_fraction + gained_points * weight
                     support_gain = int(support_total)
                     progress_patch[support] = round(support_total - support_gain, 3)
                     support_current = int(self.state.get("stats", {}).get(support, 1) or 1)
@@ -1060,6 +1201,10 @@ class TimeSkipMixin:
             entry = {"action": action, "ability": ability, "effective_training_days": round(days, 2),
                      "stat_gain": applied_stat_gain, "breakthrough": breakthrough,
                      "learning_rate_multiplier": round(learning_rate, 2),
+                     "current_skill_modifier": round(current_skill_modifier, 2),
+                     "training_method_multiplier": round(method_multiplier, 2),
+                     "training_method": method_profile["reason"],
+                     "balanced_training": plain_training,
                      "explanation": (f"Sustained {ability} repetition produced a lore-valid insight that multiplied the training return."
                                      if breakthrough else
                                      (f"{round(days, 1)} effective daily sessions built proficiency; System XP and levels govern base stats."

@@ -184,6 +184,11 @@ class SocialMixin:
             "task": "advisor_question", "question": question, "state": self.task_state_for_ai("advisor", question),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
             "canon_divergences": self.state.get("canon_divergences", []),
+            "power_comparison_guardrail": {
+                "rule": "Use the player's mechanical_power_profile. Never compare against their stock-canon self or a stale starting label.",
+                "relative_language": "Do not say much weaker/stronger without a same-scale opponent estimate and an axis-by-axis explanation.",
+                "unknown_opponents": "Estimate untracked canon opponents on the supplied balanced-score ladder and label the estimate.",
+            },
             "thread_history": self.state.get("advisor_thread", [])[-8:],
             "schema": {
                 "summary": ("ONE direct sentence answering the question — nothing more" if concise else
@@ -202,10 +207,12 @@ class SocialMixin:
 Voice: talk TO the player, like a DM answering a question at the table — direct, plain, second person ("you're", "they've"), a real opinion when asked for one. Not a report, not a wiki article. This applies to every kind of question, not just rules questions — a strategy or world-state answer should still sound like a person talking, just with more to say.
 You may freely:
 - Assess relative power levels of the player, companions, rivals, factions and known threats, using terms appropriate to this world (bounty/Haki tier, Nen category/rank, jutsu/village rank, class/level, etc.) by default.
+- For the player, state.mechanical_power_profile and the current raw state.stats are mechanically authoritative. Never substitute the canon version of a player-controlled character, their starting rank, their old title, or an earlier Advisor estimate. An extreme peak stat means extreme output in that discipline; it does not erase the separately listed speed, defense, or overall foundation.
+- When comparing the player with a canon opponent who has no tracked numeric sheet, estimate that opponent on the SAME balanced-score ladder and label it as a canon-based estimate. Compare offense, speed, defense, special techniques, experience and matchup hazards separately. If the player's tracked axis exceeds a reasonable estimate, say so plainly even when the opponent remains dangerous on other axes; never summarize them as simply 'much weaker' in contradiction with the numbers.
 - If the player asks for a specific comparison framework instead — a numeric scale, tiers, percentages, or even a well-known scale borrowed from another series (e.g. "give me this in DBZ power levels") — use exactly the framing they asked for as a communication device to convey relative strength, even when it isn't native to this world. It's a translation aid, not a claim that this world works that way.
 - When you need your OWN internal sense of "how strong is strong" — placing the player, a companion, or a threat on a scale, deciding whether a fight is winnable, judging if a request for a graph makes sense numerically — anchor to this reference ladder instead of improvising a different scale each time:
 {power_tier_reference()}
-  This ladder is scaffolding for your own consistency, never shown to the player unless they specifically ask for a numbered/tiered framing. Once you've placed a named character at a tier across this conversation, stay consistent with that placement rather than re-ranking them differently next time without a stated in-world reason (a real power-up, new information, etc.).
+  This ladder is scaffolding for your own consistency, never shown to the player unless they specifically ask for a numbered/tiered framing. A tier is based on BALANCED score, not the highest single stat or a flat arithmetic average. Once you've placed a named character at a tier, stay consistent with that placement unless current mechanical stats, a real power-up, or new information supersedes it.
 - Summarize the current state of the world: active threats, opportunities, unresolved plot threads, faction tensions, quest status.
 - When asked why an NPC feels a certain way or why a faction's standing is what it is, answer from that NPC's npc_memories[name].chain or the faction's faction_chain[name] entries in state if present — they're the real recorded reasons, not something to re-guess from scratch. Only fall back to reasoning from campaign_canon/narrative history when no chain entry exists yet (an older campaign predating this feature, or a relationship that's never had a real turning point).
 - Give honest strategic advice, including risks and trade-offs. Never decide for the player — lay out the options.
@@ -217,7 +224,12 @@ You may freely:
 {"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a real briefing: enough to support a decision, organized and concrete, but still sounds like someone talking to you, not a form being filled out."}
 {"THE PLAYER'S WORDING SUGGESTS THEY WANT A VISUAL (graph/chart/plot) — populate the chart field; don't just describe the numbers in prose instead." if wants_chart else ""}
 You never alter game state; this is a conversation only. Return ONLY valid JSON, no markdown fences."""
-        advisor_client = self.ai_bg if getattr(self, "ai_bg", None) and self.settings.get("secondary_model") else self.ai
+        # Tests and integrations may deliberately inject a lightweight primary
+        # client without rebuilding the background client. Respect that
+        # explicit client; normal configured AI instances always expose model.
+        advisor_client = (self.ai_bg if getattr(self, "ai_bg", None)
+                          and self.settings.get("secondary_model")
+                          and getattr(self.ai, "model", None) else self.ai)
         data = advisor_client.request(rules, payload, max_output_tokens=200 if concise else 1000)
         entry = {
             "role": "advisor",

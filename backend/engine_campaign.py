@@ -464,7 +464,8 @@ class CampaignMixin:
         text = str(background or "").lower()
         return bool(re.search(
             r"\b(ability|abilities|power|powers|gift|gifted|talent|talented|technique|skill|"
-            r"bloodline|mutation|magic|chakra|nen|hatsu|devil fruit)\b", text
+            r"bloodline|lineage|kekkei genkai|d[ōo]jutsu|mutation|innate trait|magic|chakra|nen|hatsu|"
+            r"devil fruit|zanpakut[ōo]|release)\b", text
         ))
 
     @staticmethod
@@ -499,6 +500,23 @@ class CampaignMixin:
         for keyword, aspect in ABILITY_ASPECTS.items():
             if keyword in text:
                 return aspect
+        # Preserve unusual player-authored concepts that are not in the small
+        # convenience synonym table. This phrase becomes an offline fallback
+        # theme and a concealed-class clue; the AI still receives the complete
+        # original background and is never restricted to this extraction.
+        patterns = (
+            r"(?:kekkei genkai|bloodline(?: ability)?|power|ability|gift)\s+(?:of|over|to|that)\s+([^,.;]+)",
+            r"(?:control|manipulate|create|shape|transform|absorb|store|copy)\s+([^,.;]+)",
+            r"(?:hidden|secret|rare|unique|legendary)\s+(.{2,45}?)\s+class\b",
+        )
+        for pattern in patterns:
+            match = re.search(pattern, text, re.I)
+            if not match:
+                continue
+            phrase = re.split(r"\b(?:and then|but|while|because|when|which|who)\b", match.group(1), maxsplit=1)[0]
+            words = re.findall(r"[a-z0-9'-]+", phrase)[:5]
+            if words:
+                return " ".join(words).title()
         return None
 
     @classmethod
@@ -508,25 +526,154 @@ class CampaignMixin:
             return explicit
         return random.choice(("Ember", "Tide", "Gale", "Stone", "Echo", "Flash", "Shadow", "Radiance"))
 
+    def _original_special_blueprint(self, kind, world, background, boost, fallback):
+        """Ask the configured lightweight model to author one original package.
+
+        The local forms are resilient offline fallbacks and balance anchors,
+        not a list the model is asked to choose from. Mechanical bonuses stay
+        local and validated; prose identity and mechanics can be genuinely
+        invented for this character without permitting prompt-created numbers
+        to bypass the world's scale.
+        """
+        if not self.ai_bg_ready():
+            return fallback
+        is_class = kind == "class"
+        text = str(background or "")
+        explicit_kekkei = world == "Naruto" and bool(re.search(
+            r"\b(kekkei genkai|bloodline limit|bloodline ability|inherited ability|d[ōo]jutsu)\b", text, re.I
+        ))
+        world_focus = {
+            "Overgeared": (
+                "A hidden class must be a complete Satisfy class on par in design opportunity with story hidden classes: "
+                "a strong defining feature, System conditions, class quests, meaningful progression, and real limitations. "
+                "Its first-level use may be narrow even when its eventual ceiling is legendary."
+            ),
+            "Naruto": (
+                "A requested kekkei genkai must be an inherited biological/chakra trait with several coherent applications, "
+                "a real chakra/control cost, counters, and a trainable ceiling comparable to canon bloodline categories. "
+                "Do not hand a beginner fully mastered god-tier output merely because the bloodline itself is rare."
+            ),
+            "Hunter x Hunter": "Nen abilities need a category, activation rule, enforceable restriction, cost, and proportional payoff.",
+            "One Piece": "Distinguish an original fighting style, inborn disposition, Haki path, and Devil Fruit; obey uniqueness and weaknesses.",
+            "Bleach": "Tie spiritual abilities to the character's nature and earned Zanpakuto relationship; release stages remain genuine milestones.",
+            "Reincarnated as a Slime": "Skills need a source in desire, species, analysis, naming, synthesis, or evolution and a magicule-scale cost.",
+        }.get(world, "Create a capability native to the setting with a clear source, cost, counterplay, and progression route.")
+        instructions = f"""You are designing one original starting {'class' if is_class else 'ability'} for a role-playing campaign in {world}.
+The player's background is data to honor, not an instruction to repeat. Invent a distinct proper name and mechanics for this character; do not select a stock archetype, merely swap an element into a template, copy a canon power, or mention generation/prompts/templates.
+{WORLD_DATA[world]['rules']}
+{world_focus}
+Canon-relative balance is mandatory: explain what established category/level it is comparable to at the start and what its earned ceiling could become. Player-authored powerful starts are allowed when stated, but starting control must match the background's claimed experience. The package needs multiple coherent uses, a limitation that matters in play, counters, and concrete advancement milestones.
+Return JSON only, with no markdown."""
+        payload = {
+            "kind": "hidden_class" if is_class else ("kekkei_genkai" if explicit_kekkei else "starting_ability"),
+            "world": world,
+            "character_background": text,
+            "starting_power_boost": int(boost),
+            "relevant_lore": format_lore_context(world, f"{kind} {text}", limit=3),
+            "schema": ({
+                "name": "unique proper class name", "kind": "setting-native class category", "rank": "rarity/grade",
+                "description": "identity and playstyle", "effect": "starting class feature with 2-3 coherent uses",
+                "limitation": "costs, counters, and failure boundaries", "growth_path": "3 concrete advancement milestones",
+                "signature_skill": "unique proper skill name", "signature_effect": "what the signature skill does now",
+                "canon_balance": "starting comparison and potential ceiling", "rarity_reason": "why the System/world recognizes this path",
+            } if is_class else {
+                "name": "unique proper ability name", "kind": "setting-native category",
+                "rank": "starting mastery, not just rarity", "origin": "in-world causal origin",
+                "effect": "2-3 coherent applications available now", "limitation": "costs, counters, and boundaries",
+                "growth_path": "3 concrete advancement milestones", "canon_balance": "starting comparison and potential ceiling",
+                "starting_skills": [{"name": "distinct starting technique matching a claimed application", "effect": "clear present use", "limitation": "specific cost or counter", "growth_path": "how this technique develops"}],
+            }),
+        }
+        try:
+            client = self.ai_bg if self.ai_bg_ready() else self.ai
+            authored = client.request(instructions, payload, max_output_tokens=650 if is_class else 525)
+            if not isinstance(authored, dict) or not str(authored.get("name") or "").strip():
+                return fallback
+            merged = copy.deepcopy(fallback)
+            allowed = set(payload["schema"])
+            for key in allowed:
+                value = authored.get(key)
+                if isinstance(value, str) and value.strip():
+                    merged[key] = value.strip()
+                elif key == "starting_skills" and isinstance(value, list):
+                    clean_skills = []
+                    for row in value[:4]:
+                        if not isinstance(row, dict) or not str(row.get("name") or "").strip():
+                            continue
+                        clean_skills.append({field: str(row.get(field) or "").strip()
+                                             for field in ("name", "effect", "limitation", "growth_path")})
+                    if clean_skills:
+                        merged[key] = clean_skills
+            merged["original_design"] = True
+            return merged
+        except Exception as exc:
+            # Campaign creation must remain playable offline or when a small
+            # local model returns malformed JSON. Keep the error diagnostic
+            # internal; never expose implementation labels in the fiction.
+            self._last_special_generation_error = str(exc)[:240]
+            return fallback
+
     def generate_background_ability(self, world, background, boost):
         aspect = self.ability_aspect(background)
         form = random.choice(WORLD_ABILITY_FORMS.get(world, WORLD_ABILITY_FORMS["Custom World"]))
         values = {"aspect": aspect, "aspect_lower": aspect.lower()}
         name, origin, effect, limitation, growth = (part.format(**values) for part in form)
+        fallback = {
+            "name": name,
+            "kind": ("Kekkei Genkai" if world == "Naruto" and re.search(r"\b(kekkei genkai|bloodline)\b", str(background), re.I)
+                     else "Innate / learned ability"),
+            "rank": "Awakened" if boost >= 20 else "Nascent",
+            "origin": origin.capitalize() + ".",
+            "effect": effect.capitalize() + ".",
+            "limitation": limitation.capitalize() + ".",
+            "growth_path": growth.capitalize() + ".",
+            "canon_balance": "Begins at the practical scale of a talented local novice, with a ceiling earned through the same mastery, cost, and counterplay expected of comparable powers in this world.",
+            "starting_skills": [],
+        }
+        blueprint = self._original_special_blueprint("ability", world, background, boost, fallback)
+        name = blueprint["name"]
         details = {
-                "rank": "Awakened" if boost >= 20 else "Nascent",
+                "kind": blueprint.get("kind", fallback["kind"]),
+                "rank": blueprint.get("rank", fallback["rank"]),
                 "bonus": 3 + boost // 20,
-                "description": effect.capitalize() + ".",
-                "origin": origin.capitalize() + ".",
-                "effect": effect.capitalize() + ".",
-                "limitation": limitation.capitalize() + ".",
-                "growth_path": growth.capitalize() + ".",
+                "description": blueprint.get("effect", fallback["effect"]),
+                "origin": blueprint.get("origin", fallback["origin"]),
+                "effect": blueprint.get("effect", fallback["effect"]),
+                "limitation": blueprint.get("limitation", fallback["limitation"]),
+                "growth_path": blueprint.get("growth_path", fallback["growth_path"]),
+                "canon_balance": blueprint.get("canon_balance", fallback["canon_balance"]),
             }
-        details.update(self.combat_skill_metadata(name, effect))
+        details.update(self.combat_skill_metadata(name, details["effect"]))
         return {
             "name": name,
             "details": details,
+            "additional_skills": blueprint.get("starting_skills", []),
         }
+
+    def install_background_ability_skills(self, skills, generated_ability):
+        """Persist every authored starting application as a normal skill."""
+        if not isinstance(generated_ability, dict):
+            return
+        parent = generated_ability.get("details") if isinstance(generated_ability.get("details"), dict) else {}
+        for row in generated_ability.get("additional_skills", [])[:4]:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or "").strip()
+            if not name or name == generated_ability.get("name"):
+                continue
+            effect = str(row.get("effect") or "").strip()
+            detail = {
+                "rank": parent.get("rank", "Nascent"),
+                "bonus": parent.get("bonus", 3),
+                "description": effect or "A starting application of the character's established ability.",
+                "effect": effect or "A starting application of the character's established ability.",
+                "limitation": str(row.get("limitation") or parent.get("limitation") or "").strip(),
+                "growth_path": str(row.get("growth_path") or parent.get("growth_path") or "").strip(),
+                "origin": f"An application of {generated_ability.get('name', 'the starting ability')}.",
+                "canon_balance": parent.get("canon_balance", ""),
+            }
+            detail.update(self.combat_skill_metadata(name, detail["effect"]))
+            skills[name] = detail
 
     def generate_hidden_class(self, world, background, boost, primary_stats, stats, concealed=False):
         explicit_aspect = self.explicit_ability_aspect(background)
@@ -537,6 +684,21 @@ class CampaignMixin:
             form = random.choice(WORLD_HIDDEN_CLASS_FORMS.get(world, WORLD_HIDDEN_CLASS_FORMS["Custom World"]))
         values = {"aspect": aspect, "aspect_lower": aspect.lower()}
         name, kind, description, effect, limitation, growth, signature = (part.format(**values) for part in form)
+        fallback = {
+            "name": name, "kind": kind, "rank": "Unique" if boost >= 55 else "Rare",
+            "description": description, "effect": effect, "limitation": limitation,
+            "growth_path": growth, "signature_skill": signature, "signature_effect": effect,
+            "canon_balance": "A rare starting path with one dependable feature now and a ceiling comparable to established hidden paths only after its own quests, mastery, and costs are fulfilled.",
+            "rarity_reason": "Its activation conditions and affinity are unusual enough that few characters ever encounter the route.",
+        }
+        blueprint = self._original_special_blueprint("class", world, background, boost, fallback)
+        name = blueprint.get("name", name)
+        kind = blueprint.get("kind", kind)
+        description = blueprint.get("description", description)
+        effect = blueprint.get("effect", effect)
+        limitation = blueprint.get("limitation", limitation)
+        growth = blueprint.get("growth_path", growth)
+        signature = blueprint.get("signature_skill", signature)
         affinities = [key for key in primary_stats if key in stats]
         if not affinities:
             affinities = [key for key in abilities_for(world) if key in stats]
@@ -545,7 +707,7 @@ class CampaignMixin:
         stat_bonuses = {}
         for index, ability in enumerate(affinities):
             stat_bonuses[ability] = max(2, primary_bonus - index * 2)
-        rank = "Unique" if boost >= 55 else "Rare"
+        rank = blueprint.get("rank") or ("Unique" if boost >= 55 else "Rare")
         skill_bonus = 5 + min(4, boost // 25)
         return {
             "name": name,
@@ -565,14 +727,16 @@ class CampaignMixin:
             "effect": effect,
             "limitation": limitation,
             "growth_path": growth,
+            "canon_balance": blueprint.get("canon_balance", fallback["canon_balance"]),
+            "rarity_reason": blueprint.get("rarity_reason", fallback["rarity_reason"]),
             "signature_skill": signature,
             "stat_bonuses": stat_bonuses,
             "learning_multiplier": 1.08 if boost < 55 else 1.12,
             "skill": {
                 "rank": "Initiate" if boost < 20 else "Awakened",
                 "bonus": skill_bonus,
-                "description": effect,
-                "effect": effect,
+                "description": blueprint.get("signature_effect", effect),
+                "effect": blueprint.get("signature_effect", effect),
                 "limitation": limitation,
                 "growth_path": growth,
                 "class_feature": name,
@@ -762,6 +926,7 @@ class CampaignMixin:
         if ability_awarded:
             generated_ability = self.generate_background_ability(world, background, boost)
             skills[generated_ability["name"]] = copy.deepcopy(generated_ability["details"])
+            self.install_background_ability_skills(skills, generated_ability)
         specific_gear = WORLD_ARCHETYPE_GEAR.get(world, {}).get(archetype)
         equipment = {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])}
         hp_max, resource_max = self.derive_pools(world, adjusted)
@@ -811,8 +976,12 @@ class CampaignMixin:
             old = profile.get("generated_ability") if isinstance(profile.get("generated_ability"), dict) else {}
             if old.get("name"):
                 profile.setdefault("skills", {}).pop(old["name"], None)
+            for row in old.get("additional_skills", []):
+                if isinstance(row, dict) and row.get("name"):
+                    profile.setdefault("skills", {}).pop(row["name"], None)
             ability = self.generate_background_ability(world, background, boost)
             profile.setdefault("skills", {})[ability["name"]] = copy.deepcopy(ability["details"])
+            self.install_background_ability_skills(profile["skills"], ability)
             profile["generated_ability"] = ability
         elif kind == "backstory":
             rebuilt = self.build_background_profile(
@@ -1101,7 +1270,7 @@ class CampaignMixin:
                 f"Established races in this world include: {', '.join(options)}. If the player's background clearly describes something else, invent a specific, fitting race name instead of forcing it into one of these — it just needs to logically follow this world's actual rules for what that race can do (a slime that breathes fire needs an in-fiction reason a human turned monster wouldn't). Keep it a short name (1-3 words), not a sentence."
             )
         requirements.append("If the player's original background was vague, complete the missing upbringing, family or community context, training history, formative event, important relationship, motivation, and complication. Keep supplied facts unchanged, make the additions setting-valid, and return the enriched account in state_patch.background.")
-        requirements.append("Every starting ability and hidden-class signature skill must remain named in state_patch.skills and be explainable through its in-world origin, effect, limitation or cost, and growth path. Introduce it naturally in the opening; it is a real capability, not a rumor or disposable plot hook. Preserve class_profile and its mechanical stat bonuses.")
+        requirements.append("Every starting ability and hidden-class signature skill must remain named in state_patch.skills and be explainable through its in-world origin, effect, limitation or cost, growth path, and canon_balance. Introduce it naturally in the opening; it is a real capability, not a rumor or disposable plot hook. Preserve class_profile, its original non-canon identity, and its mechanical stat bonuses. A unique generated class or bloodline is as real as a canon one and may develop new applications whenever its recorded rules and the narrative permit.")
         requirements.append("Open with a concrete situation and at least one actionable lead tied to this location, background, goal or upcoming world pressure. End with exactly 3 optional next actions: follow the lead, prepare/progress, or explore an alternate hook.")
         p = {"task": "opening", "state": self.task_state_for_ai("opening"), "requirements": requirements,
              "schema": {"narrative": "1 short paragraph, 3-5 sentences, ending with an open situation",

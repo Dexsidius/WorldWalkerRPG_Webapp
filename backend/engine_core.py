@@ -6,7 +6,7 @@ import copy, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
-from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_supports_races, WORLD_RACES, tower_floor_theme, TOWER_FLOOR_COUNT, tower_band
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_supports_races, WORLD_RACES, tower_floor_theme, TOWER_FLOOR_COUNT, tower_band, power_profile_for
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -657,6 +657,10 @@ Return ONLY valid JSON. No markdown fences."""
         repeated tokens without deleting anything from the real save.
         """
         snapshot = self.trimmed_state_for_ai(query)
+        snapshot["mechanical_power_profile"] = power_profile_for(
+            self.state.get("world", "Custom World"), self.state.get("stats", {}),
+            self.state.get("special", {}).get("Archetype", ""),
+        )
         purpose = str(purpose or "moment")
         if purpose in {"moment", "time_skip", "major_event", "event"}:
             return snapshot
@@ -668,6 +672,7 @@ Return ONLY valid JSON. No markdown fences."""
             "quests", "relationships", "affiliations", "companions", "contacts", "npc_memories",
             "canon_divergences", "campaign_direction", "active_action_goals", "prerequisite_tracks",
             "authoritative_player_corrections", "simulation_scale", "combat", "danger_scenario",
+            "mechanical_power_profile",
         }
         if purpose == "opening":
             opening = common | {"starting_power_band", "starting_power_notice", "appearance_desc", "portrait_traits"}
@@ -734,8 +739,10 @@ AUTHORITATIVE CORE
 - Use information fog: characters learn through believable witnesses, messages, evidence, travel, research or powers. Never confuse narrator knowledge with character knowledge.
 - Canon is the starting condition, not a railroad. Player choices may alter it naturally; recorded campaign facts and divergences outrank stock canon.
 - Use reliable source-material knowledge and the supplied lore/state. Anything canon characters can do is theoretically reproducible when the same prerequisites and costs are met. Original abilities, classes and techniques are welcome when they fit world logic.
+- Recorded original classes, bloodlines and abilities are authoritative, not lesser canon copies: honor their effect, limits, growth path and canon-relative balance as one package, and develop new applications when earned.
 - Dice are only for extreme/impossible-looking attempts, lethal undertakings and genuine power-tier leaps. Ordinary politics, strategy, investigation, travel, crafting, social play and focused training succeed plausibly without dice. Supplied rolls are settled facts; impossible actions are not rollable.
 - Focused training produces noticeable gains proportional to actual time, intensity, teachers, resources, recovery and aptitude. Only a tier leap needs a roll. Use XP/levels only when the supplied state says this world uses them.
+- mechanical_power_profile is the authoritative translation of the player's CURRENT stats. It outranks starting_power_band, old position/rank labels, stock-canon strength for the player character, and arithmetic-average guesses. Compare peak offense, speed, defense and balanced combat separately; never call a heavily trained canon-character player weak merely because their original canon version was weaker.
 - State changes must match prose: wounds change HP, resource use changes the correct pool, purchases change money/inventory, completed objectives change quests, travel changes location, and learned skills include a clear effect, limitation/cost and growth path.
 - Every authored skill may include combat_usable (boolean) and effect_type (damage|heal|debuff|utility). Profession, knowledge, navigation and crafting skills are combat_usable=false unless they have a specific combat application.
 - An initiated attack or unavoidable incoming attack begins structured combat immediately. Do not insert an extra negotiation/event-chat gate once violence is committed. A previously accepted danger scenario does not warn again unless the new action itself could kill the player.

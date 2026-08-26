@@ -2,10 +2,11 @@
 WORLD_DATA / WORLD_EXPANSIONS / DIFFICULTIES / BASE_STATE so campaign
 mechanics and AI prompt schemas stay identical."""
 import datetime
+import math
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.7.1"
+APP_VERSION = "3.7.2"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -29,10 +30,15 @@ POWER_TIERS = [
     (9, "Cataclysmic", "Can reshape a region or end a war single-handedly."),
     (10, "Reality-Bending", "Power that strains or breaks the setting's normal rules entirely."),
 ]
+POWER_TIER_THRESHOLDS = [20, 35, 50, 65, 90, 130, 200, 350, 600, 1000]
 
 
 def power_tier_reference():
-    return "\n".join(f"{n}. {name} — {desc}" for n, name, desc in POWER_TIERS)
+    thresholds = [0] + POWER_TIER_THRESHOLDS
+    return "\n".join(
+        f"{n}. {name} (balanced score {thresholds[n]}+) — {desc}"
+        for n, name, desc in POWER_TIERS
+    )
 
 DIFFICULTIES = {
     "Story": {"difficulty_shift": -15, "dc_shift": -3, "enemy_edge": -2, "death": "rare", "freedom": "very high",
@@ -1242,6 +1248,63 @@ def speed_stat_for(world):
 
 def defense_stat_for(world):
     return WORLD_DEFENSE_STAT.get(world, "Constitution")
+
+
+def _power_tier_row(value):
+    numeric = max(0.0, float(value or 0))
+    index = sum(1 for threshold in POWER_TIER_THRESHOLDS if numeric >= threshold)
+    index = min(index, len(POWER_TIERS) - 1)
+    number, name, description = POWER_TIERS[index]
+    return {"index": number, "name": name, "description": description, "score": round(numeric, 1)}
+
+
+def power_profile_for(world, stats, archetype=""):
+    """One stat interpretation shared by UI, Advisor, GM, and combat prose.
+
+    A single extreme specialty remains mechanically extraordinary without
+    pretending it also grants speed, defense, stamina, judgment, or political
+    authority. Geometric means keep an 800/40/40 specialist legible rather
+    than letting an arithmetic average erase every weak axis.
+    """
+    clean = {str(name): max(1.0, float(value)) for name, value in (stats or {}).items()
+             if isinstance(value, (int, float))}
+    if not clean:
+        empty = _power_tier_row(0)
+        return {"overall": empty, "combat": empty, "peak": {**empty, "stat": ""},
+                "axes": {}, "lopsided": False, "interpretation": "No usable stats are recorded."}
+    values = list(clean.values())
+    overall_score = len(values) / sum(1.0 / value for value in values)
+    peak_name, peak_value = max(clean.items(), key=lambda row: row[1])
+    primary = [name for name in primary_stats_for(world, archetype) if name in clean]
+    offense_name = max(primary, key=lambda name: clean[name]) if primary else peak_name
+    speed_name = speed_stat_for(world)
+    defense_name = defense_stat_for(world)
+    offense = clean.get(offense_name, peak_value)
+    speed = clean.get(speed_name, overall_score)
+    defense = clean.get(defense_name, overall_score)
+    combat_score = 3.0 / ((1.0 / offense) + (1.0 / speed) + (1.0 / defense))
+    ordered = sorted(values)
+    median = ordered[len(ordered) // 2] if len(ordered) % 2 else (ordered[len(ordered)//2 - 1] + ordered[len(ordered)//2]) / 2
+    lopsided = peak_value >= max(80, median * 2.5)
+    interpretation = (
+        f"{peak_name} is an extreme specialty, but {speed_name} and {defense_name} still govern speed and defense."
+        if lopsided else "The character's highest capability and supporting combat attributes are broadly aligned."
+    )
+    return {
+        "overall": _power_tier_row(overall_score),
+        "combat": _power_tier_row(combat_score),
+        "peak": {**_power_tier_row(peak_value), "stat": peak_name, "value": int(peak_value),
+                 "note": "Peak specialty only; never use this as the character's overall tier."},
+        "axes": {
+            "offense": {"stat": offense_name, "value": int(offense)},
+            "speed": {"stat": speed_name, "value": int(speed)},
+            "defense": {"stat": defense_name, "value": int(defense)},
+        },
+        "arithmetic_average": round(sum(values) / len(values), 1),
+        "lopsided": lopsided,
+        "interpretation": interpretation,
+        "scale_rule": "Current mechanical stats outrank starting labels and stock-canon assumptions about the player character.",
+    }
 
 
 def ability_resource_type_for(world, archetype=""):
