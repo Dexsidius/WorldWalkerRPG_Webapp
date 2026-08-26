@@ -21,6 +21,7 @@ from simulation import (advance_npc_intentions, record_simulation_events,
 from simulation_integrity import (register_action_goals, reconcile_action_goals,
                                   validate_turn_response, refresh_npc_schedules,
                                   transmit_information)
+from lit_systems import initialize_lit_systems, process_lit_turn
 
 
 DEFAULT_SETTINGS = {
@@ -611,6 +612,14 @@ Return ONLY valid JSON."""
                 self.apply_system_xp(before, context.get("actions", []) if not is_opening else [], context.get("rolls", []),
                                      context.get("elapsed_minutes", 5), context.get("intensity", "normal"), data.get("events", []))
             self.sync_derived_pools(before)
+            if is_opening:
+                initialize_lit_systems(self.state)
+                lit_notes = []
+            else:
+                lit_notes = process_lit_turn(
+                    before, self.state, turn_actions, data.get("narrative", ""),
+                    context.get("elapsed_minutes", 5),
+                )
             # "turn" is an app-controlled counter, never an AI-authored field —
             # a state_patch that happens to include one (models sometimes do)
             # must not be allowed to set it.
@@ -623,6 +632,9 @@ Return ONLY valid JSON."""
             self.state["suggested_actions"] = self.guided_suggestions(data.get("suggested_actions"))
             offer_detail = record_purchase_offer(self.state)
             self.append(data.get("narrative", "The scene advances."), detail=({"purchase_offer": offer_detail} if offer_detail else None))
+            if lit_notes:
+                heading = "SATISFY SYSTEM" if self.state.get("world") == "Overgeared" else "TOWER SYSTEM"
+                self.append(f"[{heading}]\n" + "\n".join(lit_notes), "system")
             record_simulation_events(self.state,
                                      [{"type": "action", "narrative": data.get("narrative", "")}]
                                      + list(data.get("events", []) or []), "narrator")

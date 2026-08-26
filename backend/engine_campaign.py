@@ -19,6 +19,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
 from bleach_data import (academy_kido_skills, kido_reference_summary,
                          owns_release, zanpakuto_tracks)
 from world_progression import normalize_world_progression
+from lit_systems import initialize_lit_systems
 
 
 DEFAULT_SETTINGS = {
@@ -1804,6 +1805,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 self.state["purchase_offer"] = None
                 self.state["purchase_offers"] = []
             normalize_world_progression(self.state)
+            initialize_lit_systems(self.state)
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

@@ -92,9 +92,9 @@ class WorldwalkerV3100Tests(unittest.TestCase):
     def test_creation_honors_explicit_refusal_of_random_specials(self):
         game = GameSession()
         state = game.new_campaign(
-            "Aria", "Overgeared", "Adventurer", "", "",
+            "Aria", "Overgeared", "Adventurer",
             "A novice crafter without any hidden class and with no special ability.",
-            "Crafter", "Blacksmith", {},
+            "", "", "Crafter", "Blacksmith", {},
         )
         self.assertFalse(state["special"].get("Hidden Class"))
         self.assertFalse(state["special"].get("Starting Ability"))

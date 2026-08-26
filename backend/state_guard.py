@@ -13,6 +13,7 @@ from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for
 from knowledge import normalize_npc_knowledge
 from bleach_data import CANON_HADO, CANON_BAKUDO
 from world_progression import normalize_world_progression
+from lit_systems import initialize_lit_systems
 
 
 APP_OWNED = {
@@ -61,6 +62,7 @@ APP_OWNED = {
     "information_packets", "npc_schedules", "canon_event_states",
     "simulation_validation",
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
+    "overgeared_system", "solo_system",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -250,6 +252,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     repairs = _repair(state)
     repairs.extend(_repair_bleach_mechanics(state, before))
     repairs.extend(normalize_world_progression(state, before))
+    repairs.extend(initialize_lit_systems(state))
     knowledge_changes = normalize_npc_knowledge(state, before, source)
     if knowledge_changes:
         repairs.extend(f"Downgraded unsupported secret knowledge for {row['npc']} to a suspicion" for row in knowledge_changes)
@@ -292,6 +295,7 @@ def migrate_state(state, from_version="unknown"):
     normalize_npc_knowledge(migrated, {}, "migration")
     repairs = _repair(migrated)
     repairs.extend(normalize_world_progression(migrated))
+    repairs.extend(initialize_lit_systems(migrated))
     migrated.setdefault("diagnostics", {})["migration"] = {
         "from_version": from_version, "repairs": repairs,
         "time": datetime.now().isoformat(timespec="seconds"),

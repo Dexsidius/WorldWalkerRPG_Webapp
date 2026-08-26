@@ -592,6 +592,8 @@ def api_panels():
         "titles": s.get("titles", []),
         "skills": visible_skills(s),
         "special": s.get("special", {}),
+        "overgeared_system": s.get("overgeared_system", {}),
+        "solo_system": s.get("solo_system", {}),
         "class_profile": visible_class_profile(s),
         "combat": s.get("combat", {}),
         "world_events": s.get("world_events", []),

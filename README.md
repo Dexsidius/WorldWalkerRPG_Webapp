@@ -6,7 +6,17 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.10.0** (schema 13).
+Current app/save version: **3.11.0** (schema 14).
+
+Version 3.11 turns the lightweight Solo Max-Level Newbie and Overgeared
+profiles into persistent setting simulations. Solo now tracks full floor
+scenarios, hidden-condition discovery, copied-ability requirements,
+foreknowledge, rivals, artifacts, party roles, achievement chains and clear
+reports. Overgeared now separates class development from individual production
+disciplines and tracks class quests, NPC affinity, guilds, territory, orders,
+economy and public rankings. Crafting in every world remains part of the
+Chronicle; routine ore and components no longer clutter the Bag, while named,
+reusable and story-important finished items receive readable item cards.
 
 Version 3.10 brings the non-Bleach worlds up to the same mechanical standard
 as the Bleach rebuild without adding map nodes or timeline dates. One Piece,

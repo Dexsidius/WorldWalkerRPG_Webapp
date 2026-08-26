@@ -26,8 +26,8 @@ class WorldwalkerV363Tests(unittest.TestCase):
         return game
 
     def test_version_and_danger_state_schema(self):
-        self.assertEqual(APP_VERSION, "3.10.0")
-        self.assertEqual(BASE_STATE["schema_version"], 13)
+        self.assertEqual(APP_VERSION, "3.11.0")
+        self.assertEqual(BASE_STATE["schema_version"], 14)
         self.assertEqual(BASE_STATE["danger_scenario"], {})
 
     def test_warns_once_then_suppresses_repeat_nonlethal_difficulty_gate(self):

@@ -725,9 +725,16 @@ function worldIdentityLabel(state) {
   return state?.class_profile?.name || special.Archetype || "Adventurer";
 }
 
-function renderWorldProgression(world, special, classProfile) {
+function renderWorldProgression(world, special, classProfile, data = {}) {
   const value = (raw, fallback = "Not established") => compactReadable(raw) || fallback;
   const card = (eyebrow, title, rows, tone = "") => `<article class="world-system-card ${tone}"><header><small>${escapeHtml(eyebrow)}</small><h3>${escapeHtml(value(title))}</h3></header>${rows.filter(([,v]) => v !== undefined && v !== null && value(v, "") !== "").map(([label,v]) => `<div><b>${escapeHtml(label)}</b><span>${escapeHtml(value(v))}</span></div>`).join("")}</article>`;
+  const namedRows = (rows, empty = "None recorded") => rows?.length ? rows.map((row) => {
+    const title = row?.name || row?.class || "Record";
+    const detail = row && typeof row === "object"
+      ? Object.entries(row).filter(([key, entry]) => key !== "name" && entry !== undefined && entry !== null && compactReadable(entry)).map(([key, entry]) => `${humanLabel(key)}: ${compactReadable(entry)}`).join(" · ")
+      : compactReadable(row);
+    return `<div class="lit-system-row"><b>${escapeHtml(title)}</b><span>${escapeHtml(detail)}</span></div>`;
+  }).join("") : `<p class="hint">${escapeHtml(empty)}</p>`;
   if (world === "One Piece") {
     const fruit = special["Devil Fruit Profile"] || {}, haki = special["Haki Profile"] || {};
     const hakiLine = (name) => `${Number(haki[name]?.mastery || 0)} mastery${textList(haki[name]?.applications).length ? ` · ${textList(haki[name].applications).join(", ")}` : ""}`;
@@ -743,12 +750,22 @@ function renderWorldProgression(world, special, classProfile) {
     return `<section class="world-system-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system")}${card("CHAKRA & TECHNIQUES", p.kekkei_genkai && p.kekkei_genkai !== "None" ? p.kekkei_genkai : "Shinobi Development", [["Nature affinities",p.nature_affinities],["Known jutsu",p.known_jutsu],["Summons",p.summons],["Transformations",p.transformations]], "naruto-system")}</section>`;
   }
   if (world === "Solo Max-Level Newbie") {
-    const p = special["System Profile"] || {};
-    return `<section class="world-system-grid system-window-grid">${card("SYSTEM", `Floor ${p.floor ?? special.Floor ?? 0}`, [["Unspent stat points",p.unspent_stat_points],["Hidden conditions found",p.hidden_conditions],["Achievements",p.achievements]], "solo-system")}${card("ABILITY COPY", `${textList(p.copied_abilities).length} / ${p.copy_capacity || 1} slots`, [["Copied abilities",p.copied_abilities],["Active notices",p.active_system_notices]], "solo-system")}</section>`;
+    const p = special["System Profile"] || {}, sys = data.solo_system || {}, floor = sys.floor_state || {};
+    const copied = Array.isArray(p.copied_abilities) ? p.copied_abilities : [];
+    const copyRows = copied.map((entry) => typeof entry === "object" ? `${entry.name} — ${entry.condition_progress || 0}% · ${entry.copy_condition || "condition unknown"}` : entry);
+    const hidden = (floor.hidden_conditions || []).map((entry) => `${entry.discovered ? "Known" : "Hidden"}: ${entry.discovered ? entry.name : "Unidentified condition"}${entry.completed ? " · Complete" : ""}`);
+    const rivals = (sys.rivals || []).map((r) => `${r.name}: Floor ${r.floor}, Level ${r.level} — ${r.current_goal}`);
+    const reports = (sys.floor_history || []).slice(-3).reverse();
+    return `<section class="world-system-grid system-window-grid">${card("CURRENT SCENARIO", floor.name || `Floor ${p.floor ?? special.Floor ?? 1}`, [["Clear condition",floor.clear_condition],["Environment rule",floor.environment_rule],["Recommended power",floor.recommended_power],["Administrator",floor.administrator?.name],["Hidden routes",hidden]], "solo-system")}${card("ABILITY COPY", `${copied.reduce((n,e)=>n+Number(e?.slot_cost || 1),0)} / ${p.copy_capacity || 1} slots`, [["Copied abilities",copyRows],["Tracked attempts",sys.copy_attempts?.length || 0]], "solo-system")}</section><details class="lit-system-section"><summary>Foreknowledge, rivals, artifacts, and party roles</summary><div class="lit-system-body">${card("FOREKNOWLEDGE", `${sys.foreknowledge?.remembered?.length || 0} remembered`, [["Confirmed",sys.foreknowledge?.confirmed?.length || 0],["Changed",sys.foreknowledge?.changed?.length || 0],["Suspected conditions",sys.foreknowledge?.suspected_hidden_conditions?.length || 0],["Spent exploits",sys.foreknowledge?.spent_exploits?.length || 0]], "solo-system")}${card("RIVAL PROGRESS", `${rivals.length} tracked`, [["Current positions",rivals]], "solo-system")}${card("ARTIFACTS", `${sys.artifact_index?.length || 0} indexed`, [["Known artifacts",(sys.artifact_index || []).map(a=>`${a.name} (${a.grade}) — ${textList(a.main_effect).join(", ")}`)]], "solo-system")}${card("PARTY ROLES", `${sys.party_roles?.length || 0} assigned`, [["Contributions",(sys.party_roles || []).map(x=>`${x.name}: ${x.role}`)]], "solo-system")}</div></details>${reports.length ? `<details class="lit-system-section"><summary>Recent floor reports</summary>${namedRows(reports.map(r=>({name:`Floor ${r.floor}`,objective:r.main_objective,hidden_completed:r.hidden_completed,hidden_missed:r.hidden_missed,xp_gained:r.xp_gained,levels_gained:r.levels_gained,items:r.items})))}</details>` : ""}`;
   }
   if (world === "Overgeared") {
-    const p = special["Satisfy Profile"] || {};
-    return `<section class="world-system-grid">${card("SATISFY CLASS", p.primary_class || special.Class, [["Rarity",p.class_rarity],["Secondary class",p.secondary_class],["Guild",p.guild]], "overgeared-system")}${card("PRODUCTION", `${p.crafting_mastery ?? 0} mastery`, [["Specialties",p.production_specialties],["Known recipes",p.known_recipes],["NPC affinity",p.npc_affinity]], "overgeared-system")}</section>${renderClassCard(classProfile)}`;
+    const p = special["Satisfy Profile"] || {}, sys = data.overgeared_system || {};
+    const paths = Object.entries(sys.production_paths || {}).map(([name,row]) => `${name}: ${row.mastery || 0} mastery (${row.rank || "Beginner"})`);
+    const affinities = Object.entries(sys.npc_affinity || {}).map(([name,row]) => `${name}: ${row.score ?? 0} (${row.tier || "Unknown"})`);
+    const rankings = Object.entries(sys.rankings || {}).map(([name,row]) => `${name}: ${row.band || "Unranked"} · ${row.score || 0}`);
+    const orders = (sys.crafting_orders || []).map((o) => `${o.name}: ${o.progress || 0}% — ${o.status || "Active"}`);
+    const classProgress = sys.class_progression || {};
+    return `<section class="world-system-grid">${card("SATISFY CLASS", p.primary_class || special.Class, [["Rarity",p.class_rarity],["Secondary class",p.secondary_class],["Class stage",`${classProgress.stage || "Foundation"} · ${classProgress.stage_progress || 0}%`],["Next unlock",classProgress.next_unlock],["Guild",p.guild]], "overgeared-system")}${card("PRODUCTION PATHS", `${p.crafting_mastery ?? 0} peak mastery`, [["Separate disciplines",paths],["Specialties",p.production_specialties],["Known recipes",p.known_recipes]], "overgeared-system")}</section>${renderClassCard(classProfile)}<details class="lit-system-section"><summary>Affinity, guild, territory, orders, economy, and rankings</summary><div class="lit-system-body">${card("NPC AFFINITY", `${affinities.length} tracked`, [["Relationships",affinities]], "overgeared-system")}${card("GUILD & TERRITORY", sys.guild?.name || "Independent", [["Guild rank",sys.guild?.rank],["Guild resources",sys.guild?.resources],["Controlled territory",sys.territory?.controlled],["Morale",sys.territory?.morale],["Projects",sys.territory?.projects]], "overgeared-system")}${card("CRAFTING ORDERS", `${orders.length} tracked`, [["Orders",orders],["Reminder","Materials and routine output remain in the Chronicle; only memorable reusable products enter the Bag."]], "overgeared-system")}${card("ECONOMY & RANKINGS", `${sys.economy?.personal_gold ?? 0} personal Gold`, [["This turn",`${Number(sys.economy?.change_this_turn || 0) >= 0 ? "+" : ""}${sys.economy?.change_this_turn || 0} Gold`],["Workshop income",sys.economy?.workshop_income],["Guild funds",sys.economy?.guild_funds],["Territory revenue",sys.economy?.territory_revenue],["Public standings",rankings]], "overgeared-system")}</div></details>`;
   }
   if (world === "Reincarnated as a Slime") {
     const p = special["Evolution Profile"] || {};
@@ -2899,7 +2916,7 @@ async function openJournal(tab) {
     const titles = data.titles || [];
     const isBleach = data.world === "Bleach";
     const classRow = isBleach ? "" : renderClassCard(data.class_profile);
-    const worldProgression = isBleach ? "" : renderWorldProgression(data.world, data.special || {}, data.class_profile || {});
+    const worldProgression = isBleach ? "" : renderWorldProgression(data.world, data.special || {}, data.class_profile || {}, data);
     const kido = skills.filter(([name, detail]) => /^(?:Had[ōo]|Bakud[ōo])\s*#/i.test(name) || (detail && typeof detail === "object" && detail.kido));
     const releases = skills.filter(([name, detail]) => /^(?:Shikai|Bankai)\b/i.test(name) || (detail && typeof detail === "object" && detail.release_stage));
     const foundations = skills.filter((row) => !kido.includes(row) && !releases.includes(row));
@@ -3108,7 +3125,11 @@ async function openJournal(tab) {
     const eq = data.equipment || {};
     const currencyRows = data.tracks_currency === false ? [] : [currencyRowHtml(data.currency.name, data.currency.amount)]
       .concat(Object.entries(data.currencies || {}).map(([k, v]) => `<div class="jrow"><b>${escapeHtml(k)}:</b> ${escapeHtml(v)}</div>`));
-    const bagRows = inv.length ? inv.map((i) => `<div class="jrow">${escapeHtml(typeof i === "object" ? i.name || JSON.stringify(i) : i)}</div>`).join("") : `<div class="jrow">Bag is empty.</div>`;
+    const bagRows = inv.length ? inv.map((i) => {
+      if (!i || typeof i !== "object") return `<div class="jrow">${escapeHtml(i)}</div>`;
+      const effects = textList(i.effects || i.effect), limits = textList(i.restrictions || i.restriction);
+      return `<article class="inventory-detail-card"><header><b>${escapeHtml(i.name || "Item")}</b><span>${escapeHtml(i.rating || i.grade || i.category || "Item")}</span></header>${effects.length ? `<p>${escapeHtml(effects.join(" · "))}</p>` : ""}${limits.length ? `<small>Limits: ${escapeHtml(limits.join(" · "))}</small>` : ""}${i.source || i.creator ? `<small>${escapeHtml(i.source || `Created by ${i.creator}`)}</small>` : ""}</article>`;
+    }).join("") : `<div class="jrow">Bag is empty.</div>`;
     if (data.gear_style === "full") {
       panel.innerHTML = currencyRows.join("") + buildMannequinHtml(eq) + bagRows;
       wireMannequinTooltips();

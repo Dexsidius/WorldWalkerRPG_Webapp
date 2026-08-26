@@ -18,8 +18,8 @@ from worlds import APP_VERSION, BASE_STATE, timeline_for
 
 class WorldwalkerV350Tests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.10.0")
-        self.assertEqual(BASE_STATE["schema_version"], 13)
+        self.assertEqual(APP_VERSION, "3.11.0")
+        self.assertEqual(BASE_STATE["schema_version"], 14)
         self.assertFalse(BASE_STATE["opening_complete"])
 
     def test_yahiko_start_is_normalized_and_precedes_foundation_and_death(self):
