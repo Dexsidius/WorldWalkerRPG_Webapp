@@ -572,6 +572,7 @@ def api_panels():
     return jsonify({
         "currency": s.get("currency", {"name": ex["currency"], "amount": 0}),
         "currencies": s.get("currencies", {}),
+        "tracks_currency": bool(ex.get("tracks_currency", True)),
         "gear_style": gear_style_for(s.get("world", "Custom World")),
         "shops": s.get("shops", []),
         "shop_types": ex["shop_types"],
@@ -652,6 +653,8 @@ def api_campaign_correct():
     if not game.campaign_active:
         return jsonify({"error": "Start or load a campaign first."}), 400
     d = request.get_json(force=True)
+    if game.state.get("world") == "Bleach" and d.get("type") == "currency":
+        return jsonify({"error": "Bleach does not maintain a tracked currency balance."}), 400
     try:
         record = apply_player_correction(game.state, d.get("type"), d.get("target"), d.get("value"), d.get("explanation", ""))
         game.append("[PLAYER CORRECTION]\n" + record["fact"], "meta")

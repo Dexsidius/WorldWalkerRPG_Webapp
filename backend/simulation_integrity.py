@@ -428,6 +428,8 @@ def apply_player_correction(state, correction_type, target, value, explanation="
     """Apply an explicit player-authored fact; player corrections outrank AI prose."""
     kind, target, value = ai_text(correction_type).lower(), ai_text(target), ai_text(value)
     if not kind or not value: raise ValueError("Choose a correction type and enter the correct value.")
+    if kind == "currency" and state.get("world") == "Bleach":
+        raise ValueError("Bleach does not maintain a tracked currency balance.")
     applied = ""
     if kind == "location":
         state["location"] = value

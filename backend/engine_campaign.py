@@ -1576,7 +1576,11 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             if start_note.strip():
                 prefix += start_note.strip() + "\n"
             self.state["background"] = (prefix + self.state.get("background", "")).strip()
-            self.state["currency"] = {"name": ex["currency"], "amount": profile.get("starting_currency", ex.get("currency_baseline", 250))}
+            if ex.get("tracks_currency", True):
+                self.state["currency"] = {"name": ex["currency"], "amount": profile.get("starting_currency", ex.get("currency_baseline", 250)), "tracked": True}
+            else:
+                self.state["currency"] = {"name": ex.get("currency", "Money"), "amount": 0, "tracked": False}
+                self.state["currencies"] = {}
             self.state["special"]["Origin"] = origin
             self.state["special"]["Archetype"] = archetype
             self.state["special"]["Background Details"] = copy.deepcopy(profile.get("background_details", {}))
@@ -1697,10 +1701,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 self.state["prerequisite_tracks"] = copy.deepcopy(
                     profile.get("prerequisite_tracks") or zanpakuto_tracks(has_shikai, has_bankai)
                 )
-                # Soul Society campaigns use Kan mechanically; Yen remains a
-                # separate Living-World currency if later acquired.
-                if start not in {"Karakura Town", "Karakura High School", "Kurosaki Clinic", "Urahara Shop", "Naruki City"}:
-                    self.state["currency"] = {"name": "Kan", "amount": profile.get("starting_currency", 3000)}
+                # Bleach acknowledges Kan and Yen in the fiction without
+                # turning either into a permanent economy minigame.
+                self.state["currency"] = {"name": "Kan / Yen", "amount": 0, "tracked": False}
+                self.state["currencies"] = {}
+                self.state["purchase_offer"] = None
+                self.state["purchase_offers"] = []
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

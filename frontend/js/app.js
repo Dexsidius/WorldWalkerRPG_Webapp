@@ -895,6 +895,8 @@ function renderState(state) {
     towerLabel.hidden = true; towerTimer.hidden = true;
   }
   const currency = s.currency || {};
+  const tracksCurrency = s._tracks_currency !== false && currency.tracked !== false;
+  $("#currency-row").style.display = tracksCurrency ? "" : "none";
   $("#stat-currency-label").textContent = currency.name || "Currency";
   $("#stat-currency").textContent = currency.amount !== undefined ? Number(currency.amount).toLocaleString() : "0";
   $("#stat-summary-body").classList.toggle("narrative-progression", !s._uses_xp);
@@ -1046,7 +1048,7 @@ function renderStatusWindow(s) {
   $("#sw-skills").innerHTML = [...classItems, ...titleItems, ...skillItems].join("") || '<li class="hint">None yet.</li>';
   const currency = s.currency || {};
   const misc = [
-    currency.name ? `<div><b>${escapeHtml(currency.amount ?? 0)}</b> ${escapeHtml(currency.name)}</div>` : "",
+    (s._tracks_currency !== false && currency.tracked !== false && currency.name) ? `<div><b>${escapeHtml(currency.amount ?? 0)}</b> ${escapeHtml(currency.name)}</div>` : "",
     `<div>Turn ${escapeHtml(s.turn ?? 0)}</div>`,
     (s.affiliations || []).length ? `<div>${escapeHtml((s.affiliations[0] || {}).rank || "Member")} — ${escapeHtml((s.affiliations[0] || {}).faction || "")}</div>` : "",
   ].filter(Boolean).join("");
@@ -2824,7 +2826,8 @@ async function openJournal(tab) {
     setTimeout(() => $("#campaign-search-query")?.focus(), 0);
   } else if (tab === "corrections") {
     const corrections = [...(data.simulation?.integrity?.corrections || [])].reverse();
-    panel.innerHTML = `<div class="system-summary"><b>CORRECT THE GM</b><span>Your correction becomes an authoritative campaign fact, repairs the selected state immediately, and is included in future GM context. This makes no AI call and does not advance time.</span></div><form id="gm-correction-form" class="gm-correction-form"><label>What needs correcting<select id="correction-type"><option value="fact">Story fact</option><option value="location">Current location</option><option value="inventory_add">Missing inventory item</option><option value="inventory_remove">Item you no longer own</option><option value="currency">Currency amount</option><option value="hp">Current health</option><option value="resource">Current energy pool</option><option value="quest_status">Quest status</option><option value="skill">Skill description</option></select></label><label>Target or name<input id="correction-target" type="text" placeholder="Sword, quest name, skill name, character…"></label><label>Correct value<textarea id="correction-value" rows="3" placeholder="Write the correct fact or value" required></textarea></label><label>Why, if useful<textarea id="correction-explanation" rows="2" placeholder="Optional context that helps the GM preserve this correction"></textarea></label><button class="btn-primary" type="submit">APPLY CORRECTION</button></form><h3>Correction history</h3>${corrections.length ? corrections.map((row) => `<article class="correction-card"><header><b>${escapeHtml(row.target || humanLabel(row.type))}</b><span>Turn ${escapeHtml(row.turn ?? 0)}</span></header><p>${escapeHtml(row.fact)}</p>${row.explanation ? `<small>${escapeHtml(row.explanation)}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No player corrections have been needed.</div>'}`;
+    const currencyCorrection = data.tracks_currency === false ? "" : `<option value="currency">Currency amount</option>`;
+    panel.innerHTML = `<div class="system-summary"><b>CORRECT THE GM</b><span>Your correction becomes an authoritative campaign fact, repairs the selected state immediately, and is included in future GM context. This makes no AI call and does not advance time.</span></div><form id="gm-correction-form" class="gm-correction-form"><label>What needs correcting<select id="correction-type"><option value="fact">Story fact</option><option value="location">Current location</option><option value="inventory_add">Missing inventory item</option><option value="inventory_remove">Item you no longer own</option>${currencyCorrection}<option value="hp">Current health</option><option value="resource">Current energy pool</option><option value="quest_status">Quest status</option><option value="skill">Skill description</option></select></label><label>Target or name<input id="correction-target" type="text" placeholder="Sword, quest name, skill name, character…"></label><label>Correct value<textarea id="correction-value" rows="3" placeholder="Write the correct fact or value" required></textarea></label><label>Why, if useful<textarea id="correction-explanation" rows="2" placeholder="Optional context that helps the GM preserve this correction"></textarea></label><button class="btn-primary" type="submit">APPLY CORRECTION</button></form><h3>Correction history</h3>${corrections.length ? corrections.map((row) => `<article class="correction-card"><header><b>${escapeHtml(row.target || humanLabel(row.type))}</b><span>Turn ${escapeHtml(row.turn ?? 0)}</span></header><p>${escapeHtml(row.fact)}</p>${row.explanation ? `<small>${escapeHtml(row.explanation)}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No player corrections have been needed.</div>'}`;
   } else if (tab === "simulation") {
     const integrity = data.simulation?.integrity || {}, reports = [...(integrity.recent_validation || [])].reverse();
     const schedules = Object.entries(integrity.npc_schedules || {}), packets = [...(integrity.information_packets || [])].reverse();
@@ -3054,7 +3057,7 @@ async function openJournal(tab) {
   } else if (tab === "inventory") {
     const inv = data.inventory || [];
     const eq = data.equipment || {};
-    const currencyRows = [currencyRowHtml(data.currency.name, data.currency.amount)]
+    const currencyRows = data.tracks_currency === false ? [] : [currencyRowHtml(data.currency.name, data.currency.amount)]
       .concat(Object.entries(data.currencies || {}).map(([k, v]) => `<div class="jrow"><b>${escapeHtml(k)}:</b> ${escapeHtml(v)}</div>`));
     const bagRows = inv.length ? inv.map((i) => `<div class="jrow">${escapeHtml(typeof i === "object" ? i.name || JSON.stringify(i) : i)}</div>`).join("") : `<div class="jrow">Bag is empty.</div>`;
     if (data.gear_style === "full") {
@@ -3067,6 +3070,7 @@ async function openJournal(tab) {
   } else if (tab === "shops") {
     const shops = data.shops || [];
     const currency = data.currency || { name: "Currency", amount: 0 };
+    const tracksCurrency = data.tracks_currency !== false;
     const shopBlocks = shops.length ? shops.map((sh) => {
       if (typeof sh !== "object" || !sh) return `<div class="jrow">${escapeHtml(sh)}</div>`;
       const inventory = Array.isArray(sh.inventory) ? sh.inventory : (Array.isArray(sh.items) ? sh.items : []);
@@ -3075,14 +3079,15 @@ async function openJournal(tab) {
         const name = itemObj.name || itemObj.item || String(it);
         const price = parsePriceClient(itemObj.price ?? itemObj.cost ?? itemObj.value);
         const canAfford = price != null && currency.amount >= price;
-        const priceLabel = price != null ? `${price} ${escapeHtml(currency.name)}` : "price unclear";
+        const priceLabel = tracksCurrency ? (price != null ? `${price} ${escapeHtml(currency.name)}` : "price unclear") : escapeHtml(itemObj.access || "Narrative access");
         return `<div class="shop-item-row"><span class="shop-item-name">${escapeHtml(name)}</span><span class="shop-item-price">${priceLabel}</span>` +
-          (price != null ? `<button type="button" class="shop-buy-btn" data-shop-buy="${escapeHtml(sh.name || "")}" data-shop-item="${escapeHtml(name)}"${canAfford ? "" : " disabled"}>Buy</button>` : "") +
+          (tracksCurrency && price != null ? `<button type="button" class="shop-buy-btn" data-shop-buy="${escapeHtml(sh.name || "")}" data-shop-item="${escapeHtml(name)}"${canAfford ? "" : " disabled"}>Buy</button>` : "") +
           `</div>`;
       }).join("") : `<div class="shop-item-row muted">No priced inventory listed here yet.</div>`;
       return `<div class="jrow shop-block"><b>${escapeHtml(sh.name || "Shop")}</b><small>${escapeHtml(sh.type || "Merchant")}</small>${itemRows}</div>`;
-    }).join("") : `<div class="jrow">${data.shop_types.map((t) => "? " + t).join("<br/>")}</div>`;
-    panel.innerHTML = currencyRowHtml(currency.name, currency.amount) + shopBlocks +
+    }).join("") : `<div class="jrow">${data.shop_types.map((t) => "• " + t).join("<br/>")}</div>`;
+    const accessNote = tracksCurrency ? currencyRowHtml(currency.name, currency.amount) : `<div class="system-summary"><b>SUPPLY ACCESS</b><span>Bleach does not track a money balance. Important equipment comes through rank, authorization, favors, requisitions, availability, or story events.</span></div>`;
+    panel.innerHTML = accessNote + shopBlocks +
       `<div class="jrow"><b>Training Focus</b><br/>${data.training_options.map(escapeHtml).join(", ")}</div>` +
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
   } else if (tab === "map") {

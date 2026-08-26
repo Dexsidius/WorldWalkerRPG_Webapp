@@ -152,6 +152,7 @@ def zanpakuto_tracks(has_shikai: bool = False, has_bankai: bool = False) -> list
 
 BLEACH_GM_RULES = """
 BLEACH MECHANICAL CONTRACT
+- Currency is background lore, not a tracked Bleach resource. Kan and Yen may be mentioned when a scene genuinely involves them, but never maintain balances, routine wages, costs, debts or price-gated purchases. Ordinary expenses and reasonable mundane purchases simply happen. Gate important equipment and scarce supplies through squad rank, authorization, favors, requisitions, availability and narrative consequences instead.
 - Spiritual Nature is authoritative. Do not give Shinigami-only fields or techniques to another nature unless a recorded transformation or hybrid state justifies them.
 - Every original Soul Reaper begins with an unnamed Asauchi, academy fundamentals and a real Kidō curriculum. They do not begin with Shikai or Bankai unless the creation background explicitly says they already possess that release.
 - Squad placement is a narrative decision. Academy seniors first graduate; recent graduates attend division interviews or assignment proceedings. Let the player express preferences. Exceptional talent, patronage or a division's active interest can give a genuine choice; otherwise captains and institutional needs answer in character and offer concrete placements or conditions.

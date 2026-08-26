@@ -754,6 +754,8 @@ def resolve_shop_purchase(state, shop_name, item_name):
     produce the narrated-but-not-patched currency drift the continuity
     detector (continuity.py) otherwise exists to catch after the fact.
     Returns (ok, message, price_paid_or_None)."""
+    if state.get("world") == "Bleach" or (isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False):
+        return False, "Bleach equipment is obtained through access, authorization, favors, requisitions, or story events—not a tracked money balance.", None
     shops = state.get("shops") if isinstance(state.get("shops"), list) else []
     shop = next((sh for sh in shops if isinstance(sh, dict)
                  and str(sh.get("name", "")).strip().lower() == str(shop_name or "").strip().lower()), None)
@@ -797,6 +799,8 @@ def record_purchase_offer(state):
     offered) so the Chronicle can render a real Buy button for it."""
     raw = state.pop("purchase_offer", None)
     state["purchase_offer"] = None
+    if state.get("world") == "Bleach" or (isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False):
+        return None
     if not isinstance(raw, dict):
         return None
     item = str(raw.get("item") or "").strip()
@@ -819,6 +823,8 @@ def resolve_purchase_offer(state, offer_id):
     inventory, and marks the offer resolved so it can't be bought twice.
     Returns (ok, message, price_paid_or_None), same shape as
     resolve_shop_purchase."""
+    if state.get("world") == "Bleach" or (isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False):
+        return False, "Bleach equipment is handled through narrative access rather than a tracked money balance.", None
     offers = state.get("purchase_offers") if isinstance(state.get("purchase_offers"), list) else []
     offer = next((o for o in offers if isinstance(o, dict) and o.get("id") == offer_id), None)
     if offer is None:

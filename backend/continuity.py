@@ -202,7 +202,8 @@ def update_continuity(before, after, action="", narrative=""):
                 after.setdefault("_pending_chronicle_notes", []).append(f"🔗 {fname}'s standing toward you shifted — {reason}")
     currency_before = before.get("currency") if isinstance(before.get("currency"), dict) else {}
     currency_after = after.get("currency") if isinstance(after.get("currency"), dict) else {}
-    if narrative and currency_before.get("amount") == currency_after.get("amount") and not _CURRENCY_NO_TRANSACTION_RE.search(narrative):
+    tracks_currency = before.get("world") != "Bleach" and currency_before.get("tracked", True) is not False
+    if tracks_currency and narrative and currency_before.get("amount") == currency_after.get("amount") and not _CURRENCY_NO_TRANSACTION_RE.search(narrative):
         currency_name = str(currency_after.get("name") or currency_before.get("name") or "").strip()
         currency_mentioned = (bool(currency_name) and currency_name.lower() in narrative.lower()) or bool(_CURRENCY_GENERIC_RE.search(narrative))
         if currency_mentioned and _CURRENCY_SPEND_RE.search(narrative):

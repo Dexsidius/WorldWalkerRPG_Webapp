@@ -9,8 +9,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from bleach_data import CANON_BAKUDO, CANON_HADO, academy_kido_skills
+from continuity import update_continuity
 from game import GameSession
 from state_guard import apply_guarded_patch
+from systems import record_purchase_offer, resolve_shop_purchase
 from worlds import (
     APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, abilities_for,
     playable_characters_for, start_options_for, starting_eras_for,
@@ -32,7 +34,7 @@ class WorldwalkerV390BleachTests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.9.0")
+        self.assertEqual(APP_VERSION, "3.9.1")
 
     def test_bleach_creator_is_soul_reaper_only_with_three_requested_eras(self):
         self.assertEqual(
@@ -146,6 +148,36 @@ class WorldwalkerV390BleachTests(unittest.TestCase):
         self.assertGreaterEqual(len(CANON_BAKUDO), 19)
         self.assertGreaterEqual(len(WORLD_DATA["Bleach"]["map"]), 30)
         self.assertTrue((ROOT / "assets" / "generated_maps" / "Bleach.webp").exists())
+
+    def test_bleach_currency_is_narrative_only(self):
+        game = self.make_original()
+        self.assertFalse(WORLD_EXPANSIONS["Bleach"]["tracks_currency"])
+        self.assertEqual(game.state["currency"], {"name": "Kan / Yen", "amount": 0, "tracked": False})
+        self.assertEqual(game.state["currencies"], {})
+        self.assertFalse(game.public_state()["_tracks_currency"])
+
+    def test_bleach_rejects_currency_patches_and_purchase_buttons(self):
+        game = self.make_original()
+        report = apply_guarded_patch(game.state, {
+            "currency": {"name": "Kan", "amount": 9999},
+            "currencies": {"Yen": 5000},
+            "purchase_offer": {"item": "Soul Candy", "price": 100},
+        }, source="test")
+        self.assertEqual({row["field"] for row in report["rejected"]}, {"currency", "currencies", "purchase_offer"})
+        self.assertEqual(game.state["currency"]["amount"], 0)
+        game.state["purchase_offer"] = {"item": "Soul Candy", "price": 100, "vendor": "Urahara"}
+        self.assertIsNone(record_purchase_offer(game.state))
+        ok, message, price = resolve_shop_purchase(game.state, "Urahara Shop", "Soul Candy")
+        self.assertFalse(ok)
+        self.assertIn("tracked money", message.lower())
+        self.assertIsNone(price)
+
+    def test_bleach_money_prose_does_not_trigger_currency_drift_warning(self):
+        game = self.make_original()
+        before = copy.deepcopy(game.state)
+        after = copy.deepcopy(game.state)
+        warnings = update_continuity(before, after, "Buy lunch", "You pay for lunch and leave the shop.")
+        self.assertFalse(any("currency.amount" in row for row in warnings))
 
 
 if __name__ == "__main__":

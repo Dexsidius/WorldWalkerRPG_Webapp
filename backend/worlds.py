@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.9.0"
+APP_VERSION = "3.9.1"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1311,13 +1311,13 @@ WORLD_EXPANSIONS = {
         "systems":["Class","Crafting","Item Rating","Guild","NPC Affinity","Reputation"]
     },
     "Bleach": {
-        "currency":"Yen", "currency_baseline":3000,
-        "economy_notes":"Karakura Town is contemporary Japan, so treat prices like real everyday Yen — a meal or bus fare runs hundreds of Yen, ordinary shopping and supplies in the low thousands, and a family/clinic-scale budget in the tens of thousands. Soul Society runs on its own currency, Kan (a coin similar to a Japanese 5-Yen piece) — Shinigami are paid in Kan and it's the pricing unit within Seireitei, though the deeper into Rukongai a scene goes, the more barter replaces money outright. Track Kan separately in state_patch.currencies once the player is actually stationed in Soul Society rather than converting it to Yen; the two are not meant to be interchangeable on the page.",
+        "currency":"Yen", "currency_baseline":0, "tracks_currency":False,
+        "economy_notes":"Kan exists in Soul Society and Yen exists in the Living World, but neither is a persistent player resource in this campaign. Mention money only when a particular scene makes it narratively important. Ordinary living costs and reasonable purchases happen without bookkeeping; meaningful gear and scarce resources depend on rank, authorization, favors, requisitions, availability, or story consequences.",
         "origins":["Shin'o Academy Senior","Recent Shin'o Academy Graduate"],
         "archetypes":["Zanjutsu Specialist","Kido Caster","Hakuda Fighter","Hoho Specialist","Kaido Healer","Tactical Officer"],
         "training":["Zanjutsu Drills","Kido Incantation Practice","Hakuda Conditioning","Shunpo Practice","Reiatsu Control","Zanpakuto Communication"],
-        "shop_types":["Urahara Shop","Karakura Convenience Store","Seireitei Kan Exchange","Squad Quartermaster","Black Market"],
-        "loot":["Kan","Soul Candy","Gikongan","Spirit Medicine","Reishi Training Material","Official Mission Supply"],
+        "shop_types":["Urahara Shop","Squad Quartermaster","Division Requisition Office","Academy Supply Office","Rukongai Artisan"],
+        "loot":["Soul Candy","Gikongan","Spirit Medicine","Reishi Training Material","Official Mission Supply","Authorized Equipment"],
         "encounters":["Hollow incursion","Unquiet Plus","Academy rival","Division patrol","Training accident","Rare Menos-class emergency"],
         "systems":["Reiryoku","Reiatsu","Zanpakuto","Shikai","Bankai","Squad Rank","Soul Society Standing"]
     },

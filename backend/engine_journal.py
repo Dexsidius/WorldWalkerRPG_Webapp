@@ -270,6 +270,7 @@ class JournalMixin:
         s.update(portrait_view(self.state, self.settings))
         s["_stat_style"] = stat_style_for(self.state.get("world", "Custom World"))
         s["_uses_xp"] = uses_xp_for(self.state.get("world", "Custom World"), self.state.get("custom_world", ""))
+        s["_tracks_currency"] = bool(expansion_for(self.state.get("world", "Custom World")).get("tracks_currency", True))
         s["_gear_style"] = gear_style_for(self.state.get("world", "Custom World"))
         s["_power_profile"] = power_profile_for(
             self.state.get("world", "Custom World"), self.state.get("stats", {}),
