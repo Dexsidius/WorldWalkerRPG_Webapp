@@ -25,6 +25,7 @@ still fall back to a normal AI-costing take_turn() — that's a deliberate,
 honest scope boundary, not a gap.
 """
 import random
+import re
 
 from worlds import DIFFICULTIES, abilities_for, primary_stats_for, ability_resource_type_for, speed_stat_for, defense_stat_for
 from util import clamp
@@ -247,6 +248,90 @@ class CombatMixin:
         return next((row for row in rows if str(row.get("name", "")).lower() in wanted and int(row.get("rounds_left", 0)) > 0), None)
 
     @staticmethod
+    def _status_blocks_action(row):
+        """Hard control is semantic, not dependent on one exact UI label."""
+        if not isinstance(row, dict) or int(row.get("rounds_left", 0) or 0) <= 0:
+            return False
+        if isinstance(row.get("blocks_action"), bool):
+            return row["blocks_action"]
+        name = str(row.get("name") or row.get("status") or "").lower()
+        return bool(re.search(
+            r"\b(stun(?:ned)?|paraly(?:zed|sis)|asleep|sleeping|frozen|freeze|"
+            r"immobili[sz]ed|incapacitated|unconscious|petrified|restrained|bound|controlled)\b",
+            name,
+        ))
+
+    @classmethod
+    def _active_disabling_status(cls, rows):
+        return next((row for row in rows if cls._status_blocks_action(row)), None)
+
+    @staticmethod
+    def _add_or_refresh_effect(rows, incoming):
+        """Keep one mechanical row per named condition and refresh it.
+
+        Reapplying Paralysis should extend/refresh Paralysis, not create a
+        pile of identical chips.  For percentage effects the stronger value
+        wins, which also prevents repeated weakening from multiplying without
+        limit while still allowing a stronger technique to replace a weaker
+        one.
+        """
+        name = str(incoming.get("name") or "Effect").strip()
+        existing = next((row for row in rows if str(row.get("name") or "").lower() == name.lower()), None)
+        if existing is None:
+            rows.append(incoming)
+            return incoming
+        existing["rounds_left"] = max(int(existing.get("rounds_left", 0) or 0), int(incoming.get("rounds_left", 0) or 0))
+        for key, value in incoming.items():
+            if key in {"name", "rounds_left"}:
+                continue
+            if key.endswith("_pct") and isinstance(value, (int, float)):
+                old = float(existing.get(key, 0) or 0)
+                existing[key] = min(old, value) if value < 0 else max(old, value)
+            elif key == "blocks_action":
+                existing[key] = bool(existing.get(key)) or bool(value)
+            else:
+                existing[key] = value
+        return existing
+
+    def _apply_enemy_attack_effect(self, combat, enemy):
+        """Apply an optional authored on-hit condition to the player."""
+        effect = enemy.get("attack_effect")
+        if not isinstance(effect, dict):
+            return None
+        kind = str(effect.get("type") or effect.get("effect_type") or "").strip().lower()
+        name = str(effect.get("name") or effect.get("status_effect") or ("Weakened" if kind == "debuff" else "Controlled")).strip()
+        duration = max(1, int(effect.get("duration_rounds", effect.get("rounds", 2)) or 2))
+        if kind == "control":
+            existing = next((row for row in combat.setdefault("player_statuses", [])
+                             if str(row.get("name") or "").lower() == name.lower()
+                             and int(row.get("rounds_left", 0) or 0) > 0), None)
+            # A guaranteed on-hit paralysis must not refresh itself forever
+            # while the victim is unable to act. The existing duration plays
+            # out; a later hit after recovery may inflict it again.
+            if existing is not None and not effect.get("refresh_while_active"):
+                return None
+            row = {
+                "name": name, "rounds_left": duration,
+                "blocks_action": self._status_blocks_action({"name": name, "rounds_left": duration,
+                                                               "blocks_action": effect.get("blocks_action")}),
+            }
+            self._add_or_refresh_effect(combat.setdefault("player_statuses", []), row)
+            return row
+        if kind == "debuff":
+            raw_potency = float(effect.get("potency_pct", effect.get("potency", 20)) or 20)
+            potency = clamp(raw_potency / 100.0 if abs(raw_potency) > 1 else abs(raw_potency), .05, .6)
+            row = {
+                "name": name, "rounds_left": duration,
+                "power_pct": -potency,
+                "accuracy_pct": -clamp(float(effect.get("accuracy_pct", potency * 100)) / 100.0, .05, .6),
+                "defense_pct": -clamp(float(effect.get("defense_pct", potency * 100)) / 100.0, .05, .6),
+                "speed_pct": -clamp(float(effect.get("speed_pct", potency * 75)) / 100.0, .05, .6),
+            }
+            self._add_or_refresh_effect(combat.setdefault("player_debuffs", []), row)
+            return row
+        return None
+
+    @staticmethod
     def _tick_effects(combat):
         for key in ("enemy_debuffs", "player_buffs", "player_debuffs", "player_statuses", "enemy_statuses", "summons"):
             for row in combat.get(key, []):
@@ -254,28 +339,38 @@ class CombatMixin:
             combat[key] = [row for row in combat.get(key, []) if int(row.get("rounds_left", 0)) > 0]
 
     def _player_effect_bonuses(self, combat):
-        power = sum(float(row.get("power_pct", 0)) for row in combat.get("player_buffs", []))
-        defense = sum(float(row.get("defense_pct", 0)) for row in combat.get("player_buffs", []))
-        speed = sum(float(row.get("speed_pct", 0)) for row in combat.get("player_buffs", []))
-        return {"power_pct": clamp(power, 0, .75), "defense_pct": clamp(defense, 0, .75),
-                "speed_pct": clamp(speed, 0, .75)}
+        rows = [*combat.get("player_buffs", []), *combat.get("player_debuffs", [])]
+        power = sum(float(row.get("power_pct", 0)) for row in rows)
+        defense = sum(float(row.get("defense_pct", 0)) for row in rows)
+        speed = sum(float(row.get("speed_pct", 0)) for row in rows)
+        accuracy = sum(float(row.get("accuracy_pct", row.get("power_pct", 0))) for row in combat.get("player_debuffs", []))
+        return {"power_pct": clamp(power, -.6, .75), "defense_pct": clamp(defense, -.6, .75),
+                "speed_pct": clamp(speed, -.6, .75), "accuracy_pct": clamp(accuracy, -.6, 0)}
 
     def _effective_enemy_numbers(self, enemy, combat):
         """The enemy's combat numbers after active debuffs — power, hit
         difficulty and attack strength all scale down together while a
         debuff is live; hp/hp_max are never touched by this, only how
         dangerous and how hittable the opponent currently is."""
-        power_pct = clamp(sum(float(d.get("power_pct", 0)) for d in combat.get("enemy_debuffs", [])), -0.6, 0.0)
-        defense_pct = clamp(sum(float(d.get("defense_pct", 0)) for d in combat.get("enemy_debuffs", [])), -0.6, 0.0)
-        speed_pct = clamp(sum(float(d.get("speed_pct", 0)) for d in combat.get("enemy_debuffs", [])), -0.6, 0.0)
+        debuffs = combat.get("enemy_debuffs", [])
+        power_pct = clamp(sum(float(d.get("power_pct", 0)) for d in debuffs), -0.6, 0.0)
+        defense_pct = clamp(sum(float(d.get("defense_pct", 0)) for d in debuffs), -0.6, 0.0)
+        speed_pct = clamp(sum(float(d.get("speed_pct", 0)) for d in debuffs), -0.6, 0.0)
+        accuracy_pct = clamp(sum(float(d.get("accuracy_pct", d.get("power_pct", 0))) for d in debuffs), -0.6, 0.0)
         power_mult, defense_mult = 1.0 + power_pct, 1.0 + defense_pct
         return {
             "power": max(1, int(enemy["power"] * power_mult)),
             "difficulty_min": max(1, int(enemy["difficulty_min"] * defense_mult)),
             "difficulty_max": max(1, int(enemy["difficulty_max"] * defense_mult)),
-            "attack_min": max(1, int(enemy["attack_min"] * power_mult)),
-            "attack_max": max(1, int(enemy["attack_max"] * power_mult)),
+            # These are the resistance thresholds for the enemy's own attack
+            # check. Lowering them made a weakened enemy easier to succeed,
+            # cancelling its reduced power. Keep them fixed and penalize the
+            # enemy total and damage instead.
+            "attack_min": int(enemy["attack_min"]),
+            "attack_max": int(enemy["attack_max"]),
             "speed": max(1, int(enemy["power"] * (1.0 + speed_pct))),
+            "accuracy_penalty": max(0, round(abs(accuracy_pct) * 25)),
+            "damage_multiplier": clamp(power_mult, .4, 1.0),
         }
 
     # ---------- one swing of a named ability or plain attack ----------
@@ -288,7 +383,9 @@ class CombatMixin:
         decisive speed edge) that can't be paid for is simply skipped by the
         caller instead, since the first swing already landed."""
         bonus, sb_used = self._player_offense_bonus(ability, swing_skill)
-        bonus += round(12 * self._player_effect_bonuses(combat)["power_pct"])
+        player_effects = self._player_effect_bonuses(combat)
+        bonus += round(25 * player_effects["power_pct"])
+        bonus -= round(abs(player_effects["accuracy_pct"]) * 25)
         resource_cost = 0
         if swing_skill and resource_type == "cooldown":
             ready_at = combat["cooldowns"].get(swing_skill, 0)
@@ -325,20 +422,26 @@ class CombatMixin:
             applied = False
             if check["success"]:
                 potency = clamp(float(metadata.get("status_potency", 20)) / 100.0, .05, .6)
-                combat.setdefault("enemy_debuffs", []).append({
+                self._add_or_refresh_effect(combat.setdefault("enemy_debuffs", []), {
                     "name": status_name or "Weakened", "rounds_left": duration,
                     "power_pct": -potency,
+                    "accuracy_pct": -clamp(float(mechanics.get("accuracy_pct", potency * 100)) / 100.0, 0, .6),
                     "defense_pct": -clamp(float(mechanics.get("defense_pct", 20)) / 100.0, 0, .6),
                     "speed_pct": -clamp(float(mechanics.get("speed_pct", 15)) / 100.0, 0, .6),
                 })
                 applied = True
-            event.update({"action": "debuff", "status": status_name or "Weakened", "applied": applied, **check})
+            event.update({"action": "debuff", "status": status_name or "Weakened", "applied": applied,
+                          "potency_pct": round(potency * 100) if applied else 0, **check})
         elif effect_type == "control":
             check = self._combat_check(bonus + ally_support, eff["difficulty_min"], eff["difficulty_max"])
             applied = bool(check["success"])
             if applied:
-                combat.setdefault("enemy_statuses", []).append({
+                self._add_or_refresh_effect(combat.setdefault("enemy_statuses", []), {
                     "name": status_name or "Controlled", "rounds_left": duration,
+                    "blocks_action": self._status_blocks_action({
+                        "name": status_name or "Controlled", "rounds_left": duration,
+                        "blocks_action": mechanics.get("blocks_action") if isinstance(mechanics.get("blocks_action"), bool) else None,
+                    }),
                     "damage_over_time_pct": clamp(float(mechanics.get("damage_over_time_pct", 0)) / 100.0, 0, .15),
                 })
             event.update({"action": "control", "status": status_name or "Controlled", "applied": applied, **check})
@@ -411,6 +514,7 @@ class CombatMixin:
             dmg = 0
             if check["success"] and not shrugged:
                 dmg = self._damage(enemy["hp_max"], check["margin"], sb_used, check["breakthrough"], massive)
+                dmg = max(1, round(dmg * (1 + min(0, player_effects["power_pct"]))))
                 # The enemy is spared from actually dying either when this is
                 # a non-lethal spar/test (floors both sides — see
                 # resolve_combat_round) or when the player has personally
@@ -482,7 +586,8 @@ class CombatMixin:
         # (an ambush, a party assault) — see gm_rules; 0 for any solo fight.
         summon_support = sum(int(row.get("support_bonus", 0) or 0) for row in combat.get("summons", []))
         ally_support = int(combat.get("ally_support", 0) or 0) + summon_support
-        enemy_power = int(enemy.get("power", 30) or 30)
+        effective_enemy = self._effective_enemy_numbers(enemy, combat)
+        enemy_power = effective_enemy["power"]
         player_effects = self._player_effect_bonuses(combat)
         player_speed = int(self.state.get("stats", {}).get(speed_stat_for(world), 30) or 30)
         player_speed = round(player_speed * (1 + player_effects["speed_pct"]))
@@ -491,8 +596,12 @@ class CombatMixin:
         player_offense_stat_value = int(self.state.get("stats", {}).get(ability, 30) or 30)
         player_offense_stat_value = round(player_offense_stat_value * (1 + player_effects["power_pct"]))
         events = []
+        player_disabling = self._active_disabling_status(combat.get("player_statuses", []))
 
-        if action == "flee":
+        if player_disabling:
+            events.append({"actor": "player", "action": "controlled", "name": self.state.get("name", "You"),
+                           "status": player_disabling.get("name", "Controlled")})
+        elif action == "flee":
             bonus, _ = self._player_offense_bonus(ability, None)
             eff = self._effective_enemy_numbers(enemy, combat)
             check = self._combat_check(bonus + ally_support, eff["attack_min"], eff["attack_max"])
@@ -559,27 +668,29 @@ class CombatMixin:
         player_defense_stat_value = int(self.state.get("stats", {}).get(defense_stat_for(world), 30) or 30)
         player_defense_stat_value = round(player_defense_stat_value * (1 + player_effects["defense_pct"]))
 
-        disabling = self._active_status(combat.get("enemy_statuses", []),
-                                        ("Stunned", "Paralyzed", "Asleep", "Frozen"))
-        if action != "flee" and disabling:
+        disabling = self._active_disabling_status(combat.get("enemy_statuses", []))
+        retaliation_due = action != "flee" or bool(player_disabling)
+        if retaliation_due and disabling:
             combat["log"].append({"round": combat["round"], "actor": "enemy", "action": "controlled",
                                    "name": enemy["name"], "status": disabling.get("name")})
-        elif action != "flee":
-            enemy_swings = 2 if (enemy_power - player_speed) >= SPEED_GAP_THRESHOLD else 1
+        elif retaliation_due:
+            eff = self._effective_enemy_numbers(enemy, combat)
+            retaliation_power = eff["power"]
+            enemy_swings = 2 if (eff["speed"] - player_speed) >= SPEED_GAP_THRESHOLD else 1
             for swing_index in range(enemy_swings):
-                eff = self._effective_enemy_numbers(enemy, combat)
                 defense_bonus = self._player_defense_bonus(combat) + ally_support
                 defense_bonus += round(abs(self._player_defense_bonus(combat)) * player_effects["defense_pct"])
                 check = self._combat_check(int(eff["power"] * 0.35), eff["attack_min"], eff["attack_max"])
                 # defense_bonus reduces the enemy's effective total by raising the threshold they must beat
-                check["total"] -= defense_bonus
+                check["total"] -= defense_bonus + eff["accuracy_penalty"]
                 check["success"] = check["total"] > check["difficulty"] and check["roll"] != 1
                 check["margin"] = max(0, check["total"] - check["difficulty"])
-                massive = (enemy_power - player_defense_stat_value) >= MASSIVE_GAP_THRESHOLD
-                shrugged = (player_defense_stat_value - enemy_power) >= MASSIVE_GAP_THRESHOLD
+                massive = (retaliation_power - player_defense_stat_value) >= MASSIVE_GAP_THRESHOLD
+                shrugged = (player_defense_stat_value - retaliation_power) >= MASSIVE_GAP_THRESHOLD
                 dmg = 0
                 if check["success"] and not shrugged:
                     dmg = self._damage(self.state.get("hp_max", 100), check["margin"], 0, check["breakthrough"], massive)
+                    dmg = max(1, round(dmg * eff["damage_multiplier"]))
                     if action == "defend":
                         dmg = max(1, round(dmg * DEFEND_DAMAGE_REDUCTION))
                     shield_before = int(combat.get("player_shield", 0) or 0)
@@ -587,12 +698,17 @@ class CombatMixin:
                     combat["player_shield"] = max(0, shield_before - absorbed)
                     hp_damage = max(0, dmg - absorbed)
                     self.state["hp"] = max(floor, int(self.state.get("hp", 100)) - hp_damage)
+                    inflicted = self._apply_enemy_attack_effect(combat, enemy)
                 else:
                     absorbed = 0
                     hp_damage = dmg
+                    inflicted = None
                 combat["log"].append({"round": combat["round"], "actor": "enemy", "action": "attack",
                                        "name": enemy["name"], "damage": hp_damage, "absorbed": absorbed,
                                        "extra_swing": swing_index > 0,
+                                       "debuff_penalty": eff["accuracy_penalty"],
+                                       "damage_multiplier": eff["damage_multiplier"],
+                                       "inflicted_status": inflicted.get("name") if inflicted else None,
                                        "massive": massive, "shrugged": shrugged and check["success"], **check})
                 if self.state.get("hp", 1) <= floor:
                     break

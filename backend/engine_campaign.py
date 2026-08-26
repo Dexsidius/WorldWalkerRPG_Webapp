@@ -844,16 +844,34 @@ Return JSON only, with no markdown."""
         form = random.choice(WORLD_ABILITY_FORMS.get(world, WORLD_ABILITY_FORMS["Custom World"]))
         values = {"aspect": aspect, "aspect_lower": aspect.lower()}
         name, origin, effect, limitation, growth = (part.format(**values) for part in form)
+        if boost >= 800:
+            mastery = "Godlike"
+            balance = "Begins at the top-of-setting scale explicitly claimed by the player; control and applications still follow this world's mechanics, costs, and real counters."
+        elif boost >= 450:
+            mastery = "Transcendent"
+            balance = "Begins as a world-shaping signature power because the background explicitly establishes that scale, with setting-valid operation and counterplay."
+        elif boost >= 180:
+            mastery = "Overwhelming"
+            balance = "Begins at an established major-power scale rather than novice strength; its limits and control match the experience claimed in the background."
+        elif boost >= 90:
+            mastery = "Legendary"
+            balance = "Begins at a legendary local scale established by the background, with a ceiling and counters comparable to signature canon powers."
+        elif boost >= 45:
+            mastery = "Prodigious"
+            balance = "Begins well ahead of ordinary peers while retaining world-valid costs, counters, and room for new applications."
+        else:
+            mastery = "Awakened" if boost >= 20 else "Nascent"
+            balance = "Begins at the practical scale of a talented local novice, with a ceiling earned through the same mastery, cost, and counterplay expected of comparable powers in this world."
         fallback = {
             "name": name,
             "kind": ("Kekkei Genkai" if world == "Naruto" and re.search(r"\b(kekkei genkai|bloodline)\b", str(background), re.I)
                      else "Innate / learned ability"),
-            "rank": "Awakened" if boost >= 20 else "Nascent",
+            "rank": mastery,
             "origin": origin.capitalize() + ".",
             "effect": effect.capitalize() + ".",
             "limitation": limitation.capitalize() + ".",
             "growth_path": growth.capitalize() + ".",
-            "canon_balance": "Begins at the practical scale of a talented local novice, with a ceiling earned through the same mastery, cost, and counterplay expected of comparable powers in this world.",
+            "canon_balance": balance,
             "starting_skills": [],
         }
         blueprint = self._original_special_blueprint("ability", world, background, boost, fallback)
@@ -957,11 +975,18 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             form = random.choice(WORLD_HIDDEN_CLASS_FORMS.get(world, WORLD_HIDDEN_CLASS_FORMS["Custom World"]))
         values = {"aspect": aspect, "aspect_lower": aspect.lower()}
         name, kind, description, effect, limitation, growth, signature = (part.format(**values) for part in form)
+        class_rank = ("Godlike" if boost >= 800 else "Mythic" if boost >= 450 else
+                      "Legendary" if boost >= 180 else "Unique" if boost >= 55 else "Rare")
+        class_balance = (
+            "The class begins at the extraordinary scale explicitly established by the player's background; its features are fully mechanical now, while further expressions still obey the world's own costs and counters."
+            if boost >= 180 else
+            "A rare starting path with one dependable feature now and a ceiling comparable to established hidden paths only after its own quests, mastery, and costs are fulfilled."
+        )
         fallback = {
-            "name": name, "kind": kind, "rank": "Unique" if boost >= 55 else "Rare",
+            "name": name, "kind": kind, "rank": class_rank,
             "description": description, "effect": effect, "limitation": limitation,
             "growth_path": growth, "signature_skill": signature, "signature_effect": effect,
-            "canon_balance": "A rare starting path with one dependable feature now and a ceiling comparable to established hidden paths only after its own quests, mastery, and costs are fulfilled.",
+            "canon_balance": class_balance,
             "rarity_reason": "Its activation conditions and affinity are unusual enough that few characters ever encounter the route.",
         }
         blueprint = self._original_special_blueprint("class", world, background, boost, fallback)
@@ -980,7 +1005,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         stat_bonuses = {}
         for index, ability in enumerate(affinities):
             stat_bonuses[ability] = max(2, primary_bonus - index * 2)
-        rank = blueprint.get("rank") or ("Unique" if boost >= 55 else "Rare")
+        rank = blueprint.get("rank") or class_rank
         skill_bonus = 5 + min(4, boost // 25)
         return {
             "name": name,
@@ -1027,8 +1052,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         origin_label = str(origin or "the local community").strip()
         role_label = str(archetype or "adventurer").strip()
 
-        if any(k in lowered for k in ("prodigy", "genius", "exceptional talent", "gifted")):
+        if re.search(r"\b(prodigy|genius)\b|stronger than.{0,28}\b(?:my|their|his|her|the same) age|far ahead of (?:my|their|his|her) peers", lowered):
+            learning_rate, aptitude = 1.6, "Prodigious aptitude"
+        elif any(k in lowered for k in ("exceptional talent", "exceptionally talented", "gifted")):
             learning_rate, aptitude = 1.35, "Exceptional aptitude"
+        elif re.search(r"\b(talented|quick learner|fast learner)\b", lowered):
+            learning_rate, aptitude = 1.2, "Notable aptitude"
         elif any(k in lowered for k in ("trained", "graduate", "veteran", "disciplined", "studied")):
             learning_rate, aptitude = 1.15, "Practiced learner"
         elif any(k in lowered for k in ("slow learner", "struggle to learn", "poor student", "untalented")):
@@ -1114,7 +1143,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             multiplier = 0.35
         elif any(k in text for k in ("bandit", "smuggler", "black market", "criminal", "thief")):
             multiplier = 1.6
-        amount = baseline * multiplier + boost * (baseline / 50.0)
+        # Combat-language boosts are intentionally open-ended; wealth is not.
+        # Being immeasurably strong does not silently mint immeasurable money.
+        amount = baseline * multiplier + min(boost, 100) * (baseline / 50.0)
         # +/-15% so two characters with the same background text don't start
         # with the exact identical number down to the last coin.
         amount *= random.uniform(0.85, 1.15)
@@ -1151,7 +1182,34 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         return f"{village or 'Unaffiliated'} - {rank}"
 
     @staticmethod
-    def background_power_adjustments(world, background):
+    def starting_power_claim(background):
+        """Turn the *degree* of a player's power claim into open-ended stats.
+
+        Character-creation wording is authoritative.  These values are not a
+        universal power scale; they are additions to the selected world's own
+        beginner baseline.  The intentionally large upper tiers let a player
+        explicitly request a top-of-setting or rules-breaking power fantasy
+        instead of having words such as ``godlike`` flattened into a modest
+        novice bonus.
+        """
+        text = str(background or "").lower()
+        tiers = (
+            (r"\b(immeasurable|unmeasurable|incalculable|infinite|limitless|boundless|omnipotent|all[- ]powerful)\b|beyond (?:all )?measure", 1200, "Immeasurable start"),
+            (r"\b(godlike|god[- ]tier|deity[- ]level|divine[- ]level)\b|power (?:of|equal to) (?:a )?god", 800, "Godlike start"),
+            (r"\b(transcendent|world[- ]shaking|unrivaled|unparalleled)\b|strongest (?:person |being |fighter )?in (?:the )?world", 450, "Transcendent start"),
+            (r"\b(overwhelming|monstrous|bottomless|vast|enormous|immense|prodigious)\b", 180, "Overwhelming start"),
+            (r"\b(legendary|mythic|s[- ]rank|kage[- ]level|admiral[- ]level)\b", 90, "Legendary start"),
+            (r"\b(prodigy|genius)\b|stronger than.{0,28}\b(?:my|their|his|her|the same) age|far ahead of (?:my|their|his|her) peers", 45, "Prodigious start"),
+            (r"\b(exceptional|exceptionally talented|gifted|talented|above average|unusually strong)\b", 20, "Exceptional start"),
+            (r"\b(strong|skilled|capable)\b", 12, "Strong start"),
+        )
+        for pattern, boost, label in tiers:
+            if re.search(pattern, text):
+                return boost, label
+        return 0, "Average beginner"
+
+    @classmethod
+    def background_power_adjustments(cls, world, background):
         """Translate explicit innate/training claims into setting-relative stats.
 
         This intentionally works in every built-in world. A background is an
@@ -1161,13 +1219,11 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         text = str(background or "").lower()
         if not text:
             return {}, []
-        intensity = 0
-        if re.search(r"\b(imme(?:nse|asurable)|overwhelming|monstrous|bottomless|vast|enormous|prodigious)\b", text):
-            intensity = 34
-        elif re.search(r"\b(exceptional|powerful|great|high|unusually strong|massive)\b", text):
-            intensity = 22
-        elif re.search(r"\b(above average|unusual|notable|strong|gifted)\b", text):
-            intensity = 12
+        intensity, claim_label = cls.starting_power_claim(text)
+        # Domain-specific phrases without a general aptitude adjective still
+        # establish a meaningful specialty, but remain below "prodigy".
+        if not intensity and re.search(r"\b(powerful|great|high|massive|unusual|notable)\b", text):
+            intensity, claim_label = 16, "Notable specialty"
         if not intensity:
             return {}, []
         concepts = {
@@ -1204,7 +1260,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 continue
             for index, stat in enumerate(stat_names):
                 changes[stat] = max(changes.get(stat, 0), intensity if index == 0 else max(6, intensity // 2))
-            reasons.append(f"The background establishes unusually high {stat_names[0].lower()}")
+            reasons.append(f"The background establishes {claim_label.lower()} {stat_names[0].lower()}")
         return changes, reasons
 
     def generate_naruto_lineage_profile(self, background, generated_ability):
@@ -1232,15 +1288,24 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
 
     def infer_starting_profile(self, world, origin, archetype, background, stats, start_location="", allow_starting_specials=True):
         text = f"{origin} {archetype} {background}".lower()
-        boost, band = 0, "Average beginner"
+        # Explicit descriptive language in the player's own background wins.
+        # Dropdown role labels remain a smaller fallback so selecting a canon
+        # rank is still meaningful without silently overpowering what the
+        # player actually wrote.
+        explicit_boost, declared_band = self.starting_power_claim(background)
+        boost = explicit_boost
+        legacy_boost, legacy_band = 0, "Average beginner"
         if any(k in text for k in ("omnipotent", "godlike", "six paths", "demon lord", "yonko", "emperor of the sea")):
-            boost, band = 100, "World-shaking"
+            legacy_boost, legacy_band = 100, "World-shaking"
         elif any(k in text for k in ("hokage", "kage", "admiral", "master assassin", "legendary", "s-rank")):
-            boost, band = 55, "Elite / major power"
+            legacy_boost, legacy_band = 55, "Elite / major power"
         elif any(k in text for k in ("prodigy", "genius", "bloodline", "elite", "champion", "jonin", "notorious", "renowned")):
-            boost, band = 20, "Exceptional starter"
+            legacy_boost, legacy_band = 20, "Exceptional starter"
         elif any(k in text for k in ("trained", "graduate", "veteran", "martial artist", "soldier", "hunter", "chunin", "samurai")):
-            boost, band = 8, "Trained starter"
+            legacy_boost, legacy_band = 8, "Trained starter"
+        if legacy_boost > boost:
+            boost, declared_band = legacy_boost, legacy_band
+        band = declared_band
         primary = primary_stats_for(world, archetype)
         background_profile = self.build_background_profile(world, origin, archetype, background, boost, primary)
         background_profile["growth_profile"]["combat_style"] = str(archetype or origin or "Adaptive").strip()
@@ -1261,6 +1326,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 [*background_profile["growth_profile"].get("starting_strengths", []), *background_adjustments.keys()]
             ))
             background_profile["growth_profile"]["background_stat_reasons"] = background_stat_reasons
+        # Recalculate genuinely exceptional starts from the actual final
+        # numbers. Ordinary and trained creation labels remain useful context
+        # instead of becoming a misleading universal-tier verdict.
+        if explicit_boost >= 20 or background_stat_reasons:
             band = power_profile_for(world, adjusted, archetype).get("overall", {}).get("name", band)
         base_stats = copy.deepcopy(adjusted)
         skill_name = WORLD_STARTER_SKILL.get(world, "Background Expertise")
@@ -1968,7 +2037,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             requirements.append("The player left their background blank — invent a plausible backstory consistent with their origin, archetype and world, and set it in state_patch.background.")
         if needs_appearance:
             requirements.append("The player left their appearance blank — invent a fitting physical description consistent with origin/archetype/world, and write the ACTUAL descriptive sentence into state_patch.appearance_desc as a real string (e.g. 'A lean youth with gray eyes and a scar along his jaw') — never a placeholder, a reference to another field, or a note saying it's set elsewhere. portrait_traits is a separate short list of the same distinctive details, in addition to (not instead of) appearance_desc.")
-        requirements.append("Treat every ability, class, education, social status, possession and trait claimed in the player's background as an authoritative starting fact unless it directly contradicts the chosen world. Background Details, Growth Profile, Starting Ability, Hidden Class, and class_profile are authoritative starting context; preserve and deepen them rather than erasing them. Very powerful starts are allowed.")
+        requirements.append("Treat every ability, class, education, social status, possession and trait claimed in the player's background as an authoritative starting fact unless it directly contradicts the chosen world. Background Details, Growth Profile, Starting Ability, Hidden Class, and class_profile are authoritative starting context; preserve and deepen them rather than erasing them. The degree of the wording matters: talented, prodigy, immense, godlike and immeasurable describe sharply different starting scales. Very powerful starts are allowed and must not be normalized downward.")
         if world_supports_races(self.state.get("world", "Custom World")):
             options = WORLD_RACES.get(self.state.get("world"), {}).get("options", [])
             requirements.append(

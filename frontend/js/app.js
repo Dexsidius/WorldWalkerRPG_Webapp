@@ -1868,6 +1868,7 @@ async function handleTurnResult(result, action) {
 // ---------------------------------------------------------------------------
 function combatLogLine(e) {
   const swingNote = e.extra_swing ? " [bonus swing — faster]" : "";
+  if (e.actor === "player" && e.action === "controlled") return { text: `You cannot act while ${e.status || "controlled"}.`, cls: "miss" };
   if (e.actor === "player" && e.action === "defend") return { text: "You brace for the enemy's attack.", cls: "player" };
   if (e.actor === "player" && e.action === "flee") return { text: e.success ? "You break away from the fight." : "You try to flee — it fails.", cls: e.success ? "player" : "miss" };
   if (e.actor === "player" && e.action === "overwhelm") {
@@ -1887,7 +1888,7 @@ function combatLogLine(e) {
     const label = e.ability && e.ability !== "Attack" ? e.ability : "an effect";
     const costNote = e.resource_cost ? ` (-${e.resource_cost} ${APP.state?.resource_name || "Energy"})` : "";
     return e.applied
-      ? { text: `You use ${label} on ${e.target || "the enemy"} — it takes hold, weakening them${swingNote}${costNote}.`, cls: "player" }
+      ? { text: `You use ${label} on ${e.target || "the enemy"} — it takes hold${e.potency_pct ? `, reducing their combat effectiveness by about ${e.potency_pct}%` : ", weakening them"}${swingNote}${costNote}.`, cls: "player" }
       : { text: `You try ${label} on ${e.target || "the enemy"} — it doesn't take hold${swingNote}${costNote}.`, cls: "miss" };
   }
   if (e.actor === "player" && ["buff", "shield", "cleanse", "control", "summon", "movement", "detect", "stealth", "transform", "utility"].includes(e.action)) {
@@ -1912,9 +1913,11 @@ function combatLogLine(e) {
     if (e.action === "controlled") return { text: `${e.name || "The enemy"} cannot act while ${e.status || "controlled"}.`, cls: "player" };
     if (e.shrugged) return { text: `You completely shrug off ${e.name || "the enemy"}'s attack${swingNote}.`, cls: "player" };
     const shieldNote = e.absorbed ? ` (${e.absorbed} absorbed by your barrier)` : "";
+    const debuffNote = e.debuff_penalty ? ` [weakened: -${e.debuff_penalty} to the attack]` : "";
+    const statusNote = e.inflicted_status ? ` You are now ${e.inflicted_status}.` : "";
     return e.success
-      ? { text: `${e.name || "The enemy"} hits you for ${e.damage ?? 0} dmg${shieldNote}${e.massive ? " — MASSIVE" : ""}${swingNote}.`, cls: "hit" }
-      : { text: `${e.name || "The enemy"}'s attack misses${swingNote}.`, cls: "miss" };
+      ? { text: `${e.name || "The enemy"} hits you for ${e.damage ?? 0} dmg${shieldNote}${debuffNote}${e.massive ? " — MASSIVE" : ""}${swingNote}.${statusNote}`, cls: "hit" }
+      : { text: `${e.name || "The enemy"}'s attack misses${debuffNote}${swingNote}.`, cls: "miss" };
   }
   if (e.actor === "status") return { text: `${e.status || "A lingering effect"} deals ${e.damage || 0} damage to ${e.target === "player" ? "you" : "the enemy"}.`, cls: "hit" };
   return { text: "Something happens.", cls: "" };
@@ -2010,6 +2013,22 @@ function flashCombatBar(targetSelector) {
   target.classList.add("bar-flash");
 }
 
+function combatConditionChip(row) {
+  const parts = [];
+  const pct = (label, value) => {
+    const n = Math.round(Number(value || 0) * 100);
+    if (n) parts.push(`${label} ${n > 0 ? "+" : ""}${n}%`);
+  };
+  pct("power", row.power_pct);
+  pct("defense", row.defense_pct);
+  pct("speed", row.speed_pct);
+  pct("accuracy", row.accuracy_pct);
+  if (row.blocks_action || /\b(stun(?:ned)?|paraly(?:zed|sis)|asleep|sleeping|frozen|freeze|immobili[sz]ed|incapacitated|unconscious|petrified|restrained|bound|controlled)\b/i.test(row.name || "")) parts.push("cannot act");
+  const turns = Number(row.rounds_left || 0);
+  const title = parts.length ? parts.join(" · ") : (turns ? `${turns} round${turns === 1 ? "" : "s"} remaining` : "Active effect");
+  return `<span title="${escapeHtml(title)}">${escapeHtml(row.name || "Active effect")}${turns ? ` · ${escapeHtml(turns)}` : ""}${parts.length ? `<small>${escapeHtml(parts.join(" · "))}</small>` : ""}</span>`;
+}
+
 function renderCombatPanel(s) {
   const panel = $("#combat-panel");
   const combat = s.combat || {};
@@ -2042,11 +2061,11 @@ function renderCombatPanel(s) {
   else resourceRow.innerHTML = "";
   const conditionRows = [
     Number(combat.player_shield || 0) > 0 ? { name: `Barrier ${combat.player_shield}`, rounds_left: null } : null,
-    ...(combat.player_buffs || []), ...(combat.player_statuses || []), ...(combat.summons || []),
+    ...(combat.player_buffs || []), ...(combat.player_debuffs || []), ...(combat.player_statuses || []), ...(combat.summons || []),
   ].filter(Boolean);
-  $("#combat-status-row").innerHTML = conditionRows.map((row) => `<span title="${row.rounds_left ? `${escapeHtml(row.rounds_left)} round${Number(row.rounds_left) === 1 ? "" : "s"} remaining` : "Absorbs incoming damage"}">${escapeHtml(row.name || "Active effect")}${row.rounds_left ? ` · ${escapeHtml(row.rounds_left)}` : ""}</span>`).join("");
+  $("#combat-status-row").innerHTML = conditionRows.map(combatConditionChip).join("");
   const enemyConditions = [...(combat.enemy_debuffs || []), ...(combat.enemy_statuses || [])];
-  if (enemyConditions.length) enemyBox.insertAdjacentHTML("beforeend", `<div class="combat-condition-strip">${enemyConditions.map((row) => `<span>${escapeHtml(row.name || "Affected")} · ${escapeHtml(row.rounds_left || 1)}</span>`).join("")}</div>`);
+  if (enemyConditions.length) enemyBox.insertAdjacentHTML("beforeend", `<div class="combat-condition-strip">${enemyConditions.map(combatConditionChip).join("")}</div>`);
   populateCombatAbilitySelect(s);
 }
 

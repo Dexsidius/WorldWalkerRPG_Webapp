@@ -30,7 +30,7 @@ class WorldwalkerV3130Tests(unittest.TestCase):
             )
 
     def test_version_and_schema(self):
-        self.assertEqual(APP_VERSION, "3.14.0")
+        self.assertEqual(APP_VERSION, "3.15.0")
         self.assertEqual(BASE_STATE["schema_version"], 16)
 
     def test_descriptive_magicule_placeholder_cannot_crash_normalization(self):

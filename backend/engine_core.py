@@ -757,6 +757,7 @@ AUTHORITATIVE CORE
 - mechanical_power_profile is the authoritative translation of the player's CURRENT stats. It outranks starting_power_band, old position/rank labels, stock-canon strength for the player character, and arithmetic-average guesses. Compare peak offense, speed, defense and balanced combat separately; never call a heavily trained canon-character player weak merely because their original canon version was weaker.
 - State changes must match prose: wounds change HP, resource use changes the correct pool, purchases change money/inventory, completed objectives change quests, travel changes location, and learned skills include a clear effect, limitation/cost and growth path.
 - Every authored skill must use the shared taxonomy when its function is known: category (offense|defense|healing|support|control|mobility|detection|stealth|summon|transformation|crafting|knowledge|social|utility), combat_usable (boolean), effect_type (damage|heal|buff|debuff|shield|cleanse|control|summon|movement|detect|stealth|transform|utility), target_type (enemy|enemies|self|ally|allies|area|environment), and duration_rounds for lasting effects. Optional status_effect is a short player-facing condition name. Profession, knowledge, navigation and crafting skills are combat_usable=false unless they have a specific combat application.
+- An enemy whose normal hit inflicts a condition may define attack_effect with type control or debuff, a condition name, duration_rounds, and potency_pct; the application enforces it locally.
 - An initiated attack or unavoidable incoming attack begins structured combat immediately. Do not insert an extra negotiation/event-chat gate once violence is committed. A previously accepted danger scenario does not warn again unless the new action itself could kill the player.
 {agency_rules}
 - Starting a quest requires a readable briefing with objective, cause/giver, known location, risks, first step, current knowledge and clear completion conditions.
@@ -767,6 +768,7 @@ AUTHORITATIVE CORE
             "opening": """
 OPENING JOB
 - Preserve every player-supplied background fact and every generated starting class, ability, skill, title, pool, stat, contact and item as real mechanics.
+- Treat the degree of the player's creation wording as authoritative: talented, prodigy, immense, godlike and immeasurable are deliberately different power claims. Never flatten an explicitly extreme start back toward average; use its actual saved stats and let the world respond at that scale.
 - Smoothly fill only missing upbringing, training, formative relationship, motivation and complication. Do not repeat the player's prompt verbatim or expose labels such as Generated Ability/Backstory/Loadout.
 - For canon characters, reconcile identity, age, faction, rank, mentor, party, skills and timeline before narrating. Never invent a generic mentor that contradicts canon state.
 - Begin with a concrete situation at the selected location shortly before the chosen timeline, give at least one actionable journey lead, and end at a decision point. Do not advance campaign time during the opening.

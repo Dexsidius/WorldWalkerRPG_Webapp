@@ -644,6 +644,7 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 .combat-status-row,.combat-condition-strip{ display:flex; flex-wrap:wrap; gap:5px; margin:0 0 8px; }
 .combat-condition-strip{ margin:7px 0 0; }
 .combat-status-row span,.combat-condition-strip span{ padding:2px 7px; border-radius:999px; border:1px solid rgba(var(--accent2-rgb),.32); background:rgba(var(--accent2-rgb),.09); color:var(--accent2); font-size:9.5px; font-weight:800; letter-spacing:.025em; }
+.combat-status-row span small,.combat-condition-strip span small{ display:block; margin-top:1px; color:var(--sub); font-size:8px; font-weight:600; text-transform:none; letter-spacing:0; }
 .combat-condition-strip span{ border-color:rgba(var(--danger-rgb),.32); background:rgba(var(--danger-rgb),.09); color:#ffc0b8; }
 .combat-ability-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:12.5px; }
 .combat-ability-row label{ color:var(--sub); min-width:52px; }

@@ -102,6 +102,76 @@ class SkillSystemTests(unittest.TestCase):
         event = next(row for row in result["log_tail"] if row.get("action") == "cleanse")
         self.assertIn("Poisoned", event["removed"])
 
+    def test_semantic_paralysis_blocks_enemy_and_player_actions(self):
+        game = self.fresh_combat()
+        game.state["skills"] = {"Nerve Lock": {"bonus": 10, "combat_usable": True,
+            "effect_type": "control", "status_effect": "Paralysis", "duration_rounds": 2,
+            "resource_type": "free"}}
+        passed = {"roll": 90, "total": 100, "difficulty": 30, "success": True,
+                  "margin": 70, "breakthrough": False}
+        with patch.object(game, "_combat_check", side_effect=lambda *args: dict(passed)):
+            result = game.resolve_combat_round("attack", "Nerve Lock")
+        self.assertFalse(any(row.get("actor") == "enemy" and row.get("action") == "attack"
+                             for row in result["log_tail"]))
+        self.assertTrue(any(row.get("actor") == "enemy" and row.get("action") == "controlled"
+                            for row in result["log_tail"]))
+
+        game2 = self.fresh_combat()
+        game2.state["combat"]["player_statuses"] = [{"name": "Paralyzed", "rounds_left": 1}]
+        with patch.object(game2, "_combat_check", side_effect=lambda *args: dict(passed)):
+            result2 = game2.resolve_combat_round("attack")
+        self.assertTrue(any(row.get("actor") == "player" and row.get("action") == "controlled"
+                            for row in result2["log_tail"]))
+        self.assertFalse(any(row.get("actor") == "player" and row.get("action") == "attack"
+                             for row in result2["log_tail"]))
+        self.assertTrue(any(row.get("actor") == "enemy" and row.get("action") == "attack"
+                            for row in result2["log_tail"]))
+
+    def test_weakening_reduces_enemy_accuracy_damage_and_visible_values(self):
+        game = self.fresh_combat()
+        game.state["skills"] = {"Withering Seal": {"bonus": 10, "combat_usable": True,
+            "effect_type": "debuff", "status_effect": "Weakened", "status_potency": 40,
+            "duration_rounds": 3, "resource_type": "free"}}
+        passed = {"roll": 90, "total": 100, "difficulty": 30, "success": True,
+                  "margin": 70, "breakthrough": False}
+        with patch.object(game, "_combat_check", side_effect=lambda *args: dict(passed)):
+            result = game.resolve_combat_round("attack", "Withering Seal")
+        enemy_attack = next(row for row in result["log_tail"]
+                            if row.get("actor") == "enemy" and row.get("action") == "attack")
+        debuff = result["combat"]["enemy_debuffs"][0]
+        self.assertGreater(enemy_attack["debuff_penalty"], 0)
+        self.assertLess(enemy_attack["damage_multiplier"], 1)
+        self.assertLess(debuff["power_pct"], 0)
+        self.assertLess(debuff["defense_pct"], 0)
+        self.assertLess(debuff["speed_pct"], 0)
+
+    def test_enemy_on_hit_conditions_apply_without_permanent_control_refresh(self):
+        game = self.fresh_combat()
+        game.state["combat"]["enemy"]["attack_effect"] = {
+            "type": "control", "name": "Paralyzed", "duration_rounds": 2,
+        }
+        passed = {"roll": 90, "total": 100, "difficulty": 30, "success": True,
+                  "margin": 70, "breakthrough": False}
+        with patch.object(game, "_combat_check", side_effect=lambda *args: dict(passed)):
+            first = game.resolve_combat_round("defend")
+            second = game.resolve_combat_round("attack")
+        self.assertEqual(next(row for row in first["log_tail"] if row.get("actor") == "enemy")["inflicted_status"], "Paralyzed")
+        self.assertTrue(any(row.get("actor") == "player" and row.get("action") == "controlled"
+                            for row in second["log_tail"]))
+        self.assertEqual(game.state["combat"]["player_statuses"], [])
+
+        game2 = self.fresh_combat()
+        game2.state["combat"]["enemy"]["attack_effect"] = {
+            "type": "debuff", "name": "Crippled", "duration_rounds": 3, "potency_pct": 35,
+        }
+        with patch.object(game2, "_combat_check", side_effect=lambda *args: dict(passed)):
+            game2.resolve_combat_round("defend")
+        penalties = game2._player_effect_bonuses(game2.state["combat"])
+        self.assertLess(penalties["power_pct"], 0)
+        self.assertLess(penalties["defense_pct"], 0)
+        self.assertLess(penalties["speed_pct"], 0)
+        self.assertLess(penalties["accuracy_pct"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

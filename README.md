@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.14.0** (schema 16).
+Current app/save version: **3.15.0** (schema 16).
+
+Version 3.15 makes combat conditions fully mechanical: hard control consumes
+actions, weakening changes real combat values, and both sides can carry timed
+conditions. Character creation now reads the degree of the player's language,
+so talented, prodigy, immense, godlike, and immeasurable starts produce sharply
+different open-ended stats and matching generated powers without extra AI calls.
 
 Version 3.12 separates literal System quests from ordinary story goals.
 Overgeared and Solo Max-Level Newbie retain objective progress, completion
