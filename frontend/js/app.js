@@ -2634,8 +2634,13 @@ async function processTimeSkipResolution(result, payload) {
   if (result.status === "manual_roll_required") {
     APP.pendingManualRoll = { payload, checkId: result.check_id, check: result.check };
     $("#major-roll-reason").textContent = result.check.major_reason || result.check.reason || "A major turning point hangs in the balance.";
-    $("#major-roll-details").textContent = "Roll 1–100. The game adds all relevant stat, skill, title, and situation bonuses, then compares the total with the required number.";
-    $("#d100-value").textContent = "?";
+    const needed = result.check?.difficulty ?? result.check?.needed ?? result.check?.target;
+    $("#major-roll-details").textContent = needed ? `Raw roll + bonuses vs ${needed} needed` : "Raw roll + relevant stat, skill, title, and situation bonuses";
+    $("#major-roll-risk").textContent = String(result.check?.difficulty_label || result.check?.risk || "Extreme difficulty").replaceAll("_", " ");
+    $("#major-roll-result").textContent = "Ready to roll";
+    setPercentileDice(null);
+    const marks = {"Naruto":"忍","Bleach":"魂","One Piece":"海","Hunter x Hunter":"H×H","Solo Max-Level Newbie":"塔","Overgeared":"OG","Reincarnated as a Slime":"◉","Custom World":"WW"};
+    $("#percentile-world-mark").textContent = marks[APP.state?.world] || "WW";
     $("#d100-orb").classList.remove("rolling", "revealed");
     $("#btn-major-roll").disabled = false;
     openModal("modal-major-roll");
@@ -2648,20 +2653,38 @@ async function processTimeSkipResolution(result, payload) {
   runBackgroundCheck();
 }
 
+function setPercentileDice(roll) {
+  const raw = Number(roll);
+  if (!Number.isFinite(raw)) {
+    $("#d100-tens").textContent = "—"; $("#d100-ones").textContent = "—"; $("#d100-value").textContent = "?";
+    $(".percentile-dice").setAttribute("aria-label", "Percentile dice waiting to roll");
+    return;
+  }
+  const value = raw === 100 ? 0 : raw;
+  $("#d100-tens").textContent = String(Math.floor(value / 10) * 10).padStart(2, "0");
+  $("#d100-ones").textContent = String(value % 10);
+  $("#d100-value").textContent = String(raw);
+  $(".percentile-dice").setAttribute("aria-label", `Percentile dice showing ${raw}`);
+}
+
 $("#btn-major-roll").addEventListener("click", async () => {
   const pending = APP.pendingManualRoll;
   if (!pending) return;
   const button = $("#btn-major-roll");
   button.disabled = true;
   $("#d100-orb").classList.add("rolling");
-  const ticker = setInterval(() => { $("#d100-value").textContent = String(1 + Math.floor(Math.random() * 100)); }, 55);
+  $("#percentile-tray").setAttribute("aria-busy", "true");
+  $("#major-roll-result").textContent = "Dice in motion";
+  playSfx("dice");
+  const ticker = setInterval(() => setPercentileDice(1 + Math.floor(Math.random() * 100)), 72);
   try {
     const rolled = await apiPost("/api/dice/d100", {});
     await new Promise((resolve) => setTimeout(resolve, APP.animationsEnabled ? 1150 : 80));
     clearInterval(ticker);
-    $("#d100-value").textContent = rolled.roll;
+    setPercentileDice(rolled.roll);
     $("#d100-orb").classList.remove("rolling"); $("#d100-orb").classList.add("revealed");
-    playSfx("dice");
+    $("#percentile-tray").setAttribute("aria-busy", "false");
+    $("#major-roll-result").textContent = "Result locked";
     await new Promise((resolve) => setTimeout(resolve, APP.animationsEnabled ? 650 : 40));
     closeModal("modal-major-roll");
     const payload = { ...pending.payload, manual_rolls: { ...(pending.payload.manual_rolls || {}), [pending.checkId]: rolled.roll } };
@@ -3298,7 +3321,7 @@ async function openJournal(tab) {
   } else if (tab === "lore") {
     const sources = data.lore_sources || [];
     const conflicts = data.lore_status?.conflicts || [];
-    panel.innerHTML = `<div class="system-summary"><b>AUTHORITY-RANKED LORE LIBRARY</b><span>Official sources outrank references, wikis, forums, and fan analysis. Conflicting claims remain visible instead of being silently blended.</span></div><form id="lore-import-form" class="lore-import"><label>Add a lore pack<input id="lore-file" type="file" accept=".json,.md,.txt" required></label><select id="lore-world"><option>${escapeHtml(data.world || "Custom World")}</option><option>Custom World</option></select><button class="btn-primary" type="submit">IMPORT</button></form>` +
+    panel.innerHTML = `<div class="system-summary"><b>AUTHORITY-RANKED LORE LIBRARY</b><span>Official sources outrank references, wikis, forums, and fan analysis. Conflicting claims remain visible instead of being silently blended.</span></div><form id="lore-url-form" class="lore-import"><label>Update from a source URL<input id="lore-url" type="url" placeholder="https://…" required></label><select id="lore-url-type"><option value="official_source">Official source</option><option value="official_reference">Official reference</option><option value="wiki" selected>Wiki</option><option value="forum">Forum</option><option value="fan_analysis">Fan analysis</option></select><button class="btn-primary" type="submit">UPDATE LIBRARY</button><small class="hint">Downloads only when you press Update. The source URL, type, and update time are saved with the local note.</small></form><form id="lore-import-form" class="lore-import"><label>Add a lore pack<input id="lore-file" type="file" accept=".json,.md,.txt" required></label><select id="lore-world"><option>${escapeHtml(data.world || "Custom World")}</option><option>Custom World</option></select><button class="btn-primary" type="submit">IMPORT</button></form>` +
       (sources.length ? sources.map((source) => `<div class="jrow"><b>${escapeHtml(source.name)}</b><br>${escapeHtml(source.kind)} · authority ${escapeHtml(source.authority || 0)}/100 · ${escapeHtml(source.entries || 0)} entries${source.source_types?.length ? ` · ${source.source_types.map(escapeHtml).join(", ")}` : source.source_type ? ` · ${escapeHtml(source.source_type)}` : ""}${source.worlds?.length ? ` · ${source.worlds.map(escapeHtml).join(", ")}` : ""}</div>`).join("") : '<div class="jrow">Only built-in setting guidance is available.</div>') +
       `<h3>Source conflicts</h3>` + (conflicts.length ? conflicts.map((row) => `<details class="lore-conflict"><summary><b>${escapeHtml(row.claim)}</b><span>Resolved at ${escapeHtml(row.authority)}/100</span></summary><p>${escapeHtml(row.resolution)}</p><small>Preferred source: ${escapeHtml(row.source)} (${escapeHtml(row.source_type)})</small><ul>${(row.alternatives || []).map((alt) => `<li>Disputed: ${escapeHtml(alt.value)} — ${escapeHtml(alt.source)} (${escapeHtml(alt.authority)}/100)</li>`).join("")}</ul></details>`).join("") : '<div class="jrow hint">No explicit claim conflicts detected for this world.</div>') +
       `<p class="hint">JSON entries may include title, keys, text, source, source_type, citation, and claims. Source types: official_source, official_reference, licensed_reference, curated, wiki, forum, fan_analysis, imported, or custom.</p>`;
@@ -3476,6 +3499,13 @@ $("#journal-panel").addEventListener("submit", async (event) => {
     payload.director_notes = document.getElementById("director_notes").value;
     try { const result = await apiPost("/api/campaign/tuning", payload); APP.state = result.state; showToast("Campaign tuning saved.", "notify"); }
     catch (error) { showToast(error.message, "danger"); }
+  } else if (event.target.id === "lore-url-form") {
+    event.preventDefault();
+    const button = event.target.querySelector("button"); button.disabled = true;
+    try {
+      await apiPost("/api/lore/update-url", {url: $("#lore-url").value, source_type: $("#lore-url-type").value, world: APP.state?.world || "Custom World"});
+      showToast("Lore source updated and cached locally.", "notify"); await openJournal("lore");
+    } catch (e) { showToast(e.message, "danger"); button.disabled = false; }
   } else if (event.target.id === "lore-import-form") {
     event.preventDefault();
     const file = $("#lore-file").files[0];
@@ -3631,17 +3661,17 @@ function refreshCampaignWorldFields() {
   const startWrap = $("#nc-start-wrap");
   if (startOpts.length) {
     if (world === "One Piece") {
-      const recommended = new Set([0, 1, 6, 8, 14]);
-      const groups = [
-        ["Recommended", (_, i) => recommended.has(i)],
-        ["East Blue", (_, i) => i <= 8 && !recommended.has(i)],
-        ["Grand Line & Sky", (_, i) => i >= 9 && i <= 18 && !recommended.has(i)],
-        ["Government & Revolution", (_, i) => [19, 20, 21, 30].includes(i)],
-        ["Other Blues", (_, i) => i >= 22 && i <= 24],
-        ["New World", (_, i) => i >= 25 && i <= 29],
-      ];
-      $("#nc-start").innerHTML = groups.map(([label, include]) => {
-        const options = startOpts.map((o, i) => include(o, i) ? `<option value="${i}">${escapeHtml(o.label)}</option>` : "").join("");
+      const recommended = new Set(["Foosha Village", "Shells Town", "Baratie", "Loguetown", "Water 7"]);
+      const eastBlue = new Set(["Goa Kingdom", "Shimotsuki Village", "Orange Town", "Syrup Village", "Cocoyasi Village", "Arlong Park"]);
+      const government = new Set(["Marineford", "Impel Down", "Baltigo", "Mary Geoise", "Enies Lobby"]);
+      const otherBlues = new Set(["Kano Country", "Sorbet Kingdom", "Germa Kingdom"]);
+      const newWorld = new Set(["Dressrosa", "Totto Land", "Zou", "Wano Country", "Egghead Island", "Punk Hazard"]);
+      const category = (o) => recommended.has(o.location) ? "Recommended" : eastBlue.has(o.location) ? "East Blue" :
+        government.has(o.location) ? "Government & Revolution" : otherBlues.has(o.location) ? "Other Blues" :
+        newWorld.has(o.location) ? "New World" : "Grand Line & Sky";
+      const labels = ["Recommended", "East Blue", "Grand Line & Sky", "Government & Revolution", "Other Blues", "New World"];
+      $("#nc-start").innerHTML = labels.map((label) => {
+        const options = startOpts.map((o, i) => category(o) === label ? `<option value="${i}">${escapeHtml(o.label)}</option>` : "").join("");
         return options ? `<optgroup label="${escapeHtml(label)}">${options}</optgroup>` : "";
       }).join("");
     } else {

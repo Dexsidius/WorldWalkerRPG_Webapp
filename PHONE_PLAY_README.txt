@@ -1,4 +1,4 @@
-WORLDWALKER RPG 3.12.3 — LOCAL PHONE PLAY
+WORLDWALKER RPG 3.13.0 — LOCAL PHONE PLAY
 =========================================
 
 WHAT YOU NEED

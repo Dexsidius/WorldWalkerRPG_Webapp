@@ -9,7 +9,7 @@ from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORL
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
 from portrait_generator import PORTRAIT_CACHE_DIR, generate_portrait, save_reference, portrait_history, revert_portrait, portrait_usage
-from lore import list_lore_sources, import_lore_pack, lore_library_status
+from lore import list_lore_sources, import_lore_pack, import_lore_url, lore_library_status
 from systems import (normalize_tuning, progression_preset_for, relationship_snapshot,
                      campaign_health, map_snapshot, quest_presentation_for,
                      normalize_quest_state_machine)
@@ -705,6 +705,20 @@ def api_lore_import():
     try:
         result = import_lore_pack(uploaded.filename or "lore.json", uploaded.read(2 * 1024 * 1024 + 1), request.form.get("world", "Custom World"))
         return jsonify({"imported": result, "sources": list_lore_sources()})
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/lore/update-url", methods=["POST"])
+def api_lore_update_url():
+    d = request.get_json(silent=True) or {}
+    try:
+        result = import_lore_url(
+            d.get("url", ""), d.get("world") or game.state.get("world", "Custom World"),
+            d.get("source_type", "wiki"),
+        )
+        return jsonify({"updated": result, "sources": list_lore_sources(),
+                        "status": lore_library_status(game.state.get("world", "Custom World"))})
     except Exception as e:
         return err(e, 400)
 

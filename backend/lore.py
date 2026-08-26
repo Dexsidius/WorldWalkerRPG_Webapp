@@ -8,7 +8,15 @@ packs can be placed in assets/lore without changing engine code.
 import json
 import re
 import copy
+import hashlib
+import html
+import ipaddress
+import socket
+from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 from util import DATA_DIR, safe_filename
 from bleach_data import CANON_HADO, CANON_BAKUDO
 
@@ -175,6 +183,91 @@ def import_lore_pack(filename, raw, world="Custom World"):
     target.write_text(json.dumps(cleaned, indent=2, ensure_ascii=False), encoding="utf-8")
     reload_lore()
     return {"name": target.name, "path": str(target), "entries": sum(len(v) for v in cleaned.values()), "worlds": list(cleaned)}
+
+
+class _ReadablePage(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.title, self.parts, self._tag, self._skip = "", [], "", 0
+
+    def handle_starttag(self, tag, attrs):
+        self._tag = tag.lower()
+        if self._tag in {"script", "style", "nav", "footer", "header", "form", "svg"}:
+            self._skip += 1
+
+    def handle_endtag(self, tag):
+        if tag.lower() in {"script", "style", "nav", "footer", "header", "form", "svg"} and self._skip:
+            self._skip -= 1
+        self._tag = ""
+
+    def handle_data(self, data):
+        clean = re.sub(r"\s+", " ", html.unescape(data)).strip()
+        if not clean or self._skip:
+            return
+        if self._tag == "title" and not self.title:
+            self.title = clean
+        elif self._tag in {"p", "li", "h1", "h2", "h3"} and len(clean) >= 25:
+            self.parts.append(clean)
+
+
+def _validate_public_url(url):
+    parsed = urlparse(str(url or "").strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Enter a public HTTP or HTTPS source URL.")
+    try:
+        addresses = {row[4][0] for row in socket.getaddrinfo(parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80))}
+    except OSError as exc:
+        raise ValueError("The lore source hostname could not be resolved.") from exc
+    for address in addresses:
+        ip = ipaddress.ip_address(address)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            raise ValueError("Lore updating only accepts public internet sources.")
+    return parsed.geturl()
+
+
+def import_lore_url(url, world="Custom World", source_type="wiki"):
+    """Download one user-approved source into the local ranked lore library."""
+    source_type = str(source_type or "wiki").lower().strip()
+    if source_type not in SOURCE_AUTHORITY:
+        source_type = "unknown"
+    source_url = _validate_public_url(url)
+    request = Request(source_url, headers={"User-Agent": "WorldwalkerRPG/3 lore updater"})
+    with urlopen(request, timeout=20) as response:
+        final_url = _validate_public_url(response.geturl())
+        raw = response.read(512 * 1024 + 1)
+        content_type = str(response.headers.get("Content-Type") or "").lower()
+    if len(raw) > 512 * 1024:
+        raise ValueError("Lore web sources must be 512 KB or smaller.")
+    decoded = raw.decode("utf-8", errors="replace")
+    title = urlparse(final_url).path.rstrip("/").split("/")[-1].replace("_", " ") or urlparse(final_url).hostname
+    if "json" in content_type or final_url.lower().endswith(".json"):
+        try:
+            data = json.loads(decoded)
+            if isinstance(data, dict) and isinstance(data.get("extract"), str):
+                text = data["extract"]
+                title = str(data.get("title") or title)
+            else:
+                text = json.dumps(data, ensure_ascii=False)
+        except json.JSONDecodeError as exc:
+            raise ValueError("The source claimed to be JSON but was not valid JSON.") from exc
+    elif "html" in content_type or "<html" in decoded[:1000].lower():
+        parser = _ReadablePage(); parser.feed(decoded)
+        title = parser.title or title
+        text = "\n".join(dict.fromkeys(parser.parts))
+    else:
+        text = decoded
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()[:8000]
+    if len(text) < 80:
+        raise ValueError("The source did not expose enough readable text to import.")
+    keywords = " ".join(dict.fromkeys(re.findall(r"[A-Za-z0-9'ōū-]{4,}", f"{title} {text[:5000]}")))[:1000]
+    entry = {"title": str(title)[:160], "keys": keywords, "text": text, "source": urlparse(final_url).hostname,
+             "source_type": source_type, "citation": final_url, "claims": {},
+             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    digest = hashlib.sha256(final_url.encode("utf-8")).hexdigest()[:14]
+    target = USER_LORE_DIR / f"web_{safe_filename(world)}_{digest}.json"
+    target.write_text(json.dumps({world: [entry]}, indent=2, ensure_ascii=False), encoding="utf-8")
+    reload_lore()
+    return {"name": target.name, "path": str(target), "entries": 1, "worlds": [world], "citation": final_url, "updated": True}
 
 def _normalized_entry(entry, default_source="Source not recorded", default_type="unknown"):
     row = dict(entry)

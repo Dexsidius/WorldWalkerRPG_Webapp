@@ -164,7 +164,7 @@ WORLD_ARCHETYPE_GEAR = {
         "Hoho Specialist": "Unnamed Asauchi and academy movement-training sandals",
         "Healer": "Unnamed Asauchi and basic Fourth Division first-aid supplies",
         "Tactician": "Unnamed Asauchi, soul pager and mission notebook",
-        "Kaido Healer": "Unnamed Asauchi and academy medical kit",
+        "Kaidō Healer": "Unnamed Asauchi and academy medical kit",
         "Tactical Officer": "Unnamed Asauchi, academy field kit and patrol notebook",
     },
 }
@@ -389,6 +389,12 @@ WORLD_LOCATION_START_PACKAGES = {
     ("Naruto", "Iron Country"): {"special_patch": {"Home Village": "Iron Country"}},
     ("Bleach", "Shin'o Academy"): {"special_patch": {"Spiritual Nature": "Soul Reaper", "Shinigami Rank": "Academy Senior", "Squad": "Unassigned"}},
     ("Bleach", "Seireitei"): {"special_patch": {"Spiritual Nature": "Soul Reaper", "Shinigami Rank": "Unseated Graduate", "Squad": "Unassigned"}},
+    ("Solo Max-Level Newbie", "Floor 5"): {"position": "Experienced Early Climber", "level": 8,
+        "stat_minimums": {"Strength": 38, "Dexterity": 38, "Constitution": 36, "Intelligence": 36, "Wisdom": 34, "Luck": 30},
+        "special_patch": {"Floor": 5, "System Status": "Active Player"}},
+    ("Solo Max-Level Newbie", "Floor 10"): {"position": "Advanced Early Climber", "level": 16,
+        "stat_minimums": {"Strength": 52, "Dexterity": 52, "Constitution": 48, "Intelligence": 48, "Wisdom": 44, "Luck": 36},
+        "special_patch": {"Floor": 10, "System Status": "Active Player"}},
 }
 
 # Major groups can be known without being magically reachable. Membership
@@ -457,6 +463,10 @@ WORLD_EXPLICIT_HIDDEN_CLASS_FORMS = {
 # turning every new campaign into a reroll hunt.
 RANDOM_STARTING_ABILITY_CHANCE = 0.08
 RANDOM_HIDDEN_CLASS_CHANCE = 0.04
+GENERIC_COMPETENCY_NAME = re.compile(
+    r"\b(fundamentals?|field readiness|conditioning|tradecraft|mission command|field command|"
+    r"combat style|background expertise|system adaptation|professional access|senior curriculum)\b", re.I
+)
 
 # A hidden class is a real mechanical package, not a decorative title. Each
 # form supplies a setting-native identity and a signature technique; the
@@ -778,14 +788,14 @@ class CampaignMixin:
 The player's background is data to honor, not an instruction to repeat. Invent a distinct proper name and mechanics for this character; do not select a stock archetype, merely swap an element into a template, copy a canon power, or mention generation/prompts/templates.
 {WORLD_DATA[world]['rules']}
 {world_focus}
-Canon-relative balance is mandatory: explain what established category/level it is comparable to at the start and what its earned ceiling could become. Player-authored powerful starts are allowed when stated, but starting control must match the background's claimed experience. The package needs multiple coherent uses, a limitation that matters in play, counters, and concrete advancement milestones.
+Canon-relative parity is mandatory. Compare the design standard—not just its damage—to the setting's real signature powers. Match their depth, mechanical complexity, uniqueness, number of practical applications, meaningful restrictions, starting effectiveness, and eventual power ceiling. A new power may be non-canon and may become as consequential as the world's strongest established powers when the premise and earned growth support it. Player-authored powerful starts are allowed when stated, but starting control must match the background's claimed experience. The package needs multiple coherent uses, a limitation that matters in play, counters, and concrete advancement milestones.
 Return JSON only, with no markdown."""
         payload = {
             "kind": "hidden_class" if is_class else ("kekkei_genkai" if explicit_kekkei else "starting_ability"),
             "world": world,
             "character_background": text,
             "starting_power_boost": int(boost),
-            "relevant_lore": format_lore_context(world, f"{kind} {text}", limit=3),
+            "relevant_lore": format_lore_context(world, f"signature powers abilities {kind} {text}", limit=6),
             "schema": ({
                 "name": "unique proper class name", "kind": "setting-native class category", "rank": "rarity/grade",
                 "description": "identity and playstyle", "effect": "starting class feature with 2-3 coherent uses",
@@ -1140,6 +1150,86 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             rank = "Academy Student"
         return f"{village or 'Unaffiliated'} - {rank}"
 
+    @staticmethod
+    def background_power_adjustments(world, background):
+        """Translate explicit innate/training claims into setting-relative stats.
+
+        This intentionally works in every built-in world. A background is an
+        authoritative character-creation input, not flavor text that the GM
+        may ignore after it generates a prose biography.
+        """
+        text = str(background or "").lower()
+        if not text:
+            return {}, []
+        intensity = 0
+        if re.search(r"\b(imme(?:nse|asurable)|overwhelming|monstrous|bottomless|vast|enormous|prodigious)\b", text):
+            intensity = 34
+        elif re.search(r"\b(exceptional|powerful|great|high|unusually strong|massive)\b", text):
+            intensity = 22
+        elif re.search(r"\b(above average|unusual|notable|strong|gifted)\b", text):
+            intensity = 12
+        if not intensity:
+            return {}, []
+        concepts = {
+            "One Piece": ((r"will|spirit|haki|conqueror", ("Willpower", "Instinct")),
+                          (r"strength|body|physique|power", ("Strength", "Endurance")),
+                          (r"speed|agility|reflex", ("Agility", "Instinct"))),
+            "Hunter x Hunter": ((r"aura|nen", ("Aura Control", "Willpower")),
+                                (r"strength|body|physique", ("Strength", "Willpower")),
+                                (r"speed|agility|reflex", ("Agility", "Cunning"))),
+            "Naruto": ((r"chakra|life force|stamina", ("Chakra Control", "Willpower")),
+                       (r"ninjutsu|jutsu", ("Ninjutsu", "Chakra Control")),
+                       (r"genjutsu|illusion", ("Genjutsu", "Intellect")),
+                       (r"taijutsu|body|strength|speed", ("Taijutsu", "Willpower"))),
+            "Solo Max-Level Newbie": ((r"mana|magic", ("Intelligence", "Wisdom")),
+                                      (r"strength|body|physique", ("Strength", "Constitution")),
+                                      (r"speed|agility|reflex", ("Dexterity", "Luck"))),
+            "Overgeared": ((r"mana|magic", ("Intelligence", "Wisdom")),
+                           (r"craft|forge|smith|dexter", ("Dexterity", "Intelligence")),
+                           (r"strength|body|physique", ("Strength", "Constitution"))),
+            "Reincarnated as a Slime": ((r"magicule|magic|energy", ("Magicule Control", "Willpower")),
+                                        (r"skill|analysis|learn", ("Skill Mastery", "Insight")),
+                                        (r"presence|aura", ("Presence", "Willpower"))),
+            "Bleach": ((r"spiritual pressure|reiatsu|reiryoku|spiritual power", ("Reiatsu Control", "Willpower")),
+                       (r"kido|kidō|spell", ("Kido", "Reiatsu Control")),
+                       (r"speed|hoho|shunpo", ("Hoho", "Reiatsu Control")),
+                       (r"sword|zanjutsu", ("Zanjutsu", "Willpower"))),
+            "Custom World": ((r"magic|mana|spiritual|energy|power", ("Intelligence", "Wisdom")),
+                             (r"strength|body|physique", ("Strength", "Constitution")),
+                             (r"speed|agility|reflex", ("Dexterity", "Wisdom"))),
+        }
+        changes, reasons = {}, []
+        for pattern, stat_names in concepts.get(world, concepts["Custom World"]):
+            if not re.search(pattern, text):
+                continue
+            for index, stat in enumerate(stat_names):
+                changes[stat] = max(changes.get(stat, 0), intensity if index == 0 else max(6, intensity // 2))
+            reasons.append(f"The background establishes unusually high {stat_names[0].lower()}")
+        return changes, reasons
+
+    def generate_naruto_lineage_profile(self, background, generated_ability):
+        """Give Kekkei Genkai and Dōjutsu their own persistent power card."""
+        text = str(background or "")
+        lower = text.lower()
+        is_dojutsu = bool(re.search(r"\b(d[ōo]jutsu|eye technique|special eyes?|ocular|sharingan|byakugan|rinnegan)\b", lower))
+        details = copy.deepcopy((generated_ability or {}).get("details") or {})
+        name = str((generated_ability or {}).get("name") or "Unawakened Bloodline").strip()
+        category = "Dōjutsu" if is_dojutsu else "Kekkei Genkai"
+        return {
+            "name": name,
+            "category": category,
+            "canon_status": "Original, world-valid player ability" if not re.search(r"\b(sharingan|byakugan|rinnegan|wood release|ice release|lava release)\b", lower) else "Background-established lineage",
+            "stage": str(details.get("rank") or "Nascent"),
+            "origin": str(details.get("origin") or "An inherited chakra trait established by the character's background."),
+            "abilities": [str(details.get("effect") or details.get("description") or "Its first practical application has begun to emerge.")],
+            "limitations": [str(details.get("limitation") or "Use is limited by chakra, control, physical strain, and counters appropriate to its mechanism.")],
+            "counters": ["Opponents can exploit its stated setup, range, sensory limits, chakra cost, or a superior relevant technique."],
+            "growth_path": str(details.get("growth_path") or "Awaken further applications through compatible training and meaningful conflict."),
+            "canon_balance": str(details.get("canon_balance") or "Designed to match canon bloodlines in depth, usefulness, counterplay, and earned ceiling."),
+            "development_evidence": ["Established in the creation background"],
+            "non_canon_allowed": True,
+        }
+
     def infer_starting_profile(self, world, origin, archetype, background, stats, start_location="", allow_starting_specials=True):
         text = f"{origin} {archetype} {background}".lower()
         boost, band = 0, "Average beginner"
@@ -1153,9 +1243,25 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             boost, band = 8, "Trained starter"
         primary = primary_stats_for(world, archetype)
         background_profile = self.build_background_profile(world, origin, archetype, background, boost, primary)
+        background_profile["growth_profile"]["combat_style"] = str(archetype or origin or "Adaptive").strip()
+        background_profile["growth_profile"]["style_rule"] = (
+            f"{archetype or origin or 'The character'} is the character's practiced approach. Resolve action scenes through that style, "
+            "equipment, body use, and established techniques. Unrelated disciplines require instruction and substantially more practice; "
+            "for example, a brawler defaults to fists, movement, grappling, and body conditioning rather than unexplained sword mastery."
+        )
         learning_rate = background_profile["growth_profile"]["learning_rate"]
         aptitude_bonus = 4 if learning_rate >= 1.3 else (2 if learning_rate > 1 else (-2 if learning_rate < 1 else 0))
         adjusted = {k: max(1, int(v) + boost + (aptitude_bonus if k in primary else 0)) for k, v in stats.items()}
+        background_adjustments, background_stat_reasons = self.background_power_adjustments(world, background)
+        for stat_name, amount in background_adjustments.items():
+            if stat_name in adjusted:
+                adjusted[stat_name] = max(1, int(adjusted[stat_name]) + int(amount))
+        if background_stat_reasons:
+            background_profile["growth_profile"]["starting_strengths"] = list(dict.fromkeys(
+                [*background_profile["growth_profile"].get("starting_strengths", []), *background_adjustments.keys()]
+            ))
+            background_profile["growth_profile"]["background_stat_reasons"] = background_stat_reasons
+            band = power_profile_for(world, adjusted, archetype).get("overall", {}).get("name", band)
         base_stats = copy.deepcopy(adjusted)
         skill_name = WORLD_STARTER_SKILL.get(world, "Background Expertise")
         if "uchiha" in text: skill_name = "Uchiha Fire and Dōjutsu Foundations"
@@ -1171,9 +1277,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 title_parts.append(str(archetype or "Adventurer").strip())
             title = " ".join(title_parts)
         starter_description = starter_skill_description(world, archetype, skill_name)
-        skills = {skill_name: {"rank": "Trained" if boost < 20 else "Exceptional", "bonus": 4 + boost // 10,
-                               "description": starter_description,
-                               **self.combat_skill_metadata(skill_name, starter_description)}}
+        # Generic competence belongs in stats, not as a fake named ability.
+        # Skills are reserved for actual techniques, spells, formations,
+        # releases, class features, and other setting-recognizable abilities.
+        skills = {}
         hidden_class = None
         generated_ability = None
         class_requested = allow_starting_specials and self.hidden_class_requested(background)
@@ -1201,7 +1308,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             )
         ability_requested = allow_starting_specials and self.background_ability_requested(background)
         ability_declined = self.background_ability_declined(background)
-        ability_awarded = world != "Bleach" and (
+        ability_awarded = (
             ability_requested or (
                 allow_starting_specials and not ability_declined and random.random() < RANDOM_STARTING_ABILITY_CHANCE
             )
@@ -1210,6 +1317,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             generated_ability = self.generate_background_ability(world, background, boost)
             skills[generated_ability["name"]] = copy.deepcopy(generated_ability["details"])
             self.install_background_ability_skills(skills, generated_ability)
+        naruto_lineage_profile = None
+        if world == "Naruto" and generated_ability and re.search(r"\b(kekkei genkai|bloodline|lineage|d[ōo]jutsu|eye technique|special eyes?|ocular)\b", str(background), re.I):
+            naruto_lineage_profile = self.generate_naruto_lineage_profile(background, generated_ability)
         bleach_release_profile = None
         bleach_tracks = []
         if world == "Bleach":
@@ -1239,8 +1349,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         equipment = {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])}
         hp_max, resource_max = self.derive_pools(world, adjusted)
         notice = ""
-        if boost >= 20:
-            notice = (f"This background creates an {band.lower()} character who begins far above an average local starter. "
+        if boost >= 20 or background_adjustments:
+            article = "an" if str(band).lower()[:1] in "aeiou" else "a"
+            notice = (f"This background creates {article} {band.lower()} character whose starting mechanics reflect the stated background. "
                       "The campaign allows it; rivals, factions and consequences will respond at the same scale.")
         race = infer_race_from_background(world, background, origin, archetype) if world_supports_races(world) else ""
         starting_currency = self.infer_starting_wealth(world, origin, archetype, background, boost)
@@ -1251,6 +1362,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "_base_learning_rate": learning_rate,
                 "_boost": boost, "_core_skill_name": skill_name,
                 "bleach_release_profile": bleach_release_profile, "prerequisite_tracks": bleach_tracks,
+                "naruto_lineage_profile": naruto_lineage_profile,
+                "background_stat_adjustments": background_adjustments,
                 "_background_supplied": bool(str(background or "").strip()),
                 **background_profile}
 
@@ -1262,6 +1375,15 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         note = str(start_note or "").lower()
         if world == "One Piece" and "marine recruit" in note:
             merge(package, WORLD_ORIGIN_START_PACKAGES[world]["Marine Recruit"])
+        if world == "Bleach":
+            if "kidō honors" in note or "kido honors" in note:
+                merge(package.setdefault("special_patch", {}), {"Academy Focus": "Kidō Honors"})
+            elif "kidō corps candidate" in note or "kido corps candidate" in note:
+                merge(package.setdefault("special_patch", {}), {"Placement Candidate": "Kidō Corps"})
+            elif "onmitsukidō candidate" in note or "onmitsukido candidate" in note:
+                merge(package.setdefault("special_patch", {}), {"Placement Candidate": "Onmitsukidō"})
+            elif "field practicum" in note:
+                merge(package.setdefault("special_patch", {}), {"Academy Focus": "Field Practicum"})
         if world == "Naruto":
             village = start_location if start_location in {
                 "Konohagakure", "Sunagakure", "Kirigakure", "Kumogakure", "Iwagakure", "Amegakure"
@@ -1341,6 +1463,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             if ability in stats:
                 stats[ability] = max(int(stats.get(ability, 1) or 1), int(minimum))
         merge(profile.setdefault("skills", {}), package.get("skills", {}))
+        profile["skills"] = {
+            name: detail for name, detail in profile["skills"].items()
+            if not GENERIC_COMPETENCY_NAME.search(str(name))
+        }
         merge(profile.setdefault("equipment", {}), package.get("equipment", {}))
         if world == "Bleach":
             package.setdefault("special_patch", {})["Kido Curriculum"] = kido_reference_summary()
@@ -1407,6 +1533,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         merge(self.state.setdefault("special", {}), package.get("special_patch", {}))
         if package.get("position"):
             self.state["position"] = str(package["position"])
+        if package.get("level"):
+            self.state["level"] = max(1, int(package["level"]))
+            self.state["xp_next"] = max(100, self.state["level"] * 100)
         if package.get("affiliations"):
             self.state["affiliations"] = copy.deepcopy(package["affiliations"])
         for faction, standing in package.get("reputation", {}).items():
@@ -1523,7 +1652,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             if ability in stats:
                 stats[ability] = max(1, int(value))
         if isinstance(scenario.get("skills"), dict) and scenario["skills"]:
-            normalized["skills"] = copy.deepcopy(scenario["skills"])
+            normalized["skills"] = {
+                name: copy.deepcopy(detail) for name, detail in scenario["skills"].items()
+                if not GENERIC_COMPETENCY_NAME.search(str(name))
+            }
         if isinstance(scenario.get("equipment"), dict) and scenario["equipment"]:
             normalized["equipment"] = copy.deepcopy(scenario["equipment"])
         if scenario.get("title"):
@@ -1678,6 +1810,11 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             normalize_tuning(self.state)
             if isinstance(profile.get("generated_ability"), dict):
                 self.state["special"]["Starting Ability"] = copy.deepcopy(profile["generated_ability"])
+            if isinstance(profile.get("naruto_lineage_profile"), dict):
+                lineage = copy.deepcopy(profile["naruto_lineage_profile"])
+                label = "Dōjutsu Profile" if lineage.get("category") == "Dōjutsu" else "Kekkei Genkai Profile"
+                self.state["special"][label] = lineage
+                self.state["special"][lineage.get("category", "Kekkei Genkai")] = lineage.get("name", "Unawakened Bloodline")
             if isinstance(profile.get("hidden_class"), dict):
                 self.state["special"]["Hidden Class"] = copy.deepcopy(profile["hidden_class"])
             self.state["portrait_traits"] = [appearance_desc] if appearance_desc.strip() else []

@@ -52,6 +52,34 @@ EVALUATION_SCENARIOS = [
      "state": {"location": "Dwargon", "skills": {"Hidden Devourer": {"hidden": True}},
                "npc_memories": {"Merchant Toma": {"knowledge": {"confirmed": [], "heard": [], "suspected": [], "false_beliefs": []}}}},
      "must_address": ["merchant"], "expected_fields": ["npc_memories"], "forbidden": ["hidden devourer"]},
+    {"id": "solo_xp_title", "name": "Solo XP and title persistence", "world": "Solo Max-Level Newbie",
+     "action": "Clear the Floor 1 hidden condition, collect the earned XP, and claim its title.",
+     "state": {"location": "Floor 1", "level": 2, "xp": 40, "titles": [], "solo_system": {"floor": 1}},
+     "must_address": ["hidden condition", "xp", "title"], "expected_fields": ["xp", "titles", "solo_system"], "lore_terms": ["system"]},
+    {"id": "overgeared_xp_title", "name": "Overgeared XP and title persistence", "world": "Overgeared",
+     "action": "Finish the named smithing commission, receive its XP, and record any earned production title.",
+     "state": {"location": "Winston", "level": 3, "xp": 70, "titles": [], "known_recipes": ["Commissioned Iron Sword"]},
+     "must_address": ["commission", "xp", "title"], "expected_fields": ["xp", "titles", "inventory"], "lore_terms": ["craft"]},
+    {"id": "bleach_background_power", "name": "Bleach background power fidelity", "world": "Bleach",
+     "action": "Have the examiner assess the immense spiritual pressure I was born with without pretending it means mastered control.",
+     "state": {"location": "Shin'o Academy", "stats": {"Reiatsu Control": 72, "Willpower": 54}, "resource": 213,
+               "special": {"Growth Profile": {"background_stat_reasons": ["The background establishes unusually high reiatsu control"]}}},
+     "must_address": ["immense", "spiritual pressure", "control"], "expected_fields": ["special"], "lore_terms": ["reiatsu"],
+     "forbidden": ["average spiritual pressure"]},
+    {"id": "naruto_original_dojutsu", "name": "Original Dōjutsu parity", "world": "Naruto",
+     "action": "Use the first awakened application of my original Dōjutsu to read the enemy's chakra rhythm.",
+     "state": {"location": "Konohagakure", "special": {"Dōjutsu Profile": {"name": "Pulseglass Eye", "stage": "Nascent", "abilities": ["Reads repeating chakra rhythms"], "limitations": ["Eye strain and misleading irregular rhythms"], "non_canon_allowed": True}}},
+     "must_address": ["pulseglass", "chakra rhythm", "strain"], "expected_fields": ["special"], "lore_terms": ["dōjutsu"],
+     "forbidden": ["cannot exist because it is not canon"]},
+    {"id": "custom_world_consistency", "name": "Custom-world rule continuity", "world": "Custom World",
+     "action": "Use the previously established glass-song magic to reinforce the bridge without inventing a new power source.",
+     "state": {"location": "Western March", "custom_world": "Magic comes only from resonating marked glass.", "skills": {"Glass-Song Brace": {"effect": "Resonates marked glass to reinforce a structure", "limitation": "Needs prepared glass marks"}}},
+     "must_address": ["glass", "bridge", "mark"], "expected_fields": ["skills"], "forbidden": ["mana pool"]},
+    {"id": "style_fidelity", "name": "Combat-style fidelity", "world": "One Piece",
+     "action": "As a lifelong brawler, defeat the guard using my practiced style.",
+     "state": {"location": "Loguetown", "stats": {"Strength": 58, "Agility": 44}, "skills": {},
+               "special": {"Growth Profile": {"combat_style": "Brawler", "style_rule": "Uses fists, body movement and grappling"}}},
+     "must_address": ["fist", "body", "guard"], "expected_fields": ["stats"], "forbidden": ["sword technique", "brawler fundamentals"]},
 ]
 
 
@@ -74,13 +102,13 @@ def _text_blob(value):
 def score_evaluation(scenario, response):
     criteria = []
     structured = isinstance(response, dict) and isinstance(response.get("narrative"), str) and isinstance(response.get("state_patch", {}), dict)
-    criteria.append({"name": "Structured response", "score": 20 if structured else 0, "max": 20,
+    criteria.append({"name": "Structured response", "score": 15 if structured else 0, "max": 15,
                      "detail": "Required narrative and state-patch fields are present." if structured else "Required JSON fields are missing."})
     if not isinstance(response, dict):
         return {"score": 0, "criteria": criteria}
     narrative = str(response.get("narrative") or "")
     clean = 80 <= len(narrative) <= 2400 and not re.search(r"Generated (Ability|Backstory|Class)|\[\s*\{|undefined|null", narrative, re.I)
-    criteria.append({"name": "Readable narrative", "score": 20 if clean else 8 if narrative else 0, "max": 20,
+    criteria.append({"name": "Readable narrative", "score": 15 if clean else 6 if narrative else 0, "max": 15,
                      "detail": "Narrative is readable and free of internal-generation labels." if clean else "Narrative is empty, unusually sized, or exposes internal formatting."})
     blob = _text_blob(response)
     addressed = [term for term in scenario.get("must_address", []) if term.lower() in blob]
@@ -97,9 +125,13 @@ def score_evaluation(scenario, response):
                      "detail": f"Represented {len(present)} of {len(fields)} expected persistent outcomes" + (f"; illegally authored {', '.join(sorted(forbidden_owned))}." if forbidden_owned else ".")})
     forbidden = [term for term in scenario.get("forbidden", []) if term.lower() in blob]
     lore_found = [term for term in scenario.get("lore_terms", []) if term.lower() in blob]
-    lore_score = 0 if forbidden else (20 if not scenario.get("lore_terms") or lore_found else 8)
-    criteria.append({"name": "Lore and secrecy", "score": lore_score, "max": 20,
+    lore_score = 0 if forbidden else (15 if not scenario.get("lore_terms") or lore_found else 6)
+    criteria.append({"name": "Lore and secrecy", "score": lore_score, "max": 15,
                      "detail": ("No forbidden reveal or lore violation detected." if not forbidden else "Revealed or used forbidden information: " + ", ".join(forbidden))})
+    suggestions = response.get("suggested_actions") if isinstance(response.get("suggested_actions"), list) else []
+    causal = bool(response.get("events") or patch) and len([x for x in suggestions if str(x).strip()]) >= 2
+    criteria.append({"name": "Causality and continuation", "score": 15 if causal else 7 if patch else 0, "max": 15,
+                     "detail": "Outcome changes state and offers grounded next actions." if causal else "Outcome lacks a persistent consequence or usable continuation."})
     return {"score": sum(row["score"] for row in criteria), "criteria": criteria}
 
 

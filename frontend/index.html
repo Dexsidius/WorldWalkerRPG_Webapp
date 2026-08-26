@@ -708,13 +708,21 @@
 </div>
 
 <div class="modal-backdrop" id="modal-major-roll">
-  <div class="modal major-roll-modal">
-    <header class="modal-head"><span>✦ FATE CHECK — D100</span></header>
-    <div class="modal-body major-roll-body">
-      <p id="major-roll-reason">A turning point hangs in the balance.</p>
-      <div class="d100-orb" id="d100-orb"><span id="d100-value">?</span><small>D100</small></div>
-      <p class="hint" id="major-roll-details">Your stats, skills and titles are added after the roll.</p>
-      <button id="btn-major-roll" class="btn-primary full">ROLL THE D100</button>
+  <div class="modal major-roll-modal percentile-roll" id="d100-orb">
+    <header class="percentile-topline">
+      <div><span class="roll-kicker">Critical fate check</span><p id="major-roll-reason">A turning point hangs in the balance.</p></div>
+      <span class="roll-risk" id="major-roll-risk">Extreme difficulty</span>
+    </header>
+    <div class="percentile-tray" id="percentile-tray" aria-busy="false">
+      <span class="percentile-world-mark" id="percentile-world-mark" aria-hidden="true">WW</span>
+      <div class="percentile-dice" role="img" aria-label="Percentile dice waiting to roll">
+        <div class="percentile-die die-tens"><svg viewBox="0 0 160 180" aria-hidden="true"><path class="die-base" d="M80 13 145 50 80 87 15 50Z"/><path class="face-dark" d="M15 50 80 87 80 160 15 123Z"/><path class="face-light" d="M80 87 145 50 145 123 80 160Z"/><path class="die-seam" d="M15 50 80 87 145 50M80 87V160"/><path class="die-outline" d="M80 13 145 50 145 123 80 160 15 123 15 50Z"/><text class="die-number" x="80" y="64" id="d100-tens">—</text><text class="side-number" x="49" y="116" transform="rotate(29 49 116)">20</text><text class="side-number" x="112" y="116" transform="rotate(-29 112 116)">50</text></svg></div>
+        <div class="percentile-die die-ones"><svg viewBox="0 0 160 180" aria-hidden="true"><path class="die-base" d="M80 13 145 50 80 87 15 50Z"/><path class="face-dark" d="M15 50 80 87 80 160 15 123Z"/><path class="face-light" d="M80 87 145 50 145 123 80 160Z"/><path class="die-seam" d="M15 50 80 87 145 50M80 87V160"/><path class="die-outline" d="M80 13 145 50 145 123 80 160 15 123 15 50Z"/><text class="die-number" x="80" y="64" id="d100-ones">—</text><text class="side-number" x="49" y="116" transform="rotate(29 49 116)">2</text><text class="side-number" x="112" y="116" transform="rotate(-29 112 116)">5</text></svg></div>
+      </div>
+    </div>
+    <div class="percentile-details">
+      <div><div class="roll-equation"><strong id="d100-value">?</strong><span id="major-roll-details">Relevant bonuses are added after the roll.</span></div><div class="roll-result" id="major-roll-result" aria-live="polite">Ready to roll</div></div>
+      <button id="btn-major-roll" class="btn-primary">ROLL PERCENTILE DICE</button>
     </div>
   </div>
 </div>

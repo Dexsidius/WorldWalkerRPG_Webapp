@@ -1,14 +1,25 @@
 """Shared helpers: state merging, dice math, asset path resolution, and the
 scene/portrait keyword resolvers ported from the original Tkinter build."""
-import os, re, copy, sys, hashlib
+import os, re, copy, sys, hashlib, tempfile
 from pathlib import Path
 
 APP_DIR_NAME = "WorldwalkerRPG"
 
 
 def data_dir():
-    base = os.getenv("APPDATA") or str(Path.home())
-    p = Path(base) / APP_DIR_NAME
+    explicit = os.getenv("WORLDWALKER_DATA_DIR")
+    if explicit:
+        p = Path(explicit).expanduser()
+        base = str(p.parent)
+    elif "unittest" in sys.modules or "pytest" in sys.modules:
+        # Automated tests must never load a player's live model keys, saves,
+        # or settings. A configured live major-event model previously made
+        # otherwise deterministic unit tests call the network.
+        p = Path(tempfile.gettempdir()) / f"WorldwalkerRPG-tests-{os.getpid()}"
+        base = str(p.parent)
+    else:
+        base = os.getenv("APPDATA") or str(Path.home())
+        p = Path(base) / APP_DIR_NAME
     try:
         (p / "saves").mkdir(parents=True, exist_ok=True)
     except OSError as e:

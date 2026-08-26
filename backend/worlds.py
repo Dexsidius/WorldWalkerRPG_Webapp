@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.12.3"
+APP_VERSION = "3.13.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1290,6 +1290,10 @@ WORLD_START_OPTIONS = {
         {"label": "Wano Country (closed nation)", "location": "Wano Country", "note": "Starting inside isolated Wano as a native, captive, smuggler, pirate, samurai, or covert visitor."},
         {"label": "Egghead Island (future island)", "location": "Egghead Island", "note": "Starting on Dr. Vegapunk's restricted island as a researcher, government asset, test subject, visitor, or infiltrator."},
         {"label": "Mary Geoise (seat of government)", "location": "Mary Geoise", "note": "Starting at the World Government's most restricted capital with a background establishing status, service, captivity, or infiltration."},
+        {"label": "Arlong Park (occupied territory)", "location": "Arlong Park", "note": "Starting in Arlong-controlled territory as a prisoner, collaborator, infiltrator, local resister, or stranded traveler."},
+        {"label": "Whiskey Peak (bounty-hunter town)", "location": "Whiskey Peak", "note": "Starting in the apparent welcoming town whose hidden economy revolves around bounty hunters and newly arrived pirates."},
+        {"label": "Thriller Bark (haunted ship-island)", "location": "Thriller Bark", "note": "Starting aboard Thriller Bark with a background explaining capture, infiltration, service, or accidental arrival."},
+        {"label": "Punk Hazard (forbidden research island)", "location": "Punk Hazard", "note": "Starting on the restricted island as a survivor, captive, researcher, government asset, or infiltrator in a compatible era."},
     ],
     "Hunter x Hunter": [
         {"label": "Whale Island (rural start)", "location": "Whale Island", "note": ""},
@@ -1298,6 +1302,10 @@ WORLD_START_OPTIONS = {
         {"label": "Heavens Arena (fighter or spectator)", "location": "Heavens Arena", "note": "Starting around the fighting tower as a competitor, worker, trainer, or visitor; Nen knowledge still depends on the background and era."},
         {"label": "Kukuroo Mountain (testing gate region)", "location": "Kukuroo Mountain", "note": "Starting near the Zoldyck estate with a background explaining work, travel, training, or a deliberate attempt to reach the Testing Gate."},
         {"label": "Greed Island (qualified entrant)", "location": "Greed Island", "note": "Starting as a qualified Greed Island player; choose a compatible era or accept the start as a deliberate divergence."},
+        {"label": "Meteor City (discarded city)", "location": "Meteor City", "note": "Starting in Meteor City as a resident, visitor, recruit, aid worker, criminal contact, or outsider under scrutiny."},
+        {"label": "NGL (isolated nation)", "location": "NGL", "note": "Starting inside NGL with a background that accounts for its strict borders and limited technology."},
+        {"label": "Hunter Association HQ (professional start)", "location": "Hunter Association HQ", "note": "Starting at Association headquarters as an applicant, staff member, licensed Hunter, client, or escorted visitor."},
+        {"label": "Zevil Island (field trial)", "location": "Zevil Island", "note": "Starting during or around a Hunter Exam field phase, expedition, recovery operation, or independent survival test."},
     ],
     "Naruto": [
         {"label": "Konohagakure", "location": "Konohagakure", "note": ""},
@@ -1307,14 +1315,24 @@ WORLD_START_OPTIONS = {
         {"label": "Iwagakure", "location": "Iwagakure", "note": "A shinobi of Iwagakure, the Hidden Stone Village."},
         {"label": "Akatsuki (Amegakure)", "location": "Amegakure", "note": "Starting already recruited into the Akatsuki, an international criminal organization operating out of Amegakure — not affiliated with any Hidden Village."},
         {"label": "Iron Country", "location": "Iron Country", "note": "A samurai-in-training of Iron Country — chakra plays little part in daily life here; skill is earned through the blade and discipline, not jutsu."},
+        {"label": "Forest of Death (field exercise)", "location": "Forest of Death", "note": "Starting during a sanctioned exercise, Chunin Exam phase, patrol, research assignment, or unauthorized entry."},
+        {"label": "Land of Waves (frontier mission)", "location": "Land of Waves", "note": "Starting in the Land of Waves as a local, traveler, mercenary, missing-nin, or shinobi assigned to a regional mission."},
+        {"label": "Land of Rice Fields (borderland)", "location": "Land of Rice Fields", "note": "Starting in the border region as a local, wandering shinobi, investigator, merchant escort, or future Sound contact."},
+        {"label": "Kannabi Bridge (wartime start)", "location": "Kannabi Bridge", "note": "Starting near Kannabi Bridge during a compatible wartime era or as a deliberate alternate-history premise."},
     ],
     "Bleach": [
         {"label": "Shin'o Academy (senior student)", "location": "Shin'o Academy", "note": "A final-year Soul Reaper academy student preparing for graduation and division placement."},
         {"label": "Seireitei (recent graduate)", "location": "Seireitei", "note": "A newly graduated Soul Reaper awaiting interviews, recommendations and assignment to one of the thirteen divisions."},
+        {"label": "Shin'o Academy (Kidō honors senior)", "location": "Shin'o Academy", "note": "A final-year Soul Reaper academy student with a Kidō focus, preparing for graduation and possible Kidō Corps or squad interviews."},
+        {"label": "Shin'o Academy (field practicum senior)", "location": "Shin'o Academy", "note": "A final-year Soul Reaper academy student beginning supervised field practicum before graduation and division placement."},
+        {"label": "Seireitei (Kidō Corps candidate)", "location": "Seireitei", "note": "A recent Soul Reaper graduate invited to interview with the Kidō Corps while retaining a narrative say in final placement."},
+        {"label": "Seireitei (Onmitsukidō candidate)", "location": "Seireitei", "note": "A recent Soul Reaper graduate under consideration for covert service while retaining a narrative say in final placement."},
     ],
     "Solo Max-Level Newbie": [
         {"label":"Earth — Tower Entrance (manifestation)","location":"Earth — Tower Entrance","note":"Starting outside the newly manifested Tower before the first clear routes are established."},
         {"label":"Floor 1 (opening scenario)","location":"Floor 1","note":"Starting inside the first live Tower scenario as a registered player."},
+        {"label":"Floor 5 (experienced climber)","location":"Floor 5","note":"Starting as an established early climber with preceding clears, equipment, XP and knowledge generated to match the background."},
+        {"label":"Floor 10 (advanced early climber)","location":"Floor 10","note":"Starting at an early boss threshold with prior progression generated to match the claimed route and achievements."},
     ],
     "Overgeared": [
         {"label":"Winston (starting city)","location":"Winston","note":"Starting among Winston's players, craftspeople and local political pressures."},
@@ -1324,6 +1342,9 @@ WORLD_START_OPTIONS = {
         {"label":"Titan (capital)","location":"Titan","note":"Starting in the capital with access and obligations appropriate to the background."},
         {"label":"Kesan Canyon (dangerous route)","location":"Kesan Canyon","note":"Starting on the canyon route as an explorer, mercenary, quest hunter or stranded traveler."},
         {"label":"Temple of Yatan (dangerous start)","location":"Temple of Yatan","note":"Starting near an active Yatan-related danger; the background must explain why the character is there."},
+        {"label":"Frontier (settlement opportunity)","location":"Frontier","note":"Starting where undeveloped territory creates construction, production, monster-hunting and political opportunities."},
+        {"label":"Saharan Empire (imperial society)","location":"Saharan Empire","note":"Starting within the empire with status, access and obligations determined by the background."},
+        {"label":"Northern Frontier (harsh expedition)","location":"Northern Frontier","note":"Starting on a cold frontier as an explorer, soldier, crafter, settler, quest party member, or stranded player."},
     ],
     "Reincarnated as a Slime": [
         {"label":"Great Jura Forest (new arrival)","location":"Great Jura Forest","note":"Starting unaligned in the Great Jura Forest."},
@@ -1332,6 +1353,17 @@ WORLD_START_OPTIONS = {
         {"label":"Dwargon (armed nation)","location":"Dwargon","note":"Starting in Dwargon with legal access and status determined by the background."},
         {"label":"Blumund (human town)","location":"Blumund","note":"Starting in the human town as a resident, adventurer, merchant, demi-human or concealed monster."},
         {"label":"Tempest (established nation)","location":"Tempest","note":"Starting in established Tempest; select a compatible era or accept an alternate-history premise."},
+        {"label":"Kingdom of Falmuth (human power)","location":"Kingdom of Falmuth","note":"Starting in Falmuth as a citizen, soldier, adventurer, official, merchant, demi-human, or concealed monster."},
+        {"label":"Sorcerous Dynasty of Thalion (magical nation)","location":"Sorcerous Dynasty of Thalion","note":"Starting in Thalion with social access, magical education and official scrutiny determined by the background."},
+        {"label":"Demon Lord's Domain (dangerous court)","location":"Demon Lord's Domain","note":"Starting in a demon lord's territory with allegiance, invitation, captivity, infiltration or exceptional survival explained by the background."},
+        {"label":"Dragon Peak (remote frontier)","location":"Dragon Peak","note":"Starting near Dragon Peak as an explorer, monster, pilgrim, researcher or survivor with risks scaled to the background."},
+    ],
+    "Custom World": [
+        {"label":"Starting Region (central start)","location":"Starting Region","note":"Starting in the setting's central region with details generated from the custom-world description."},
+        {"label":"Northern Reach (remote frontier)","location":"Northern Reach","note":"Starting on the northern frontier with climate, factions and opportunities generated from the custom setting."},
+        {"label":"Western March (contested border)","location":"Western March","note":"Starting in a western borderland shaped by the custom setting's active conflicts and trade."},
+        {"label":"Eastern Reach (distant crossroads)","location":"Eastern Reach","note":"Starting at an eastern crossroads with cultures and pressures grounded in the custom setting."},
+        {"label":"Southern Wilds (dangerous wilderness)","location":"Southern Wilds","note":"Starting in the southern wilderness with survival conditions and inhabitants generated from the custom setting."},
     ],
 }
 
@@ -1378,7 +1410,7 @@ BASE_STATE = {
     # real established roster (see MAJOR_CHARACTER_STARTS) seed this at
     # creation; the GM keeps it updated as membership actually changes.
     "faction_rosters":{},
-    "known_recipes":[],"training_log":[],"combat":{},"danger_scenario":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"overgeared_system":{},"solo_system":{},"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":14,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
+    "known_recipes":[],"training_log":[],"combat":{},"danger_scenario":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"overgeared_system":{},"solo_system":{},"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":15,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
     # memory_updates is a transient GM suggestion; reliability.py folds it
     # into the app-owned, deduplicated long-term narrative memory.
     "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]},
@@ -1449,7 +1481,7 @@ WORLD_EXPANSIONS = {
         "currency":"Yen", "currency_baseline":0, "tracks_currency":False,
         "economy_notes":"Kan exists in Soul Society and Yen exists in the Living World, but neither is a persistent player resource in this campaign. Mention money only when a particular scene makes it narratively important. Ordinary living costs and reasonable purchases happen without bookkeeping; meaningful gear and scarce resources depend on rank, authorization, favors, requisitions, availability, or story consequences.",
         "origins":["Shin'o Academy Senior","Recent Shin'o Academy Graduate"],
-        "archetypes":["Zanjutsu Specialist","Kido Caster","Hakuda Fighter","Hoho Specialist","Kaido Healer","Tactical Officer"],
+        "archetypes":["Zanjutsu Specialist","Kido Caster","Hakuda Fighter","Hoho Specialist","Kaidō Healer","Tactical Officer"],
         "training":["Zanjutsu Drills","Kido Incantation Practice","Hakuda Conditioning","Shunpo Practice","Reiatsu Control","Zanpakuto Communication"],
         "shop_types":["Urahara Shop","Squad Quartermaster","Division Requisition Office","Academy Supply Office","Rukongai Artisan"],
         "loot":["Soul Candy","Gikongan","Spirit Medicine","Reishi Training Material","Official Mission Supply","Authorized Equipment"],

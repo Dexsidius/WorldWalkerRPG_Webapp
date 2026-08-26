@@ -5,6 +5,20 @@ result in a stable shape so the Journal, Advisor, combat resolver, and later
 turns all read the same facts instead of interpreting loose prose differently.
 """
 import copy
+import re
+
+
+def _safe_int(value, default=0):
+    """Coerce AI/save values without letting descriptive placeholders crash turns."""
+    if isinstance(value, bool):
+        return int(default)
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, str):
+        cleaned = value.strip().replace(",", "")
+        if re.fullmatch(r"[-+]?\d+(?:\.\d+)?", cleaned):
+            return int(float(cleaned))
+    return int(default)
 
 
 WORLD_PROGRESSION_LABELS = {
@@ -107,7 +121,7 @@ def normalize_world_progression(state, before=None):
             structured_changed = entry.get("mastery") != old_entry.get("mastery")
             branch_legacy_changed = legacy_haki.get(branch, 0) != (old_special.get("Haki", {}) or {}).get(branch, 0)
             mastery = entry.get("mastery", 0) if structured_changed and not branch_legacy_changed else legacy_haki.get(branch, entry.get("mastery", 0))
-            entry["mastery"] = int(mastery or 0)
+            entry["mastery"] = _safe_int(mastery)
             legacy_haki[branch] = entry["mastery"]
             entry.setdefault("applications", [])
             entry.setdefault("evidence", [])
@@ -121,11 +135,11 @@ def normalize_world_progression(state, before=None):
     elif world == "Hunter x Hunter":
         nen = _profile(special.get("Nen Profile"))
         category = special.get("Nen Category", "Unknown")
-        learned = any(int(special.get(key, 0) or 0) > 0 for key in ("Ten", "Zetsu", "Ren")) or str(category).lower() not in {"unknown", "none", ""}
+        learned = any(_safe_int(special.get(key, 0)) > 0 for key in ("Ten", "Zetsu", "Ren")) or str(category).lower() not in {"unknown", "none", ""}
         nen.setdefault("visibility", "Discovered" if learned else "Undiscovered")
         category = sync(nen, "category", "Nen Category", category)
         for key in ("Ten", "Zetsu", "Ren"):
-            nen.setdefault(key.lower(), int(special.get(key, 0) or 0))
+            nen.setdefault(key.lower(), _safe_int(special.get(key, 0)))
         hatsu = _profile(nen.get("hatsu_profile"))
         legacy_hatsu = special.get("Hatsu", "Undeveloped")
         hatsu.setdefault("name", legacy_hatsu)
@@ -151,7 +165,32 @@ def normalize_world_progression(state, before=None):
         sync(profile, "clan", "Clan", "None")
         affinities = special.get("Nature Affinity", "Unknown")
         profile.setdefault("nature_affinities", affinities if isinstance(affinities, list) else ([affinities] if affinities not in {"", "Unknown", "None"} else []))
-        profile.setdefault("kekkei_genkai", special.get("Kekkei Genkai", "None"))
+        kekkei_profile = _profile(special.get("Kekkei Genkai Profile"))
+        dojutsu_profile = _profile(special.get("Dōjutsu Profile"))
+        legacy_kekkei = special.get("Kekkei Genkai", "None")
+        legacy_dojutsu = special.get("Dōjutsu", "None")
+        if kekkei_profile:
+            kekkei_profile.setdefault("name", legacy_kekkei)
+            kekkei_profile.setdefault("category", "Kekkei Genkai")
+            kekkei_profile.setdefault("abilities", [])
+            kekkei_profile.setdefault("limitations", [])
+            kekkei_profile.setdefault("counters", [])
+            kekkei_profile.setdefault("growth_path", "Develop additional world-valid applications through training and conflict.")
+            kekkei_profile.setdefault("non_canon_allowed", True)
+            special["Kekkei Genkai"] = kekkei_profile.get("name", legacy_kekkei)
+            special["Kekkei Genkai Profile"] = kekkei_profile
+        if dojutsu_profile:
+            dojutsu_profile.setdefault("name", legacy_dojutsu)
+            dojutsu_profile.setdefault("category", "Dōjutsu")
+            dojutsu_profile.setdefault("abilities", [])
+            dojutsu_profile.setdefault("limitations", [])
+            dojutsu_profile.setdefault("counters", [])
+            dojutsu_profile.setdefault("growth_path", "Awaken and master further ocular stages through compatible experience.")
+            dojutsu_profile.setdefault("non_canon_allowed", True)
+            special["Dōjutsu"] = dojutsu_profile.get("name", legacy_dojutsu)
+            special["Dōjutsu Profile"] = dojutsu_profile
+        profile["kekkei_genkai"] = copy.deepcopy(kekkei_profile or legacy_kekkei)
+        profile["dojutsu"] = copy.deepcopy(dojutsu_profile or legacy_dojutsu)
         profile.setdefault("summons", special.get("Summons", []))
         profile.setdefault("transformations", special.get("Transformations", []))
         profile["known_jutsu"] = copy.deepcopy(special.get("Known Jutsu", profile.get("known_jutsu", [])))
@@ -166,12 +205,12 @@ def normalize_world_progression(state, before=None):
 
     elif world == "Solo Max-Level Newbie":
         profile = _profile(special.get("System Profile"))
-        profile["floor"] = int(sync(profile, "floor", "Floor", state.get("tower_floor", 0)) or 0)
-        profile["unspent_stat_points"] = int(sync(profile, "unspent_stat_points", "Unspent Stat Points", 0) or 0)
+        profile["floor"] = _safe_int(sync(profile, "floor", "Floor", state.get("tower_floor", 0)))
+        profile["unspent_stat_points"] = _safe_int(sync(profile, "unspent_stat_points", "Unspent Stat Points", 0))
         profile["copied_abilities"] = copy.deepcopy(sync(profile, "copied_abilities", "Copied Abilities", []))
         profile.setdefault("copy_capacity", max(1, len(profile["copied_abilities"]) or 1))
         profile["achievements"] = copy.deepcopy(special.get("Achievements", state.get("achievements", profile.get("achievements", []))))
-        profile["hidden_conditions"] = int(special.get("Hidden Conditions Found", profile.get("hidden_conditions", 0)) or 0)
+        profile["hidden_conditions"] = _safe_int(special.get("Hidden Conditions Found", profile.get("hidden_conditions", 0)))
         profile.setdefault("active_system_notices", [])
         special["System Profile"] = profile
         repairs.append("Synchronized System progression profile")
@@ -184,7 +223,7 @@ def normalize_world_progression(state, before=None):
         profile["primary_class"] = sync(profile, "primary_class", "Class", class_profile.get("name", "Beginner"))
         profile["secondary_class"] = sync(profile, "secondary_class", "Secondary Class", "None")
         profile["class_rarity"] = class_profile.get("rank", profile.get("class_rarity", "Normal"))
-        profile["crafting_mastery"] = int(sync(profile, "crafting_mastery", "Crafting Mastery", 0) or 0)
+        profile["crafting_mastery"] = _safe_int(sync(profile, "crafting_mastery", "Crafting Mastery", 0))
         profile.setdefault("production_specialties", [])
         profile["known_recipes"] = copy.deepcopy(state.get("known_recipes", profile.get("known_recipes", [])))
         profile["guild"] = special.get("Guild", profile.get("guild", "None"))
@@ -197,7 +236,7 @@ def normalize_world_progression(state, before=None):
         profile["species"] = sync(profile, "species", "Species", state.get("race", "Unknown"))
         profile["stage"] = sync(profile, "stage", "Evolution Stage", "Unnamed")
         profile.setdefault("named_status", "Named" if "named" in str(profile["stage"]).lower() else "Unnamed")
-        profile["magicule_capacity"] = int(sync(profile, "magicule_capacity", "Magicule Capacity", 0) or 0)
+        profile["magicule_capacity"] = _safe_int(sync(profile, "magicule_capacity", "Magicule Capacity", 0))
         profile.setdefault("resistances", copy.deepcopy(special.get("Resistances", [])))
         profile.setdefault("intrinsic_skills", _skill_names(state, ("Intrinsic",)))
         named = copy.deepcopy(special.get("Named Skills", []))

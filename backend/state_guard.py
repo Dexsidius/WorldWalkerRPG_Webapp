@@ -68,6 +68,57 @@ APP_OWNED = {
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
 
+NESTED_DICT_FIELDS = {
+    "stats", "hidden_stats", "skills", "class_profile", "equipment", "relationships",
+    "reputation", "special", "contacts", "chat_threads", "combat", "portrait_identity",
+    "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
+    "difficulty_controls", "progression_preset", "overgeared_system", "solo_system",
+}
+NESTED_LIST_FIELDS = {
+    "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
+    "companions", "codex", "status", "conditions", "known_recipes", "training_log",
+    "active_encounters", "achievements", "travel_history", "loot_history", "queued_actions",
+    "standing_orders", "suggested_actions", "prerequisite_tracks", "lore_sources",
+}
+
+
+def _safe_number(value, default=0, minimum=None):
+    if isinstance(value, bool):
+        result = default
+    elif isinstance(value, (int, float)):
+        result = value
+    elif isinstance(value, str) and re.fullmatch(r"\s*[-+]?\d+(?:\.\d+)?\s*", value):
+        result = float(value)
+    else:
+        result = default
+    if minimum is not None:
+        result = max(minimum, result)
+    return int(result) if float(result).is_integer() else float(result)
+
+
+def _repair_nested_shapes(state):
+    """Repair common malformed nested AI/save values before consumers read them."""
+    repairs = []
+    for key in NESTED_DICT_FIELDS:
+        if not isinstance(state.get(key), dict):
+            state[key] = copy.deepcopy(BASE_STATE.get(key, {})) if isinstance(BASE_STATE.get(key), dict) else {}
+            repairs.append(f"Repaired invalid {key} object")
+    for key in NESTED_LIST_FIELDS:
+        if not isinstance(state.get(key), list):
+            state[key] = copy.deepcopy(BASE_STATE.get(key, [])) if isinstance(BASE_STATE.get(key), list) else []
+            repairs.append(f"Repaired invalid {key} list")
+    allowed_stats = set(abilities_for(state.get("world", "Custom World")))
+    state["stats"] = {
+        str(name): _safe_number(value, 1, 1)
+        for name, value in state.get("stats", {}).items()
+        if name in allowed_stats and not isinstance(value, (dict, list, bool))
+    }
+    for key in ("level", "xp", "xp_next", "hp", "hp_max", "resource", "resource_max", "turn", "world_clock_minutes", "canon_day"):
+        if key in state:
+            minimum = 1 if key in {"level", "xp_next", "hp_max", "resource_max"} else None
+            state[key] = _safe_number(state.get(key), BASE_STATE.get(key, 0), minimum)
+    return repairs
+
 
 def _type_ok(key, value):
     if key in FLEXIBLE_TYPES:
@@ -178,6 +229,7 @@ def _repair(state):
         state["world"] = "Custom World"; repairs.append("Unknown world changed to Custom World")
     if state.get("difficulty") not in DIFFICULTIES:
         state["difficulty"] = "Adventurer"; repairs.append("Unknown difficulty changed to Adventurer")
+    repairs.extend(_repair_nested_shapes(state))
     for current, maximum in (("hp", "hp_max"), ("resource", "resource_max")):
         try:
             state[maximum] = max(1, int(state.get(maximum, 100)))

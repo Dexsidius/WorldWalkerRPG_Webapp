@@ -22,7 +22,8 @@ class WorldwalkerV250Tests(unittest.TestCase):
         profile = preview["starting_profile"]
         self.assertNotEqual(profile["hp_max"], 100)
         self.assertNotEqual(profile["resource_max"], 100)
-        self.assertTrue(profile["skills"])
+        self.assertEqual(profile["growth_profile"]["combat_style"], "Ninjutsu Student")
+        self.assertFalse(any("fundamental" in name.lower() for name in profile["skills"]))
         self.assertTrue(profile["equipment"])
 
     def test_world_shaking_background_warns_but_is_allowed(self):
@@ -140,7 +141,7 @@ class WorldwalkerV250Tests(unittest.TestCase):
         old = copy.deepcopy(BASE_STATE)
         old.update(schema_version=4, world="Naruto", stats={"Taijutsu": 10, "Ninjutsu": 15, "Genjutsu": 8, "Chakra Control": 12, "Willpower": 11, "Intellect": 13}, hp=50, hp_max=100, resource=25, resource_max=100)
         migrated = migrate_state(old, "2.4.0")
-        self.assertEqual(migrated["schema_version"], 14)
+        self.assertEqual(migrated["schema_version"], 15)
         self.assertEqual(migrated["stats"]["Ninjutsu"], 45)
         self.assertAlmostEqual(migrated["hp"] / migrated["hp_max"], .5, delta=.02)
         self.assertAlmostEqual(migrated["resource"] / migrated["resource_max"], .25, delta=.02)

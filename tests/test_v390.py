@@ -34,7 +34,7 @@ class WorldwalkerV390BleachTests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.12.3")
+        self.assertEqual(APP_VERSION, "3.13.0")
 
     def test_bleach_creator_is_soul_reaper_only_with_three_requested_eras(self):
         self.assertEqual(
@@ -42,10 +42,9 @@ class WorldwalkerV390BleachTests(unittest.TestCase):
             ["Shin'o Academy Senior", "Recent Shin'o Academy Graduate"],
         )
         self.assertNotIn("Quincy Marksman", WORLD_EXPANSIONS["Bleach"]["archetypes"])
-        self.assertEqual(
-            [row["location"] for row in start_options_for("Bleach")],
-            ["Shin'o Academy", "Seireitei"],
-        )
+        starts = start_options_for("Bleach")
+        self.assertEqual({row["location"] for row in starts}, {"Shin'o Academy", "Seireitei"})
+        self.assertTrue(all("Soul Reaper" in row["note"] for row in starts))
         eras = starting_eras_for("Bleach")
         self.assertEqual([row["id"] for row in eras], [
             "week_before_arrival", "year_before_arrival", "turn_back_pendulum",
