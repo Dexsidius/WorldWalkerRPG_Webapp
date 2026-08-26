@@ -1127,7 +1127,7 @@ body[data-world="Bleach"] .major-roll-modal{ --die-a:#e8eceb;--die-b:#232d31;--d
 .map-wrap{ position:relative; width:100%; aspect-ratio:16/10; border-radius:12px; border:1px solid var(--border-soft); overflow:hidden; box-shadow:inset 0 0 60px rgba(0,0,0,.4); cursor:grab; touch-action:none; }
 .map-wrap.dragging{ cursor:grabbing; }
 .map-canvas{ position:absolute; inset:0; width:100%; height:100%; background-image:linear-gradient(rgba(3,7,12,.18),rgba(3,7,12,.25)),var(--map-image); background-size:cover; background-position:center; transform-origin:0 0; will-change:transform; }
-.map-territories{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.map-territories{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; filter:drop-shadow(0 1px 1px rgba(0,0,0,.65)); }
 .map-ambient{ position:absolute; inset:0; z-index:1; pointer-events:none; overflow:hidden; }
 .map-ambient::before,.map-ambient::after{ content:""; position:absolute; width:46%; height:24%; border-radius:50%; background:rgba(7,12,18,.2); filter:blur(18px); animation:mapCloudDrift 22s linear infinite; }
 .map-ambient::before{ left:-35%; top:18%; }

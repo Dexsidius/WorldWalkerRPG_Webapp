@@ -3297,13 +3297,14 @@ async function openJournal(tab) {
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
   } else if (tab === "map") {
     const nodes = data.map_data?.nodes || [];
+    const regions = data.map_data?.regions || [];
     const knownCount = nodes.filter((node) => node.discovered).length;
-    const legendChips = groupNodesByController(nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}">${escapeHtml(t.controller)}</span>`).join("");
+    const legendChips = groupNodesByController(regions.length ? regions : nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}">${escapeHtml(t.controller)}</span>`).join("");
     panel.innerHTML = `<div class="map-heading"><div><b>${escapeHtml(data.world || s.world || "World")} Atlas</b><small>${nodes.length} important landmarks · ${knownCount} visited/discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
       (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
       `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>A reference atlas — click a landmark for what's known about it, who's tied to it, and who controls it. Drag to pan, scroll or use the buttons to zoom.</p></aside></div>`;
     const canvas = $("#map-canvas");
-    paintMapTerritories($("#map-territory-canvas"), nodes);
+    paintMapTerritories($("#map-territory-canvas"), regions.length ? regions : nodes);
     applyNativeMapFx(nodes);
     nodes.forEach((node) => {
       const dot = document.createElement("button");
@@ -3350,13 +3351,10 @@ async function openJournal(tab) {
 }
 
 // ---------------------------------------------------------------------------
-// Map territories — a Voronoi-style mosaic (nearest controlled landmark wins
-// each cell) instead of isolated per-faction blobs/circles, so territories
-// read like regions on a real map: they border directly on their neighbors
-// with no gaps and never overlap, even though the borders themselves are
-// rough rather than hand-drawn coastlines. Colored by a stable hash of the
-// faction's name so the same group always gets the same color across
-// renders without a hardcoded palette.
+// Political territory is painted from map anchors with a bounded influence
+// radius. Nearest influence wins where claims overlap. Borders are drawn only
+// between unlike owners (or owned and unclaimed land), so two adjacent pieces
+// controlled by the same polity read as one continuous possession.
 // ---------------------------------------------------------------------------
 function factionColor(name) {
   let hash = 0;
@@ -3367,36 +3365,62 @@ function groupNodesByController(nodes) {
   const byFaction = {};
   nodes.forEach((n) => {
     const controller = n.controller;
-    if (!controller || controller === "Unknown") return;
+    if (!controller || controller === "Unknown" || controller === "Unclaimed") return;
     (byFaction[controller] = byFaction[controller] || []).push(n);
   });
   return Object.keys(byFaction).map((controller) => ({ controller, color: factionColor(controller) }));
 }
 function paintMapTerritories(canvas, nodes) {
   if (!canvas) return;
-  const owners = nodes.filter((n) => n.controller && n.controller !== "Unknown");
-  const GRID = 120;
+  const owners = nodes.filter((n) => n.controller && n.controller !== "Unknown" && n.controller !== "Unclaimed");
+  const GRID = 160;
   canvas.width = GRID;
   canvas.height = GRID;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, GRID, GRID);
   if (!owners.length) return;
-  const colors = new Map(owners.map((n) => [n.controller, factionColor(n.controller)]));
-  const withAlpha = new Map([...colors].map(([k, v]) => [k, v.replace("hsl(", "hsla(").replace(")", ",.22)")]));
+  const controllers = [...new Set(owners.map((n) => n.controller))];
+  const colors = new Map(controllers.map((name) => [name, factionColor(name)]));
+  const withAlpha = new Map([...colors].map(([k, v]) => [k, v.replace("hsl(", "hsla(").replace(")", ",.25)")]));
+  const ownerGrid = new Int16Array(GRID * GRID);
+  ownerGrid.fill(-1);
   for (let gy = 0; gy < GRID; gy++) {
     for (let gx = 0; gx < GRID; gx++) {
       const px = ((gx + 0.5) / GRID) * 100, py = ((gy + 0.5) / GRID) * 100;
-      let best = null, bestDist = Infinity;
+      let best = null, bestScore = Infinity;
       for (const n of owners) {
-        const dx = Number(n.x) - px, dy = Number(n.y) - py, d = dx * dx + dy * dy;
-        if (d < bestDist) { bestDist = d; best = n; }
+        const radius = Math.max(4, Math.min(42, Number(n.size) || 12));
+        const dx = Number(n.x) - px, dy = Number(n.y) - py;
+        const score = Math.sqrt(dx * dx + dy * dy) / radius;
+        if (score <= 1 && score < bestScore) { bestScore = score; best = n; }
       }
       if (best) {
+        ownerGrid[gy * GRID + gx] = controllers.indexOf(best.controller);
         ctx.fillStyle = withAlpha.get(best.controller);
         ctx.fillRect(gx, gy, 1, 1);
       }
     }
   }
+  // One continuous outline per resulting control surface. There is no line
+  // between neighboring cells with the same owner, which visually combines
+  // annexed or jointly controlled areas without inventing new geometry.
+  ctx.beginPath();
+  for (let gy = 0; gy < GRID; gy++) {
+    for (let gx = 0; gx < GRID; gx++) {
+      const here = ownerGrid[gy * GRID + gx];
+      if (here < 0) continue;
+      const right = gx + 1 < GRID ? ownerGrid[gy * GRID + gx + 1] : -1;
+      const down = gy + 1 < GRID ? ownerGrid[(gy + 1) * GRID + gx] : -1;
+      if (right !== here) { ctx.moveTo(gx + 1, gy); ctx.lineTo(gx + 1, gy + 1); }
+      if (down !== here) { ctx.moveTo(gx, gy + 1); ctx.lineTo(gx + 1, gy + 1); }
+      if (gx === 0) { ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + 1); }
+      if (gy === 0) { ctx.moveTo(gx, gy); ctx.lineTo(gx + 1, gy); }
+    }
+  }
+  ctx.strokeStyle = "rgba(245, 240, 219, .82)";
+  ctx.lineWidth = .55;
+  ctx.lineJoin = "round";
+  ctx.stroke();
 }
 
 // ---------------------------------------------------------------------------

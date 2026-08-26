@@ -251,6 +251,9 @@ class JournalMixin:
 
     def public_state(self):
         s = copy.deepcopy(self.state)
+        # Governance bookkeeping powers narrative reports and map changes,
+        # but is intentionally not a visible management dashboard.
+        s.pop("polity_state", None)
         try:
             s["_canon_countdown"] = self.canon_countdown()
         except Exception:

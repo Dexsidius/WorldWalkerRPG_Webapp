@@ -12,6 +12,7 @@ import secrets
 
 from util import ai_text
 from causality import advance_causal_clock
+from politics import political_regions_for_map, tick_polity_governance
 
 # A chapter is meant to read as a season of the story, not a fixed number of
 # actions — consolidate roughly every in-game quarter (90 days on the
@@ -327,6 +328,10 @@ def tick_world_clocks(state, elapsed_minutes):
                 else:
                     events.append({"type": "world", "message": f"Somewhere beyond your own path, {who} has made real headway: {current_goal}."})
     events.extend(resolve_clock_conflicts(state))
+    events.extend(tick_polity_governance(
+        state, elapsed_minutes,
+        set(WORLD_TERRITORIES.get(state.get("world", ""), {}).values()),
+    ))
     return events
 
 
@@ -389,10 +394,22 @@ def propose_faction_conflicts(state, elapsed_days):
         return
     faction_clocks = state.get("faction_clocks") or {}
     holdings = {}
+    world = state.get("world", "")
+    # Begin with canon ownership, then let campaign overrides replace it.
+    for loc, faction in WORLD_TERRITORIES.get(world, {}).items():
+        if faction:
+            holdings.setdefault(faction, []).append(loc)
     for loc, detail in (state.get("location_details") or {}).items():
         if isinstance(detail, dict):
-            f = detail.get("controlling_faction") or detail.get("faction")
-            if f: holdings.setdefault(f, []).append(loc)
+            # Remove a canon location from its old owner's holding list before
+            # applying the campaign's real current controller, including an
+            # explicit empty/unclaimed result.
+            for places in holdings.values():
+                if loc in places:
+                    places.remove(loc)
+            f = detail.get("controlling_faction") if "controlling_faction" in detail else detail.get("faction")
+            if f:
+                holdings.setdefault(f, []).append(loc)
     eligible = [name for name, clock in faction_clocks.items()
                 if isinstance(clock, dict) and clock.get("status") == "active"
                 and not str(clock.get("opponent") or "").strip() and name in holdings]
@@ -547,10 +564,19 @@ def _collapse_faction(state, loser_name, winner_name):
     continuing to exist untouched."""
     events = []
     vacated = []
+    # Materialize canon holdings as campaign overrides when their owner
+    # collapses, otherwise map_snapshot's canon fallback would restore them.
+    for loc, faction in WORLD_TERRITORIES.get(state.get("world", ""), {}).items():
+        if faction == loser_name:
+            detail = state.setdefault("location_details", {}).setdefault(loc, {})
+            if "controlling_faction" not in detail:
+                detail["controlling_faction"] = ""
+                vacated.append(loc)
     for loc, detail in (state.get("location_details") or {}).items():
         if isinstance(detail, dict) and detail.get("controlling_faction") == loser_name:
             detail["controlling_faction"] = ""
-            vacated.append(loc)
+            if loc not in vacated:
+                vacated.append(loc)
     if vacated:
         events.append({"type": "world", "conflict": True,
                         "message": f"With {loser_name} gone, {', '.join(vacated)} " +
@@ -968,10 +994,16 @@ def map_snapshot(state, world_map, world):
         # couple of turns of the player just not happening to open the map
         # the instant it changed — see update_continuity's territory diff.
         recently_changed = isinstance(changed_turn, (int, float)) and (current_turn - int(changed_turn)) <= 3
+        if "controlling_faction" in detail:
+            controller = detail.get("controlling_faction") or "Unclaimed"
+        elif detail.get("faction"):
+            controller = detail.get("faction")
+        else:
+            controller = territories.get(name, "Unknown")
         nodes.append({"name": name, "x": x, "y": y, "kind": kind, "tier": tier, "current": name == current_node[0],
                       "discovered": name in discovered or name == current_node[0], "travel_minutes": travel_minutes,
-                      "controller": detail.get("controlling_faction") or detail.get("faction") or territories.get(name, "Unknown"),
+                      "controller": controller,
                       "quests": list(dict.fromkeys(quests)), "notes": detail.get("notes") or detail.get("description") or "No additional local notes recorded.",
                       "notable_individuals": _notable_individuals_for(state, name), "danger_level": str(detail.get("danger_level") or ""),
                       "recently_changed": recently_changed})
-    return {"nodes": nodes}
+    return {"nodes": nodes, "regions": political_regions_for_map(state, nodes)}

@@ -15,6 +15,7 @@ from bleach_data import CANON_HADO, CANON_BAKUDO
 from world_progression import normalize_world_progression
 from lit_systems import initialize_lit_systems
 from skill_system import normalize_skill_map
+from politics import normalize_political_state
 
 
 APP_OWNED = {
@@ -73,12 +74,14 @@ NESTED_DICT_FIELDS = {
     "reputation", "special", "contacts", "chat_threads", "combat", "portrait_identity",
     "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
     "difficulty_controls", "progression_preset", "overgeared_system", "solo_system",
+    "polity_state",
 }
 NESTED_LIST_FIELDS = {
     "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
     "companions", "codex", "status", "conditions", "known_recipes", "training_log",
     "active_encounters", "achievements", "travel_history", "loot_history", "queued_actions",
     "standing_orders", "suggested_actions", "prerequisite_tracks", "lore_sources",
+    "political_regions",
 }
 
 
@@ -320,6 +323,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     repairs.extend(_repair_bleach_mechanics(state, before))
     repairs.extend(normalize_world_progression(state, before))
     repairs.extend(initialize_lit_systems(state))
+    repairs.extend(normalize_political_state(state, before))
     knowledge_changes = normalize_npc_knowledge(state, before, source)
     if knowledge_changes:
         repairs.extend(f"Downgraded unsupported secret knowledge for {row['npc']} to a suspicion" for row in knowledge_changes)
@@ -364,6 +368,7 @@ def migrate_state(state, from_version="unknown"):
     migrated["skills"] = normalize_skill_map(migrated.get("skills", {}))
     repairs.extend(normalize_world_progression(migrated))
     repairs.extend(initialize_lit_systems(migrated))
+    repairs.extend(normalize_political_state(migrated))
     migrated.setdefault("diagnostics", {})["migration"] = {
         "from_version": from_version, "repairs": repairs,
         "time": datetime.now().isoformat(timespec="seconds"),
