@@ -46,7 +46,7 @@ class WorldwalkerV300Tests(unittest.TestCase):
             )
 
     def test_version_3_and_schema_8_are_declared(self):
-        self.assertEqual(APP_VERSION, "3.6.4")
+        self.assertEqual(APP_VERSION, "3.7.0")
         self.assertEqual(BASE_STATE["schema_version"], 13)
         self.assertIn("class_profile", BASE_STATE)
 

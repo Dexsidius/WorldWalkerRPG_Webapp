@@ -730,9 +730,9 @@ function renderAiPortrait(s) {
   if (s._portrait_generated) status.textContent = "AI PORTRAIT · CACHED";
   else if (!s._portrait_generation_enabled) status.textContent = "PORTRAITS OFF";
   else if (!s._portrait_generation_ready) status.textContent = "SET UP IMAGE AI FOR ART";
-  else status.textContent = "AI PORTRAIT QUEUED";
+  else status.textContent = s._portrait_auto_generate ? "AI PORTRAIT QUEUED" : "AI PORTRAIT · GENERATE WHEN READY";
   $("#btn-portrait-regenerate").disabled = APP.portraitInFlight || !APP.campaignActive;
-  if (!APP.deferPortraitGeneration) ensureAiPortrait(s);
+  if (!APP.deferPortraitGeneration && s._portrait_auto_generate) ensureAiPortrait(s);
 }
 
 async function ensureAiPortrait(s, force = false) {
@@ -1790,11 +1790,24 @@ function combatAbilityEffectType(s, name) {
   const t = (detail && typeof detail === "object" ? detail.effect_type : "") || "";
   return ["damage", "heal", "debuff"].includes(t) ? t : "damage";
 }
+function combatAbilityUsable(s, name) {
+  const detail = (s.skills || {})[name];
+  if (!detail || typeof detail !== "object") return false;
+  if (detail.combat_usable === false) return false;
+  if (detail.combat_usable === true) return true;
+  if (["damage", "heal", "debuff"].includes(String(detail.effect_type || "").toLowerCase())) return true;
+  // Backward-compatible inference for older saves whose skills predate the
+  // combat_usable field.  Profession/knowledge fundamentals no longer turn
+  // into attacks merely because they have a numeric bonus.
+  const blob = `${name} ${detail.description || ""} ${detail.effect || ""}`.toLowerCase();
+  if (/navigator|navigation|craft|smith|cooking|merchant|account|research|history|language|fundamentals expected of this role/.test(blob)) return false;
+  return /attack|strike|damage|weapon|combat|fight|jutsu|spell|blast|projectile|heal|restore hp|shield|guard|weaken|debuff|stun|bind|poison|haki|nen|chakra/.test(blob);
+}
 function populateCombatAbilitySelect(s) {
   const combat = s.combat || {};
   const cooldowns = combat.cooldowns || {};
   const abilitySel = $("#combat-ability");
-  const skills = Object.keys(s.skills || {});
+  const skills = Object.keys(s.skills || {}).filter((name) => combatAbilityUsable(s, name));
   const priorAbility = abilitySel.value;
   abilitySel.innerHTML = `<option value="">Plain Attack</option>` + skills.map((name) => {
     const readyAt = cooldowns[name] || 0;
@@ -1850,8 +1863,14 @@ function flashCombatBar(targetSelector) {
 function renderCombatPanel(s) {
   const panel = $("#combat-panel");
   const combat = s.combat || {};
-  if (!combat.active) { panel.hidden = true; return; }
+  const actionInput = $("#action-input");
+  if (!combat.active) {
+    panel.hidden = true;
+    actionInput.placeholder = "TYPE AN ACTION HERE\nPress Enter or Add to keep it in this chat until you Advance.";
+    return;
+  }
   panel.hidden = false;
+  actionInput.placeholder = "Combat is active — use the combat controls, or describe a specific combat action here.";
   $("#combat-round").textContent = combat.round ?? 1;
   $("#combat-mode-badge").hidden = !combat.non_lethal;
   // The mercy toggle only means anything for a real, lethal-by-default fight
@@ -2487,6 +2506,10 @@ function clientDurationMinutes(amount, unit) {
 function handleTimeSkipResult(result, payload) {
   appendStoryEntries(result.story);
   renderState(result.state);
+  // A resolved skip always returns the backend to moment mode. Mirror that
+  // locally so the selector and World Systems label never disagree.
+  $("#time-unit").value = "moment";
+  syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
   handleNotifications(result.notifications);
   // The Advance button lives below Action Chat in its own scrolling column.
   // After a turn, return that column to the composer so the player's next
@@ -2684,7 +2707,13 @@ function renderAdvisorThread(thread) {
   const list = thread || [];
   const box = $("#advisor-messages");
   box.innerHTML = list.map(renderAdvisorMessage).join("") || '<p class="hint">No questions asked yet — try one of the prompts above.</p>';
-  box.scrollTop = box.scrollHeight;
+  // Open on the beginning of the newest answer, not the bottom half of a
+  // long briefing. On phones the old bottom-scroll made a briefing appear
+  // to begin at point two or three with its summary off-screen.
+  requestAnimationFrame(() => {
+    const latest = box.querySelector(".advisor-msg:last-of-type") || box.lastElementChild;
+    box.scrollTop = latest ? Math.max(0, latest.offsetTop - box.offsetTop - 6) : 0;
+  });
   $("#advisor-starters").style.display = list.length ? "none" : "flex";
 
   const last = list[list.length - 1];
@@ -3667,6 +3696,7 @@ async function openSettingsModal() {
   $("#st-music-volume").value = Number(s.music_volume ?? .35);
   $("#st-anim").checked = !!s.animations_enabled;
   $("#st-portrait-enabled").checked = s.portrait_generation_enabled !== false;
+  $("#st-portrait-auto").checked = s.portrait_auto_generate === true;
   $("#st-image-model").value = s.image_model || "gpt-image-2";
   $("#st-local-image-model").value = s.local_image_model || "";
   $("#st-portrait-quality").value = s.portrait_quality || "low";
@@ -3707,6 +3737,7 @@ $("#btn-save-settings").addEventListener("click", async () => {
     music_volume: Number($("#st-music-volume").value || .35),
     animations_enabled: $("#st-anim").checked,
     portrait_generation_enabled: $("#st-portrait-enabled").checked,
+    portrait_auto_generate: $("#st-portrait-auto").checked,
     image_model: $("#st-image-model").value.trim() || "gpt-image-2",
     local_image_model: $("#st-local-image-model").value.trim(),
     portrait_quality: $("#st-portrait-quality").value,
@@ -3787,6 +3818,8 @@ async function refreshUsagePill() {
       pill.textContent = `${prefix}${u.total_cost_usd.toFixed(2)} this session`;
       pill.classList.toggle("over-budget", !!u.over_session_budget);
       pill.title = `${u.total_calls} AI call(s) — main model + background model + ${u.portraits.generated} portrait(s).`
+        + (u.cached_input_tokens ? ` ${u.cached_input_tokens.toLocaleString()} input tokens were reported as cached.` : "")
+        + (u.cost_is_conservative ? " Cached-input discounts are not subtracted, so this is a conservative ceiling." : "")
         + (u.cost_estimate_complete ? "" : " (one or more models are unpriced; total is a floor, not exact.)");
     }
     if (summary && u.provider === "cloud") {
@@ -3794,6 +3827,8 @@ async function refreshUsagePill() {
         + `(${u.main.input_tokens + u.main.output_tokens} main-model tokens, ${u.background.input_tokens + u.background.output_tokens} background-model tokens) `
         + `${u.major_is_separate ? `${u.major.input_tokens + u.major.output_tokens} major-event tokens, ` : ""}`
         + `and ${u.portraits.generated} portrait(s).`
+        + (u.cached_input_tokens ? ` Cached input reported: ${u.cached_input_tokens.toLocaleString()} tokens.` : "")
+        + (u.cost_is_conservative ? " The dollar estimate keeps cached input at full rate, so actual provider billing may be lower." : "")
         + (u.cost_estimate_complete ? "" : " Some pricing is unknown for the selected model(s), so this is a floor, not an exact total.");
     }
   } catch (e) { /* usage is a convenience readout, never block on it */ }

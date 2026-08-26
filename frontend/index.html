@@ -481,7 +481,8 @@
         <label><input type="checkbox" id="st-sound" checked /> Game sounds</label>
         <label><input type="checkbox" id="st-music" checked /> World music</label>
         <label><input type="checkbox" id="st-anim" checked /> Animations</label>
-        <label><input type="checkbox" id="st-portrait-enabled" checked /> Generate portraits from character changes</label>
+        <label><input type="checkbox" id="st-portrait-enabled" checked /> Allow AI portrait generation</label>
+        <label><input type="checkbox" id="st-portrait-auto" /> Automatically regenerate after major appearance changes</label>
         <label><input type="checkbox" id="st-developer-mode" /> Developer diagnostics</label>
       </div>
       <label>Music Volume</label>
@@ -507,7 +508,7 @@
         <option>auto</option>
       </select>
 
-      <p class="hint">Local text inference has no per-turn API charge. Cloud portraits use the image API separately and may incur image-generation charges. Portraits regenerate only when visually relevant traits change and are cached on this computer.</p>
+      <p class="hint">Local text inference has no per-turn API charge. Cloud portraits use the image API separately. Automatic generation is off by default; the portrait button generates on demand and cached art is reused until major visible traits change.</p>
 
       <div id="usage-summary" class="hint usage-summary"></div>
 

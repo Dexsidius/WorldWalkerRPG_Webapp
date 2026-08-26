@@ -325,13 +325,13 @@ class TurnsMixin:
 
     def resolve(self, action, assessment, roll_result):
         p = {"task": "narrator_and_resolution", "role": "Narrator + Rules Referee", "action": action,
-             "assessment": assessment, "dice_result": roll_result, "state_before": self.trimmed_state_for_ai(action),
+             "assessment": assessment, "dice_result": roll_result, "state_before": self.task_state_for_ai("moment", action),
              "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
                         "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
                         "danger_scenario_concluded": "boolean; true only when the current confrontation ended or the player left it",
                         "events": [{"type": "xp|level_up|skill|title|quest|hidden_quest|item|loot|reputation|companion|codex|location|training|combat|injury|death|discovery|world", "message": "notification"}],
                         "timeline_event": "major event or empty", "suggested_actions": ["exactly 3 optional contextual actions: strongest lead, growth/preparation, alternate hook. Each must name a real, specific person/place/faction/thread already in this campaign, not a generic template. Scale honestly — a longer-term lead can openly say so ('over the next few days...') rather than being forced into an instant."]}}
-        rules = self.gm_context(action) + " You are operating as the MAIN GM: Narrator + Rules Referee. Resolve strictly from dice_result when present. Never hide progression in narration. If state.danger_scenario is active, the player already accepted this confrontation's general danger: continue the scene without another permission prompt unless this specific action could kill them, and set danger_scenario_concluded=true only when the danger is truly over or they leave. End by preserving or revealing an actionable journey thread and return exactly three useful, world-consistent suggested actions."
+        rules = self.task_context("moment", action) + " Resolve strictly from dice_result when present. Never hide progression in narration. Set danger_scenario_concluded=true only when the confrontation is truly over or the player leaves it."
         return self.request_with_narrative(rules, p, 1300)
 
     def take_turn(self, action, confirmed_lethal=False, cached_assessment=None):
@@ -381,7 +381,7 @@ class TurnsMixin:
         in-the-moment exchange, resolved exactly like any ordinary action)."""
         title = str(self.state.get("active_canon_event") or "this event").strip()
         context = str(self.state.get("interruption_context") or "").strip()
-        return self.gm_context(f"the ongoing major event: {title}") + f"""
+        return f"""
 
 YOU ARE CURRENTLY RESOLVING A LIVE MAJOR EVENT SCENE, ONE BEAT AT A TIME — NOT A TIME SKIP.
 EVENT: {title}
@@ -426,7 +426,7 @@ Return ONLY valid JSON."""
         if not self.state.get("active_canon_event"):
             raise RuntimeError("No major event is currently active.")
         wants_resolution = self._wants_event_resolution(action)
-        p = {"task": "event_turn", "action": action, "state": self.trimmed_state_for_ai(),
+        p = {"task": "event_turn", "action": action, "state": self.task_state_for_ai("event", action),
              "event_title": self.state.get("active_canon_event", ""),
              "resolve_to_conclusion": wants_resolution,
              "schema": {
@@ -441,7 +441,7 @@ Return ONLY valid JSON."""
             p["requirements"] = [
                 "resolve_to_conclusion is true: the player's own words just now explicitly declared an intent to keep going until this event actually ends (e.g. 'until the attack is over'). This is a direct, unambiguous instruction — treat it exactly like any other player order. You MUST set event_concluded=true in THIS response. Narrate the remaining span of the event at a summary pace (what they did, what changed, how it wound down), land on its real conclusion, and write event_conclusion_summary. Returning event_concluded=false here — asking one more incremental question instead of finishing what the player just told you to finish — is a failure to follow their stated instruction, not carefulness.",
             ]
-        data = self.request_with_narrative(self.event_window_rules(), p, 900)
+        data = self.request_with_narrative(self.task_context("event", action) + "\n" + self.event_window_rules(), p, 900)
         self.append("> " + str(action), "player")
         result = self.apply_resolution(data, is_opening=False, pending_action=action,
                                         progression_context={"actions": [action], "elapsed_minutes": 5})
@@ -629,7 +629,9 @@ Return ONLY valid JSON."""
                 reconcile_action_goals(self.state, [], data, 5)
             if not is_opening:
                 self.append_growth_deltas(before)
-            self.ensure_quest_briefings(before, pending_action or "")
+            self.ensure_quest_briefings(before, " ".join(
+                part for part in (str(pending_action or "").strip(), str(data.get("narrative") or "").strip()) if part
+            ))
             normalize_quest_state_machine(self.state)
             if not is_opening:
                 advance_hidden_class_discovery(self.state, pending_action or "")
@@ -690,13 +692,56 @@ Return ONLY valid JSON."""
             "continuity_warnings": continuity_warnings,
         }
 
+    def _suggestion_is_current(self, value):
+        """Reject locally provable stale/impossible suggestion text.
+
+        The model still writes the interesting options.  This guard only
+        removes contradictions the application can know with certainty:
+        traveling to the place already occupied, continuing a combat that has
+        mechanically ended, or contacting a person never established in the
+        campaign.  It prevents old campaign-direction hints from becoming a
+        self-reinforcing loop across later turns.
+        """
+        text = ai_text(value)
+        if not text:
+            return False
+        lower = text.lower()
+        location = str(self.state.get("location") or "").strip()
+        if location and re.search(rf"\b(?:travel|return|go|sail|walk|head)\s+to\s+(?:the\s+)?{re.escape(location)}\b", text, re.I):
+            return False
+
+        combat = self.state.get("combat") if isinstance(self.state.get("combat"), dict) else {}
+        if combat and not combat.get("active") and combat.get("outcome"):
+            enemy = str((combat.get("enemy") or {}).get("name") or "").strip().lower()
+            immediate_combat = bool(re.search(
+                r"\b(win or escape|escape the fight|continue the fight|rush|finish off|defeat|attack|strike|disable)\b",
+                lower,
+            ))
+            reframed = bool(re.search(r"\b(return|re-?engage|prepare|plan|recover|recruit|track|negotiate|investigate)\b", lower))
+            if immediate_combat and not reframed and (not enemy or enemy in lower or "fight" in lower):
+                return False
+
+        # "Reach out to X" should only survive when X is a real known contact,
+        # companion, or remembered NPC.  Generic invented names were otherwise
+        # able to appear as confident next-step buttons.
+        match = re.match(r"\s*(?:reach out to|contact|message|call)\s+(.+?)(?:\s+and\b|\s+to\b|[.,;]|$)", text, re.I)
+        if match:
+            target = match.group(1).strip().lower()
+            known = {str(name).strip().lower() for name in (self.state.get("contacts") or {}).keys()}
+            known.update(str(name).strip().lower() for name in (self.state.get("npc_memories") or {}).keys())
+            known.update(str(row.get("name") if isinstance(row, dict) else row).strip().lower()
+                         for row in (self.state.get("companions") or []))
+            if target and target not in known:
+                return False
+        return True
+
     def guided_suggestions(self, authored=None):
         """Guarantee three optional, state-grounded leads even when a model
         forgets or truncates its suggestion field."""
         suggestions = []
         for value in authored or []:
             text = ai_text(value)
-            if text and text.lower() not in {x.lower() for x in suggestions}:
+            if self._suggestion_is_current(text) and text.lower() not in {x.lower() for x in suggestions}:
                 suggestions.append(text[:180])
         for opportunity in reversed(self.state.get("relationship_opportunities", [])):
             if isinstance(opportunity, dict) and opportunity.get("status") == "available" and opportunity.get("prompt"):
@@ -704,7 +749,7 @@ Return ONLY valid JSON."""
                 break
         direction = self.state.get("campaign_direction") if isinstance(self.state.get("campaign_direction"), dict) else {}
         for lead in direction.get("nearby_opportunities", [])[:2]:
-            if ai_text(lead): suggestions.append(ai_text(lead)[:180])
+            if self._suggestion_is_current(lead): suggestions.append(ai_text(lead)[:180])
         for quest in self.state.get("quests", []):
             if not isinstance(quest, dict): continue
             conditions = quest.get("clear_conditions", []) or quest.get("current_knowledge", [])
@@ -737,7 +782,7 @@ Return ONLY valid JSON."""
         unique = []
         for text in suggestions:
             text = str(text).strip()
-            if text and text.lower() not in {x.lower() for x in unique}:
+            if self._suggestion_is_current(text) and text.lower() not in {x.lower() for x in unique}:
                 unique.append(text[:180])
             if len(unique) == 3: break
         return unique
@@ -797,6 +842,23 @@ Return ONLY valid JSON."""
             new_quests.append(quest)
 
         for quest in new_quests:
+            quest_name = str(quest.get("name") or "New Quest").strip()
+            placeholder_phrases = (
+                "no additional explanation", "no briefing recorded", "no explanation recorded",
+                "advance this quest", f"advance {quest_name.lower()}",
+            )
+            def _placeholder(value):
+                text = ai_text(value).strip().lower()
+                return not text or any(text.startswith(phrase) for phrase in placeholder_phrases)
+
+            source_sentence = ""
+            if trigger:
+                keywords = [word.lower() for word in re.findall(r"[A-Za-z]{4,}", quest_name)
+                            if word.lower() not in {"that", "this", "with", "from", "quest"}]
+                sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", trigger) if s.strip()]
+                source_sentence = next((s for s in sentences if any(word in s.lower() for word in keywords)), "")
+                if not source_sentence and sentences:
+                    source_sentence = sentences[0]
             conditions = quest.get("clear_conditions") or quest.get("objectives") or quest.get("objective") or []
             if isinstance(conditions, str):
                 conditions = [conditions]
@@ -809,14 +871,28 @@ Return ONLY valid JSON."""
             risks = quest.get("risks") or quest.get("known_risks") or []
             if isinstance(risks, str):
                 risks = [risks]
-            objective = str(conditions[0] if conditions else trigger or f"Advance {quest.get('name', 'this quest')}").strip()
-            quest["explanation"] = str(quest.get("explanation") or quest.get("description") or f"A new objective has begun: {objective}.")[:2000]
-            quest["current_knowledge"] = [ai_text(x)[:500] for x in knowledge[:40] if ai_text(x)] or [f"The quest begins at {self.state.get('location', 'the current location')}." ]
-            quest["clear_conditions"] = [ai_text(x)[:500] for x in conditions[:40] if ai_text(x)] or [objective[:500]]
+            clean_conditions = [ai_text(x)[:500] for x in conditions[:40] if ai_text(x)]
+            if len(clean_conditions) == 1 and _placeholder(clean_conditions[0]):
+                clean_conditions = []
+            objective = (clean_conditions[0] if clean_conditions else
+                         f"Investigate {quest_name}, resolve its central problem, and confirm the outcome.")
+            explanation = ai_text(quest.get("explanation") or quest.get("description"))
+            if _placeholder(explanation):
+                explanation = (f"At {self.state.get('location', 'the current location')}, this objective emerged: {source_sentence}"
+                               if source_sentence else f"A concrete objective has begun at {self.state.get('location', 'the current location')}: {quest_name}.")
+            quest["explanation"] = explanation[:2000]
+            clean_knowledge = [ai_text(x)[:500] for x in knowledge[:40] if ai_text(x)]
+            if len(clean_knowledge) == 1 and re.match(r"(?i)^the quest begins at\b", clean_knowledge[0]):
+                clean_knowledge = []
+            quest["current_knowledge"] = clean_knowledge or ([source_sentence[:500]] if source_sentence else [f"The first lead is at {self.state.get('location', 'the current location')}." ])
+            quest["clear_conditions"] = clean_conditions or [objective[:500]]
             quest["locations"] = [ai_text(x)[:500] for x in locations[:40] if ai_text(x)] or [str(self.state.get("location", "Current location"))]
             quest["risks"] = [ai_text(x)[:500] for x in risks[:20] if ai_text(x)] or ["No specific danger is confirmed yet."]
             quest["giver"] = str(quest.get("giver") or quest.get("cause") or "Circumstances")[:200]
-            quest["first_step"] = str(quest.get("first_step") or quest.get("next_step") or f"Follow the first known lead: {quest['current_knowledge'][0]}")[:500]
+            first_step = ai_text(quest.get("first_step") or quest.get("next_step"))
+            if _placeholder(first_step) or re.match(r"(?i)^follow the first known lead:\s*the quest begins at\b", first_step):
+                first_step = (f"Examine the evidence tied to {quest_name} at {quest['locations'][0]} and speak with the people directly involved.")
+            quest["first_step"] = first_step[:500]
             quest["discovered_clues"] = [ai_text(x)[:500] for x in (quest.get("discovered_clues") or quest["current_knowledge"])[:40] if ai_text(x)]
             quest["completion_conditions"] = [ai_text(x)[:500] for x in (quest.get("completion_conditions") or quest["clear_conditions"])[:40] if ai_text(x)]
             quest["optional_objectives"] = [ai_text(x)[:500] for x in (quest.get("optional_objectives") or [])[:20] if ai_text(x)]
@@ -950,11 +1026,36 @@ Return ONLY valid JSON."""
         else:
             msgs.extend(f"{stat.upper()} {delta:+d}  → {value}" for stat, delta, value in stat_changes)
         bs, as_ = b.get("skills", {}), a.get("skills", {})
+        def _skill_summary(value):
+            if not isinstance(value, dict):
+                return ai_text(value)
+            rank = ai_text(value.get("rank"))
+            description = ai_text(value.get("description") or value.get("effect"))
+            parts = [part for part in (rank, description) if part]
+            return " — ".join(parts)
+
+        def _skill_change(old, new):
+            if not isinstance(old, dict) or not isinstance(new, dict):
+                return _skill_summary(new) or "details refined"
+            changes = []
+            if old.get("rank") != new.get("rank") and new.get("rank"):
+                changes.append(f"rank {ai_text(old.get('rank') or 'unknown')} → {ai_text(new.get('rank'))}")
+            if old.get("bonus") != new.get("bonus") and isinstance(new.get("bonus"), (int, float)):
+                changes.append(f"bonus {int(new.get('bonus') or 0):+d}")
+            for key, label in (("description", "use"), ("effect", "effect"),
+                               ("limitation", "limit"), ("growth_path", "growth path")):
+                if old.get(key) != new.get(key) and ai_text(new.get(key)):
+                    changes.append(f"{label}: {ai_text(new.get(key))}")
+            # Origin/source metadata is useful to the engine but should not
+            # spill a raw structure—or generation provenance—into play.
+            return "; ".join(changes[:3]) or "details clarified"
+
         for k, v in as_.items():
             if k not in bs:
-                msgs.append(f"NEW SKILL: {k} — {v}")
+                summary = _skill_summary(v)
+                msgs.append(f"NEW SKILL: {k}{f' — {summary}' if summary else ''}")
             elif bs[k] != v:
-                msgs.append(f"SKILL UPDATED: {k} — {bs[k]} → {v}")
+                msgs.append(f"SKILL REFINED: {k} — {_skill_change(bs[k], v)}")
         new_titles = set(ai_text(t) for t in a.get("titles", []) if ai_text(t))
         old_titles = set(ai_text(t) for t in b.get("titles", []) if ai_text(t))
         for t in new_titles - old_titles:

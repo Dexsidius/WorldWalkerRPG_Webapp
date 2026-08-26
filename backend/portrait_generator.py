@@ -259,6 +259,7 @@ def portrait_view(state, settings):
         "_portrait_generated": bool(cached),
         "_portrait_reference": bool(reference and not cached),
         "_portrait_generation_enabled": bool(settings.get("portrait_generation_enabled", True)),
+        "_portrait_auto_generate": bool(settings.get("portrait_auto_generate", False)),
         "_portrait_generation_ready": portrait_ready(settings),
         "_portrait_regeneration_policy": "Only significant visible appearance, equipment, affiliation clothing, or transformation changes create a new cache key.",
     }

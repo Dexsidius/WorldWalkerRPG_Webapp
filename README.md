@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.6.3** (schema 13). Version 3.6 is intended for fresh campaigns.
+Current app/save version: **3.7.0** (schema 13). Version 3.7 is intended for fresh campaigns.
+
+Version 3.7.0 reduces AI cost and improves simulation consistency. It sends
+task-specific context to each model, uses the secondary model for Advisor and
+combat narration when configured, reports cached-token savings, keeps only
+useful autosave history, and disables automatic portrait generation by default.
+It also improves standing plans, roll/action labeling, training and quest
+reports, combat entry, scene-matched artwork, suggestions, mobile Advisor
+readability, and moment/time-skip controls.
 
 Version 3.6.3 gives dangerous confrontations one persistent warning instead
 of reopening a warning for every difficult choice in the same scene. Normal

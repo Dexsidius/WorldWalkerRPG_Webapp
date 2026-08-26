@@ -38,6 +38,7 @@ DEFAULT_SETTINGS = {
     "music_volume": 0.35,
     "animations_enabled": True,
     "portrait_generation_enabled": True,
+    "portrait_auto_generate": False,
     "image_model": "gpt-image-2",
     "local_image_model": "",
     "portrait_quality": "low",
@@ -246,7 +247,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread")
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -481,6 +482,20 @@ class CoreMixin:
         narrative = str(data.get("narrative") or "") + " " + " ".join(
             str(update.get("narrative") or "") for update in (data.get("updates") or []) if isinstance(update, dict)
         )
+        # A committed-attack phrase in the player's order is not enough when
+        # the resolved scene explicitly establishes that the supposed target
+        # is absent or the confrontation never existed.  Respect that grounded
+        # outcome instead of manufacturing combat against whichever known NPC
+        # happened to be mentioned later in the sentence.
+        denied = bool(re.search(
+            r"\b(?:no (?:armed |hostile )?(?:target|attacker|enemy|bandit|opponent|confrontation|fight|combat)\b|"
+            r"(?:target|attacker|enemy|bandit|opponent) (?:is|was|are|were) not (?:present|there)|"
+            r"attack cannot occur|combat (?:is not|isn't|was not|wasn't) initiated|no weapon is drawn|"
+            r"acting against an absent target)\b",
+            narrative, re.I,
+        ))
+        if denied:
+            return False
         unavoidable = bool(self._UNAVOIDABLE_ATTACK_RE.search(narrative))
         if initiated and not unavoidable and re.search(r"\b(training dumm(?:y|ies)|practice targets?|door|wall|rock|tree)\b", action_text, re.I):
             initiated = False
@@ -489,21 +504,22 @@ class CoreMixin:
 
         haystack = action_text + " " + narrative
         opponent = "Hostile opponent"
-        known = [str(name) for name in (self.state.get("npc_memories") or {}).keys() if str(name).strip()]
-        known += [str(name) for name in (self.state.get("contacts") or {}).keys() if str(name).strip()]
-        player_name = str(self.state.get("name") or "").lower()
-        for name in sorted(set(known), key=len, reverse=True):
-            if name.lower() != player_name and re.search(rf"\b{re.escape(name)}\b", haystack, re.I):
-                opponent = name
-                break
-        if opponent == "Hostile opponent":
+        if initiated:
             match = re.search(r"\b(?:attack|fight|strike|stab|slash|shoot|punch|kick|hit|tackle|grapple|ambush|kill|duel|spar)(?:\s+with)?\s+(?:the\s+|a\s+|an\s+)?([A-Za-z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,2})", action_text, re.I)
             if match:
-                candidate = re.split(r"\b(?:with|using|at|in|until|because|and|but)\b", match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,!?")
+                candidate = re.split(r"\b(?:with|using|at|in|until|before|after|while|as|because|and|but|who|that|threatening|near|beside)\b", match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,!?")
                 if candidate and candidate.lower() not in {"training dummy", "practice target", "door", "wall"}:
                     opponent = candidate.title()
+        if opponent == "Hostile opponent":
+            known = [str(name) for name in (self.state.get("npc_memories") or {}).keys() if str(name).strip()]
+            known += [str(name) for name in (self.state.get("contacts") or {}).keys() if str(name).strip()]
+            player_name = str(self.state.get("name") or "").lower()
+            for name in sorted(set(known), key=len, reverse=True):
+                if name.lower() != player_name and re.search(rf"\b{re.escape(name)}\b", haystack, re.I):
+                    opponent = name
+                    break
         non_lethal = bool(re.search(r"\b(spar|practice bout|friendly duel|training match)\b", action_text, re.I))
-        group = bool(re.search(r"\b(group|squad|mob|pack|gang|troops|soldiers|bandits|monsters)\b", opponent, re.I))
+        group = bool(re.search(r"\b(group|squad|mob|pack|gang|troops|soldiers|bandit|bandits|monsters)\b", opponent, re.I))
         patch["combat"] = {
             "active": True, "round": 1, "non_lethal": non_lethal,
             "location": self.state.get("location") or "the current scene",
@@ -631,6 +647,132 @@ CORE PRINCIPLES
 - Canon is the opening condition, not a railroad. Record meaningful changes as canon_divergences.{self._scale_lock_rule()}
 {extra}
 Return ONLY valid JSON. No markdown fences."""
+
+    def task_state_for_ai(self, purpose="moment", query=""):
+        """Right-size state for specialized AI roles.
+
+        Full turn/time-skip simulation still receives the relevance-trimmed
+        campaign snapshot.  Opening, Advisor, and post-combat prose receive
+        only fields that can affect that task, avoiding tens of thousands of
+        repeated tokens without deleting anything from the real save.
+        """
+        snapshot = self.trimmed_state_for_ai(query)
+        purpose = str(purpose or "moment")
+        if purpose in {"moment", "time_skip", "major_event", "event"}:
+            return snapshot
+        common = {
+            "name", "age", "position", "world", "difficulty", "background", "custom_world", "race",
+            "player_identity", "location", "world_time", "calendar", "canon_day", "canon_anchor",
+            "stats", "hidden_stats", "hp", "hp_max", "resource_name", "resource", "resource_max",
+            "skills", "titles", "class_profile", "special", "inventory", "equipment", "currency",
+            "quests", "relationships", "affiliations", "companions", "contacts", "npc_memories",
+            "canon_divergences", "campaign_direction", "active_action_goals", "prerequisite_tracks",
+            "authoritative_player_corrections", "simulation_scale", "combat", "danger_scenario",
+        }
+        if purpose == "opening":
+            opening = common | {"starting_power_band", "starting_power_notice", "appearance_desc", "portrait_traits"}
+            return {key: copy.deepcopy(value) for key, value in snapshot.items() if key in opening and value not in (None, "", [], {})}
+        if purpose == "combat_summary":
+            combat_keys = common | {"turn", "standing_orders", "suggested_actions"}
+            result = {key: copy.deepcopy(value) for key, value in snapshot.items() if key in combat_keys and value not in (None, "", [], {})}
+            # Distant NPC dossiers, full background prose, and unrelated
+            # inventories cannot change how already-resolved swings read.
+            result.pop("npc_memories", None)
+            result.pop("background", None)
+            result["recent_campaign_facts"] = copy.deepcopy((snapshot.get("campaign_canon") or [])[-2:])
+            return result
+        if purpose == "advisor":
+            advisor_keys = common | {"factions", "faction_clocks", "npc_clocks", "world_events", "background_world_feed", "chapter_summaries", "campaign_canon"}
+            result = {key: copy.deepcopy(value) for key, value in snapshot.items() if key in advisor_keys and value not in (None, "", [], {})}
+            result["campaign_canon"] = copy.deepcopy((snapshot.get("campaign_canon") or [])[-8:])
+            result["background_world_feed"] = copy.deepcopy((snapshot.get("background_world_feed") or [])[-8:])
+            result["world_events"] = copy.deepcopy((snapshot.get("world_events") or [])[-8:])
+            return result
+        return snapshot
+
+    def task_rules(self, purpose="moment", action_hint=""):
+        """Compact authoritative rules for one AI job.
+
+        The original all-purpose GM prompt remains available for plug-ins and
+        diagnostic comparisons.  Production call sites use this task router so
+        a combat recap no longer pays for character creation, faction
+        governance, shops, long-skip scheduling, and every other subsystem.
+        """
+        purpose = str(purpose or "moment")
+        wd = WORLD_DATA[self.state["world"]]
+        difficulty = DIFFICULTIES[self.state["difficulty"]]
+        tuning = normalize_tuning(self.state)
+        profile = progression_preset_for(self.state.get("world"))
+        narration = self.settings.get("narration", "Concise")
+        shared = f"""You are the authoritative Game Master for a persistent Worldwalker RPG campaign.
+WORLD: {self.state['world']}
+WORLD RULES: {wd['rules']}
+CUSTOM SETTING: {self.state.get('custom_world', '')}
+DIFFICULTY: {self.state['difficulty']} — {difficulty['description']}
+PROGRESSION: {profile['label']}; training x{tuning['training_rate']}, breakthrough x{tuning['breakthrough_rate']}, XP x{tuning['xp_rate']} only where canonical XP exists.
+NARRATION: {narration}
+WORLD ABILITIES: {self.ability_enum()}
+
+AUTHORITATIVE CORE
+- Resolve what the player actually said. Every action gets a concrete success, specific failure/partial result, or exact world-rule reason it is impossible. Never downgrade action into mere preparation.
+- The player alone controls their character's choices and dialogue. NPCs, factions, travel, information and canon continue causally without making the player the automatic center.
+- Use information fog: characters learn through believable witnesses, messages, evidence, travel, research or powers. Never confuse narrator knowledge with character knowledge.
+- Canon is the starting condition, not a railroad. Player choices may alter it naturally; recorded campaign facts and divergences outrank stock canon.
+- Use reliable source-material knowledge and the supplied lore/state. Anything canon characters can do is theoretically reproducible when the same prerequisites and costs are met. Original abilities, classes and techniques are welcome when they fit world logic.
+- Dice are only for extreme/impossible-looking attempts, lethal undertakings and genuine power-tier leaps. Ordinary politics, strategy, investigation, travel, crafting, social play and focused training succeed plausibly without dice. Supplied rolls are settled facts; impossible actions are not rollable.
+- Focused training produces noticeable gains proportional to actual time, intensity, teachers, resources, recovery and aptitude. Only a tier leap needs a roll. Use XP/levels only when the supplied state says this world uses them.
+- State changes must match prose: wounds change HP, resource use changes the correct pool, purchases change money/inventory, completed objectives change quests, travel changes location, and learned skills include a clear effect, limitation/cost and growth path.
+- Every authored skill may include combat_usable (boolean) and effect_type (damage|heal|debuff|utility). Profession, knowledge, navigation and crafting skills are combat_usable=false unless they have a specific combat application.
+- An initiated attack or unavoidable incoming attack begins structured combat immediately. Do not insert an extra negotiation/event-chat gate once violence is committed. A previously accepted danger scenario does not warn again unless the new action itself could kill the player.
+- Starting a quest requires a readable briefing with objective, cause/giver, known location, risks, first step, current knowledge and clear completion conditions.
+- End with exactly three optional, current, state-grounded suggestions written as concrete verb + specific known target + purpose. Never suggest traveling to the current location, contacting an unknown person, or continuing an encounter that has ended.
+- Return one valid JSON object. Omit empty optional fields and empty arrays/objects instead of echoing the entire schema. Never write application-owned ledgers or diagnostics in state_patch.{self._scale_lock_rule()}
+"""
+        modules = {
+            "opening": """
+OPENING JOB
+- Preserve every player-supplied background fact and every generated starting class, ability, skill, title, pool, stat, contact and item as real mechanics.
+- Smoothly fill only missing upbringing, training, formative relationship, motivation and complication. Do not repeat the player's prompt verbatim or expose labels such as Generated Ability/Backstory/Loadout.
+- For canon characters, reconcile identity, age, faction, rank, mentor, party, skills and timeline before narrating. Never invent a generic mentor that contradicts canon state.
+- Begin with a concrete situation at the selected location shortly before the chosen timeline, give at least one actionable journey lead, and end at a decision point. Do not advance campaign time during the opening.
+""",
+            "moment": """
+MOMENT JOB
+- Resolve exactly one immediate meaningful beat, consuming a believable amount of time but never more than 24 hours. Preserve later standing-plan actions as deferred work.
+- If a fight begins, stop after its opening exchange with active structured combat. Otherwise end at the next meaningful decision point while the world remains in motion.
+""",
+            "time_skip": """
+TIME-SKIP JOB
+- Simulate the entire allowed interval chronologically and attempt queued actions in order. Continue complete standing orders when no new actions were supplied.
+- Respect travel, sleep, recovery, resources, teachers and commitments. Never complete deferred work. Stop early when an explicit goal completes, committed combat begins, a significant personal beat requires control, or the supplied canon/major boundary is reached.
+- Give each meaningful beat its own dated update. Routine distant movement may be consolidated; do not duplicate the same consequence across several cards.
+- At a canon boundary, judge involvement from location/travel, access/status/affiliation and event scale. Personally present players receive a concrete scene prompt; everyone else receives only plausible news or no report.
+""",
+            "major_event": """
+MAJOR-EVENT JOB
+- Treat the supplied boundary as a hard stop. Describe the event from the player's real distance, status and access. Do not teleport them into a private scene or ask a generic Yes/No intervention question.
+- If the player is caught in the event, provide the specific immediate prompt in the normal Chronicle. If violence is already committed, start structured combat.
+""",
+            "event": """
+EVENT-SCENE JOB
+- Continue the active major/canon event through the normal Chronicle one immediate beat at a time. Keep location, access, participants and prior divergence exact. End at a situation-specific decision point.
+""",
+            "combat_summary": """
+COMBAT-SUMMARY JOB
+- The mechanical log already happened. Narrate only those hits, misses, costs, escape/victory/defeat and mercy choices; never reroll, add exchanges or change the outcome.
+- Apply only direct aftermath such as injuries, loot, XP where canonical, quest consequences, contacts and immediate reactions. Keep the recap concise and provide next actions for the post-combat situation, never for the finished fight.
+""",
+        }
+        return shared + modules.get(purpose, modules["moment"])
+
+    def task_context(self, purpose="moment", query=""):
+        rules = self.task_rules(purpose, query)
+        if purpose == "combat_summary":
+            return rules
+        lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
+                                   limit=self.simulation_profile()["lore_limit"])
+        self.last_lore_context = lore
+        return rules + (("\n\n" + lore) if lore else "") + self.rated_good_example_snippet()
 
     def gm_rules(self, action_hint=""):
         wd = WORLD_DATA[self.state["world"]]

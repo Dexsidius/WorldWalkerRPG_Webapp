@@ -108,7 +108,9 @@ class AI:
         self.local_token = local_token
         self.max_estimated_cost_usd = max(0.0, float(max_estimated_cost_usd or 0))
         self.last_endpoint = ""
-        self.usage = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "cost_usd": 0.0, "cost_unknown": False}
+        self.usage = {"input_tokens": 0, "cached_input_tokens": 0, "uncached_input_tokens": 0,
+                      "output_tokens": 0, "calls": 0, "cost_usd": 0.0,
+                      "cost_unknown": False, "cost_is_conservative": False}
 
     def estimate_request_cost(self, instructions, payload, max_output_tokens=700):
         """Conservative preflight estimate; local models always return zero."""
@@ -128,13 +130,22 @@ class AI:
         u = (data or {}).get("usage") or {}
         in_tok = int(u.get("input_tokens", u.get("prompt_tokens", 0)) or 0)
         out_tok = int(u.get("output_tokens", u.get("completion_tokens", 0)) or 0)
+        details = u.get("input_tokens_details") or u.get("prompt_tokens_details") or {}
+        cached_tok = min(in_tok, max(0, int(details.get("cached_tokens", 0) or 0)))
         if not in_tok and not out_tok:
             return
         self.usage["input_tokens"] += in_tok
+        self.usage["cached_input_tokens"] += cached_tok
+        self.usage["uncached_input_tokens"] += max(0, in_tok - cached_tok)
         self.usage["output_tokens"] += out_tok
         self.usage["calls"] += 1
         if self.provider != "cloud":
             return
+        # The local price table intentionally stores only standard input and
+        # output rates. Providers can discount cached input differently by
+        # model, so keep the displayed dollar total conservative while still
+        # exposing exactly how many cached tokens the API reported.
+        self.usage["cost_is_conservative"] = bool(self.usage.get("cost_is_conservative") or cached_tok)
         cost = estimate_cost_usd(self.model, in_tok, out_tok)
         if cost is None:
             self.usage["cost_unknown"] = True

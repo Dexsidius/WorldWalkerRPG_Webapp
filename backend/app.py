@@ -360,6 +360,8 @@ def api_usage():
         "session_budget_warning_usd": warning_at,
         "over_session_budget": bool(warning_at and total_cost >= warning_at),
         "cost_estimate_complete": cost_known,
+        "cost_is_conservative": any(client.usage.get("cost_is_conservative") for client in unique_clients),
+        "cached_input_tokens": sum(client.usage.get("cached_input_tokens", 0) for client in unique_clients),
         "total_calls": sum(client.usage.get("calls", 0) for client in unique_clients),
     })
 
@@ -795,7 +797,7 @@ def api_settings_post():
         "provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model",
         "max_ai_cost_per_request_usd", "session_budget_warning_usd",
         "narration", "autosave", "sound_enabled", "music_enabled", "music_volume", "animations_enabled",
-        "portrait_generation_enabled", "image_model", "local_image_model", "portrait_quality", "developer_mode",
+        "portrait_generation_enabled", "portrait_auto_generate", "image_model", "local_image_model", "portrait_quality", "developer_mode",
         "onboarding_seen", "simulation_mode"
     ] if k in d}
     game.update_settings(patch)

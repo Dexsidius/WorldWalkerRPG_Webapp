@@ -1263,8 +1263,9 @@ input,select,textarea{ font-family:inherit; }
   .advisor-body>.hint{ margin:0 0 4px; font-size:10px; line-height:1.3; }
   .advisor-mode-toggle{ flex:0 0 auto; padding:6px 8px; margin:2px 0 5px!important; }
   .advisor-mode-toggle small{ display:none; }
-  .advisor-starters,.advisor-followups{ flex:0 0 auto; flex-wrap:nowrap; max-height:none; overflow-x:auto; overflow-y:hidden; padding:3px 0 6px; scrollbar-width:thin; }
-  .advisor-starters button,.advisor-followups button{ flex:0 0 auto; white-space:nowrap; }
+  .advisor-starters,.advisor-followups{ flex:0 0 auto; flex-wrap:nowrap; max-height:132px; overflow-x:hidden; overflow-y:auto; padding:3px 0 6px; scrollbar-width:thin; }
+  .advisor-starters,.advisor-followups{ flex-wrap:wrap; }
+  .advisor-starters button,.advisor-followups button{ flex:1 1 220px; min-width:0; white-space:normal; text-align:left; line-height:1.35; }
   .advisor-messages{ flex:1 1 0; min-height:0; padding:2px 3px 8px 0; }
   .advisor-msg{ max-width:98%; padding:11px 12px; }
   .advisor-msg-summary{ font-size:14px; line-height:1.58; }

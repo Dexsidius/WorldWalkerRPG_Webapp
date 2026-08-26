@@ -181,10 +181,10 @@ class SocialMixin:
         concise = len(str(question).split()) <= 6
         wants_chart = bool(re.search(r"\b(graph|chart|plot|visuali[sz]e|bar\s*chart)\b", str(question), re.I))
         payload = {
-            "task": "advisor_question", "question": question, "state": self.trimmed_state_for_ai(),
+            "task": "advisor_question", "question": question, "state": self.task_state_for_ai("advisor", question),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
-            "canon_divergences": self.state.get("canon_divergences") or [],
-            "thread_history": self.state.get("advisor_thread", [])[-16:],
+            "canon_divergences": self.state.get("canon_divergences", []),
+            "thread_history": self.state.get("advisor_thread", [])[-8:],
             "schema": {
                 "summary": ("ONE direct sentence answering the question — nothing more" if concise else
                             "2-4 direct sentences answering the question with a bottom line and important context"),
@@ -217,7 +217,8 @@ You may freely:
 {"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a real briefing: enough to support a decision, organized and concrete, but still sounds like someone talking to you, not a form being filled out."}
 {"THE PLAYER'S WORDING SUGGESTS THEY WANT A VISUAL (graph/chart/plot) — populate the chart field; don't just describe the numbers in prose instead." if wants_chart else ""}
 You never alter game state; this is a conversation only. Return ONLY valid JSON, no markdown fences."""
-        data = self.ai.request(rules, payload, max_output_tokens=200 if concise else 1000)
+        advisor_client = self.ai_bg if getattr(self, "ai_bg", None) and self.settings.get("secondary_model") else self.ai
+        data = advisor_client.request(rules, payload, max_output_tokens=200 if concise else 1000)
         entry = {
             "role": "advisor",
             "summary": (data.get("summary") or "").strip() or "...",

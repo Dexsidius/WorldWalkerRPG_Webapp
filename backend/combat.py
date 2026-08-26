@@ -305,13 +305,14 @@ class CombatMixin:
         dict describing exactly what happened — no prose, no AI call."""
         self.ensure_combat_numbers()
         combat = self.state["combat"]
+        log_start = len(combat.get("log", []))
         enemy = combat.get("enemy") or {}
         # A spar, test, or supervised duel (combat.non_lethal) is won or lost
         # on points — HP is floored at 1 for both sides instead of 0, so
         # neither combatant can actually be killed by it.
         floor = 1 if combat.get("non_lethal") else 0
         if not enemy.get("alive", True) or int(enemy.get("hp", 0)) <= 0:
-            return self.end_combat("victory")
+            return self.end_combat("victory", log_start)
 
         world = self.state.get("world", "Custom World")
         primary = primary_stats_for(world, self.state.get("special", {}).get("Archetype", "")) or [abilities_for(world)[0]]
@@ -331,7 +332,7 @@ class CombatMixin:
             check = self._combat_check(bonus + ally_support, eff["attack_min"], eff["attack_max"])
             if check["success"]:
                 combat["log"].append({"round": combat["round"], "actor": "player", "action": "flee", **check, "result": "escaped"})
-                return self.end_combat("fled")
+                return self.end_combat("fled", log_start)
             events.append({"actor": "player", "action": "flee", **check, "result": "failed to escape"})
         elif action == "defend":
             events.append({"actor": "player", "action": "defend", "result": "braced"})
@@ -353,7 +354,7 @@ class CombatMixin:
                             "target": enemy["name"], **check})
             if check["success"]:
                 combat["log"].extend([{"round": combat["round"], **e} for e in events])
-                return self.end_combat("overwhelmed")
+                return self.end_combat("overwhelmed", log_start)
         else:
             requested_skill = ability_name if ability_name and ability_name in self.state.get("skills", {}) else None
             requested_type = self._ability_resource_type(requested_skill) if requested_skill else "free"
@@ -379,7 +380,7 @@ class CombatMixin:
         combat["log"].extend([{"round": combat["round"], **e} for e in events])
 
         if not enemy.get("alive", True):
-            return self.end_combat("victory")
+            return self.end_combat("victory", log_start)
 
         if action != "flee":
             enemy_swings = 2 if (enemy_power - player_speed) >= SPEED_GAP_THRESHOLD else 1
@@ -412,13 +413,13 @@ class CombatMixin:
         self.autosave()
 
         if self.state.get("hp", 1) <= floor:
-            return self.end_combat("defeat" if not combat.get("non_lethal") else "yielded")
+            return self.end_combat("defeat" if not combat.get("non_lethal") else "yielded", log_start)
 
         return {"combat": self.state["combat"], "hp": self.state.get("hp"), "hp_max": self.state.get("hp_max"),
                 "resource": self.state.get("resource"), "resource_max": self.state.get("resource_max"),
-                "log_tail": combat["log"][-3:], "player_died": False}
+                "log_tail": combat["log"][log_start:], "player_died": False}
 
-    def end_combat(self, outcome):
+    def end_combat(self, outcome, log_start=None):
         combat = self.state.get("combat") or {}
         combat["active"] = False
         combat["outcome"] = outcome
@@ -427,9 +428,16 @@ class CombatMixin:
         # receive their own warning instead of inheriting stale consent.
         self.clear_danger_scenario()
         self.autosave()
+        log = combat.get("log", [])
+        # The frontend mirrors this tail into the Chronicle.  Returning the
+        # last N cumulative rows made round two repeat round one's lines, and
+        # the final escape/victory repeated several rounds again.  A caller
+        # resolving a round supplies the pre-round index so only new events
+        # are returned; direct/legacy callers retain a small useful tail.
+        fresh_log = log[int(log_start):] if isinstance(log_start, int) else log[-5:]
         result = {"combat": combat, "hp": self.state.get("hp"), "hp_max": self.state.get("hp_max"),
                   "resource": self.state.get("resource"), "resource_max": self.state.get("resource_max"),
-                  "log_tail": combat.get("log", [])[-5:], "player_died": outcome == "defeat"}
+                  "log_tail": fresh_log, "player_died": outcome == "defeat"}
         if outcome == "defeat" and self.state.get("hp", 1) <= 0:
             self.state["alive"] = False
         return result
@@ -447,13 +455,13 @@ class CombatMixin:
             return {"narrative": "", "story": self._flush_story()}
         mercy_shown = bool(combat.get("non_lethal") or combat.get("spare_enemy"))
         payload = {
-            "task": "narrate_combat", "state": self.trimmed_state_for_ai(), "combat_outcome": combat.get("outcome"),
+            "task": "narrate_combat", "state": self.task_state_for_ai("combat_summary"), "combat_outcome": combat.get("outcome"),
             "mercy_shown": mercy_shown, "mechanical_log": pending,
             "schema": {"narrative": "2-6 sentences turning the mechanical log into a real combat scene — do not re-roll or contradict any result",
                        "state_patch": "loot, injuries, XP, quest/codex/companion consequences of this fight",
                        "events": "system notifications", "timeline_event": "major event or empty",
                        "suggested_actions": ["3 concise next actions"]}}
-        rules = self.gm_rules() + (
+        rules = self.task_context("combat_summary") + (
             "\nYou are narrating a fight that has ALREADY been mechanically resolved by the application. "
             "Every roll, hit, miss and HP change in mechanical_log already happened — narrate them faithfully, "
             "do not add extra unlisted hits or change any outcome. This is the same MAIN GM role as any other turn."
@@ -466,7 +474,8 @@ class CombatMixin:
                 "the bout, not defeated at risk of real harm — narrate it as the player yielding a spar/test, "
                 "not a life-threatening loss."
             )
-        data = self.ai.request(rules, payload, max_output_tokens=900)
+        narrator = self.ai_bg if getattr(self, "ai_bg", None) and self.settings.get("secondary_model") else self.ai
+        data = narrator.request(rules, payload, max_output_tokens=650)
         combat["narrated_through"] = len(log)
         if not combat.get("active"):
             self.state["combat"] = {}
