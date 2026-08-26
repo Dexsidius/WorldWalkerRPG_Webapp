@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.8.0** (schema 13). Version 3.8 is intended for fresh campaigns.
+Current app/save version: **3.8.1** (schema 13). Version 3.8 is intended for fresh campaigns.
+
+Version 3.8.1 adds a fully mechanical Pain canon start immediately after
+Yahiko's death, while the Deva Path and transformed Akatsuki are first taking
+shape. It also expands One Piece creation from three starting locations to a
+broad selection across the Blues, Grand Line, World Government territory and
+the New World; every new choice has an opening premise and a matching map node.
 
 Version 3.8.0 makes campaign-start labels mechanically authoritative. Canon
 characters and high-status original origins now begin with their promised

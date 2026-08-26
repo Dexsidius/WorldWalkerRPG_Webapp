@@ -1,4 +1,4 @@
-const CACHE = "worldwalker-v380-shell-2";
+const CACHE = "worldwalker-v381-shell-1";
 const SHELL = ["/", "/css/style.css", "/js/app.js", "/manifest.webmanifest", "/assets/branding/worldwalker-emblem.png"];
 
 self.addEventListener("install", (event) => {

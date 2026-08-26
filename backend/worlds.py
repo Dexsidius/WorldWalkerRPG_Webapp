@@ -7,7 +7,7 @@ import re
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.8.0"
+APP_VERSION = "3.8.1"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -190,7 +190,10 @@ WORLD_DATA = {
             ("Amazon Lily",29,61,"island",10), ("Punk Hazard",9,66,"island",11),
             ("Dressrosa",12,62,"kingdom",12), ("Mary Geoise",50,43,"government",15),
             ("Egghead Island",5,69,"island",14), ("Lulusia Kingdom",27,70,"kingdom",9),
-            ("Ohara",22,40,"historical",8), ("Wano Country",6,51,"nation",14)
+            ("Ohara",22,40,"historical",8), ("Wano Country",6,51,"nation",14),
+            ("Cocoyasi Village",77,29,"settlement",3), ("Shimotsuki Village",72,27,"settlement",2),
+            ("Baltigo",31,76,"revolutionary",10), ("Kano Country",31,34,"kingdom",7),
+            ("Sorbet Kingdom",62,79,"kingdom",6), ("Germa Kingdom",18,24,"mobile kingdom",9)
         ],
         "special": {"Haki":{"Observation":0,"Armament":0,"Conqueror":0}, "Bounty":0, "Devil Fruit":"None", "Crew":"None"}
     },
@@ -983,6 +986,35 @@ MAJOR_CHARACTER_STARTS = {
              {"name":"Jiraiya","attitude":"Respected mentor, distant","goal":"Returned to Konoha after three years training the three of them; still watches his former students' progress from afar.","is_companion":False,"last_known_location":"Konohagakure"},
          ],
          "seed_faction_rosters":{"Akatsuki":["Yahiko","Nagato","Konan"]}},
+        {"id":"pain_birth","name":"Pain","label":"Pain — birth of Pain","start_day":-4855,"location":"Amegakure","age":18,"origin":"Amegakure War Orphan","archetype":"Rinnegan Wielder",
+         "appearance":"Yahiko's orange-haired body newly bears black chakra-receiver piercings and the Rinnegan as the first public face of Pain; Nagato's scarred red-haired true body remains concealed nearby.",
+         "background":"The morning after Yahiko's death. Nagato has survived Hanzō's ambush, summoned the Demonic Statue, lost the use of his legs, and adopted the identity of Pain, but the future form and doctrine of Akatsuki are still his to decide.",
+         "expanded_background":"Yahiko died to save Konan when Hanzō and Danzō trapped the original Akatsuki. Nagato answered with the Rinnegan and the Demonic Statue of the Outer Path, destroying their attackers at a terrible physical cost: black receivers remain embedded in his back and his legs are crippled. Konan has escaped with him and Yahiko's body. Nagato has just taken the name Pain and begun using Yahiko as the Deva Path, the first public body of a remote Rinnegan network. The remaining five Paths have not yet been assembled, Hanzō still rules Amegakure, and the masked man calling himself Madara is waiting to exploit Nagato's grief. The player has full control over whether Pain follows canon, preserves more of Yahiko's ideals, or creates a different Akatsuki entirely.",
+         "motivation":"End the cycle of war that destroyed Yahiko, whether through shared pain, Yahiko's original ideals, or a new path chosen by the player.",
+         "starting_complication":"Nagato is newly crippled and grieving, only the Deva Path is operational, Hanzō remains in power, and the masked man's offer carries concealed motives.",
+         "title":"Pain — Akatsuki Leader","position":"Leader of the transformed Akatsuki",
+         "equipment":{"Weapon":"Black Chakra Receivers and concealed life-support frame"},
+         "special_patch":{"Shinobi Rank":"Akatsuki Leader","Home Village":"Amegakure","Clan":"Uzumaki","True Identity":"Nagato","Public Body":"Yahiko — nascent Deva Path","Rinnegan":"Active in both eyes","Six Paths of Pain":"Deva Path operational; five Paths not yet assembled","Known Jutsu":["Rinnegan Six Paths Techniques","Summoning: Demonic Statue of the Outer Path","Black Chakra Receivers","Remote Body Control","Five Basic Nature Transformations"]},
+         "conditions":["Nagato's legs are crippled and his true body requires support for travel","Black receivers from the Demonic Statue impose constant pain and chakra strain","Only the Deva Path is currently operational; the remaining Paths must be created or replaced through play","Fresh grief after Yahiko's death can shape judgment without removing player control"],
+         "affiliations":[{"faction":"Akatsuki","rank":"Leader","status":"active","joined":"Original founding","notes":"Nagato now leads the surviving organization through the identity of Pain, beside Konan."}],
+         "reputation":{"Akatsuki":90,"Amegakure":-20},
+         "stat_minimums":{"Taijutsu":75,"Ninjutsu":170,"Genjutsu":75,"Chakra Control":145,"Willpower":120,"Intellect":105},
+         "skills":{
+             "Rinnegan — Six Paths Techniques":{"rank":"Extraordinary","bonus":16,"description":"Uses the Rinnegan's gravitational, summoning, absorption, soul, restoration, mechanized and Outer Path capabilities directly or through prepared bodies.","limitation":"Only the Deva body is ready at campaign start; large techniques have severe chakra, cooldown and bodily costs, and unfamiliar applications still require experimentation.","growth_path":"Stabilize Nagato's body, refine remote control, assemble or redesign the other Paths, and master each Rinnegan discipline."},
+             "Deva Path — Yahiko":{"rank":"Nascent Path","bonus":13,"description":"Controls Yahiko's preserved body through black receivers, sharing Rinnegan vision and channeling attractive and repulsive force while presenting Pain to the world.","limitation":"The body has only just been prepared, shared vision is limited to one Path, and powerful gravity techniques require recovery intervals.","growth_path":"Improve receiver placement, movement, range and gravity control while deciding what Yahiko's body will represent."},
+             "Demonic Statue of the Outer Path":{"rank":"Catastrophic Summoning","bonus":15,"description":"Summons the Gedō Statue and channels its chakra-draining power, as demonstrated during the escape from Hanzō's ambush.","limitation":"Its rods have already crippled Nagato; continued use can consume life force and worsen his condition.","growth_path":"Learn the statue's true function and establish strict conditions for using it without sacrificing Nagato's life."},
+             "Black Receiver Network":{"rank":"Developing Mastery","bonus":11,"description":"Creates and implants chakra receivers to transmit Nagato's chakra, commands and Rinnegan perception into prepared targets at range.","limitation":"Range, signal stability, chakra cost and the number of active bodies remain practical constraints.","growth_path":"Build secure relay positions, increase range, and develop the complete shared-vision formation."},
+             "Jiraiya's Ninjutsu Training":{"rank":"Mastered Foundation","bonus":9,"description":"Applies the survival, chakra control, teamwork and elemental ninjutsu taught to Nagato, Yahiko and Konan during their childhood in Amegakure."}},
+         "knowledge":["Hanzō collaborated with Danzō's Root forces to destroy the original Akatsuki.","The masked man calling himself Madara previously offered to guide Nagato and is likely to return now that Yahiko is dead.","The other five bodies of the future Six Paths of Pain have not yet been selected or prepared."],
+         "starting_quests":[{"name":"Decide What Pain Will Become","status":"Active","giver":"Yahiko's Death","locations":["Amegakure"],"objectives":["Stabilize Nagato and secure a hidden base","Decide whether Yahiko will remain the Deva Path or be honored another way","Choose the transformed Akatsuki's doctrine and immediate response to Hanzō","Accept, reject, deceive, or investigate the masked man's offer","Create, redesign, or abandon the remaining Paths of Pain"],"next_hint":"Speak with Konan beside Yahiko's body and decide the first order issued in the name of Pain."}],
+         "seed_npcs":[
+             {"name":"Konan","attitude":"Grieving, fiercely loyal partner","goal":"Protect Nagato, preserve what remains of Yahiko's dream, and help decide what Akatsuki becomes.","is_companion":True,"last_known_location":"Amegakure"},
+             {"name":"Yahiko","attitude":"Deceased best friend and moral center","goal":"His dream of peace survives only through the meaning Nagato and Konan give his sacrifice.","is_companion":False,"last_known_location":"Deceased"},
+             {"name":"Masked Man ('Madara')","attitude":"Manipulative would-be patron","goal":"Exploit Nagato's Rinnegan, grief, and Akatsuki for the Eye of the Moon Plan.","is_companion":False,"last_known_location":"Unknown","can_contact":False},
+             {"name":"Hanzō","attitude":"Mortal enemy and ruler of Amegakure","goal":"Destroy the surviving Akatsuki before it can threaten his rule.","is_companion":False,"last_known_location":"Amegakure","can_contact":False},
+             {"name":"Jiraiya","attitude":"Former mentor, distant and unaware of the full tragedy","goal":"Protect the shinobi world while believing his former students may still realize their dream of peace.","is_companion":False,"last_known_location":"Konohagakure","can_contact":False}
+         ],
+         "seed_faction_rosters":{"Akatsuki":["Pain","Konan"]}},
         {"id":"naruto_graduation","name":"Naruto Uzumaki","label":"Naruto — Academy graduation night","start_day":0,"location":"Konohagakure","age":12,"origin":"Academy Student","archetype":"Ninjutsu Student","appearance":"A short blond academy student with blue eyes, whisker-like cheek marks, goggles, and an orange-and-blue outfit.","background":"The day of the Academy graduation and the Scroll of Seals incident.",
          "title":"Academy Student","position":"Academy Student awaiting the graduation test",
          "affiliations":[{"faction":"Konohagakure","rank":"Academy Student","status":"active","joined":"Before campaign start","notes":"Enrolled in Konoha's Academy and awaiting the graduation test."}],
@@ -1070,6 +1102,34 @@ WORLD_START_OPTIONS = {
         {"label": "Foosha Village (East Blue civilian)", "location": "Foosha Village", "note": ""},
         {"label": "Shells Town (Marine recruit)", "location": "Shells Town", "note": "Starting posted as a Marine recruit at Shells Town."},
         {"label": "Goa Kingdom (kingdom-born)", "location": "Goa Kingdom", "note": "Starting life in the Goa Kingdom."},
+        {"label": "Shimotsuki Village (swordsman village)", "location": "Shimotsuki Village", "note": "Starting in an East Blue village known for its sword dojo and Wano-descended traditions."},
+        {"label": "Orange Town (small port)", "location": "Orange Town", "note": "Starting in a rebuilding East Blue port vulnerable to pirate raids."},
+        {"label": "Syrup Village (quiet island)", "location": "Syrup Village", "note": "Starting in a peaceful East Blue village with little protection from outside threats."},
+        {"label": "Baratie (sea restaurant)", "location": "Baratie", "note": "Starting aboard the floating restaurant Baratie as staff, a customer, or a traveler seeking passage."},
+        {"label": "Cocoyasi Village (occupied village)", "location": "Cocoyasi Village", "note": "Starting under the Arlong Pirates' control, where resistance and survival shape daily life."},
+        {"label": "Loguetown (Grand Line gateway)", "location": "Loguetown", "note": "Starting in the city of Gold Roger's execution, the final major East Blue port before the Grand Line."},
+        {"label": "Reverse Mountain (Grand Line crossing)", "location": "Reverse Mountain", "note": "Starting as a traveler, guide, castaway, or crew member near the dangerous entrance to the Grand Line."},
+        {"label": "Drum Island (winter kingdom)", "location": "Drum Island", "note": "Starting in a winter kingdom known for medicine, harsh terrain, and political upheaval."},
+        {"label": "Alabasta (desert kingdom)", "location": "Alabasta", "note": "Starting in the desert kingdom of Alabasta amid royal, criminal, military, and civilian interests."},
+        {"label": "Jaya (pirate port)", "location": "Jaya", "note": "Starting in a lawless pirate port where information, violence, and impossible dreams collide."},
+        {"label": "Skypiea (sky island)", "location": "Skypiea", "note": "Starting above the Blue Sea among sky-island cultures, dials, and conflicts over sacred land."},
+        {"label": "Water 7 (shipwright city)", "location": "Water 7", "note": "Starting in the waterborne city famous for shipwrights, sea trains, commerce, and hidden government activity."},
+        {"label": "Enies Lobby (government service)", "location": "Enies Lobby", "note": "Starting inside a restricted World Government judicial stronghold as an official, guard, prisoner, or infiltrator."},
+        {"label": "Sabaody Archipelago (world crossroads)", "location": "Sabaody", "note": "Starting at the crowded gateway to the New World among pirates, Marines, merchants, nobles, and traffickers."},
+        {"label": "Amazon Lily (Kuja homeland)", "location": "Amazon Lily", "note": "Starting within the secluded Kuja homeland; outsiders require a specific background explaining how they arrived or were accepted."},
+        {"label": "Fishman Island (undersea kingdom)", "location": "Fishman Island", "note": "Starting in the undersea kingdom as a resident, visitor, guard, merchant, or traveler preparing for the New World."},
+        {"label": "Marineford (Marine headquarters)", "location": "Marineford", "note": "Starting at Marine headquarters as enlisted personnel, an officer, government visitor, prisoner, or infiltrator."},
+        {"label": "Impel Down (great prison)", "location": "Impel Down", "note": "Starting within the great undersea prison as an inmate, guard, official, or covert infiltrator."},
+        {"label": "Baltigo (Revolutionary base)", "location": "Baltigo", "note": "Starting at the Revolutionary Army's hidden base with a background that establishes membership, sponsorship, or capture."},
+        {"label": "Kano Country (West Blue kingdom)", "location": "Kano Country", "note": "Starting in a West Blue nation shaped by martial traditions, politics, and the Happo Navy."},
+        {"label": "Sorbet Kingdom (South Blue kingdom)", "location": "Sorbet Kingdom", "note": "Starting in the South Blue's Sorbet Kingdom as a citizen, traveler, royal subject, or revolutionary contact."},
+        {"label": "Germa Kingdom (mobile North Blue kingdom)", "location": "Germa Kingdom", "note": "Starting aboard Germa's mobile kingdom as a subject, soldier, scientist, guest, captive, or infiltrator."},
+        {"label": "Dressrosa (New World kingdom)", "location": "Dressrosa", "note": "Starting in Dressrosa under Doflamingo's rule, amid royal secrets, criminal trade, and public spectacle."},
+        {"label": "Totto Land (Big Mom territory)", "location": "Totto Land", "note": "Starting within Big Mom's territory as a resident, guest, subordinate, political hostage, or trespasser."},
+        {"label": "Zou (Mink homeland)", "location": "Zou", "note": "Starting on the wandering elephant Zunesha among the Mink Tribe; non-Mink characters need a plausible route there."},
+        {"label": "Wano Country (closed nation)", "location": "Wano Country", "note": "Starting inside isolated Wano as a native, captive, smuggler, pirate, samurai, or covert visitor."},
+        {"label": "Egghead Island (future island)", "location": "Egghead Island", "note": "Starting on Dr. Vegapunk's restricted island as a researcher, government asset, test subject, visitor, or infiltrator."},
+        {"label": "Mary Geoise (seat of government)", "location": "Mary Geoise", "note": "Starting at the World Government's most restricted capital with a background establishing status, service, captivity, or infiltration."},
     ],
     "Hunter x Hunter": [
         {"label": "Whale Island (rural start)", "location": "Whale Island", "note": ""},
