@@ -1707,7 +1707,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             # negative year.
             self.state["calendar_anchor_day"] = start_day
             self.state["world_time"] = f"{format_calendar_date(world, start_day, self.state.get('calendar_epoch'), start_day)} — Morning, 08:00"
-            self.state["timeline"] = [f"{self.state['name']} enters the story at {start}. {self.state['canon_anchor']}." ]
+            clean_anchor = str(self.state["canon_anchor"] or "").strip().rstrip(" .!?")
+            self.state["timeline"] = [f"{self.state['name']} enters the story at {start}. {clean_anchor}." ]
             if scenario:
                 self.state["age"] = scenario.get("age", "")
                 self.state["campaign_canon"] = [{"turn": 0, "type": "canon_character_start", "text": f"The player assumes full control of {scenario['name']} at {scenario['label']}."}]

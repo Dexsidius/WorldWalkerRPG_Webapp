@@ -350,7 +350,8 @@ class CoreMixin:
         return compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
 
     def append(self, text, tag=None, canon_day=None, detail=None):
-        entry = {"text": text, "tag": tag, "time": datetime.now().isoformat(timespec="seconds")}
+        entry = {"text": text, "tag": tag, "time": datetime.now().isoformat(timespec="seconds"),
+                 "world_time": str(self.state.get("world_time") or "")}
         if canon_day is not None:
             entry["canon_day"] = canon_day
         if detail:

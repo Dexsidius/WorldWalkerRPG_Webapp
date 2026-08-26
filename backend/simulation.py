@@ -155,7 +155,7 @@ POWER_RE = re.compile(
     r"\b(learn|master|unlock|awaken|acquire|gain|develop|achieve|manifest|discover)\b.*\b("
     r"ability|power|form|class|haki|nen|jutsu|skill|technique|magic|fruit|"
     r"zanpakut[ōo]|shikai|bankai|hollowfication|resurrecci[óo]n|segunda etapa|schrift|vollst[äa]ndig|fullbring|"
-    r"had[ōo]|bakud[ōo]|kid[ōo])\b|\b(?:had[ōo]|bakud[ōo])\s*#?\s*\d{1,2}\b",
+    r"had[ōo]|bakud[ōo]|kid[ōo])\b",
     re.I,
 )
 

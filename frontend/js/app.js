@@ -404,9 +404,10 @@ function appendStoryEntries(entries) {
   runs.forEach((run) => {
     const beat = document.createElement("section");
     beat.className = "story-beat";
-    const firstTime = run.entries.find((entry) => entry.time)?.time;
-    const clockLabel = firstTime ? new Date(firstTime).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
-    const dateText = dayLabel(run.day);
+    const worldTime = String(run.entries.find((entry) => entry.world_time)?.world_time || "");
+    const worldParts = worldTime.split(/\s+[—-]\s+/);
+    const dateText = dayLabel(run.day) || (worldParts.length > 1 ? worldParts[0] : "");
+    const clockLabel = worldParts.length > 1 ? worldParts.slice(1).join(" — ") : "";
     beat.innerHTML = `<header class="story-beat-head"><span>${escapeHtml(dateText || storyBeatLabel(run.entries))}</span>${clockLabel ? `<time>${escapeHtml(clockLabel)}</time>` : ""}</header>`;
     const entriesWrap = document.createElement("div");
     entriesWrap.className = "story-beat-entries";
@@ -929,6 +930,7 @@ function renderState(state) {
   const saved = s._last_autosave || s.last_autosave || "";
   $("#hdr-autosave").textContent = saved ? `Saved ${String(saved).replace("T", " ").slice(0, 16)}` : "Not saved";
   renderQueuedActions(s.queued_actions || []);
+  $("#scene-title").textContent = Number(s.turn || 0) > 0 ? "CURRENT SCENE" : "OPENING SCENE";
   $("#btn-retry-opening").hidden = Boolean(s.opening_complete);
 
   // Generated portraits are keyed by visually relevant state and update only
@@ -982,10 +984,15 @@ function renderState(state) {
 
   // attributes — dynamic per world (see backend worlds.WORLD_ABILITIES)
   const attrs = s.stats || {};
+  const abilityProgress = s.ability_progress || {};
   const attrKeys = Object.keys(attrs);
   $("#attributes-grid").innerHTML = attrKeys.map((k) => {
     const v = attrs[k] ?? 1;
-    return `<div class="attr-cell"><div class="attr-name"><i class="a-icon">${abilityIcon(k)}</i>${escapeHtml(k)}</div><div class="attr-right"><span class="attr-val">${escapeHtml(v)}</span></div></div>`;
+    const progress = Number(abilityProgress[k] || 0);
+    const progressText = progress > .001
+      ? (s._uses_xp ? `Practice +${progress.toFixed(progress >= 10 ? 1 : 2)}` : `${Math.round(progress * 100)}% to next point`)
+      : "";
+    return `<div class="attr-cell"><div class="attr-name"><i class="a-icon">${abilityIcon(k)}</i>${escapeHtml(k)}</div><div class="attr-right">${progressText ? `<small class="attr-progress">${escapeHtml(progressText)}</small>` : ""}<span class="attr-val">${escapeHtml(v)}</span></div></div>`;
   }).join("");
 
   const isFullSheet = s._stat_style === "full_sheet";
@@ -1052,7 +1059,7 @@ function renderState(state) {
   renderMessagesPanel(s);
 
   // time mode + world systems icons
-  $("#time-mode-label").textContent = "Time mode: " + (s.time_mode || "moment");
+  updateSelectedTimeLabel();
   updateWorldSystemIcons(s);
 
   // suggested actions
@@ -1881,7 +1888,7 @@ function combatLogLine(e) {
   return { text: "Something happens.", cls: "" };
 }
 
-const COMBAT_EFFECT_ICON = { heal: "🩹 ", debuff: "☠ ", damage: "" };
+const COMBAT_EFFECT_ICON = { heal: "🩹 ", debuff: "⛓ ", damage: "" };
 function combatAbilityEffectType(s, name) {
   const detail = (s.skills || {})[name];
   const t = (detail && typeof detail === "object" ? detail.effect_type : "") || "";
@@ -2204,10 +2211,26 @@ function syncTimeControl(unitSelector, amountSelector, amountFieldSelector, mome
       : "Long skips simulate the full period and may stop early for goals or major events.";
   }
   if (unitSelector === "#time-unit" && APP.state) renderQueuedActions(APP.state.queued_actions || []);
+  if (unitSelector === "#time-unit") updateSelectedTimeLabel();
+}
+
+function updateSelectedTimeLabel() {
+  const label = $("#time-mode-label");
+  const unitEl = $("#time-unit");
+  const amountEl = $("#time-amount");
+  if (!label || !unitEl) return;
+  const unit = unitEl.value || "moment";
+  if (unit === "moment") label.textContent = "Selected skip: next story beat";
+  else if (unit === "next_event") label.textContent = "Selected skip: next major event";
+  else {
+    const amount = Number(amountEl?.value || 1);
+    const shownUnit = amount === 1 ? unit.replace(/s$/, "") : unit;
+    label.textContent = `Selected skip: ${amount} ${shownUnit}`;
+  }
 }
 
 $("#time-unit").addEventListener("change", () => syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help"));
-$("#time-amount").addEventListener("input", () => renderQueuedActions(APP.state?.queued_actions || []));
+$("#time-amount").addEventListener("input", () => { renderQueuedActions(APP.state?.queued_actions || []); updateSelectedTimeLabel(); });
 $("#td-unit").addEventListener("change", () => syncTimeControl("#td-unit", "#td-amount", "#td-amount-field"));
 syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
 syncTimeControl("#td-unit", "#td-amount", "#td-amount-field");
@@ -3554,7 +3577,23 @@ function refreshCampaignWorldFields() {
   const startOpts = wd.start_options || [];
   const startWrap = $("#nc-start-wrap");
   if (startOpts.length) {
-    $("#nc-start").innerHTML = startOpts.map((o, i) => `<option value="${i}">${escapeHtml(o.label)}</option>`).join("");
+    if (world === "One Piece") {
+      const recommended = new Set([0, 1, 6, 8, 14]);
+      const groups = [
+        ["Recommended", (_, i) => recommended.has(i)],
+        ["East Blue", (_, i) => i <= 8 && !recommended.has(i)],
+        ["Grand Line & Sky", (_, i) => i >= 9 && i <= 18 && !recommended.has(i)],
+        ["Government & Revolution", (_, i) => [19, 20, 21, 30].includes(i)],
+        ["Other Blues", (_, i) => i >= 22 && i <= 24],
+        ["New World", (_, i) => i >= 25 && i <= 29],
+      ];
+      $("#nc-start").innerHTML = groups.map(([label, include]) => {
+        const options = startOpts.map((o, i) => include(o, i) ? `<option value="${i}">${escapeHtml(o.label)}</option>` : "").join("");
+        return options ? `<optgroup label="${escapeHtml(label)}">${options}</optgroup>` : "";
+      }).join("");
+    } else {
+      $("#nc-start").innerHTML = startOpts.map((o, i) => `<option value="${i}">${escapeHtml(o.label)}</option>`).join("");
+    }
     startWrap.style.display = "";
   } else {
     $("#nc-start").innerHTML = "";

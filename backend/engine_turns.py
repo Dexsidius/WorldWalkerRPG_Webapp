@@ -612,6 +612,8 @@ Return ONLY valid JSON."""
             else:
                 self.apply_system_xp(before, context.get("actions", []) if not is_opening else [], context.get("rolls", []),
                                      context.get("elapsed_minutes", 5), context.get("intensity", "normal"), data.get("events", []))
+            if not is_opening:
+                self.reconcile_title_events(data.get("events", []))
             self.sync_derived_pools(before)
             if is_opening:
                 initialize_lit_systems(self.state)
@@ -1039,11 +1041,46 @@ Return ONLY valid JSON."""
             self.state["progression_log"] = self.state["progression_log"][-300:]
         return {"xp_awarded": award, "levels_gained": levels_gained, "stat_gains": stat_gains, "reasons": reasons}
 
+    def reconcile_title_events(self, events):
+        """Persist title announcements even when a model omits titles patch."""
+        titles = self.state.setdefault("titles", [])
+        known = {ai_text(title).strip().lower() for title in titles if ai_text(title).strip()}
+        earned = []
+        patterns = (
+            r"(?:title acquired|title earned|earned the title|unlocked (?:the )?title)\s*[:—-]?\s*[\"']?([^\n\"']+)",
+        )
+        for event in events or []:
+            if not isinstance(event, dict):
+                continue
+            event_type = str(event.get("type") or "").strip().lower()
+            raw_label = event.get("title") or event.get("name")
+            raw_message = event.get("message") or event.get("narrative")
+            label = ai_text(raw_label).strip() if raw_label is not None else ""
+            message = ai_text(raw_message).strip() if raw_message is not None else ""
+            if not label:
+                for pattern in patterns:
+                    match = re.search(pattern, message, re.I)
+                    if match:
+                        label = match.group(1).strip(" .!—-\")")
+                        break
+            if event_type in {"title", "title_acquired", "title_earned"} and not label:
+                label = message
+            if not label or label.lower() in known:
+                continue
+            known.add(label.lower())
+            titles.append(label[:160])
+            earned.append(label[:160])
+        self.state["titles"] = titles[-200:]
+        return earned
+
     def notify(self, b, a, events):
         msgs = []
         cinematic = []
-        if a.get("xp") != b.get("xp"):
-            latest_progress = (a.get("progression_log") or [{}])[-1]
+        expected_turn = int(b.get("turn", 0) or 0) + 1
+        latest_progress = next((row for row in reversed(a.get("progression_log") or [])
+                                if isinstance(row, dict) and row.get("type") == "xp"
+                                and int(row.get("turn", 0) or 0) >= expected_turn), None)
+        if a.get("xp") != b.get("xp") or latest_progress:
             earned = latest_progress.get("xp_awarded") if isinstance(latest_progress, dict) and latest_progress.get("type") == "xp" else None
             if earned is None:
                 earned = a.get("xp", 0) - b.get("xp", 0)

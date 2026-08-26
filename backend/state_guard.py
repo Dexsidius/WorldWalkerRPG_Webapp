@@ -151,6 +151,19 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
         elif key in {"quests", "hidden_quests", "quest_archive"}:
             cleaned = [_clean_quest(q, key == "hidden_quests") for q in value[:200]]
             value = [q for q in cleaned if q]
+        elif key == "titles":
+            # A narrator patch often contains only the newly earned title.
+            # Treat titles as an append-only achievement ledger so that such
+            # a patch cannot silently erase everything earned earlier.
+            combined = [*(before.get("titles", []) or []), *value]
+            seen, preserved = set(), []
+            for title in combined:
+                label = ai_text(title).strip()
+                if not label or label.lower() in seen:
+                    continue
+                seen.add(label.lower())
+                preserved.append(copy.deepcopy(title))
+            value = preserved[-200:]
         elif isinstance(value, list):
             value = value[:500]
         safe[key] = copy.deepcopy(value)

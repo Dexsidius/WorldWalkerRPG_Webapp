@@ -75,7 +75,8 @@ def update_continuity(before, after, action="", narrative=""):
     if before.get("location") != after.get("location"):
         facts.append({**stamp, "type": "location", "text": f"Player moved from {before.get('location')} to {after.get('location')}."})
     if before.get("appearance_desc") != after.get("appearance_desc"):
-        facts.append({**stamp, "type": "appearance", "text": f"Current appearance: {after.get('appearance_desc')}."})
+        appearance = str(after.get("appearance_desc") or "").strip().rstrip(" .!?")
+        facts.append({**stamp, "type": "appearance", "text": f"Current appearance: {appearance}."})
     # A location's controlling_faction can change from either source: the
     # GM's own state_patch (a player-witnessed change) or the mechanical
     # off-screen conflict resolver in systems.py (a background one) — both

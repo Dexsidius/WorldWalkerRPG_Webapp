@@ -83,6 +83,37 @@ PLAIN_TRAINING_RE = re.compile(
     r"^\s*(?:i\s+)?(?:just\s+)?(?:train|practice|work\s*out)(?:\s+(?:hard|intensely|rigorously|"
     r"every\s+day|daily))?[.!]*\s*$", re.I)
 
+WORLD_TRAINING_STAT_HINTS = {
+    "Naruto": {
+        "Chakra Control": r"\b(chakra control|precision|precise|sensor|sensing|medical|concentration|chakra threads?)\b",
+        "Genjutsu": r"\b(genjutsu|illusion|mental interference|mind technique)\b",
+        "Ninjutsu": r"\b(ninjutsu|jutsu|nature transformation|elemental|chakra technique)\b",
+        "Taijutsu": r"\b(taijutsu|hand[- ]to[- ]hand|martial|melee|punch|kick|body conditioning)\b",
+        "Intellect": r"\b(study|research|theory|tactic|strategy|formula|sealing theory)\b",
+        "Willpower": r"\b(meditat|resolve|endurance of pain|mental discipline)\b",
+    },
+    "Bleach": {
+        "Kido": r"\b(kid[ōo]|had[ōo]|bakud[ōo]|incantation|spell)\b",
+        "Reiatsu Control": r"\b(reiatsu control|reiryoku control|spiritual pressure|energy control|precision)\b",
+        "Zanjutsu": r"\b(zanjutsu|sword|blade|zanpakut[ōo])\b",
+        "Hakuda": r"\b(hakuda|unarmed|hand[- ]to[- ]hand|martial)\b",
+        "Hoho": r"\b(hoh[ōo]|shunpo|flash step|footwork|speed)\b",
+    },
+    "Overgeared": {
+        "Dexterity": r"\b(craft|forge|smith|sew|engrave|precision|production)\b",
+        "Intelligence": r"\b(design|research|study|analy[sz]e|spell|theory)\b",
+        "Strength": r"\b(strength|lifting|strike|heavy weapon|power)\b",
+        "Constitution": r"\b(endurance|stamina|conditioning|surviv)\b",
+    },
+    "Solo Max-Level Newbie": {
+        "Dexterity": r"\b(dexterity|agility|speed|footwork|precision|trap)\b",
+        "Intelligence": r"\b(intelligence|research|study|spell|magic|analy[sz]e)\b",
+        "Wisdom": r"\b(wisdom|perception|sense|strategy|tactic|judgment)\b",
+        "Strength": r"\b(strength|power|strike|melee|weapon)\b",
+        "Constitution": r"\b(constitution|endurance|stamina|conditioning|surviv)\b",
+    },
+}
+
 # These are accelerators, not prerequisites. A detailed player-authored method
 # always helps on player-favoring difficulties; particularly effective methods
 # that actually exist in the selected setting can support extraordinary growth.
@@ -290,6 +321,32 @@ _POWER_GOAL_KEYWORDS = ("learn", "master", "unlock", "awaken", "achieve", "obtai
 
 
 class TimeSkipMixin:
+    def _infer_training_ability(self, action, current_stats):
+        """Map named techniques to the stat their actual mechanics use."""
+        text = str(action or "")
+        lowered = text.lower()
+        for skill_name, detail in (self.state.get("skills", {}) or {}).items():
+            if str(skill_name).lower() not in lowered:
+                continue
+            if isinstance(detail, dict):
+                text += " " + " ".join(
+                    ai_text(detail.get(key)) for key in
+                    ("description", "effect", "growth_path", "limitation", "kind")
+                    if ai_text(detail.get(key))
+                )
+            else:
+                text += " " + ai_text(detail)
+        scores = {}
+        for stat, pattern in WORLD_TRAINING_STAT_HINTS.get(self.state.get("world"), {}).items():
+            if stat not in current_stats:
+                continue
+            matches = re.findall(pattern, text, re.I)
+            if matches:
+                scores[stat] = len(matches)
+        if not scores:
+            return None
+        return max(scores, key=lambda stat: (scores[stat], -list(current_stats).index(stat)))
+
     @staticmethod
     def _same_place(player_location, event_location):
         """Fuzzy same-place check used to force a canon-event interruption
@@ -885,6 +942,22 @@ class TimeSkipMixin:
             data["interruption_context"] = data.get("interruption_context") or "The minigame result is now part of the story, but no later queued action or unused portion of the requested skip has been simulated."
             data["intervention_prompt"] = data.get("intervention_prompt") or f"What does {self.state.get('name') or 'the player'} do next?"
         goal_status = data.get("goal_status") if isinstance(data.get("goal_status"), dict) else {}
+        if not goal_status and active_goals and not moment_mode:
+            goal = active_goals[0]
+            goal_action = ai_text(goal.get("action") or (orders[0] if orders else "the stated goal"))
+            condition = ai_text(goal.get("condition") or goal_action)
+            stopped_early = bool(canon_stop or data.get("interrupted"))
+            if stopped_early:
+                explanation = f"The interruption ended the available work before {condition} could be completed."
+                next_hint = f"Handle the immediate interruption, then resume: {goal_action}"
+            else:
+                explanation = f"The available time ended without confirming that {condition} was complete."
+                next_hint = f"Continue with a focused method, teacher, or resource aimed at: {condition}"
+            goal_status = data["goal_status"] = {
+                "action": goal_action, "achieved": False,
+                "elapsed": copy.deepcopy(data.get("elapsed") or {"amount": amount, "unit": unit}),
+                "explanation": explanation, "next_hint": next_hint,
+            }
         if goal_status.get("achieved"):
             goal_elapsed = goal_status.get("elapsed") if isinstance(goal_status.get("elapsed"), dict) else {}
             if goal_elapsed.get("amount") is not None and goal_elapsed.get("unit"):
@@ -953,6 +1026,19 @@ class TimeSkipMixin:
             fight_index = next((index for index, order in enumerate(orders)
                                 if self._FIGHT_START_RE.search(str(order)) and not self._FIGHT_NEGATION_RE.search(str(order))), None)
             if fight_index is not None:
+                opening_result = next((row for row in results if isinstance(row, dict)
+                                       and (row.get("action_index") == fight_index
+                                            or ai_text(row.get("action")).lower() == ai_text(orders[fight_index]).lower())), None)
+                if opening_result:
+                    combat_patch["opening_check"] = {
+                        "success": bool(opening_result.get("success")),
+                        "roll": int(opening_result.get("roll", 0) or 0),
+                        "total": int(opening_result.get("total", 0) or 0),
+                        "difficulty": int(opening_result.get("difficulty", 0) or 0),
+                        "margin": max(0, int(opening_result.get("total", 0) or 0) - int(opening_result.get("difficulty", 0) or 0)),
+                        "ability": ai_text(opening_result.get("ability")),
+                        "breakthrough": bool(opening_result.get("breakthrough")),
+                    }
                 # An explicit queued attack begins when its place in the
                 # itinerary is reached; it cannot be followed by the rest of
                 # a week/month skip before the player sees combat controls.
@@ -1111,7 +1197,8 @@ class TimeSkipMixin:
                 # other stat below instead of silently treating it as Ninjutsu.
                 ability = min(current_stats, key=lambda name: float(current_stats.get(name, 0) or 0))
             else:
-                ability = (suggested_ability or mentioned_stat or
+                inferred_ability = self._infer_training_ability(action, current_stats)
+                ability = (mentioned_stat or inferred_ability or suggested_ability or
                            (primary_stats_for(self.state.get("world"), self.state.get("special", {}).get("Archetype", ""))
                             or list(current_stats))[0])
             factor = 1.25 if not result else 1.55 if result.get("success") else .70
@@ -1479,6 +1566,7 @@ class TimeSkipMixin:
                 self.apply_system_xp(before, context.get("actions", []), context.get("rolls", []),
                                      context.get("elapsed_minutes", self.duration_minutes(requested_amount, requested_unit)),
                                      context.get("intensity", "normal"), data.get("events", []))
+            self.reconcile_title_events(data.get("events", []))
             self.sync_derived_pools(before)
             elapsed = data.get("elapsed") if isinstance(data.get("elapsed"), dict) else {}
             elapsed_amount = elapsed.get("amount", requested_amount)

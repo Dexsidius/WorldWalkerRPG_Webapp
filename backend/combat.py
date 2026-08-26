@@ -124,6 +124,25 @@ class CombatMixin:
             enemy["attack_min"], enemy["attack_max"] = clamp(center - 10, 1, 100), clamp(center + 10, 1, 100)
 
         combat.setdefault("log", [])
+        opening = combat.get("opening_check")
+        if isinstance(opening, dict) and not combat.get("opening_check_applied"):
+            if opening.get("success"):
+                margin = max(0, int(opening.get("margin", 0) or 0))
+                pct = min(.24, .10 + margin / 500.0 + (.04 if opening.get("breakthrough") else 0))
+                damage = max(1, int(round(hp_max * pct)))
+                enemy["hp"] = max(1, int(enemy.get("hp", hp_max)) - damage)
+                combat["opening_advantage"] = {
+                    "damage": damage, "remaining_hp": enemy["hp"],
+                    "total": opening.get("total"), "difficulty": opening.get("difficulty"),
+                }
+                combat["log"].append({
+                    "actor": "player", "action": "opening advantage",
+                    "ability": opening.get("ability") or combat.get("player_defense_ability"),
+                    "success": True, "damage": damage,
+                    "total": opening.get("total"), "difficulty": opening.get("difficulty"),
+                    "enemy_hp": enemy["hp"], "enemy_hp_max": hp_max,
+                })
+            combat["opening_check_applied"] = True
         combat.setdefault("narrated_through", 0)
         combat.setdefault("outcome", None)
         combat.setdefault("cooldowns", {})

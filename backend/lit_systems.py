@@ -217,7 +217,7 @@ def _normalize_copy(entry):
 
 def _production_path_for_text(text):
     text = str(text or "")
-    if re.search(r"\b(?:blacksmith|forge|smith|smelt|metal|weapon|armor)\b", text, re.I):
+    if re.search(r"\b(?:blacksmith|forge|smith|smelt|metal|weapon|armor|blade|dagger|sword)\b", text, re.I):
         return "Blacksmithing"
     if re.search(r"\b(?:alchemist|brew|potion|alchemy|elixir)\b", text, re.I):
         return "Alchemy"
@@ -471,14 +471,23 @@ def _solo_turn(before, state, action_text, narrative, elapsed_minutes):
         old_state["boss"]["defeated"] = True
         gained_achievements = [_achievement_name(x) for x in state.get("achievements", []) if _achievement_name(x) not in {_achievement_name(y) for y in (before or {}).get("achievements", [])}]
         gained_items = [_text(x) for x in state.get("inventory", []) if _text(x).lower() not in {_text(y).lower() for y in (before or {}).get("inventory", [])}]
+        xp_gained = sum(
+            max(0, _number(entry.get("xp_awarded"), 0))
+            for entry in (state.get("progression_log", []) or [])
+            if isinstance(entry, dict) and entry.get("type") == "xp"
+            and _number(entry.get("turn"), 0) > _number((before or {}).get("turn"), 0)
+        )
+        prior_titles = {_text(title).lower() for title in (before or {}).get("titles", []) if _text(title)}
+        gained_titles = [_text(title) for title in state.get("titles", [])
+                         if _text(title) and _text(title).lower() not in prior_titles]
         report = {
             "floor": old_floor, "name": old_state.get("name"), "time_spent_days": round(days, 2),
             "main_objective": old_state.get("clear_condition"),
             "hidden_completed": [x["name"] for x in old_state.get("hidden_conditions", []) if x.get("completed")],
             "hidden_missed": [x["name"] for x in old_state.get("hidden_conditions", []) if not x.get("completed")],
-            "xp_gained": max(0, _number(state.get("xp"), 0) - _number((before or {}).get("xp"), 0)),
+            "xp_gained": xp_gained,
             "levels_gained": max(0, _number(state.get("level"), 1) - _number((before or {}).get("level"), 1)),
-            "achievements": gained_achievements, "items": gained_items,
+            "achievements": gained_achievements, "titles": gained_titles, "items": gained_items,
             "party_changes": [], "rival_snapshot": copy.deepcopy(system.get("rivals", [])),
             "earth_consequence": "The public ranking and organizations react according to how visible the clear was.",
         }

@@ -350,8 +350,9 @@ input,select,textarea{ font-family:inherit; }
 .attr-name{ font-size:11.5px; color:var(--sub); font-weight:600; letter-spacing:.02em; display:flex; align-items:center; gap:7px; }
 .attr-name .a-icon{ display:inline-flex; align-items:center; justify-content:center; opacity:.85; width:16px; flex-shrink:0; }
 .a-icon svg{ width:13px; height:13px; display:block; }
-.attr-right{ display:flex; align-items:baseline; gap:5px; flex-shrink:0; }
+.attr-right{ display:flex; align-items:baseline; justify-content:flex-end; gap:7px; flex-shrink:0; }
 .attr-val{ font-family:var(--font-mono); font-size:14px; font-weight:700; color:var(--text); }
+.attr-progress{ color:var(--accent2); font:8.5px var(--font-body); letter-spacing:.01em; white-space:nowrap; }
 .attr-mod{ font-size:10px; color:var(--accent2); }
 .hidden-stats-wrap{ margin-top:10px; padding-top:8px; border-top:1px dashed var(--border-soft); }
 .hidden-stats-label{ font-size:10px; font-weight:800; letter-spacing:.08em; color:var(--muted); margin-bottom:4px; }
