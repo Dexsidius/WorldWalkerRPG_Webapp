@@ -171,6 +171,12 @@ LANDMARK_SCENES = {
     "Reincarnated as a Slime": (
         (("tempest", "rimuru city"), "slime_tempest"), (("dwargon", "armed nation"), "slime_dwargon"),
     ),
+    "Bleach": (
+        (("karakura", "kurosaki clinic", "urahara shop", "naruki"), "bleach_karakura_town"),
+        (("seireitei", "rukongai", "shin'o academy", "shino academy", "sokyoku", "gotei 13", "central 46", "muken"), "bleach_seireitei"),
+        (("hueco mundo", "las noches", "forest of menos", "garganta"), "bleach_hueco_mundo"),
+        (("soul king palace", "royal guard", "wahrwelt", "silbern"), "bleach_royal_realm"),
+    ),
 }
 
 
@@ -239,7 +245,7 @@ def _category_from_place(text):
 
 WORLD_NEUTRAL_SCENES = {
     "Overgeared": "kingdom", "One Piece": "harbor_port", "Hunter x Hunter": "forest_path",
-    "Naruto": "town_square", "Solo Max-Level Newbie": "tower_hub", "Bleach": "town_square",
+    "Naruto": "town_square", "Solo Max-Level Newbie": "tower_hub", "Bleach": "bleach_seireitei",
     "Reincarnated as a Slime": "forest_path", "Custom World": "starry_sky",
 }
 

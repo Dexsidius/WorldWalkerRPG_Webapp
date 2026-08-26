@@ -548,6 +548,27 @@ def api_panels():
     ex = expansion_for(s.get("world", "Custom World"))
     world = s.get("world", "Custom World")
     world_map = WORLD_DATA.get(world, {}).get("map", [])
+    canon_events = timeline_for(world).get("events", [])
+    tracker = canon_event_tracker(s, canon_events)
+    dependencies = canon_dependency_graph(s)
+    if not game.settings.get("canon_foreknowledge", False):
+        now = int(s.get("canon_day", -7) or -7)
+        secret_keys = {(int(event.get("day", 0) or 0), str(event.get("title", "")))
+                       for event in canon_events if event.get("spoiler") and int(event.get("day", 0) or 0) > now}
+        def spoiler_safe(rows):
+            safe = []
+            for raw in rows:
+                row = dict(raw)
+                if (int(row.get("day", 0) or 0), str(row.get("title", ""))) in secret_keys:
+                    row.update(title="Unrevealed future pressure", location="Unknown",
+                               summary="Details remain hidden until the campaign can discover them.",
+                               requires=[], reason="Character-knowledge mode is hiding future canon spoilers.", replacement="")
+                safe.append(row)
+            return safe
+        canon_events = spoiler_safe(canon_events)
+        tracker = spoiler_safe(tracker)
+        dependencies = dict(dependencies)
+        dependencies["events"] = spoiler_safe(dependencies.get("events", []))
     return jsonify({
         "currency": s.get("currency", {"name": ex["currency"], "amount": 0}),
         "currencies": s.get("currencies", {}),
@@ -569,6 +590,7 @@ def api_panels():
         "companions": s.get("companions", []),
         "titles": s.get("titles", []),
         "skills": visible_skills(s),
+        "special": s.get("special", {}),
         "class_profile": visible_class_profile(s),
         "combat": s.get("combat", {}),
         "world_events": s.get("world_events", []),
@@ -585,8 +607,8 @@ def api_panels():
         "canon_day": s.get("canon_day", -7),
         "canon_anchor": s.get("canon_anchor", ""), "calendar_epoch": s.get("calendar_epoch", ""),
         "calendar_anchor_day": s.get("calendar_anchor_day"),
-        "canon_events": timeline_for(s.get("world", "Custom World")).get("events", []),
-        "canon_event_tracker": canon_event_tracker(s, timeline_for(s.get("world", "Custom World")).get("events", [])),
+        "canon_events": canon_events,
+        "canon_event_tracker": tracker,
         "canon_events_fired": s.get("canon_events_fired", []),
         "scheduled_events": game.visible_schedule(),
         "quest_archive": s.get("quest_archive", []),
@@ -613,7 +635,7 @@ def api_panels():
                        "recent_events": s.get("simulation_events", [])[-40:],
                        "integrity": integrity_snapshot(s)},
         "travel_graph": build_travel_graph(s),
-        "canon_dependencies": canon_dependency_graph(s),
+        "canon_dependencies": dependencies,
     })
 
 
@@ -798,7 +820,7 @@ def api_settings_post():
         "max_ai_cost_per_request_usd", "session_budget_warning_usd",
         "narration", "autosave", "sound_enabled", "music_enabled", "music_volume", "animations_enabled",
         "portrait_generation_enabled", "portrait_auto_generate", "image_model", "local_image_model", "portrait_quality", "developer_mode",
-        "onboarding_seen", "simulation_mode"
+        "onboarding_seen", "simulation_mode", "canon_foreknowledge"
     ] if k in d}
     game.update_settings(patch)
     return jsonify({"ok": True})

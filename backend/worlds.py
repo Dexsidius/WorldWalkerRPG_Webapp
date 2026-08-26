@@ -5,9 +5,11 @@ import datetime
 import math
 import re
 
+from bleach_data import BLEACH_GM_RULES
+
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.8.1"
+APP_VERSION = "3.9.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -291,23 +293,33 @@ WORLD_DATA = {
     "Bleach": {
         "tagline": "Shinigami, Hollows, Zanpakuto, and the fragile boundary between the living world and Soul Society.",
         "resource": "Reiryoku",
-        "progression": ["Level","XP","Reiryoku","Techniques","Rank","Soul Society Standing","Titles"],
+        "progression": ["Reiryoku","Spiritual Arts","Kido","Zanpakuto Bond","Shikai","Bankai","Squad Rank","Standing","Titles"],
         # Aizen's true loyalties are this world's single biggest canon
         # secret at the campaign's default start — the actual instruction
         # protecting it lives in the "rules" string below (it has to, to
         # reach the model), not just here as a code comment.
-        "rules": "Honor Bleach world logic. Ordinary humans cannot see spirits; a rare few (like Ichigo Kurosaki) can from birth. Shinigami (Soul Reapers) wield a Zanpakuto — a living, unique spirit-blade every Shinigami eventually learns to hear and name — through Zanjutsu, Hakuda, Hoho and Kido training; its Shikai and later Bankai release states are earned through a real bond with the blade's spirit, never handed out casually. Hollows are corrupted, hungry spirits that Shinigami are duty-bound to purify (Konso) or destroy; a Hollow-corrupted human or Shinigami can become a Vizard. Quincy purify spirits by destroying them outright using bow-and-arrow reishi techniques, and have a long, bitter history with the Gotei 13. Soul Society (Seireitei, governed by the Gotei 13's thirteen divisions and Central 46, surrounded by the sprawling Rukongai) and the living world (Karakura Town and beyond) are connected but distinct; unauthorized travel between them, and unauthorized transfer of Shinigami powers to a human, are both serious offenses under Soul Society law. Central 46 and the Gotei 13's own internal politics are real and can move against the player. Until this campaign's own timeline or the player's actions genuinely uncover it, Sosuke Aizen is a well-regarded, seemingly loyal 5th Division captain — never hint, foreshadow, or let any NPC act as though his true nature or the Hogyoku's existence is already known; the same discretion applies to the Visored, who are still living in hiding and should not surface as a usable faction or ally prematurely. Canon may diverge permanently.",
-        "start": "Karakura Town",
-        "factions": {"Gotei 13": 0, "Central 46": 0, "Onmitsukido": 0},
+        "rules": "Honor Bleach world logic. Ordinary humans cannot see spirits; a rare few can. Shinigami train Zanjutsu, Hakuda, Hoho and Kido and carry a living Zanpakuto whose earned releases reflect the wielder. Hollows are corrupted spirits Shinigami purify; Quincy destroy Hollows with reishi techniques, threatening the balance of souls. Soul Society, the Living World, Hueco Mundo and the Royal Realm are distinct spaces with gated travel. Rank is an institution, not a universal power number. Central 46 and division politics are active. Until this campaign's timeline or player actions genuinely uncover it, Sosuke Aizen is a respected 5th Division captain: never hint, foreshadow, or reveal his true nature, the Hogyoku or the hidden Visored prematurely. Canon may diverge permanently.\n" + BLEACH_GM_RULES,
+        "start": "Shin'o Academy",
+        "factions": {"Gotei 13": 0, "Central 46": 0, "Onmitsukido": 0, "Kido Corps": 0, "Noble Houses": 0, "Urahara Network": 0},
         "map": [
-            ("Karakura Town",22,68,"settlement",1), ("Karakura High School",28,74,"settlement",1),
-            ("Kurosaki Clinic",16,72,"landmark",1), ("Urahara Shop",30,60,"shop",3),
-            ("Rukongai",68,58,"region",4), ("Shino Academy",64,44,"training",4),
-            ("Seireitei",78,38,"government",6), ("Senzaikyu",84,30,"prison",7),
-            ("Sokyoku Hill",88,22,"landmark",8), ("Central 46 Chambers",72,26,"government",8),
-            ("Hueco Mundo",30,14,"region",12), ("Las Noches",18,8,"nation",14)
+            ("Karakura Town",56,55,"settlement",1), ("Karakura High School",56,47,"settlement",1),
+            ("Kurosaki Clinic",53,64,"landmark",1), ("Urahara Shop",65,59,"shop",3),
+            ("Naruki City",61,52,"settlement",2), ("Urahara Training Grounds",64,62,"training",5),
+            ("Senkaimon",40,66,"landmark",5), ("Dangai",41,51,"region",7),
+            ("Rukongai",16,57,"region",4), ("North Rukongai",15,21,"region",4),
+            ("East Rukongai",34,43,"region",4), ("South Rukongai",18,67,"region",4),
+            ("West Rukongai",2,43,"region",4), ("Shin'o Academy",9,36,"training",4),
+            ("Seireitei",18,40,"government",6), ("Gotei 13 Barracks",25,53,"hq",6),
+            ("Kido Corps Headquarters",22,47,"hq",7), ("Onmitsukido Headquarters",14,45,"hq",8),
+            ("Senzaikyu",10,49,"prison",7), ("Sokyoku Hill",21,28,"landmark",8),
+            ("Central 46 Chambers",20,50,"government",8), ("Maggot's Nest",8,57,"prison",8),
+            ("Muken",20,74,"prison",12), ("Hueco Mundo Desert",84,44,"region",10),
+            ("Forest of Menos",86,47,"dungeon",11), ("Las Noches",91,29,"nation",14),
+            ("Garganta",88,66,"region",9), ("Valley of Screams",42,35,"region",10),
+            ("Soul King Palace",56,17,"government",16), ("Royal Guard Domains",61,18,"region",17),
+            ("Silbern",80,12,"hq",15), ("Wahrwelt",65,30,"nation",18), ("Gates of Hell",45,84,"landmark",18)
         ],
-        "special": {"Shinigami Rank":"Unranked","Zanpakuto":"None","Shikai":"Unachieved","Bankai":"Unachieved","Squad":"None"}
+        "special": {"Spiritual Nature":"Soul Reaper","Shinigami Rank":"Academy Senior","Zanpakuto":"Unnamed Asauchi","Zanpakuto Profile":{"stage":"Sealed","name":"Unknown","development_evidence":[]},"Shikai":"Unachieved","Bankai":"Unachieved","Squad":"Unassigned","Kido Curriculum":{"Hadō":"#1-99 learnable","Bakudō":"#1-99 learnable","Unshown Numbers":"Generated once when discovered, then permanent"}}
     },
     "Custom World": {
         "tagline": "A freeform world defined by you.",
@@ -542,17 +554,34 @@ CANON_TIMELINES = {
     # the same kind of explicit campaign-relative estimate the other
     # worlds' ancient-era entries already use, since canon gives ages and
     # rough eras here too, not exact dates.
-    "Bleach": {"start_day": -3, "anchor": "Three days before Rukia Kuchiki arrives in Karakura Town", "events": [
+    "Bleach": {"start_day": -7, "anchor": "One week before Rukia Kuchiki arrives in Karakura Town", "events": [
+        {"major": True, "historical_only": True, "day": -40150, "title": "Turn Back the Pendulum", "location": "Seireitei", "scope": "wide", "summary": "Roughly 110 years before Ichigo's story, disappearances in Rukongai and secret Hollowfication experiments place several captains and lieutenants on the path that will drive them into exile.", "spoiler": True},
         {"major": False, "historical_only": True, "day": -2190, "title": "Masaki Kurosaki's death", "location": "Karakura Town", "summary": "A Hollow called Grand Fisher kills Ichigo's mother on a riverbank while she shields him — he was nine years old, and could not yet tell humans from spirits."},
         {"major": False, "historical_only": True, "day": -1460, "title": "Kaien Shiba's death", "location": "Seireitei", "summary": "The 13th Division's lieutenant, Kaien Shiba, and his wife Miyako are killed by a Hollow. No one has been promoted to fill the vacant lieutenant seat since."},
-        {"day": 0, "title": "Rukia Kuchiki arrives in Karakura Town", "location": "Kurosaki Clinic", "summary": "A Hollow attacks the Kurosaki family; badly wounded fighting it, Rukia transfers her own Shinigami powers to Ichigo — an act forbidden by Soul Society law — so he can save his family and finish the Hollow himself."},
+        {"day": 0, "title": "Rukia Kuchiki arrives in Karakura Town", "location": "Kurosaki Clinic", "scope": "personal", "summary": "A Hollow attacks the Kurosaki family; badly wounded fighting it, Rukia transfers her own Shinigami powers to Ichigo — an act forbidden by Soul Society law — so he can save his family and finish the Hollow himself.", "banner":"ichigo_receives_soul_reaper_powers"},
         {"major": False, "day": 20, "title": "Uryu Ishida makes himself known", "location": "Karakura Town", "summary": "The last known Quincy in the area confronts Ichigo over a Shinigami's duty versus a Quincy's, opening a rivalry rooted in a much older grudge between their two traditions."},
         {"major": False, "day": 40, "title": "Orihime and Chad's spiritual awareness grows", "location": "Karakura Town", "summary": "Prolonged proximity to Ichigo's now-considerable Reiryoku begins waking latent spiritual power in his closest friends."},
-        {"day": 60, "title": "Renji and Byakuya come for Rukia", "location": "Karakura Town", "summary": "Lieutenant Renji Abarai and Captain Byakuya Kuchiki — Rukia's own adoptive brother — arrive under Soul Society orders to reclaim her stolen powers and take her back for trial, defeating Ichigo in the process."},
-        {"day": 61, "title": "Rukia is sentenced to execution", "location": "Seireitei", "summary": "Central 46 sentences Rukia to death for the forbidden transfer, and irregularly shortens her grace period from 35 days to 25 — an early, visible sign that something is manipulating the process from behind the scenes."},
+        {"day": 60, "title": "Renji and Byakuya come for Rukia", "location": "Karakura Town", "scope": "personal", "summary": "Lieutenant Renji Abarai and Captain Byakuya Kuchiki arrive under Soul Society orders to reclaim Rukia's powers and return her for trial.", "banner":"rukia_retrieval"},
+        {"day": 61, "title": "Rukia is sentenced to execution", "location": "Seireitei", "scope": "wide", "summary": "Central 46 sentences Rukia to death for the forbidden transfer and accelerates the execution timetable.", "spoiler": True},
         {"major": False, "day": 71, "title": "Training with Urahara Kisuke", "location": "Urahara Shop", "summary": "Kisuke Urahara trains Ichigo for ten intensive days, restoring and strengthening his Shinigami powers and teaching him to physically open a path into Soul Society."},
-        {"major": False, "day": 74, "title": "The push into Seireitei", "location": "Seireitei", "summary": "Ichigo and his allies force their way into Soul Society and begin fighting through the Gotei 13 toward Rukia's execution."},
-        {"day": 88, "title": "Aizen's betrayal at Sokyoku Hill", "location": "Sokyoku Hill", "summary": "At the execution itself, Sosuke Aizen fakes his own death and reveals he orchestrated the entire arrest and execution — using Rukia and a power called the Hogyoku he'd hidden inside her soul all along — before defecting from Soul Society with Gin Ichimaru and Kaname Tosen."},
+        {"day": 74, "title": "The push into Seireitei", "location": "Seireitei", "scope": "wide", "summary": "Ichigo and his allies force their way into Soul Society and begin fighting through the Gotei 13 toward Rukia's execution.", "banner":"seireitei_invasion"},
+        {"day": 88, "title": "Aizen's betrayal at Sokyoku Hill", "location": "Sokyoku Hill", "scope": "wide", "summary": "At the execution, Sosuke Aizen reveals that he manipulated Rukia's sentence to recover the Hogyoku before defecting with Gin Ichimaru and Kaname Tosen.", "spoiler": True, "banner":"aizen_betrayal", "requires":["Rukia is sentenced to execution"]},
+        {"day": 175, "title": "Arrancar appear in Karakura", "location": "Karakura Town", "scope": "wide", "summary": "Arrancar scouts bring the threat of Hueco Mundo directly into the World of the Living.", "spoiler": True, "banner":"arrancar_arrival", "requires":["Aizen's betrayal at Sokyoku Hill"]},
+        {"day": 185, "title": "The Visored approach Ichigo", "location": "Karakura Town", "scope": "personal", "summary": "Hidden exiles offer Ichigo a way to confront the Hollow power growing within him.", "spoiler": True, "requires":["Arrancar appear in Karakura"]},
+        {"day": 205, "title": "Orihime is taken to Hueco Mundo", "location": "Karakura Town", "scope": "personal", "summary": "An Arrancar operation isolates Orihime and compels her to enter Hueco Mundo.", "spoiler": True, "requires":["Arrancar appear in Karakura"]},
+        {"day": 214, "title": "Hueco Mundo rescue begins", "location": "Hueco Mundo Desert", "scope": "personal", "summary": "Ichigo's group enters Hueco Mundo and advances toward Las Noches.", "spoiler": True, "banner":"hueco_mundo_rescue", "requires":["Orihime is taken to Hueco Mundo"]},
+        {"day": 226, "title": "Ichigo confronts Grimmjow", "location": "Las Noches", "scope": "personal", "summary": "The rivalry between Ichigo and Grimmjow reaches its decisive battle.", "spoiler": True, "requires":["Hueco Mundo rescue begins"]},
+        {"day": 238, "title": "Ichigo confronts Ulquiorra", "location": "Las Noches", "scope": "personal", "summary": "A desperate confrontation atop Las Noches pushes Ichigo's Hollow power beyond his control.", "spoiler": True, "requires":["Hueco Mundo rescue begins"]},
+        {"day": 252, "title": "The battle for Fake Karakura Town", "location": "Karakura Town", "scope": "wide", "summary": "The Gotei 13 confronts Aizen's forces over the fate of Karakura Town.", "spoiler": True, "banner":"fake_karakura_battle", "requires":["Aizen's betrayal at Sokyoku Hill"]},
+        {"day": 278, "title": "Ichigo's final confrontation with Aizen", "location": "Karakura Town", "scope": "wide", "summary": "Ichigo returns from Dangai training for a battle whose cost can change his relationship with Shinigami power.", "spoiler": True, "banner":"ichigo_vs_aizen", "requires":["The battle for Fake Karakura Town"]},
+        {"day": 795, "title": "Xcution enters Ichigo's life", "location": "Karakura Town", "scope": "personal", "summary": "Seventeen months later, Fullbringers offer Ichigo a route toward recovering the power he lost.", "spoiler": True, "requires":["Ichigo's final confrontation with Aizen"]},
+        {"day": 850, "title": "Ichigo's Soul Reaper powers return", "location": "Karakura Town", "scope": "personal", "summary": "Soul Society intervenes as the conflict with Xcution reaches its decisive turn.", "spoiler": True, "banner":"soul_reaper_powers_restored", "requires":["Xcution enters Ichigo's life"]},
+        {"day": 930, "title": "The Wandenreich declares war", "location": "Seireitei", "scope": "wide", "summary": "A hidden Quincy empire gives Soul Society five days before annihilation and begins its first invasion.", "spoiler": True, "banner":"wandenreich_invasion", "requires":["Ichigo's Soul Reaper powers return"]},
+        {"day": 935, "title": "The first invasion of Soul Society", "location": "Seireitei", "scope": "wide", "summary": "Sternritter breach Seireitei, steal Bankai and inflict catastrophic losses on the Gotei 13.", "spoiler": True, "requires":["The Wandenreich declares war"]},
+        {"day": 950, "title": "Royal Guard training", "location": "Soul King Palace", "scope": "personal", "summary": "Survivors are taken to the Royal Realm to heal, reforge and prepare for the next invasion.", "spoiler": True, "requires":["The first invasion of Soul Society"]},
+        {"day": 970, "title": "The second Wandenreich invasion", "location": "Seireitei", "scope": "wide", "summary": "The Quincy empire replaces Seireitei with its own shadow domain and resumes the war.", "spoiler": True, "banner":"second_wandenreich_invasion", "requires":["The first invasion of Soul Society"]},
+        {"day": 990, "title": "The Soul King crisis", "location": "Soul King Palace", "scope": "wide", "summary": "The war reaches the lynchpin holding the worlds together, threatening the balance of every realm.", "spoiler": True, "banner":"soul_king_crisis", "requires":["The second Wandenreich invasion"]},
+        {"day": 1005, "title": "Wahrwelt final battle", "location": "Wahrwelt", "scope": "wide", "summary": "The remaining forces converge on Yhwach's transformed stronghold for the final struggle over the worlds' future.", "spoiler": True, "banner":"wahrwelt_final_battle", "requires":["The Soul King crisis"]},
     ]},
     "Custom World": {"start_day": -7, "anchor": "Seven days before the world's opening incident", "events": [
         {"day": 0, "title": "Opening incident", "location": "Starting Region", "summary": "The custom world's first major story pressure begins; adapt this event to the player's setting."},
@@ -638,10 +667,12 @@ WORLD_STARTING_ERAS = {
          "anchor": "As Falmuth's hostility and Demon Lord politics place Tempest on the edge of a transformative crisis."},
     ],
     "Bleach": [
-        {"id": "rukia_arrival", "label": "Rukia's Arrival in Karakura Town (default)", "start_day": -3,
-         "anchor": "Three days before the Shinigami Rukia Kuchiki arrives in Karakura Town and a Hollow attack on the Kurosaki family changes everything."},
-        {"id": "year_before_arrival", "label": "One year before the series begins (as an original Shinigami)", "start_day": -367,
-         "anchor": "One year before Rukia Kuchiki is sent to investigate Hollow activity in Karakura Town. Soul Society is at peace — Sosuke Aizen is a well-regarded captain of the 5th Division, the Gotei 13's thirteen divisions are fully staffed, and nothing yet hints at what's coming. A good point to start as a Shinigami newly graduated from the Shino Academy and just assigned to a squad."},
+        {"id": "week_before_arrival", "label": "One week before Ichigo receives Soul Reaper powers (default)", "start_day": -7,
+         "anchor": "One week before Rukia Kuchiki's mission reaches the Kurosaki Clinic. The player is a Shin'o Academy senior or recent graduate awaiting division placement."},
+        {"id": "year_before_arrival", "label": "One year before Ichigo receives Soul Reaper powers", "start_day": -365,
+         "anchor": "One year before Rukia Kuchiki reaches Karakura. Soul Society appears stable, and the player is completing the academy or awaiting a first squad assignment."},
+        {"id": "turn_back_pendulum", "label": "Turn Back the Pendulum — 110 years earlier", "start_day": -40157,
+         "anchor": "One week before the disappearances that will become the Turn Back the Pendulum crisis. The player is an academy senior or recent graduate in the Gotei 13 of that era; future knowledge remains hidden unless the player enables full canon foreknowledge."},
     ],
 }
 
@@ -780,7 +811,7 @@ WORLD_PRIMERS = {
         "power_system": "Shinigami channel Reiryoku (spiritual power) through Zanjutsu (swordsmanship), Hakuda (unarmed combat), Hoho (speed — Shunpo is its signature technique) and Kido (incantation-based spells, split into offensive Hado and restraining Bakudo). Every Shinigami's Zanpakuto is a living, unique spirit blade; learning its true name unlocks Shikai, and a deep, hard-won bond with it can unlock the far more powerful Bankai. Hollows, Quincy (who destroy spirits outright with reishi-based archery) and later Vizard and Arrancar each represent a different relationship to the same spiritual power.",
         "factions": ["The Gotei 13 — Soul Society's thirteen Shinigami divisions, each led by a Captain", "Central 46 — Soul Society's judicial authority, nominally acting for the unseen Soul King", "The Onmitsukido (Stealth Force) and Kido Corps — Soul Society's covert-ops and spellcasting bodies"],
         "locations": ["Karakura Town — an ordinary Japanese town with unusually high spiritual activity", "Seireitei — the walled inner city housing the Gotei 13 and Central 46, surrounded by the sprawling Rukongai districts", "Hueco Mundo — the Hollows' harsh home dimension, and whatever lies within its fortress, Las Noches"],
-        "starting_note": "Most campaigns begin right as an ordinary life first collides with Soul Society's world — before any real standing, rank, or reputation on either side of that line exists.",
+        "starting_note": "Original campaigns begin as a Shin'o Academy senior or recent graduate before squad placement. The player helps choose a division through play; Shikai and Bankai are earned later unless explicitly established in the background.",
     },
 }
 
@@ -1073,7 +1104,24 @@ MAJOR_CHARACTER_STARTS = {
          "starting_quests":[{"name":"Understand the Sealed Cave","status":"Active","giver":"New Existence","locations":["Great Jura Forest — Sealed Cave"],"objectives":["Learn how the slime body moves and senses","Test Great Sage and Predator safely","Discover another presence within the cave"],"next_hint":"Move through the cave while asking Great Sage what can be confirmed about the new body."}]}
     ],
     "Bleach": [
-        {"id":"ichigo_series_start","name":"Ichigo Kurosaki","label":"Ichigo — the night Rukia arrives","start_day":0,"location":"Kurosaki Clinic","age":15,"origin":"Karakura High Student","archetype":"Zanjutsu Specialist","appearance":"A tall, lean, strongly-built first-year high schooler with spiky orange hair and a near-permanent scowl often mistaken for delinquency, wearing the standard black Karakura High uniform.","background":"The mid-May night a Hollow attacks the Kurosaki family and Rukia Kuchiki, badly wounded defending them, transfers her own Shinigami powers to him — an act normally forbidden by Soul Society law. He has been able to see spirits his whole life, but this is the moment everything actually changes.",
+        {"id":"ichigo_series_start","name":"Ichigo Kurosaki","label":"Ichigo — the night he receives Soul Reaper powers","start_day":0,"location":"Kurosaki Clinic","age":15,"origin":"Substitute Soul Reaper","archetype":"Zanjutsu Specialist","appearance":"A tall, lean first-year high schooler with spiky orange hair and a fierce scowl, his living body now separated from a black-robed Soul Reaper form carrying an oversized blade.","background":"The exact night Ichigo receives Rukia Kuchiki's Soul Reaper power. Fishbone D has broken into the Kurosaki home and injured Rukia. Ichigo has just accepted her blade through his chest to protect his family; the transfer takes far more power than either expected. He now stands in an unfamiliar Soul Reaper body with an oversized unnamed Zanpakuto while the Hollow is still attacking.",
+         "expanded_background":"Ichigo has seen spirits since childhood and entered this night as a protective but otherwise living Karakura High student. Rukia Kuchiki arrived hunting Fishbone D, was wounded shielding him, and transferred her power as the only immediate way for Ichigo to protect his family. The transfer has just happened. Ichigo has enormous raw spiritual capacity but no formal Shinigami education, no Kidō, no release and almost no control. The player takes control before the first fight is decided.",
+         "title":"New Substitute Soul Reaper","position":"Unregistered Substitute Soul Reaper",
+         "active_canon_event":"Rukia Kuchiki arrives in Karakura Town",
+         "active_event_context":"The power transfer has already happened inside the shattered Kurosaki home. Fishbone D is attacking, Rukia is wounded, and Ichigo's family is down nearby. Continue as an immediate combat scene in the normal Chronicle.",
+         "active_event_prompt":"Fishbone D lunges through the ruined wall. What does Ichigo do with the oversized blade?",
+         "stat_minimums":{"Zanjutsu":36,"Hakuda":42,"Hoho":24,"Kido":5,"Reiatsu Control":22,"Willpower":58},
+         "stat_values":{"Zanjutsu":36,"Hakuda":42,"Hoho":24,"Kido":5,"Reiatsu Control":22,"Willpower":58},
+         "equipment":{"Weapon":"Oversized unnamed Zanpakuto formed from borrowed Soul Reaper power","Clothing":"Newly manifested black shihakusho"},
+         "special_patch":{"Spiritual Nature":"Living Human / Substitute Soul Reaper","Shinigami Rank":"Unregistered Substitute","Zanpakuto":"Oversized unnamed borrowed-power blade","Zanpakuto Profile":{"stage":"Borrowed power — sealed","name":"Unknown","development_evidence":["Accepted Rukia's power to protect the Kurosaki family"]},"Shikai":"Unachieved","Bankai":"Unachieved","Squad":"None","Kido Curriculum":{"Hadō":"Not yet trained","Bakudō":"Not yet trained","Unshown Numbers":"May be researched after Kidō fundamentals are learned"}},
+         "skills":{
+             "Spiritual Sight":{"rank":"Innate","bonus":8,"description":"Sees, hears and physically interacts with spirits that ordinary living humans cannot perceive.","combat_usable":False,"effect_type":"utility"},
+             "Borrowed Soul Reaper Power":{"rank":"Newly Transferred","bonus":7,"description":"Manifests a Soul Reaper body, black shihakusho and oversized blade using power transferred by Rukia; output is high but control is almost nonexistent.","limitation":"Ichigo has no formal training, release or reliable control and does not yet understand the body's techniques.","growth_path":"Survive the opening attack, learn Soul Reaper fundamentals and develop his own relationship with the power.","combat_usable":True,"effect_type":"utility"},
+             "Instinctive Zanpakuto Strike":{"rank":"Untrained Power","bonus":6,"description":"Commits raw strength and spiritual pressure through the oversized blade in a direct cut.","limitation":"Poor footwork and control leave openings and waste considerable Reiryoku.","growth_path":"Learn Zanjutsu structure, control spiritual output and understand the blade.","combat_usable":True,"effect_type":"damage"}
+         },
+         "conditions":["Rukia Kuchiki is badly wounded nearby","Fishbone D is actively attacking the Kurosaki family","Ichigo has never fought as a Soul Reaper before"],
+         "opening_combat":{"active":True,"round":1,"non_lethal":False,"location":"Kurosaki Clinic","enemy":{"name":"Fishbone D","is_group":False,"group_size":None,"hp":95,"hp_max":95,"difficulty_min":28,"difficulty_max":42,"attack_min":30,"attack_max":44,"power":34,"alive":True},"player_defense_ability":"Hoho","log":[],"narrated_through":0,"outcome":None,"cooldowns":{},"ally_support":0,"enemy_debuffs":[],"spare_enemy":False},
+         "starting_quests":[{"name":"Protect the Kurosaki Family","status":"Active","category":"main","giver":"Immediate Crisis","locations":["Kurosaki Clinic"],"explanation":"Fishbone D attacked the clinic and Rukia's power transfer has given Ichigo one immediate chance to stop it.","current_knowledge":["The Hollow is after Ichigo's unusually visible soul","Rukia is too injured to finish the fight","Ichigo's family is still in immediate danger"],"objectives":["Defeat or drive off Fishbone D","Keep the Kurosaki family alive","Learn what happened to Rukia's power"],"clear_conditions":["Fishbone D can no longer threaten the clinic","The family survives the attack"],"next_hint":"Take control of the oversized blade and answer Fishbone D's next attack."}],
          # Isshin is seeded as he actually presents at this point in canon —
          # a goofy, purely human clinic doctor. His real past as a former
          # Squad 10 Captain is a Thousand-Year Blood War-era reveal, more
@@ -1081,6 +1129,7 @@ MAJOR_CHARACTER_STARTS = {
          # here would spoil it the same way seeding Aizen's true nature
          # into this world's factions would.
          "seed_npcs":[
+             {"name":"Rukia Kuchiki","attitude":"Wounded ally shocked by the scale of the transfer","goal":"Keep Ichigo alive long enough to defeat Fishbone D and contain the consequences of her forbidden act.","is_companion":True,"last_known_location":"Kurosaki Clinic"},
              {"name":"Isshin Kurosaki","attitude":"Loving, embarrassing father","goal":"Runs the family clinic; presents as an ordinary, if eccentric, human doctor.","is_companion":False,"last_known_location":"Kurosaki Clinic"},
              {"name":"Yuzu Kurosaki","attitude":"Devoted younger sister","goal":"Keeps the household running — cooking, cleaning — and worries over everyone.","is_companion":False,"last_known_location":"Kurosaki Clinic"},
              {"name":"Karin Kurosaki","attitude":"Sharp-tongued younger sister","goal":"Plays soccer and, unlike Yuzu, has her own latent ability to see spirits.","is_companion":False,"last_known_location":"Kurosaki Clinic"},
@@ -1146,10 +1195,8 @@ WORLD_START_OPTIONS = {
         {"label": "Iron Country", "location": "Iron Country", "note": "A samurai-in-training of Iron Country — chakra plays little part in daily life here; skill is earned through the blade and discipline, not jutsu."},
     ],
     "Bleach": [
-        {"label": "Karakura Town (spirit-sighted civilian)", "location": "Karakura Town", "note": "An ordinary resident of Karakura Town who can see spirits — no Shinigami powers yet."},
-        {"label": "Seireitei (Shinigami of the Gotei 13)", "location": "Seireitei", "note": "Already a Shinigami, stationed in Soul Society — pairs naturally with starting one year before the series."},
-        {"label": "Rukongai (soul of the outer districts)", "location": "Rukongai", "note": "A soul born and raised in the Rukongai, Soul Society's sprawling outer districts, before ever setting foot in Seireitei."},
-        {"label": "Shino Academy (Shinigami-in-training)", "location": "Shino Academy", "note": "Currently training at the Shino Academy, not yet assigned to a squad."},
+        {"label": "Shin'o Academy (senior student)", "location": "Shin'o Academy", "note": "A final-year Soul Reaper academy student preparing for graduation and division placement."},
+        {"label": "Seireitei (recent graduate)", "location": "Seireitei", "note": "A newly graduated Soul Reaper awaiting interviews, recommendations and assignment to one of the thirteen divisions."},
     ],
 }
 
@@ -1266,13 +1313,12 @@ WORLD_EXPANSIONS = {
     "Bleach": {
         "currency":"Yen", "currency_baseline":3000,
         "economy_notes":"Karakura Town is contemporary Japan, so treat prices like real everyday Yen — a meal or bus fare runs hundreds of Yen, ordinary shopping and supplies in the low thousands, and a family/clinic-scale budget in the tens of thousands. Soul Society runs on its own currency, Kan (a coin similar to a Japanese 5-Yen piece) — Shinigami are paid in Kan and it's the pricing unit within Seireitei, though the deeper into Rukongai a scene goes, the more barter replaces money outright. Track Kan separately in state_patch.currencies once the player is actually stationed in Soul Society rather than converting it to Yen; the two are not meant to be interchangeable on the page.",
-        "origins":["Karakura High Student","Spirit-Sighted Civilian","Rukongai Orphan","Noble Clan Scion","Shino Academy Graduate",
-                   "Onmitsukido Trainee","Quincy Descendant","Substitute Shinigami Candidate"],
-        "archetypes":["Zanjutsu Specialist","Kido Caster","Hakuda Fighter","Hoho Specialist","Healer","Tactician","Quincy Marksman"],
+        "origins":["Shin'o Academy Senior","Recent Shin'o Academy Graduate"],
+        "archetypes":["Zanjutsu Specialist","Kido Caster","Hakuda Fighter","Hoho Specialist","Kaido Healer","Tactical Officer"],
         "training":["Zanjutsu Drills","Kido Incantation Practice","Hakuda Conditioning","Shunpo Practice","Reiatsu Control","Zanpakuto Communication"],
         "shop_types":["Urahara Shop","Karakura Convenience Store","Seireitei Kan Exchange","Squad Quartermaster","Black Market"],
-        "loot":["Yen","Kan","Soul Candy","Gikongan","Spirit Medicine","Zanpakuto Fragment"],
-        "encounters":["Hollow","Rogue Spirit","Rival Shinigami","Onmitsukido Patrol","Quincy","Menos"],
+        "loot":["Kan","Soul Candy","Gikongan","Spirit Medicine","Reishi Training Material","Official Mission Supply"],
+        "encounters":["Hollow incursion","Unquiet Plus","Academy rival","Division patrol","Training accident","Rare Menos-class emergency"],
         "systems":["Reiryoku","Reiatsu","Zanpakuto","Shikai","Bankai","Squad Rank","Soul Society Standing"]
     },
     "Custom World": {

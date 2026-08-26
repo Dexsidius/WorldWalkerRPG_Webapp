@@ -151,7 +151,13 @@ EXTREME_RE = re.compile(
     r"entire (?:nation|village|kingdom|world)|admiral|emperor|kage)\b", re.I)
 MAJOR_RE = re.compile(r"\b(awaken|evolve|transformation|transform|legendary|ultimate|boss|climactic|deathmatch|conqueror)\b", re.I)
 LETHAL_RE = re.compile(r"\b(kill|deathmatch|assassinate|boss|suicide|alone against|invade|lethal|to the death)\b", re.I)
-POWER_RE = re.compile(r"\b(learn|master|unlock|awaken|acquire|gain|develop)\b.*\b(ability|power|form|class|haki|nen|jutsu|skill|technique|magic|fruit)\b", re.I)
+POWER_RE = re.compile(
+    r"\b(learn|master|unlock|awaken|acquire|gain|develop|achieve|manifest|discover)\b.*\b("
+    r"ability|power|form|class|haki|nen|jutsu|skill|technique|magic|fruit|"
+    r"zanpakut[ōo]|shikai|bankai|hollowfication|resurrecci[óo]n|segunda etapa|schrift|vollst[äa]ndig|fullbring|"
+    r"had[ōo]|bakud[ōo]|kid[ōo])\b|\b(?:had[ōo]|bakud[ōo])\s*#?\s*\d{1,2}\b",
+    re.I,
+)
 
 DIPLOMACY_RE = re.compile(
     r"\b(negotiate|persuade|convince|diploma|politic|petition|propose|proposal|alliance|ally|"

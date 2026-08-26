@@ -71,6 +71,11 @@ WORLD_PORTRAIT_STYLES = {
         "expressive character design; clean graceful linework; luminous soft cel shading; jewel-like "
         "magical color accents"
     ),
+    "Bleach": (
+        "an original high-contrast supernatural sword manga aesthetic suited to Bleach: elegant fashion-forward "
+        "silhouette, spare confident black ink, sharp expressive eyes, flowing black-and-white cloth, restrained "
+        "cel color and cool spiritual highlights; never copy a named canon character"
+    ),
     "Custom World": (
         "cinematic anime-inspired RPG concept illustration; elegant ink contours; painterly cel "
         "shading; detailed materials; distinctive original silhouette"
@@ -84,11 +89,12 @@ WORLD_BACKDROPS = {
     "Solo Max-Level Newbie": "dark crystalline tower hall with faint cyan rings and no readable text",
     "Overgeared": "medieval forge workshop with amber furnace glow",
     "Reincarnated as a Slime": "great forest settlement with warm wooden roofs and magical motes",
+    "Bleach": "white-walled spirit-city roofs beneath a dark sky with pale blue spiritual motes",
     "Custom World": "misty crossroads where forest, city, mountains, and stars blend softly",
 }
 
 VISUAL_SPECIAL_KEYS = re.compile(
-    r"species|race|form|transformation|evolution|clan|bloodline|devil fruit|class|body|eyes|hair|mark|curse|mutation",
+    r"species|race|form|transformation|evolution|clan|bloodline|devil fruit|class|body|eyes|hair|mark|curse|mutation|zanpakuto|shikai|bankai|spiritual nature",
     re.I,
 )
 

@@ -699,6 +699,17 @@ function renderClassCard(rawClass) {
   return `<article class="skill-journal-card class-profile-card"><header><h3>◆ ${escapeHtml(cls.name)}</h3><div class="skill-chips"><span>${escapeHtml(cls.kind || "Hidden Class")}</span><span>${escapeHtml(cls.rank || "Rare")}</span></div></header><p class="skill-summary">${escapeHtml(compactReadable(cls.description) || "A rare path whose full nature is still being discovered.")}</p>${discoveryRow}${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</article>`;
 }
 
+function renderBleachReleases(special) {
+  const profile = special?.["Zanpakuto Profile"] && typeof special["Zanpakuto Profile"] === "object" ? special["Zanpakuto Profile"] : {};
+  const shikai = String(special?.Shikai || "Unachieved");
+  const bankai = String(special?.Bankai || "Unachieved");
+  const achieved = (value) => !/^(?:unachieved|none|unknown|)$/i.test(value);
+  const row = (label, value) => value ? `<div class="release-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(compactReadable(value))}</span></div>` : "";
+  const shikaiCard = `<article class="release-card shikai-card ${achieved(shikai) ? "awakened" : "sealed"}"><header><span>始解</span><div><small>FIRST RELEASE</small><h3>${escapeHtml(achieved(shikai) ? (profile.shikai_name || shikai) : "Shikai — Unachieved")}</h3></div></header>${achieved(shikai) ? `${row("Release command", profile.release_command)}${row("Form", profile.shikai_form)}${row("Ability", profile.shikai_effect)}${row("Limits", profile.shikai_limitation)}${row("Counters", profile.shikai_counters)}` : `<p>Learn the spirit's identity and true name through Jinzen, training, battle and a personal inner-world trial.</p>`}</article>`;
+  const bankaiCard = `<article class="release-card bankai-card ${achieved(bankai) ? "awakened" : "sealed"}"><header><span>卍解</span><div><small>FINAL RELEASE</small><h3>${escapeHtml(achieved(bankai) ? (profile.bankai_name || bankai) : "Bankai — Unachieved")}</h3></div></header>${achieved(bankai) ? `${row("Manifestation", profile.bankai_manifestation)}${row("Ability", profile.bankai_effect)}${row("Cost", profile.bankai_cost)}${row("Counters", profile.bankai_counters)}` : `<p>Requires an achieved Shikai, spirit manifestation, sufficient spiritual capacity and a character-specific mastery trial.</p>`}</article>`;
+  return `<section class="bleach-release-grid">${shikaiCard}${bankaiCard}</section>`;
+}
+
 function loadPortraitImage(url) {
   const img = $("#portrait-img");
   if (!url || img.getAttribute("data-src") === url) return;
@@ -2655,7 +2666,8 @@ function openPowerSummary() {
         <div class="clock-track"><i style="width:${pct}%"></i></div><b>${escapeHtml(value)}</b></div>`;
     }).join("") || '<div class="hint">No stats recorded yet.</div>';
   const titles = (s.titles || []).map((t) => `<span class="power-title-chip">🏅 ${escapeHtml(titleLabel(t))}</span>`).join("");
-  const classCard = s.class_profile?.name ? renderClassCard(s.class_profile) : "";
+  const classCard = s.world !== "Bleach" && s.class_profile?.name ? renderClassCard(s.class_profile) : "";
+  const releaseCards = s.world === "Bleach" ? renderBleachReleases(s.special || {}) : "";
   $("#power-summary-body").innerHTML = `
     <div class="power-summary-head">
       <div><b>${escapeHtml(s.name || "Traveler")}</b><span>${escapeHtml(s.world || "")}${s.position ? ` · ${escapeHtml(s.position)}` : ""}</span></div>
@@ -2672,6 +2684,7 @@ function openPowerSummary() {
       <small>Overall foundation: Tier ${escapeHtml(overall.index)} · ${escapeHtml(overall.name)} (balanced score ${escapeHtml(overall.score ?? "—")}). Peak output is not treated as every stat. ${escapeHtml(profile.interpretation || "")}</small>
     </div>
     <div class="power-stat-list">${statRows}</div>
+    ${releaseCards}
     ${classCard}
     ${titles ? `<div class="power-title-list">${titles}</div>` : ""}
     <button id="btn-power-summary-ask-advisor" class="btn-ghost full">⚖ Ask the Advisor how you compare</button>
@@ -2833,14 +2846,20 @@ async function openJournal(tab) {
   } else if (tab === "skills") {
     const skills = Object.entries(data.skills || {});
     const titles = data.titles || [];
-    const classRow = renderClassCard(data.class_profile);
+    const isBleach = data.world === "Bleach";
+    const classRow = isBleach ? "" : renderClassCard(data.class_profile);
+    const kido = skills.filter(([name, detail]) => /^(?:Had[ōo]|Bakud[ōo])\s*#/i.test(name) || (detail && typeof detail === "object" && detail.kido));
+    const releases = skills.filter(([name, detail]) => /^(?:Shikai|Bankai)\b/i.test(name) || (detail && typeof detail === "object" && detail.release_stage));
+    const foundations = skills.filter((row) => !kido.includes(row) && !releases.includes(row));
     const skillRows = skills.length
       ? skills.map(([name, detail]) => renderSkillCard(name, detail)).join("")
       : '<div class="jrow">No learned skills yet.</div>';
     const titleRows = titles.length
       ? titles.map((title) => `<div class="jrow">🏅 ${escapeHtml(titleLabel(title))}</div>`).join("")
       : '<div class="jrow hint">No titles earned yet.</div>';
-    panel.innerHTML = `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button>${classRow ? `<h3>Class / Path</h3>${classRow}` : ""}<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
+    panel.innerHTML = isBleach
+      ? `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button><h3>Zanpakutō Releases</h3>${renderBleachReleases(data.special || {})}<h3>Hadō & Bakudō</h3>${kido.length ? kido.map(([name, detail]) => renderSkillCard(name, detail)).join("") : '<div class="jrow hint">No numbered Kidō learned yet.</div>'}<h3>Soul Reaper Training</h3>${foundations.length ? foundations.map(([name, detail]) => renderSkillCard(name, detail)).join("") : '<div class="jrow hint">No additional training recorded.</div>'}<h3>Titles</h3>${titleRows}`
+      : `<button id="btn-open-power-summary" class="btn-ghost full">⚔ Power Summary</button>${classRow ? `<h3>Class / Path</h3>${classRow}` : ""}<h3>Learned Skills</h3>${skillRows}<h3>Titles</h3>${titleRows}`;
     $("#btn-open-power-summary").addEventListener("click", openPowerSummary);
   } else if (tab === "achievements") {
     const achievements = data.achievements || [];
@@ -3545,8 +3564,13 @@ function renderCampaignPreview(p, payload) {
     const ability = startingAbility && startingAbility.details ? startingAbility.details : {};
     const startingTechniques = startingAbility && Array.isArray(startingAbility.additional_skills) ? startingAbility.additional_skills : [];
     const growth = profile.growth_profile || {};
-    const abilityCard = startingAbility ? `<section class="generated-ability"><b>STARTING ABILITY — ${escapeHtml(startingAbility.name)}</b>${ability.kind ? `<span><strong>Type:</strong> ${escapeHtml(ability.kind)}</span>` : ""}<span>${escapeHtml(ability.effect || ability.description || "")}</span>${startingTechniques.length ? `<span><strong>Starting techniques:</strong> ${startingTechniques.map((row) => escapeHtml(row.name || "")).filter(Boolean).join(" · ")}</span>` : ""}<span><strong>In-world origin:</strong> ${escapeHtml(ability.origin || "A rare talent that has begun to surface.")}</span><span><strong>Limit:</strong> ${escapeHtml(ability.limitation || "Must be developed through play.")}</span><span><strong>Growth:</strong> ${escapeHtml(ability.growth_path || "Practice and suitable guidance.")}</span>${ability.canon_balance ? `<span><strong>World-scale balance:</strong> ${escapeHtml(ability.canon_balance)}</span>` : ""}</section>` : "";
-    const classCard = (profile.class_profile || profile.hidden_class) ? renderClassCard(profile.class_profile || profile.hidden_class) : "";
+    const abilityCard = p.world !== "Bleach" && startingAbility ? `<section class="generated-ability"><b>STARTING ABILITY — ${escapeHtml(startingAbility.name)}</b>${ability.kind ? `<span><strong>Type:</strong> ${escapeHtml(ability.kind)}</span>` : ""}<span>${escapeHtml(ability.effect || ability.description || "")}</span>${startingTechniques.length ? `<span><strong>Starting techniques:</strong> ${startingTechniques.map((row) => escapeHtml(row.name || "")).filter(Boolean).join(" · ")}</span>` : ""}<span><strong>In-world origin:</strong> ${escapeHtml(ability.origin || "A rare talent that has begun to surface.")}</span><span><strong>Limit:</strong> ${escapeHtml(ability.limitation || "Must be developed through play.")}</span><span><strong>Growth:</strong> ${escapeHtml(ability.growth_path || "Practice and suitable guidance.")}</span>${ability.canon_balance ? `<span><strong>World-scale balance:</strong> ${escapeHtml(ability.canon_balance)}</span>` : ""}</section>` : "";
+    const classCard = p.world !== "Bleach" && (profile.class_profile || profile.hidden_class) ? renderClassCard(profile.class_profile || profile.hidden_class) : "";
+    const bleachReleaseCard = p.world === "Bleach" ? renderBleachReleases(profile.bleach_release_profile ? {
+      "Zanpakuto Profile": profile.bleach_release_profile,
+      Shikai: `Achieved — ${profile.bleach_release_profile.shikai_name || profile.bleach_release_profile.name}`,
+      Bankai: profile.bleach_release_profile.stage === "Bankai" ? profile.bleach_release_profile.bankai_name : "Unachieved",
+    } : { Shikai: "Unachieved", Bankai: "Unachieved" }) : "";
     const startWarnings = (p.start_warnings || []).filter(Boolean);
     const warningCard = startWarnings.length ? `<section class="start-warnings"><b>START CONSISTENCY NOTE</b>${startWarnings.map((warning) => `<span>${escapeHtml(warning)}</span>`).join("")}</section>` : "";
     const primer = p.world_primer || {};
@@ -3562,12 +3586,12 @@ function renderCampaignPreview(p, payload) {
         "Custom World": "Hidden potential",
     };
     const classLabel = classLabels[p.world] || "Hidden potential";
-    const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div><button type="button" data-preview-reroll="class">${escapeHtml(classLabel)}</button><button type="button" data-preview-reroll="ability">Starting ability</button><button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
+    const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div>${p.world === "Bleach" ? "" : `<button type="button" data-preview-reroll="class">${escapeHtml(classLabel)}</button><button type="button" data-preview-reroll="ability">Starting ability</button>`}<button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
     const learningRate = Number(growth.learning_rate || 1);
     const ordinaryGrowth = Math.abs(learningRate - 1) < 0.005 && String(growth.aptitude || "").toLowerCase().includes("typical");
     const growthLabel = !ordinaryGrowth && String(growth.aptitude || "").toLowerCase().includes("typical") ? "Modified learning potential" : (growth.aptitude || "Unusual potential");
     const growthSummary = ordinaryGrowth ? "" : `<div class="growth-summary"><b>${escapeHtml(growthLabel)}</b><span>${escapeHtml(learningRate.toFixed(2))}× sustained-learning rate</span><small>${escapeHtml(growth.explanation || "Actual growth still depends on time, training conditions, instruction, and recovery.")}</small></div>`;
-    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${warningCard}${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Open-ended starting abilities</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section>${growthSummary}${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : (p.starting_era ? "This original character begins in the selected timeline era." : "This original character begins shortly before the world's main story.")}</p>`;
+    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${warningCard}${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Open-ended starting abilities</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${bleachReleaseCard}${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section>${growthSummary}${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : (p.starting_era ? "This original character begins in the selected timeline era." : "This original character begins shortly before the world's main story.")}</p>`;
     openModal("modal-campaign-preview");
 }
 
@@ -3720,6 +3744,7 @@ async function openSettingsModal() {
   $("#st-anim").checked = !!s.animations_enabled;
   $("#st-portrait-enabled").checked = s.portrait_generation_enabled !== false;
   $("#st-portrait-auto").checked = s.portrait_auto_generate === true;
+  $("#st-canon-foreknowledge").checked = s.canon_foreknowledge === true;
   $("#st-image-model").value = s.image_model || "gpt-image-2";
   $("#st-local-image-model").value = s.local_image_model || "";
   $("#st-portrait-quality").value = s.portrait_quality || "low";
@@ -3761,6 +3786,7 @@ $("#btn-save-settings").addEventListener("click", async () => {
     animations_enabled: $("#st-anim").checked,
     portrait_generation_enabled: $("#st-portrait-enabled").checked,
     portrait_auto_generate: $("#st-portrait-auto").checked,
+    canon_foreknowledge: $("#st-canon-foreknowledge").checked,
     image_model: $("#st-image-model").value.trim() || "gpt-image-2",
     local_image_model: $("#st-local-image-model").value.trim(),
     portrait_quality: $("#st-portrait-quality").value,

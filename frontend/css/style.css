@@ -1219,8 +1219,8 @@ input,select,textarea{ font-family:inherit; }
 @media(max-width:720px){ .story-feed{ padding:12px; } .story-entry{ grid-template-columns:1fr; gap:4px; } .story-entry-label{ padding-top:0; } .challenge-resolution-choice,.challenge-choice-grid,.tactical-options{ grid-template-columns:1fr; } .map-layout{ grid-template-columns:1fr; }.map-detail{ min-height:0; }.lore-import,.tuning-row{ grid-template-columns:1fr; } }
 
 @media(max-width:720px){
-  html,body{ height:auto; min-height:100%; }
-  body{ overflow:auto; background-attachment:scroll; }
+  html,body{ height:auto; min-height:100%; overflow-x:hidden; }
+  body{ overflow-y:auto; background-attachment:scroll; }
   .app-shell{ display:flex; flex-direction:column; width:100%; height:auto; min-height:100dvh; padding:7px; gap:8px; }
   .topbar{ order:0; position:sticky; top:0; min-height:52px; padding:7px 9px; flex-wrap:wrap; gap:5px; z-index:2000; }
   .topbar-left{ width:100%; justify-content:space-between; gap:8px; }
@@ -1229,7 +1229,11 @@ input,select,textarea{ font-family:inherit; }
   .menu-btn{ padding:8px 7px; font-size:10px; }
   .menu-drop{ position:fixed; top:52px; left:7px; right:7px; width:auto; max-height:70dvh; overflow:auto; }
   .topbar-center{ max-width:64%; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .topbar-right{ margin-left:auto; gap:5px; }
+  .topbar-right{ width:100%; min-width:0; margin-left:0; gap:5px; flex-wrap:wrap; justify-content:flex-start; }
+  /* Autosave detail and running cost remain available in Game/AI Setup,
+     but forcing all six status chips into a 360px row made the whole app
+     horizontally scroll on phones. Keep the four turn-critical controls. */
+  #hdr-autosave,#hdr-cost{ display:none; }
   .col{ overflow:visible; min-height:0; padding:0; }
   /* Action Chat + Time Control (col-right) come first on mobile, right
      after the topbar — on a phone, reaching them used to mean scrolling
@@ -1255,6 +1259,16 @@ input,select,textarea{ font-family:inherit; }
   .modal{ width:calc(100vw - 14px)!important; max-width:none!important; max-height:92dvh; }
   .modal-backdrop{ padding:7px; align-items:center; }
   .modal-body{ padding:14px; }
+  .radio-row{ flex-wrap:wrap; gap:8px 14px; }
+  .suggested-actions{ max-width:100%; }
+  /* The supplied Bleach atlas already labels its iconic realms. Showing
+     another 30 persistent HTML labels over it made the phone map
+     unreadable. Unknown pins remain tappable and reveal their label on
+     focus; current and discovered locations stay labeled at all times. */
+  .map-node.unknown .map-label{ display:none; }
+  .map-node.unknown:focus .map-label,
+  .map-node.unknown:hover .map-label{ display:block; z-index:5; }
+  .map-node.unknown .map-pip{ width:12px; height:12px; left:-6px; top:-6px; }
   .chat-modal,.advisor-modal{ height:calc(100dvh - 14px); max-height:calc(100dvh - 14px); }
   .chat-modal>.modal-head,.advisor-modal>.modal-head{ flex:0 0 auto; }
   .chat-body{ display:flex; flex-direction:column; height:auto; min-height:0; overflow:hidden!important; }
@@ -1461,6 +1475,22 @@ body[data-world="Bleach"] .panel{ border-left:3px solid rgba(232,238,242,.72); }
 body[data-world="Bleach"] .panel-head{ text-transform:uppercase; letter-spacing:.1em; background:linear-gradient(90deg,rgba(232,238,242,.1),transparent); }
 body[data-world="Bleach"] .story-feed{ background-image:linear-gradient(rgba(99,185,213,.025) 1px,transparent 1px); background-size:100% 26px; }
 body[data-world="Bleach"] .quick-nav button:hover, body[data-world="Bleach"] .btn-primary:hover{ box-shadow:inset 4px 0 0 var(--accent2); transform:translateX(2px); }
+.bleach-release-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:8px 0 18px; }
+.release-card{ position:relative; overflow:hidden; border:1px solid var(--border); background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(0,0,0,.28)); padding:14px; min-height:145px; }
+.release-card::after{ content:""; position:absolute; inset:auto -12% -45% 35%; height:90px; transform:rotate(-8deg); background:linear-gradient(90deg,transparent,rgba(var(--accent2-rgb),.13),transparent); pointer-events:none; }
+.release-card header{ display:flex; gap:12px; align-items:center; border-bottom:1px solid var(--border-soft); padding-bottom:9px; margin-bottom:9px; }
+.release-card header>span{ display:grid; place-items:center; width:48px; height:48px; border:1px solid currentColor; font:700 1.15rem var(--font-display); }
+.release-card header small{ display:block; color:var(--sub); letter-spacing:.14em; font:700 .64rem var(--font-label); }
+.release-card header h3{ margin:2px 0 0; font-size:1rem; }
+.release-card p{ color:var(--sub); line-height:1.5; }
+.release-card.sealed{ opacity:.7; filter:saturate(.45); }
+.shikai-card.awakened{ border-color:#70cce8; box-shadow:inset 3px 0 #70cce8,0 0 20px rgba(99,185,213,.1); }
+.bankai-card{ background:linear-gradient(145deg,rgba(90,13,20,.28),rgba(0,0,0,.55)); }
+.bankai-card.awakened{ border-color:#e8eef2; box-shadow:inset 3px 0 #e8eef2,0 0 24px rgba(220,235,242,.14); }
+.release-detail{ display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px; padding:6px 0; border-bottom:1px solid rgba(255,255,255,.055); }
+.release-detail b{ color:var(--accent2); font-size:.73rem; text-transform:uppercase; letter-spacing:.06em; }
+.release-detail span{ color:var(--text); line-height:1.4; }
+@media(max-width:720px){ .bleach-release-grid{ grid-template-columns:1fr; } .release-detail{ grid-template-columns:1fr; gap:2px; } }
 body[data-world] .brand::after{ margin-left:9px; color:var(--accent2); font-size:.75em; opacity:.72; }
 body[data-world="One Piece"] .brand::after{ content:"⚓"; }
 body[data-world="Hunter x Hunter"] .brand::after{ content:"▱"; }

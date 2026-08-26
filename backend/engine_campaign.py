@@ -16,6 +16,8 @@ from reliability import update_narrative_memory
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks)
+from bleach_data import (academy_kido_skills, kido_reference_summary,
+                         owns_release, zanpakuto_tracks)
 
 
 DEFAULT_SETTINGS = {
@@ -46,6 +48,7 @@ WORLD_STARTER_GEAR = {
     "Solo Max-Level Newbie": "Beginner weapon and emergency potion",
     "Overgeared": "Beginner equipment set and trade tools",
     "Reincarnated as a Slime": "Species-appropriate natural weapon or focus",
+    "Bleach": "Unnamed Asauchi, academy uniform, soul pager and basic field kit",
     "Custom World": "Setting-appropriate weapon and travel kit",
 }
 
@@ -151,6 +154,16 @@ WORLD_ARCHETYPE_GEAR = {
         "Assassin-type Monster": "Venomous Fangs",
         "Magic Crafter": "Magicule-conductive Hand Tools",
     },
+    "Bleach": {
+        "Zanjutsu Specialist": "Unnamed Asauchi and reinforced sword-practice wraps",
+        "Kido Caster": "Unnamed Asauchi, academy Kido notes and practice targets",
+        "Hakuda Fighter": "Unnamed Asauchi and reinforced hand-to-hand practice wraps",
+        "Hoho Specialist": "Unnamed Asauchi and academy movement-training sandals",
+        "Healer": "Unnamed Asauchi and basic Fourth Division first-aid supplies",
+        "Tactician": "Unnamed Asauchi, soul pager and mission notebook",
+        "Kaido Healer": "Unnamed Asauchi and academy medical kit",
+        "Tactical Officer": "Unnamed Asauchi, academy field kit and patrol notebook",
+    },
 }
 
 POOL_STATS = {
@@ -160,6 +173,7 @@ POOL_STATS = {
     "Solo Max-Level Newbie": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
     "Overgeared": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
     "Reincarnated as a Slime": (("Instinct", "Willpower"), ("Magicule Control", "Skill Mastery")),
+    "Bleach": (("Hakuda", "Willpower"), ("Reiatsu Control", "Willpower")),
     "Custom World": (("Constitution", "Strength"), ("Wisdom", "Intelligence")),
 }
 
@@ -224,6 +238,12 @@ WORLD_ABILITY_FORMS = {
          "shapes magicules into controlled {aspect_lower}-themed effects suited to the user's species",
          "output is limited by magicule capacity, analysis, resistances, and control",
          "increase magicule capacity, analyze related phenomena, and combine compatible skills"),
+    ],
+    "Bleach": [
+        ("{aspect} Spiritual Affinity", "an unusual quality in the Soul Reaper's Reiryoku that has not yet become a Zanpakuto release",
+         "lets the wielder sense and shape narrow {aspect_lower}-aligned patterns through ordinary academy techniques",
+         "it is not Shikai, grants no release state, and becomes unstable when forced beyond current Reiatsu Control",
+         "refine control, record how it answers real choices, and let it inform the Zanpakuto spirit if Shikai is earned"),
     ],
     "Custom World": [
         ("{aspect} Gift", "a setting-consistent talent that first surfaced under pressure",
@@ -333,6 +353,28 @@ WORLD_ORIGIN_START_PACKAGES = {
             "stat_minimums": {"Magicule Control": 42, "Skill Mastery": 42, "Instinct": 40, "Willpower": 42},
             "skills": _start_skill("Named Monster Authority", "Combines an evolved body, strengthened magicule circulation, and earned presence among Jura's monsters.", "Renowned", 10)},
     },
+    "Bleach": {
+        "Shin'o Academy Senior": {
+            "position": "Final-year Shin'o Academy Student", "title": "Shin'o Academy Senior",
+            "affiliations": [{"faction": "Gotei 13", "rank": "Academy Candidate", "status": "training", "joined": "Before campaign start", "notes": "Eligible for graduation and division placement after completing academy requirements."}],
+            "reputation": {"Gotei 13": 10, "Kido Corps": 5},
+            "special_patch": {"Spiritual Nature": "Soul Reaper", "Shinigami Rank": "Academy Senior", "Zanpakuto": "Unnamed Asauchi", "Shikai": "Unachieved", "Bankai": "Unachieved", "Squad": "Unassigned"},
+            "equipment": {"Weapon": "Unnamed Asauchi", "Uniform": "Shin'o Academy senior uniform", "Field Gear": "Soul pager, academy handbook and basic spirit medicine"},
+            "stat_minimums": {"Zanjutsu": 32, "Hakuda": 30, "Hoho": 30, "Kido": 28, "Reiatsu Control": 32, "Willpower": 30},
+            "skills": _start_skill("Shin'o Academy Senior Curriculum", "Uses the four Shinigami arts, Konso procedure, Hollow identification, patrol protocol and supervised field methods at graduation-candidate level.", "Academy Senior", 6),
+            "quests": [{"name":"Graduate and Choose a Division","status":"Active","category":"main","giver":"Shin'o Academy","locations":["Shin'o Academy","Gotei 13 Barracks"],"explanation":"Complete the remaining academy evaluation, then meet division representatives and influence the first squad assignment.","objectives":["Complete the final graduation evaluation","Learn what several divisions expect","State a preferred squad and make a case for placement","Accept, negotiate or challenge the resulting assignment"],"clear_conditions":["Graduate from Shin'o Academy","Receive or choose a squad assignment"],"next_hint":"Review the final evaluation and ask which divisions are actively recruiting."}],
+        },
+        "Recent Shin'o Academy Graduate": {
+            "position": "Unseated Soul Reaper awaiting assignment", "title": "Recent Shin'o Academy Graduate",
+            "affiliations": [{"faction": "Gotei 13", "rank": "Unseated Graduate", "status": "awaiting assignment", "joined": "Campaign start", "notes": "Graduated but not yet assigned to a division."}],
+            "reputation": {"Gotei 13": 15, "Kido Corps": 5},
+            "special_patch": {"Spiritual Nature": "Soul Reaper", "Shinigami Rank": "Unseated Graduate", "Zanpakuto": "Unnamed Asauchi", "Shikai": "Unachieved", "Bankai": "Unachieved", "Squad": "Unassigned"},
+            "equipment": {"Weapon": "Unnamed Asauchi", "Uniform": "Newly issued black shihakusho", "Field Gear": "Soul pager, mission satchel and basic spirit medicine"},
+            "stat_minimums": {"Zanjutsu": 34, "Hakuda": 31, "Hoho": 31, "Kido": 29, "Reiatsu Control": 34, "Willpower": 32},
+            "skills": _start_skill("Soul Reaper Field Readiness", "Performs Konso, recognizes common Hollows, uses academy combat methods, follows mission protocol and can operate under a seated officer's direction.", "Graduate", 6),
+            "quests": [{"name":"Choose a Gotei 13 Division","status":"Active","category":"main","giver":"Gotei 13 Placement Office","locations":["Seireitei","Gotei 13 Barracks"],"explanation":"Division representatives are evaluating new graduates. The player can express preferences, seek interviews and use demonstrated talent to earn a real choice.","objectives":["Investigate suitable divisions","Meet or petition division representatives","State a preferred squad","Secure or accept a first assignment"],"clear_conditions":["A division records the character as an active member"],"next_hint":"Attend placement proceedings or request an interview with a preferred division."}],
+        },
+    },
 }
 
 WORLD_LOCATION_START_PACKAGES = {
@@ -342,6 +384,8 @@ WORLD_LOCATION_START_PACKAGES = {
                     "objectives": ["Complete the current exam phase", "Qualify in the final phase"], "next_hint": "Report to the examiner and learn the current phase's rules."}]},
     ("Naruto", "Amegakure"): {"special_patch": {"Home Village": "Amegakure"}},
     ("Naruto", "Iron Country"): {"special_patch": {"Home Village": "Iron Country"}},
+    ("Bleach", "Shin'o Academy"): {"special_patch": {"Spiritual Nature": "Soul Reaper", "Shinigami Rank": "Academy Senior", "Squad": "Unassigned"}},
+    ("Bleach", "Seireitei"): {"special_patch": {"Spiritual Nature": "Soul Reaper", "Shinigami Rank": "Unseated Graduate", "Squad": "Unassigned"}},
 }
 
 # Major groups can be known without being magically reachable. Membership
@@ -353,6 +397,7 @@ WORLD_PUBLIC_CONTACTS = {
     "Solo Max-Level Newbie": {"Players", "Major Guilds"},
     "Overgeared": {"Players", "Local Lords", "Church", "Guilds", "Kingdom"},
     "Reincarnated as a Slime": {"Jura Forest Monsters", "Free Guild"},
+    "Bleach": {"Gotei 13", "Kido Corps", "Noble Houses"},
     "Custom World": {"Local Faction"},
 }
 
@@ -519,6 +564,12 @@ WORLD_BACKGROUND_COLOR = {
         ("a wandering monster tamer", "a botched taming attempt showed how little separates a monster from a companion"),
         ("a cautious forest-dwelling sage", "a magic-born disaster proved the forest's peace was more fragile than it looked"),
     ),
+    "Bleach": (
+        ("an upper-year Shin'o Academy instructor", "a supervised Hollow exercise exposed the difference between classroom control and protecting another soul"),
+        ("a patient Kido lecturer", "a failed incantation became the first clue that the student's Reiryoku did not behave like everyone else's"),
+        ("a seated officer visiting the academy", "a field observation revealed which division duties actually matched the student's values"),
+        ("an Asauchi caretaker", "a silent moment with the unnamed blade suggested that its sleeping spirit was already listening"),
+    ),
     "Custom World": (
         ("a locally respected mentor", "a dangerous incident revealed that talent without understanding creates consequences"),
         ("a retired local specialist", "a close call in the field taught respect for what looked like routine work"),
@@ -540,6 +591,8 @@ WORLD_BACKGROUND_NAMES = {
                    "Bram Kessler", "Tovin Reed", "Anya Coldiron", "Fenric Bale", "Mira Duskwright", "Talon Grey"),
     "Reincarnated as a Slime": ("Rilsa", "Gelm", "Nemu", "Sorel", "Fadda", "Mireth", "Gobzo", "Ranith",
                                 "Elmis", "Korgu", "Vessa", "Draska"),
+    "Bleach": ("Akari Fujimoto", "Daigo Arakawa", "Emi Hoshina", "Haruto Senda", "Kaoru Mizuno", "Mio Tachibana",
+               "Renjiro Kagawa", "Sachi Kurosawa", "Toma Igarashi", "Yuna Shibata", "Kei Naruse", "Natsumi Arai"),
     "Custom World": ("Ari Vale", "Mara Stone", "Toren Reed", "Elan Ashford", "Sena Cobb", "Rook Delaney",
                       "Ivy Marchetti", "Dashiell Kern", "Wren Castellan", "Marlow Finch", "Talia Voss", "Corin Blake"),
 }
@@ -561,7 +614,8 @@ class CampaignMixin:
         blob = f"{name} {effect}".lower()
         usable = bool(re.search(
             r"\b(attack|strike|combat|fight|weapon|jutsu|spell|blast|projectile|trap|bind|stun|"
-            r"heal|restore|shield|guard|weaken|poison|haki|nen|chakra pulse|damage)\b", blob
+            r"heal|restore|shield|guard|weaken|poison|haki|nen|chakra pulse|damage|sword|blade|cut|"
+            r"zanjutsu|hakuda|shikai|bankai|had[ōo]|bakud[ōo]|kid[ōo])\b", blob
         ))
         if re.search(r"\b(navigat|chart|craft|smith|cook|merchant|account|history|research)\b", blob) and not re.search(r"\b(attack|combat|trap|heal|shield|damage)\b", blob):
             usable = False
@@ -815,6 +869,53 @@ Return JSON only, with no markdown."""
             detail.update(self.combat_skill_metadata(name, detail["effect"]))
             skills[name] = detail
 
+    def generate_zanpakuto_profile(self, background, has_shikai=False, has_bankai=False):
+        """Author one coherent release line for an explicitly released start.
+
+        Normal Soul Reaper starts intentionally defer this until the in-game
+        breakthrough so the narrator can use the campaign's accumulated
+        choices. Creation calls it only when the player's background plainly
+        says the release is already owned.
+        """
+        aspect = self.ability_aspect(background)
+        fallbacks = {
+            "Ember": ("Homurakage", "Wake beneath the ash", "Stores heat from blocked blows and releases it as controlled cutting fire."),
+            "Tide": ("Shiosai", "Draw the returning tide", "Redirects nearby liquid and spiritual flow into curved blades and defensive currents."),
+            "Gale": ("Kazehiki", "Carry the unheard word", "Shapes compressed wind along the blade for changing reach and deflecting trajectories."),
+            "Stone": ("Iwagane", "Stand where the mountain remembers", "Condenses spiritual pressure into weighted armor and impact-breaking edges."),
+            "Echo": ("Hibikigane", "Answer what the silence keeps", "Reads and returns vibrations through blade, ground and nearby spiritual matter."),
+            "Flash": ("Senrin", "Cross the distance between heartbeats", "Leaves short-lived spiritual paths that sharpen one committed movement or cut."),
+            "Shadow": ("Kageutsushi", "Darken the space between", "Binds the blade's shadow to surfaces for misdirection, restraint and angled attacks."),
+            "Radiance": ("Akebonohoshi", "Open the sleepless dawn", "Shapes pale light into revealing marks, guarded zones and focused purifying cuts."),
+        }
+        name, command, shikai_effect = fallbacks.get(aspect, fallbacks["Echo"])
+        fallback = {
+            "name": name, "sealed_appearance": "A plain academy Asauchi whose guard has slowly taken on a personal motif.",
+            "spirit": f"A demanding {aspect.lower()}-aligned figure that tests whether the wielder's stated values survive pressure.",
+            "inner_world": f"A shifting inner landscape where {aspect.lower()} imagery reflects the wielder's unresolved choices.",
+            "release_command": command, "shikai_name": name, "shikai_form": "The sealed blade changes into a distinctive but practical combat form.",
+            "shikai_effect": shikai_effect,
+            "shikai_limitation": "The effect consumes Reiryoku in proportion to scale and loses precision when the wielder acts against the bond's central lesson.",
+            "shikai_counters": "Superior Reiatsu, disrupted concentration and opponents who understand the effect's setup can resist or exploit it.",
+            "bankai_name": f"Bankai: {name} Tenchi", "bankai_manifestation": "The inner-world motif manifests across the battlefield around an evolved form of the blade.",
+            "bankai_effect": f"Expands the Shikai's {aspect.lower()} principle across a wide controlled space instead of granting an unrelated power.",
+            "bankai_cost": "Massive sustained Reiryoku and physical strain; early use is brief and dangerous to repeat.",
+            "bankai_counters": "Overwhelming Reiatsu, escaping its effective area, breaking its governing setup or forcing the novice wielder to exhaust the manifestation.",
+        }
+        authored = {}
+        if self.ai_bg_ready():
+            instructions = f"""Design one original Bleach Zanpakuto for this player character. Do not copy any canon release.
+The background is authoritative data. Shikai and Bankai must be two stages of one identity rooted in the wielder's history, values and limitations. Starting ownership: Shikai={bool(has_shikai)}, Bankai={bool(has_bankai)}. Even a powerful release needs a real Reiryoku cost and counterplay. Return JSON only."""
+            payload = {"background": str(background or ""), "schema": {key: "concise setting-native detail" for key in fallback}}
+            try:
+                raw = self.ai_bg.request(instructions, payload, max_output_tokens=700)
+                if isinstance(raw, dict):
+                    authored = {key: str(raw.get(key) or "").strip() for key in fallback if str(raw.get(key) or "").strip()}
+            except Exception as exc:
+                self._last_special_generation_error = str(exc)[:240]
+        profile = {**fallback, **authored, "stage": "Bankai" if has_bankai else "Shikai", "development_evidence": ["Established in the creation background"]}
+        return profile
+
     def generate_hidden_class(self, world, background, boost, primary_stats, stats, concealed=False):
         explicit_aspect = self.explicit_ability_aspect(background)
         aspect = explicit_aspect or self.ability_aspect(background)
@@ -1040,6 +1141,8 @@ Return JSON only, with no markdown."""
         elif archetype: skill_name = f"{archetype} Fundamentals"
         if world == "Naruto":
             title = self.naruto_identity_title(origin, start_location)
+        elif world == "Bleach":
+            title = str(origin or "Soul Reaper").strip()
         else:
             title_parts = [str(origin or "Local").strip()]
             if str(archetype or "Adventurer").strip().lower() not in title_parts[0].lower().split():
@@ -1052,7 +1155,9 @@ Return JSON only, with no markdown."""
         hidden_class = None
         generated_ability = None
         class_requested = allow_starting_specials and self.hidden_class_requested(background)
-        class_awarded = class_requested or (allow_starting_specials and random.random() < RANDOM_HIDDEN_CLASS_CHANCE)
+        # Bleach progression is expressed through the Zanpakuto relationship,
+        # releases and Kido—not a generic hidden-class card.
+        class_awarded = world != "Bleach" and (class_requested or (allow_starting_specials and random.random() < RANDOM_HIDDEN_CLASS_CHANCE))
         if class_awarded:
             hidden_class = self.generate_hidden_class(
                 world, background, boost, primary, adjusted,
@@ -1068,11 +1173,36 @@ Return JSON only, with no markdown."""
                 f"The {hidden_class['name']} class opens specialized practice routes"
             )
         ability_requested = allow_starting_specials and self.background_ability_requested(background)
-        ability_awarded = ability_requested or (allow_starting_specials and random.random() < RANDOM_STARTING_ABILITY_CHANCE)
+        ability_awarded = world != "Bleach" and (ability_requested or (allow_starting_specials and random.random() < RANDOM_STARTING_ABILITY_CHANCE))
         if ability_awarded:
             generated_ability = self.generate_background_ability(world, background, boost)
             skills[generated_ability["name"]] = copy.deepcopy(generated_ability["details"])
             self.install_background_ability_skills(skills, generated_ability)
+        bleach_release_profile = None
+        bleach_tracks = []
+        if world == "Bleach":
+            senior = "senior" in str(origin or "").lower()
+            skills.update(academy_kido_skills(archetype, senior=senior))
+            has_bankai = owns_release(background, "bankai")
+            has_shikai = has_bankai or owns_release(background, "shikai")
+            if has_shikai:
+                bleach_release_profile = self.generate_zanpakuto_profile(background, has_shikai=True, has_bankai=has_bankai)
+                skills[f"Shikai — {bleach_release_profile['shikai_name']}"] = {
+                    "rank": "Shikai", "bonus": 10 + boost // 20,
+                    "description": bleach_release_profile["shikai_effect"], "effect": bleach_release_profile["shikai_effect"],
+                    "limitation": bleach_release_profile["shikai_limitation"],
+                    "growth_path": "Deepen the Zanpakuto bond, develop applications and earn the Bankai prerequisites.",
+                    "combat_usable": True, "effect_type": "utility", "release_stage": "Shikai",
+                }
+                if has_bankai:
+                    skills[bleach_release_profile["bankai_name"]] = {
+                        "rank": "Bankai", "bonus": 14 + boost // 20,
+                        "description": bleach_release_profile["bankai_effect"], "effect": bleach_release_profile["bankai_effect"],
+                        "limitation": bleach_release_profile["bankai_cost"],
+                        "growth_path": "Extend safe duration, refine control and integrate Bankai without abandoning the Shikai's core identity.",
+                        "combat_usable": True, "effect_type": "utility", "release_stage": "Bankai",
+                    }
+            bleach_tracks = zanpakuto_tracks(has_shikai=has_shikai, has_bankai=has_bankai)
         specific_gear = WORLD_ARCHETYPE_GEAR.get(world, {}).get(archetype)
         equipment = {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])}
         hp_max, resource_max = self.derive_pools(world, adjusted)
@@ -1088,6 +1218,7 @@ Return JSON only, with no markdown."""
                 "starting_currency": starting_currency, "_base_stats": base_stats,
                 "_base_learning_rate": learning_rate,
                 "_boost": boost, "_core_skill_name": skill_name,
+                "bleach_release_profile": bleach_release_profile, "prerequisite_tracks": bleach_tracks,
                 "_background_supplied": bool(str(background or "").strip()),
                 **background_profile}
 
@@ -1127,6 +1258,17 @@ Return JSON only, with no markdown."""
                 stats[ability] = max(int(stats.get(ability, 1) or 1), int(minimum))
         merge(profile.setdefault("skills", {}), package.get("skills", {}))
         merge(profile.setdefault("equipment", {}), package.get("equipment", {}))
+        if world == "Bleach":
+            package.setdefault("special_patch", {})["Kido Curriculum"] = kido_reference_summary()
+            if int(profile.get("_boost", 0) or 0) >= 20:
+                package["special_patch"]["Squad Choice Privilege"] = "Exceptional talent — may choose among willing divisions after interviews"
+            release = profile.get("bleach_release_profile")
+            if isinstance(release, dict):
+                package["special_patch"].update({
+                    "Zanpakuto": release.get("name", "Named Zanpakuto"), "Zanpakuto Profile": copy.deepcopy(release),
+                    "Shikai": f"Achieved — {release.get('shikai_name', release.get('name', 'Named release'))}",
+                    "Bankai": release.get("bankai_name", "Achieved") if release.get("stage") == "Bankai" else "Unachieved",
+                })
         if package.get("title"):
             profile["titles"] = [package["title"]]
         if package.get("race"):
@@ -1283,6 +1425,13 @@ Return JSON only, with no markdown."""
         for ability, minimum in (scenario.get("stat_minimums") or {}).items():
             if ability in stats:
                 stats[ability] = max(int(stats.get(ability, 1) or 1), int(minimum))
+        # Floors suit most canon presets, but an exact opening can have a
+        # weakness just as important as its strengths. These overrides keep
+        # generic stat rolling from making an untrained Ichigo academy-level
+        # at Kidō or Hohō on the power-transfer night.
+        for ability, value in (scenario.get("stat_values") or {}).items():
+            if ability in stats:
+                stats[ability] = max(1, int(value))
         if isinstance(scenario.get("skills"), dict) and scenario["skills"]:
             normalized["skills"] = copy.deepcopy(scenario["skills"])
         if isinstance(scenario.get("equipment"), dict) and scenario["equipment"]:
@@ -1518,7 +1667,40 @@ Return JSON only, with no markdown."""
                     self.state.setdefault("reputation", {})[faction] = standing
                 if scenario.get("title"):
                     self.state["titles"] = [scenario["title"]]
+                if scenario.get("active_canon_event"):
+                    # A canon-character preset can begin inside the event
+                    # instead of one beat before it. Mark it fired so the
+                    # next Advance continues the live scene rather than
+                    # announcing the same timeline entry again.
+                    active_title = str(scenario["active_canon_event"])
+                    self.state["active_canon_event"] = active_title
+                    self.state["active_event_context"] = str(scenario.get("active_event_context") or "")
+                    self.state["active_event_prompt"] = str(scenario.get("active_event_prompt") or "")
+                    self.state["canon_events_fired"] = [active_title]
+                if isinstance(scenario.get("opening_combat"), dict):
+                    # Ichigo's only selectable canon start begins after the
+                    # power transfer, while Fishbone D is still attacking.
+                    # Seed the fight mechanically so the opening can never
+                    # turn it into a passive modal or a negotiable setup.
+                    self.state["combat"] = copy.deepcopy(scenario["opening_combat"])
             self.apply_start_package_to_state(profile.get("start_package", start_package))
+            if world == "Bleach":
+                release = profile.get("bleach_release_profile")
+                if isinstance(release, dict):
+                    self.state["special"].update({
+                        "Zanpakuto": release.get("name", "Named Zanpakuto"), "Zanpakuto Profile": copy.deepcopy(release),
+                        "Shikai": f"Achieved — {release.get('shikai_name', release.get('name', 'Named release'))}",
+                        "Bankai": release.get("bankai_name", "Achieved") if release.get("stage") == "Bankai" else "Unachieved",
+                    })
+                has_shikai = str(self.state["special"].get("Shikai", "")).lower() not in {"", "unachieved", "none"}
+                has_bankai = str(self.state["special"].get("Bankai", "")).lower() not in {"", "unachieved", "none"}
+                self.state["prerequisite_tracks"] = copy.deepcopy(
+                    profile.get("prerequisite_tracks") or zanpakuto_tracks(has_shikai, has_bankai)
+                )
+                # Soul Society campaigns use Kan mechanically; Yen remains a
+                # separate Living-World currency if later acquired.
+                if start not in {"Karakura Town", "Karakura High School", "Kurosaki Clinic", "Urahara Shop", "Naruki City"}:
+                    self.state["currency"] = {"name": "Kan", "amount": profile.get("starting_currency", 3000)}
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

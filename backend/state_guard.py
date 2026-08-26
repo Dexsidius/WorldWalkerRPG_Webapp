@@ -5,11 +5,13 @@ application-owned fields, change the clock outside Advance, or corrupt the save
 shape. Every accepted/rejected field is recorded for Diagnostics.
 """
 import copy
+import re
 from datetime import datetime
 
 from util import merge, ai_text
 from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for
 from knowledge import normalize_npc_knowledge
+from bleach_data import CANON_HADO, CANON_BAKUDO
 
 
 APP_OWNED = {
@@ -173,11 +175,76 @@ def _repair(state):
     return repairs
 
 
+_KIDO_SKILL_RE = re.compile(r"^(Had[ōo]|Bakud[ōo])\s*#\s*(\d{1,2})(?:\s*:\s*(.+))?$", re.I)
+
+
+def _repair_bleach_mechanics(state, before):
+    """Keep releases and numbered Kido persistent and source-consistent."""
+    if state.get("world") != "Bleach":
+        return []
+    repairs = []
+    skills = state.setdefault("skills", {})
+    previous = before.get("skills", {}) if isinstance(before.get("skills"), dict) else {}
+
+    def indexed(source):
+        result = {}
+        for name, detail in source.items():
+            match = _KIDO_SKILL_RE.match(str(name))
+            if match:
+                branch = "Hado" if match.group(1).lower().startswith("ha") else "Bakudo"
+                result[(branch, int(match.group(2)))] = (name, copy.deepcopy(detail))
+        return result
+
+    old_index, new_index = indexed(previous), indexed(skills)
+    for key, (name, detail) in list(new_index.items()):
+        branch, number = key
+        catalog = CANON_HADO if branch == "Hado" else CANON_BAKUDO
+        if number in catalog:
+            canon_name, canon_effect = catalog[number]
+            expected = f"{branch} #{number}: {canon_name}"
+            if name != expected:
+                skills.pop(name, None); skills[expected] = detail; name = expected
+                repairs.append(f"Restored the established name of {branch} #{number}")
+            if isinstance(skills[name], dict):
+                skills[name].setdefault("description", canon_effect)
+                skills[name].setdefault("effect", canon_effect)
+                skills[name]["kido"] = {"branch": branch, "number": number, "source_status": "established"}
+        elif key in old_index and old_index[key][0] != name:
+            skills.pop(name, None)
+            old_name, old_detail = old_index[key]
+            skills[old_name] = old_detail
+            repairs.append(f"Preserved the campaign's established {branch} #{number} formula")
+        elif isinstance(skills.get(name), dict):
+            skills[name]["kido"] = {"branch": branch, "number": number, "source_status": "campaign_original"}
+            skills[name].setdefault("limitation", "Casting requires sufficient Reiryoku, control and knowledge of the formula; chantless use is weaker until mastered.")
+            skills[name].setdefault("growth_path", "Refine the incantation, efficiency, chantless output and tactical applications.")
+        if not any(isinstance(row, dict) and row.get("name") == name for row in state.setdefault("codex", [])):
+            state["codex"].append({"name": name, "type": "Kido Spell", "notes": "A permanently recorded numbered formula in this campaign."})
+
+    special = state.setdefault("special", {})
+    shikai = str(special.get("Shikai", "Unachieved"))
+    bankai = str(special.get("Bankai", "Unachieved"))
+    shikai_ok = shikai.lower() not in {"", "none", "unknown", "unachieved"}
+    bankai_ok = bankai.lower() not in {"", "none", "unknown", "unachieved"}
+    if bankai_ok and not shikai_ok:
+        special["Bankai"] = "Unachieved"
+        bankai_ok = False
+        repairs.append("Blocked Bankai without an achieved Shikai")
+    profile = special.get("Zanpakuto Profile") if isinstance(special.get("Zanpakuto Profile"), dict) else {}
+    if shikai_ok and profile.get("shikai_name"):
+        skill_name = f"Shikai — {profile['shikai_name']}"
+        skills.setdefault(skill_name, {"rank":"Shikai", "bonus":10, "description":profile.get("shikai_effect", "The recorded first release of this Zanpakuto."), "effect":profile.get("shikai_effect", ""), "limitation":profile.get("shikai_limitation", "Consumes Reiryoku and requires release control."), "growth_path":"Deepen the bond and refine applications.", "combat_usable":True, "effect_type":"utility", "release_stage":"Shikai"})
+    if bankai_ok and profile.get("bankai_name"):
+        skills.setdefault(profile["bankai_name"], {"rank":"Bankai", "bonus":14, "description":profile.get("bankai_effect", "The recorded final release of this Zanpakuto."), "effect":profile.get("bankai_effect", ""), "limitation":profile.get("bankai_cost", "Consumes immense Reiryoku."), "growth_path":"Extend safe duration and mastery.", "combat_usable":True, "effect_type":"utility", "release_stage":"Bankai"})
+    return repairs
+
+
 def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     before = copy.deepcopy(state)
     safe, accepted, rejected = _normalize_patch(patch, state, allow_time, source)
     merge(state, safe)
     repairs = _repair(state)
+    repairs.extend(_repair_bleach_mechanics(state, before))
     knowledge_changes = normalize_npc_knowledge(state, before, source)
     if knowledge_changes:
         repairs.extend(f"Downgraded unsupported secret knowledge for {row['npc']} to a suspicion" for row in knowledge_changes)
@@ -204,6 +271,7 @@ def migrate_state(state, from_version="unknown"):
             "Hunter x Hunter": (("Strength", "Willpower"), ("Aura Control", "Willpower")),
             "Naruto": (("Taijutsu", "Willpower"), ("Chakra Control", "Ninjutsu")),
             "Reincarnated as a Slime": (("Instinct", "Willpower"), ("Magicule Control", "Skill Mastery")),
+            "Bleach": (("Hakuda", "Willpower"), ("Reiatsu Control", "Willpower")),
         }
         hp_keys, resource_keys = pool_map.get(world, (("Constitution", "Strength"), ("Wisdom", "Intelligence")))
         stats = migrated["stats"]

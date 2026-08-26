@@ -3403,9 +3403,9 @@ class WorldwalkerV260Tests(unittest.TestCase):
 
     def test_original_shinigami_one_year_before_start_lands_a_year_early(self):
         game = GameSession()
-        game.new_campaign("Traveler", "Bleach", "Adventurer", "", "", "", "Shino Academy Graduate", "Kido Caster",
+        game.new_campaign("Traveler", "Bleach", "Adventurer", "", "", "", "Recent Shin'o Academy Graduate", "Kido Caster",
                            {n: 30 for n in abilities_for("Bleach")}, start_location="Seireitei", starting_era_id="year_before_arrival")
-        self.assertEqual(game.state["canon_day"], -367)
+        self.assertEqual(game.state["canon_day"], -365)
         self.assertEqual(game.state["player_identity"]["mode"], "original")
         self.assertEqual(game.state["location"], "Seireitei")
 

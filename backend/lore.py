@@ -10,6 +10,7 @@ import re
 import copy
 from pathlib import Path
 from util import DATA_DIR, safe_filename
+from bleach_data import CANON_HADO, CANON_BAKUDO
 
 LORE_DIR = Path(__file__).resolve().parent.parent / "assets" / "lore"
 USER_LORE_DIR = DATA_DIR / "lore"
@@ -61,6 +62,18 @@ BUILTIN_LORE = {
         {"title":"Naming and evolution", "keys":"name naming monster evolve goblin ogre kijin magicules", "text":"Naming transfers magicules and can trigger monster evolution. The cost scales with the target and can exhaust or endanger the namer; mass naming requires exceptional reserves or recovery support."},
         {"title":"Demon Lord awakening", "keys":"demon lord seed harvest festival souls awakening", "text":"True Demon Lord awakening requires a valid seed plus the setting's soul/Harvest Festival conditions. Reputation or strength alone does not substitute, but a divergent player may fulfill those conditions."},
         {"title":"Resistances and analysis", "keys":"resistance immunity analysis great sage raphael consume predator", "text":"Resistance, analysis and absorption must come from acquired skills, species traits or evolution. Analysis does not grant knowledge beyond available observations and capabilities."},
+    ],
+    "Bleach": [
+        {"title":"Souls, realms and balance", "keys":"soul plus hollow konso purification world living soul society hueco mundo balance", "text":"Pluses pass to Soul Society through Konso. Hollows are purified by a Soul Reaper's Zanpakuto unless their mortal crimes instead condemn them. Soul Society, the Living World and Hueco Mundo are distinct realms; destroying souls rather than purifying them can destabilize their balance.", "source_type":"curated", "source":"Bleach source-material reference"},
+        {"title":"Reiryoku and Reiatsu", "keys":"reiryoku reiatsu spiritual pressure sensing capacity control suppress", "text":"Reiryoku is spiritual power held by a soul; Reiatsu is the pressure it exerts. Capacity, output and control are related but not identical. A severe pressure gap can impede movement or cause harm, while disciplined suppression can conceal strength.", "source_type":"curated", "source":"Bleach source-material reference"},
+        {"title":"Four Shinigami arts", "keys":"zanjutsu hakuda hoho shunpo kido academy shinigami soul reaper", "text":"Soul Reapers train Zanjutsu swordsmanship, Hakuda unarmed combat, Hoho movement and Kido spellcraft. Skill and specialization differ by individual; rank is institutional and should not replace current mechanical stats when comparing power.", "source_type":"curated", "source":"Bleach source-material reference"},
+        {"title":"Zanpakuto releases", "keys":"asauchi zanpakuto spirit inner world name command shikai bankai jinzen materialization", "text":"An Asauchi is imprinted by its wielder and becomes their Zanpakuto. Shikai follows communication and learning the true name; Bankai normally requires manifesting and subjugating the spirit and then years of mastery. A release expresses one coherent identity: Bankai evolves the established Shikai rather than becoming an unrelated power.", "source_type":"wiki", "source":"Bleach Wiki — Zanpakuto", "citation":"https://bleach.fandom.com/wiki/Zanpakut%C5%8D"},
+        {"title":"Kido curriculum", "keys":"kido hado bakudo spell incantation chantless numbers 1 99 learn research", "text":"Kido uses Reiryoku and is divided chiefly into offensive Hado and binding/support Bakudo. Number broadly signals difficulty and power. Full incantations support proper output; skilled casters can omit them at reduced power. Every Soul Reaper can study compatible spells—the system is not class-locked.", "source_type":"wiki", "source":"Bleach Wiki — Kido", "citation":"https://bleach.fandom.com/wiki/Kid%C5%8D"},
+        {"title":"Established numbered Hado", "keys":"hado sho byakurai tsuzuri raiden shakkaho okasen sokatsui haien tenran raikoho kurohitsugi", "text":"Established Hado: " + "; ".join(f"#{n} {name} — {effect}" for n, (name, effect) in sorted(CANON_HADO.items())) + " Numbers not shown in source material remain open campaign research slots: author one fitting permanent formula when discovered instead of declaring the number nonexistent.", "source_type":"wiki", "source":"Bleach Wiki — Kido", "citation":"https://bleach.fandom.com/wiki/Kid%C5%8D"},
+        {"title":"Established numbered Bakudo", "keys":"bakudo sai hainawa seki geki sekienton kyokko shitotsu sansen tsuriboshi enkosen rikujokoro danku kin bankin", "text":"Established Bakudo: " + "; ".join(f"#{n} {name} — {effect}" for n, (name, effect) in sorted(CANON_BAKUDO.items())) + " Numbers not shown in source material remain open campaign research slots and must persist once authored.", "source_type":"wiki", "source":"Bleach Wiki — Kido", "citation":"https://bleach.fandom.com/wiki/Kid%C5%8D"},
+        {"title":"Gotei 13 and squad placement", "keys":"gotei 13 squad division captain lieutenant seated officer graduate assignment academy", "text":"The Gotei 13 has thirteen divisions with captains, lieutenants, seated and unseated officers. Graduation does not mechanically dictate one division. Preferences, aptitude, recommendations, recruitment needs, interviews and captain decisions can all shape placement; exceptional candidates may receive competing offers.", "source_type":"wiki", "source":"Bleach Wiki — Gotei 13", "citation":"https://bleach.fandom.com/wiki/Gotei_13"},
+        {"title":"Realm travel", "keys":"senkaimon dangai garganta hueco mundo royal realm soul king palace travel gate", "text":"Senkaimon passages cross between the Living World and Soul Society through the Dangai. Garganta provides a route involving Hueco Mundo. The Royal Realm and hidden enemy domains require their own exceptional access. Map proximity never substitutes for the required gate or method.", "source_type":"curated", "source":"Bleach source-material reference"},
+        {"title":"Wandenreich war", "keys":"wandenreich sternritter quincy war invasion yhwach bankai steal soul king", "text":"The Wandenreich is a hidden Quincy empire led by Yhwach. Its invasion, Bankai theft and assault on the Soul King belong to the later Thousand-Year Blood War and must remain unrevealed to characters before discovery.", "source_type":"official_reference", "source":"Official BLEACH Thousand-Year Blood War story", "citation":"https://bleach-anime.com/en/story/story.html", "min_canon_day":930},
     ],
     "Custom World": [
         {"title":"Setting consistency", "keys":"power magic technology learn copy ability rule", "text":"Treat demonstrated capabilities as reproducible when the custom world's stated prerequisites are met. Establish new restrictions consistently and record them in the codex rather than inventing one-off denials."},
@@ -208,7 +221,8 @@ def _cache_key(world, query, state, limit):
     # not. A normalized keyword key lets repeated questions/actions reuse the
     # same ranked evidence without retaining any campaign secrets globally.
     terms = sorted(set(re.findall(r"[a-z0-9'-]{3,}", str(query or "").lower())))[:40]
-    return (str(world), tuple(terms), location, tuple(skill_names), int(limit), _LORE_CACHE_STATS["generation"])
+    canon_day = int((state or {}).get("canon_day", -10**9) or -10**9)
+    return (str(world), tuple(terms), location, tuple(skill_names), canon_day, int(limit), _LORE_CACHE_STATS["generation"])
 
 
 def retrieve_lore(world, query, state=None, limit=5):
@@ -217,7 +231,9 @@ def retrieve_lore(world, query, state=None, limit=5):
         _LORE_CACHE_STATS["hits"] += 1
         return copy.deepcopy(_LORE_CACHE[key])
     _LORE_CACHE_STATS["misses"] += 1
-    entries = all_lore_entries(world)
+    current_day = int((state or {}).get("canon_day", -10**9) or -10**9)
+    entries = [entry for entry in all_lore_entries(world)
+               if int(entry.get("min_canon_day", -10**9) or -10**9) <= current_day]
     query_blob = " ".join([str(query or ""), str((state or {}).get("location", "")), " ".join((state or {}).get("skills", {}).keys())]).lower()
     terms = set(re.findall(r"[a-z0-9'-]+", query_blob))
     ranked = []

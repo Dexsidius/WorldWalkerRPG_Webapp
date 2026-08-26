@@ -161,6 +161,7 @@ POOL_STATS = {
     "Solo Max-Level Newbie": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
     "Overgeared": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
     "Reincarnated as a Slime": (("Instinct", "Willpower"), ("Magicule Control", "Skill Mastery")),
+    "Bleach": (("Hakuda", "Willpower"), ("Reiatsu Control", "Willpower")),
     "Custom World": (("Constitution", "Strength"), ("Wisdom", "Intelligence")),
 }
 

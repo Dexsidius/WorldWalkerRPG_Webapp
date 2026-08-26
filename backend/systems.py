@@ -50,7 +50,7 @@ WORLD_TERRITORIES = {
     # at this world's default campaign start (pre-Aizen-reveal), who
     # actually holds it isn't public knowledge yet, and seeding one would
     # spoil the Soul Society arc's own twist before the story gets there.
-    "Bleach": {"Seireitei": "Gotei 13", "Rukongai": "Gotei 13", "Shino Academy": "Gotei 13",
+    "Bleach": {"Seireitei": "Gotei 13", "Rukongai": "Gotei 13", "Shin'o Academy": "Gotei 13",
                "Senzaikyu": "Central 46", "Central 46 Chambers": "Central 46"},
     "Custom World": {"Starting Region": "Local Faction"},
 }

@@ -101,6 +101,30 @@ def _map_nodes(world):
 
 def _route_requirement(a, b, world):
     kinds = {a.get("kind", ""), b.get("kind", "")}
+    if world == "Bleach":
+        living = {"Karakura Town", "Karakura High School", "Kurosaki Clinic", "Urahara Shop", "Naruki City", "Urahara Training Grounds"}
+        transit = {"Senkaimon", "Dangai", "Garganta", "Valley of Screams"}
+        hueco = {"Hueco Mundo Desert", "Forest of Menos", "Las Noches"}
+        royal = {"Soul King Palace", "Royal Guard Domains", "Wahrwelt"}
+        enemy = {"Silbern"}
+        def realm(name):
+            if name in living: return "Living World"
+            if name in transit: return "Inter-realm passage"
+            if name in hueco: return "Hueco Mundo"
+            if name in royal: return "Royal Realm"
+            if name in enemy: return "Hidden Quincy domain"
+            if name == "Gates of Hell": return "Hell"
+            return "Soul Society"
+        ra, rb = realm(a["name"]), realm(b["name"])
+        if ra != rb:
+            joined = {ra, rb}
+            if "Hueco Mundo" in joined: return "Open or obtain access to a Garganta"
+            if "Royal Realm" in joined: return "Royal Guard authorization, Oken access, or another established Royal Realm route"
+            if "Hidden Quincy domain" in joined: return "Discover and breach the Wandenreich's shadow route"
+            if "Hell" in joined: return "A canon-valid opening of the Gates of Hell"
+            if joined <= {"Living World", "Soul Society", "Inter-realm passage"}: return "Use a Senkaimon and cross the Dangai"
+        if a["name"] in {"Muken", "Maggot's Nest", "Central 46 Chambers", "Senzaikyu"} or b["name"] in {"Muken", "Maggot's Nest", "Central 46 Chambers", "Senzaikyu"}:
+            return "Official clearance, an authorized escort, or a credible covert route"
     if world == "Solo Max-Level Newbie" and (a["name"].startswith("Floor ") or b["name"].startswith("Floor ")):
         return "Clear each intervening floor"
     if "sky" in kinds: return "A sky route or flight-capable transport"

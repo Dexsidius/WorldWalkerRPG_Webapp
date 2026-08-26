@@ -43,6 +43,7 @@ DEFAULT_SETTINGS = {
     "local_image_model": "",
     "portrait_quality": "low",
     "simulation_mode": "balanced",
+    "canon_foreknowledge": False,
     "developer_mode": False,
     "onboarding_seen": False,
 }
@@ -72,6 +73,7 @@ POOL_STATS = {
     "Solo Max-Level Newbie": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
     "Overgeared": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
     "Reincarnated as a Slime": (("Instinct", "Willpower"), ("Magicule Control", "Skill Mastery")),
+    "Bleach": (("Hakuda", "Willpower"), ("Reiatsu Control", "Willpower")),
     "Custom World": (("Constitution", "Strength"), ("Wisdom", "Intelligence")),
 }
 
@@ -731,7 +733,8 @@ CUSTOM SETTING: {self.state.get('custom_world', '')}
 DIFFICULTY: {self.state['difficulty']} — {difficulty['description']}
 PROGRESSION: {profile['label']}; training x{tuning['training_rate']}, breakthrough x{tuning['breakthrough_rate']}, XP x{tuning['xp_rate']} only where canonical XP exists.
 NARRATION: {narration}
-WORLD ABILITIES: {self.ability_enum()}
+	WORLD ABILITIES: {self.ability_enum()}
+	CANON KNOWLEDGE MODE: {"Full canon foreknowledge enabled for the player UI; NPC knowledge still remains in-character." if self.settings.get("canon_foreknowledge") else "Spoiler-safe character knowledge; never reveal future secrets before this campaign discovers them."}
 
 AUTHORITATIVE CORE
 - Resolve what the player actually said. Every action gets a concrete success, specific failure/partial result, or exact world-rule reason it is impossible. Never downgrade action into mere preparation.
