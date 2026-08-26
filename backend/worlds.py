@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.12.2"
+APP_VERSION = "3.12.3"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's

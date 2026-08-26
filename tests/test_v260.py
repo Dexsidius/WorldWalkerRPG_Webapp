@@ -894,6 +894,16 @@ class WorldwalkerV260Tests(unittest.TestCase):
             self.assertIn(f'data-effect="{weather}"', css)
         self.assertIn("prefers-reduced-motion:reduce", css)
 
+    def test_naruto_ambient_uses_falling_sakura_instead_of_chakra_motes(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn('s?.world === "Naruto" ? "sakura"', js)
+        self.assertIn('if (s?.world === "Naruto") return "sakura";', js)
+        self.assertIn('mode === "sakura" ? 24 : 18', js)
+        self.assertIn('mode === "sakura" ? 16 : 12', js)
+        self.assertIn('.ambient-fx[data-effect="sakura"]', css)
+        self.assertIn("@keyframes ambientSakura", css)
+
     def test_native_map_ambient_tracks_critical_nodes_without_iframes(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")

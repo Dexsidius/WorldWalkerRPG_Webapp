@@ -6,7 +6,7 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.12.2** (schema 14).
+Current app/save version: **3.12.3** (schema 14).
 
 Version 3.12 separates literal System quests from ordinary story goals.
 Overgeared and Solo Max-Level Newbie retain objective progress, completion

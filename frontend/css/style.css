@@ -476,6 +476,8 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 .ambient-fx[data-effect="wind"] i{ width:clamp(18px,calc(var(--size) * 5),50px); height:1px; border-radius:0; background:linear-gradient(90deg,transparent,#d9f6ff,transparent); box-shadow:none; animation-name:ambientWind; }
 .ambient-fx[data-effect="leaves"]{ --ambient-color:#91ca69; --ambient-color-2:#e2b65f; }
 .ambient-fx[data-effect="leaves"] i{ width:calc(var(--size) * 1.7); height:calc(var(--size) * .65); border-radius:100% 0 100% 0; background:linear-gradient(135deg,var(--ambient-color),var(--ambient-color-2)); box-shadow:none; animation-name:ambientLeaf; }
+.ambient-fx[data-effect="sakura"]{ --ambient-color:#ffb7cf; --ambient-color-2:#ffe0ea; opacity:.78; mix-blend-mode:normal; }
+.ambient-fx[data-effect="sakura"] i{ width:calc(var(--size) * 1.45); height:var(--size); border-radius:90% 12% 85% 18%; background:radial-gradient(circle at 72% 28%,var(--ambient-color-2) 0 17%,var(--ambient-color) 45%,#e982aa 100%); box-shadow:0 1px 2px rgba(103,30,62,.22); transform-origin:65% 40%; animation-name:ambientSakura; }
 .ambient-fx[data-effect="bubbles"] i{ border:1px solid #c4f5ff; background:transparent; box-shadow:inset 0 0 4px rgba(170,242,255,.7); }
 .ambient-fx[data-effect="chakra"]{ --ambient-color:#65b9ff; --ambient-color-2:#e5f4ff; }
 .ambient-fx[data-effect="spirit"]{ --ambient-color:#eefaff; --ambient-color-2:#70d8ff; }
@@ -491,6 +493,7 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 @keyframes ambientTwinkle{ 0%,100%{ opacity:.12; transform:scale(.55); } 45%{ opacity:.95; transform:scale(1.15); } }
 @keyframes ambientWind{ from{ transform:translate3d(-100px,0,0); opacity:0; } 20%{ opacity:.45; } to{ transform:translate3d(520px,var(--drift),0); opacity:0; } }
 @keyframes ambientLeaf{ from{ transform:translate3d(-60px,-30px,0) rotate(0); } to{ transform:translate3d(480px,180px,0) rotate(620deg); } }
+@keyframes ambientSakura{ 0%{ transform:translate3d(-25px,-65px,0) rotate(0) rotateY(0); opacity:0; } 12%{ opacity:.88; } 45%{ transform:translate3d(calc(var(--drift) * .35),70px,0) rotate(190deg) rotateY(135deg); } 72%{ transform:translate3d(calc(var(--drift) * -.2),150px,0) rotate(330deg) rotateY(245deg); opacity:.8; } 100%{ transform:translate3d(var(--drift),265px,0) rotate(540deg) rotateY(360deg); opacity:0; } }
 @keyframes ambientPulseRise{ 0%{ transform:translate3d(0,18px,0) scale(.45); opacity:0; } 40%{ opacity:.85; } 70%{ transform:translate3d(var(--drift),-65px,0) scale(1.25); opacity:.45; } 100%{ transform:translate3d(calc(var(--drift) * .7),-115px,0) scale(.3); opacity:0; } }
 @keyframes ambientSystem{ 0%{ transform:translate3d(0,30px,0) rotate(45deg); opacity:0; } 40%{ opacity:.8; } 52%{ transform:translate3d(var(--drift),-28px,0) rotate(45deg); opacity:.1; } 58%{ opacity:.85; } 100%{ transform:translate3d(var(--drift),-105px,0) rotate(225deg); opacity:0; } }
 @keyframes stormFlash{ 0%,8%,11%,100%{ opacity:0; } 9%{ opacity:.32; } 10%{ opacity:.08; } }

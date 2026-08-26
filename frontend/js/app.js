@@ -1416,14 +1416,15 @@ function ambientModeFor(category, weather, s) {
   const weatherMode = weatherKeyFor(weather);
   if (weatherMode) return weatherMode;
   if (s?.combat?.active || ["duel", "monster_battlefield", "battlefield_dusk"].includes(category)) return "sparks";
-  if (activityFor(s) === "training") return s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "chakra" : "energy";
+  if (activityFor(s) === "training") return s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "sakura" : "energy";
   if (FIRE_SCENES.has(category)) return "embers";
   if (STAR_SCENES.has(category)) return "stars";
   if (WIND_SCENES.has(category)) return category === "forest_path" ? "leaves" : "wind";
   if (category === "rain_city") return "rain";
   if (category === "underwater") return "bubbles";
   if (s?.world === "One Piece") return "wind";
-  if (s?.world === "Hunter x Hunter" || s?.world === "Naruto") return "leaves";
+  if (s?.world === "Naruto") return "sakura";
+  if (s?.world === "Hunter x Hunter") return "leaves";
   if (s?.world === "Overgeared") return "embers";
   if (s?.world === "Bleach") return "spirit";
   if (s?.world === "Solo Max-Level Newbie") return "system";
@@ -1463,14 +1464,15 @@ function applyNativeSceneFx(category, weather, s) {
   document.body.setAttribute("data-time", time);
   layer.dataset.time = time;
   layer.dataset.activity = activityFor(s);
-  fillAmbientLayer(layer, mode, mode === "rain" || mode === "snow" ? 26 : 18, `${s?.world}:${category}:${mode}`);
+  const count = mode === "rain" || mode === "snow" ? 26 : mode === "sakura" ? 24 : 18;
+  fillAmbientLayer(layer, mode, count, `${s?.world}:${category}:${mode}`);
 }
 
 function applyPortraitAmbient(s) {
   const layer = $("#portrait-ambient");
   if (!layer) return;
-  const mode = s?.combat?.active ? "sparks" : s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "chakra" : s?.world === "Solo Max-Level Newbie" ? "system" : s?.world === "Overgeared" ? "embers" : s?.world === "Reincarnated as a Slime" ? "magic" : s?.world === "One Piece" ? "wind" : "motes";
-  fillAmbientLayer(layer, mode, 12, `portrait:${s?.world}:${mode}`);
+  const mode = s?.combat?.active ? "sparks" : s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "sakura" : s?.world === "Solo Max-Level Newbie" ? "system" : s?.world === "Overgeared" ? "embers" : s?.world === "Reincarnated as a Slime" ? "magic" : s?.world === "One Piece" ? "wind" : "motes";
+  fillAmbientLayer(layer, mode, mode === "sakura" ? 16 : 12, `portrait:${s?.world}:${mode}`);
 }
 
 function applyNativeMapFx(nodes) {
