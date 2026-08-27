@@ -9,6 +9,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 from jjk_system import (advance_jjk_state, generate_birth_slot, initialize_jjk_state,
                         normalize_birth_slot_package)
+from game import GameSession
 from worlds import BASE_STATE, abilities_for
 from util import scene_image_url
 
@@ -26,6 +27,22 @@ def jjk_state(slot=None, origin="Tokyo Jujutsu High — First Year", background=
 
 
 class WorldwalkerV3270JjkDepthTests(unittest.TestCase):
+    def test_jjk_starting_gear_is_not_mislabeled_as_a_weapon(self):
+        game = GameSession()
+        stats = {name: 30 for name in abilities_for("Jujutsu Kaisen")}
+        profile = game.infer_starting_profile(
+            "Jujutsu Kaisen", "Tokyo Jujutsu High — First Year", "Jujutsu Sorcerer",
+            "A new student with a sound technique.", stats, start_location="Tokyo Jujutsu High",
+        )
+        self.assertIn("Field Gear", profile["equipment"])
+        self.assertNotIn("Weapon", profile["equipment"])
+
+    def test_jjk_creation_and_preview_use_clear_labels(self):
+        source = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('world === "Jujutsu Kaisen" ? "Starting Placement" : "Starting Location"', source)
+        self.assertIn("Starting attributes", source)
+        self.assertNotIn("Open-ended starting abilities", source)
+
     def test_ai_rename_rebuilds_the_whole_technique_package(self):
         fallback = generate_birth_slot("A shadow technique", seed="old")
         updated = normalize_birth_slot_package({

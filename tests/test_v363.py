@@ -26,7 +26,7 @@ class WorldwalkerV363Tests(unittest.TestCase):
         return game
 
     def test_version_and_danger_state_schema(self):
-        self.assertEqual(APP_VERSION, "3.26.0")
+        self.assertEqual(APP_VERSION, "3.27.0")
         self.assertEqual(BASE_STATE["schema_version"], 19)
         self.assertEqual(BASE_STATE["danger_scenario"], {})
 

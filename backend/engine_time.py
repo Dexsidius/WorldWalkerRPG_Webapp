@@ -1549,14 +1549,16 @@ class TimeSkipMixin:
             if not amount:
                 continue
             sign = -1 if str(entry.get("kind", "income")).lower() == "expense" else 1
-            paid_cycles = 0
-            total = 0.0
-            # Capped so a save with a stale/misconfigured entry (or a
-            # multi-year time skip) can't spin here indefinitely.
-            while (next_due * 1440 + 480) <= after_minutes and paid_cycles < 240:
-                total += amount
-                next_due += interval
-                paid_cycles += 1
+            due_minute = next_due * 1440 + 480
+            if due_minute > after_minutes:
+                continue
+            # Calculate catch-up in constant time.  The old defensive loop
+            # stopped after 240 payments, so a daily income over a one-year
+            # skip paid only 240 days and left the rest to leak into later
+            # turns.  Arithmetic is both safer and exact for long campaigns.
+            paid_cycles = ((after_minutes - due_minute) // (interval * 1440)) + 1
+            total = amount * paid_cycles
+            next_due += interval * paid_cycles
             if not paid_cycles:
                 continue
             currency["amount"] = currency.get("amount", 0) + sign * total

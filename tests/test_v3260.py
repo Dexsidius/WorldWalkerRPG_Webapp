@@ -29,7 +29,7 @@ class WorldwalkerV3260RecurringFinancePersistenceTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.26.0")
+        self.assertEqual(APP_VERSION, "3.27.0")
 
     def test_unmentioned_income_survives_an_unrelated_recurring_finances_patch(self):
         """The real bug: establishing a second income source later, without
@@ -71,6 +71,47 @@ class WorldwalkerV3260RecurringFinancePersistenceTests(unittest.TestCase):
         ]}, allow_time=False)
         self.assertEqual(len(game.state["recurring_finances"]), 1)
         self.assertEqual(game.state["recurring_finances"][0]["amount"], 450)
+
+    def test_partial_update_keeps_existing_schedule_fields(self):
+        game = self.fresh()
+        game.state["recurring_finances"] = [
+            {"label": "Chunin instructor salary", "kind": "income", "amount": 300,
+             "interval_days": 30, "next_due_day": 30, "active": True,
+             "notes": "Original appointment"},
+        ]
+        apply_guarded_patch(game.state, {"recurring_finances": [
+            {"label": "Chunin instructor salary", "amount": 450},
+        ]}, allow_time=False)
+        entry = game.state["recurring_finances"][0]
+        self.assertEqual(entry["amount"], 450)
+        self.assertEqual(entry["kind"], "income")
+        self.assertEqual(entry["interval_days"], 30)
+        self.assertEqual(entry["next_due_day"], 30)
+        self.assertEqual(entry["notes"], "Original appointment")
+
+    def test_harmless_label_punctuation_does_not_duplicate_income(self):
+        game = self.fresh()
+        game.state["recurring_finances"] = [
+            {"label": "Chunin instructor salary", "kind": "income", "amount": 300,
+             "interval_days": 30, "next_due_day": 30, "active": True},
+        ]
+        apply_guarded_patch(game.state, {"recurring_finances": [
+            {"label": "Chunin instructor salary!", "amount": 450},
+        ]}, allow_time=False)
+        self.assertEqual(len(game.state["recurring_finances"]), 1)
+        self.assertEqual(game.state["recurring_finances"][0]["amount"], 450)
+
+    def test_daily_income_catches_up_a_full_year_without_truncation(self):
+        game = self.fresh()
+        game.state["currency"] = {"name": "Ryo", "amount": 0}
+        game.state["recurring_finances"] = [
+            {"label": "Daily stall", "kind": "income", "amount": 10,
+             "interval_days": 1, "next_due_day": 1, "active": True},
+        ]
+        notes = game._pay_recurring_finances(365 * 1440 + 480)
+        self.assertEqual(game.state["currency"]["amount"], 3650)
+        self.assertEqual(game.state["recurring_finances"][0]["next_due_day"], 366)
+        self.assertIn("x365 cycles", notes[0]["text"])
 
     def test_scheduled_events_get_the_same_omission_protection(self):
         game = self.fresh()
@@ -122,6 +163,18 @@ class WorldwalkerV3260TradeAndFactionConflictTests(unittest.TestCase):
         self.assertIn("contested_location", game.task_rules("time_skip"))
         self.assertNotIn("contested_location", game.task_rules("combat_summary"))
         self.assertNotIn("contested_location", game.task_rules("opening"))
+
+
+class WorldwalkerV3260PlaytestPresentationTests(unittest.TestCase):
+    def test_queue_preview_does_not_call_routine_training_uncertain(self):
+        source = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('"Focused growth"', source)
+        self.assertNotIn('? "Uncertain" : "Routine"', source)
+
+    def test_sticky_modal_header_has_an_opaque_surface(self):
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        modal_head = css.split(".modal-head{", 1)[1].split("}", 1)[0]
+        self.assertIn("rgba(var(--glass-rgb),.98)", modal_head)
 
 
 if __name__ == "__main__":

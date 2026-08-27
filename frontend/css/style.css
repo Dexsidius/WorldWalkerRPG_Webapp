@@ -978,7 +978,7 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
   display:flex; align-items:center; justify-content:space-between; padding:16px 20px;
   font-family:var(--font-display); font-weight:700; font-size:16px; color:var(--gold);
   border-bottom:1px solid var(--border-soft); position:sticky; top:0;
-  background:linear-gradient(180deg, rgba(var(--accent-rgb),.14), transparent); z-index:2;
+  background:linear-gradient(180deg, rgba(var(--accent-rgb),.18), rgba(var(--glass-rgb),.98)),rgba(var(--glass-rgb),.98); z-index:2;
 }
 .danger-head{ color:#ffb3ae; }
 .modal-close{ background:transparent; border:none; color:var(--sub); font-size:16px; }

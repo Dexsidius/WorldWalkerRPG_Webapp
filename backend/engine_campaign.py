@@ -113,6 +113,7 @@ def starter_skill_description(world, archetype, skill_name):
         "Overgeared": "Covers the concrete class actions, equipment handling, and Satisfy systems expected of a beginning player in this role.",
         "Reincarnated as a Slime": "Covers the species traits, magicule awareness, and survival behaviors the character can currently use and explain.",
         "Bleach": "Covers the spiritual awareness, movement, combat safety, and established techniques appropriate to the character's current station.",
+        "Jujutsu Kaisen": "Covers cursed-energy safety, reinforcement, curse awareness, and the field habits appropriate to the character's current training.",
         "Custom World": "Covers the concrete tools, methods, and limits established for this role in the campaign's world.",
     }
     return defaults.get(world, f"Applies the practical tools and methods represented by {skill_name}.")
@@ -1582,9 +1583,11 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                                       normalized_grade(jjk_curse_grade) if is_curse_origin(origin) else "")
             adjusted, skills = staged["stats"], staged["skills"]
         specific_gear = WORLD_ARCHETYPE_GEAR.get(world, {}).get(archetype)
-        equipment = ({"Natural Weapon":"Manifested cursed body"}
-                     if world == "Jujutsu Kaisen" and is_curse_origin(origin)
-                     else {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])})
+        if world == "Jujutsu Kaisen":
+            equipment = ({"Natural Weapon":"Manifested cursed body"} if is_curse_origin(origin) else
+                         {"Field Gear":WORLD_STARTER_GEAR["Jujutsu Kaisen"]})
+        else:
+            equipment = {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])}
         hp_max, resource_max = self.derive_pools(world, adjusted)
         if world == "Jujutsu Kaisen" and (jjk_guarantee_strong or is_curse_origin(origin)):
             band = power_profile_for(world, adjusted, archetype).get("overall", {}).get("name", band)

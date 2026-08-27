@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.22.0** (schema 18).
+Current app/save version: **3.27.0** (schema 19).
+
+Version 3.27 deepens Jujutsu Kaisen play with coherent generated technique
+packages, persistent mastery tracks, binding vows, technique intelligence,
+Black Flash records, grade evidence, clan obligations, curse growth, soul and
+possession state, role-specific opening missions, a clearer progression
+journal, and four optimized setting scenes. It also fixes full-year recurring
+finance calculations, partial finance updates and duplicate labels, improves
+mobile modal readability, and replaces misleading queued-action risk labels.
 
 Version 3.22 adds a complete Jujutsu Kaisen world with Tokyo and Kyoto school
 starts for all three years, independent curse users, great-clan members,

@@ -233,17 +233,27 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
             # way an entry actually goes away is the GM explicitly marking
             # it (active:false / resolved:true) or a player correction.
             def _label(entry):
-                return str((entry or {}).get("label") or (entry or {}).get("title") or "").strip().lower()
+                raw = str((entry or {}).get("label") or (entry or {}).get("title") or "").casefold()
+                # Models occasionally vary harmless punctuation/casing when
+                # recalling a label. Treat "Instructor salary" and
+                # "Instructor salary!" as the same persistent source.
+                return re.sub(r"[\W_]+", " ", raw, flags=re.UNICODE).strip()
             existing = before.get(key) if isinstance(before.get(key), list) else []
             existing_by_label = {_label(e): e for e in existing if isinstance(e, dict) and _label(e)}
-            merged, seen = [], set()
+            merged, seen, positions = [], set(), {}
             for entry in value:
                 if not isinstance(entry, dict):
                     continue
                 label = _label(entry)
+                if label and label in positions:
+                    merge(merged[positions[label]], entry)
+                    continue
+                combined = copy.deepcopy(existing_by_label.get(label, {})) if label else {}
+                merge(combined, entry)
                 if label:
                     seen.add(label)
-                merged.append(entry)
+                    positions[label] = len(merged)
+                merged.append(combined)
             for label, old_entry in existing_by_label.items():
                 if label not in seen:
                     merged.append(old_entry)
