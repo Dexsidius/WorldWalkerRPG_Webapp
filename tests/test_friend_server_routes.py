@@ -133,6 +133,8 @@ class FriendServerRouteTests(unittest.TestCase):
             assert friend_state["name"] == "Konan", friend_state["name"]
             assert host_state["queued_actions"] == ["Address the gathered rebels"]
             assert friend_state["queued_actions"] == ["Scout Hanzo's patrols"]
+            assert host_state["_multiplayer_chronicle"] == []
+            assert friend_state["_multiplayer_chronicle"] == []
 
             denied = friend.post("/api/multiplayer/time", json={"amount":7,"unit":"days"}, headers=f)
             assert denied.status_code == 400

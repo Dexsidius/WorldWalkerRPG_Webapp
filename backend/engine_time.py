@@ -792,11 +792,25 @@ class TimeSkipMixin:
             payload["requirements"].extend([
                 "This is one shared multiplayer turn. Every planned action begins with its controlling character's name. Resolve each ready character as an independent protagonist; characters marked passes=true or connected=false take no deliberate action and must never repeat old standing orders.",
                 "Tag every relevant update title or related_action with the acting character. Preserve one shared clock and world continuity even if the characters are in different scenes.",
+                "Enforce information boundaries between player characters. A local/private scene is visible only to its actor and characters physically present at that location. A distant character learns it only through a modeled conversation, witness, letter, message, rumor, report, broadcast, research or established perception ability. Never make both players omniscient merely because they share a campaign.",
+                "For EVERY update, return actor_user_id (or empty for a world-only event), the event location/sublocation, information_scope, delivery_channel and audience_user_ids using ONLY the exact supplied multiplayer user IDs. audience_user_ids must list every player who can perceive or has plausibly received that information, and nobody else. Use information_scope local/private for firsthand scenes, reported/rumor for delivered information, and shared/global only for events both genuinely know.",
+                "If an interruption or decision point concerns only one separated character, list only that character in interruption_user_ids. The other player's simulation may stop on the shared clock but must not receive the hidden context or prompt.",
                 "Return multiplayer_character_updates keyed by the supplied user_id. Include only that character's changed mechanical fields (stats, pools, status, location, skills, titles, inventory, equipment, special abilities, level/XP and activity); never put shared world facts there.",
             ])
+            updates_schema = payload.setdefault("schema", {}).get("updates")
+            if isinstance(updates_schema, list) and updates_schema and isinstance(updates_schema[0], dict):
+                updates_schema[0].update({
+                    "actor_user_id": "exact multiplayer user_id responsible/centered in this beat, or empty for a world-only event",
+                    "location": "exact place where the beat occurs",
+                    "sublocation": "room/district/site when known, or empty",
+                    "information_scope": "private|local|reported|rumor|shared|global",
+                    "delivery_channel": "firsthand|conversation|witness|letter|message|rumor|report|news|broadcast|ability|research",
+                    "audience_user_ids": "exact supplied user IDs who can currently know this update",
+                })
             payload.setdefault("schema", {})["multiplayer_character_updates"] = {
                 "user_id": "changed character fields only; one object per participant"
             }
+            payload["schema"]["interruption_user_ids"] = "exact supplied user IDs who personally receive the interruption context/prompt"
         use_major_model = bool(event_mode or canon_stop or any(bool(chk.get("major_event")) for chk in checks))
         narrator_client = self.ai_major if use_major_model and self.settings.get("major_event_model") else self.ai
         task = "major_event" if (event_mode or canon_stop) else ("moment" if moment_mode else "time_skip")
@@ -1813,6 +1827,8 @@ class TimeSkipMixin:
                 "elapsed": data.get("elapsed", {"amount": requested_amount, "unit": requested_unit}),
                 "interruption_reason": data.get("interruption_reason", ""),
                 "interruption_kind": data.get("interruption_kind", ""),
+                "interruption_user_ids": copy.deepcopy(data.get("interruption_user_ids"))
+                if isinstance(data.get("interruption_user_ids"), list) else None,
                 "interruption_context": data.get("interruption_context", ""),
                 "intervention_prompt": data.get("intervention_prompt", ""),
                 "danger_notice_required": danger_notice_required,

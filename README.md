@@ -6,7 +6,14 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.18.0** (schema 16).
+Current app/save version: **3.18.1** (schema 16).
+
+Version 3.18.1 gives each multiplayer character a durable, proximity-aware
+Chronicle. Local scenes reach characters who are present, private moments stay
+private, distant information can arrive through messages, reports, rumors or
+broadcasts, and genuinely shared events reach both players. Each account's
+filtered history survives refreshes and server restarts, with Nearby, Reported
+and Shared markers explaining how the character learned each update.
 
 Version 3.18 adds durable two-player campaigns to the hosted friend server.
 The host shares a copy of any current campaign with a six-character invite

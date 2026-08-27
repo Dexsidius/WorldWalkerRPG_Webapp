@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
 from friend_accounts import FriendAccountStore, FriendGameRegistry
-from multiplayer import MultiplayerStore, player_view
+from multiplayer import MultiplayerStore, player_view, split_player_results
 from worlds import BASE_STATE
 
 
@@ -109,6 +109,82 @@ class MultiplayerStoreTests(unittest.TestCase):
         self.assertFalse(status["your_ready"])
         self.assertEqual(status["result"]["story"][0]["text"], "The world moves.")
         self.assertGreaterEqual(status["seconds_left"], 590)
+
+    def test_each_player_receives_a_durable_proximity_aware_chronicle(self):
+        room_id, _ = self.create_and_join()
+        host_character = self.store.member(room_id, self.host["id"])["character"]
+        friend_character = self.store.member(room_id, self.friend["id"])["character"]
+        host_character.update(location="Konoha", sublocation="Eastern Gate")
+        friend_character.update(location="Sunagakure", sublocation="Market Road")
+        characters = {self.host["id"]: host_character, self.friend["id"]: friend_character}
+        self.store.save_characters(room_id, characters)
+        participants = self.store.resolution_plan(room_id)["participants"]
+        result = {
+            "status": "resolved",
+            "story": [
+                {"text": "[KONOHA WATCH] Yahiko questions the eastern gate guards.", "tag": "narrative"},
+                {"text": "[DESERT CARAVAN] Konan finds a damaged caravan outside the market.", "tag": "narrative"},
+                {"text": "[VILLAGE BROADCAST] Every great village receives the same emergency warning.", "tag": "canon_event"},
+                {"text": "[SEALED REPORT] A messenger tells Konan what happened at the border.", "tag": "system"},
+            ],
+            "updates": [
+                {"title": "Konoha Watch", "type": "action", "actor_user_id": self.host["id"],
+                 "location": "Konoha", "sublocation": "Eastern Gate", "information_scope": "local",
+                 "delivery_channel": "witness", "audience_user_ids": [self.host["id"]]},
+                {"title": "Desert Caravan", "type": "action", "actor_user_id": self.friend["id"],
+                 "location": "Sunagakure", "sublocation": "Market Road", "information_scope": "local",
+                 "delivery_channel": "witness", "audience_user_ids": [self.friend["id"]]},
+                {"title": "Village Broadcast", "type": "canon event", "information_scope": "global",
+                 "delivery_channel": "broadcast", "audience_user_ids": [self.host["id"], self.friend["id"]]},
+                {"title": "Sealed Report", "type": "world event", "information_scope": "reported",
+                 "delivery_channel": "message", "audience_user_ids": [self.friend["id"]]},
+            ],
+        }
+        personal = split_player_results(result, participants, characters, self.host["id"])
+        host_text = " ".join(entry["text"] for entry in personal[self.host["id"]]["story"])
+        friend_text = " ".join(entry["text"] for entry in personal[self.friend["id"]]["story"])
+        self.assertIn("KONOHA WATCH", host_text)
+        self.assertNotIn("DESERT CARAVAN", host_text)
+        self.assertNotIn("SEALED REPORT", host_text)
+        self.assertIn("DESERT CARAVAN", friend_text)
+        self.assertNotIn("KONOHA WATCH", friend_text)
+        self.assertIn("SEALED REPORT", friend_text)
+        self.assertIn("VILLAGE BROADCAST", host_text)
+        self.assertIn("VILLAGE BROADCAST", friend_text)
+        self.assertEqual(personal[self.host["id"]]["story"][0]["multiplayer_scope"], "local")
+        self.assertEqual(personal[self.host["id"]]["story"][-1]["multiplayer_scope"], "shared")
+        self.assertEqual(personal[self.friend["id"]]["story"][-1]["multiplayer_scope"], "reported")
+
+        self.store.complete(room_id, result, personal)
+        host_status = self.store.status(room_id, self.host["id"], since_round=0)
+        friend_status = self.store.status(room_id, self.friend["id"], since_round=0)
+        self.assertNotEqual(host_status["result"]["story"], friend_status["result"]["story"])
+        restarted_store = MultiplayerStore(self.accounts)
+        host_history = restarted_store.chronicle(room_id, self.host["id"])
+        friend_history = restarted_store.chronicle(room_id, self.friend["id"])
+        self.assertEqual([entry["text"] for entry in host_history],
+                         [entry["text"] for entry in personal[self.host["id"]]["story"]])
+        self.assertEqual([entry["text"] for entry in friend_history],
+                         [entry["text"] for entry in personal[self.friend["id"]]["story"]])
+
+    def test_unspecified_local_scene_falls_back_to_character_proximity(self):
+        room_id, _ = self.create_and_join()
+        characters = {}
+        for user_id in (self.host["id"], self.friend["id"]):
+            character = self.store.member(room_id, user_id)["character"]
+            character.update(location="Amegakure", sublocation="Old Tower")
+            characters[user_id] = character
+        self.store.save_characters(room_id, characters)
+        participants = self.store.resolution_plan(room_id)["participants"]
+        result = {
+            "status": "resolved",
+            "story": [{"text": "[TOWER MEETING] Yahiko lowers his voice and explains the plan.", "tag": "narrative"}],
+            "updates": [{"title": "Tower Meeting", "type": "action", "actor_user_id": self.host["id"],
+                         "information_scope": "local"}],
+        }
+        personal = split_player_results(result, participants, characters, self.host["id"])
+        self.assertEqual(len(personal[self.host["id"]]["story"]), 1)
+        self.assertEqual(len(personal[self.friend["id"]]["story"]), 1)
 
 
 if __name__ == "__main__":

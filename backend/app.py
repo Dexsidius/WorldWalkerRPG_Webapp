@@ -28,7 +28,7 @@ from evaluations import list_evaluations, run_model_comparison, run_model_evalua
 from support import repair_campaign_state, build_diagnostic_bundle
 from friend_accounts import FriendAccountStore, FriendGameRegistry, persistent_secret
 from multiplayer import (MultiplayerStore, character_from_state, player_view,
-                         apply_character_update)
+                         apply_character_update, split_player_results)
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else BACKEND_DIR.parent
@@ -189,6 +189,7 @@ def request_public_state():
                 state.get("special", {}).get("Archetype", "") if isinstance(state.get("special"), dict) else "",
             )
             state["_multiplayer"] = _multiplayer_store.status(room["id"], user["id"], heartbeat=False)
+            state["_multiplayer_chronicle"] = _multiplayer_store.chronicle(room["id"], user["id"])
     return state
 
 
@@ -248,6 +249,7 @@ def _resolve_multiplayer_room(room_id, force=False):
             participants.append({
                 "user_id": person["user_id"], "character_name": character.get("name", person["username"]),
                 "location": character.get("location", target_game.state.get("location", "")),
+                "sublocation": character.get("sublocation", target_game.state.get("sublocation", "")),
                 "stats": character.get("stats", {}), "skills": character.get("skills", {}),
                 "status": character.get("status", "Normal"), "connected": person["connected"],
                 "ready": person["ready"], "passes": person["passes"], "actions": person["actions"],
@@ -290,11 +292,12 @@ def _resolve_multiplayer_room(room_id, force=False):
                 characters[user_id] = character_from_state(target_game.state)
             else:
                 characters[user_id] = apply_character_update(person["character"], updates.get(user_id, {}))
+        player_results = split_player_results(result, plan["participants"], characters, host_id)
         _multiplayer_store.save_characters(room_id, characters)
         target_game.state["queued_actions"] = []
         target_game.state["standing_orders"] = []
         target_game.save()
-        _multiplayer_store.complete(room_id, result)
+        _multiplayer_store.complete(room_id, result, player_results)
         return True
     except Exception as exc:
         traceback.print_exc()

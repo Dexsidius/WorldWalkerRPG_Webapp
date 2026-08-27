@@ -575,7 +575,22 @@ function appendStoryEntries(entries) {
       lastWasUntitledNarrative = part.tag === "narrative" && !part.hasOwnTitle;
       const label = document.createElement("div");
       label.className = "story-entry-label";
-      label.textContent = part.label;
+      const labelText = document.createElement("span");
+      labelText.textContent = part.label;
+      label.appendChild(labelText);
+      if (APP.multiplayer && entry.multiplayer_scope) {
+        const scope = ["local", "shared", "reported"].includes(entry.multiplayer_scope)
+          ? entry.multiplayer_scope : "local";
+        const visibility = document.createElement("small");
+        visibility.className = `story-visibility ${scope}`;
+        visibility.textContent = scope === "local" ? "NEARBY" : scope.toUpperCase();
+        visibility.title = scope === "local"
+          ? "Only players close enough to witness this event receive it."
+          : scope === "reported"
+            ? "Your character learned this through a report, message, rumor, or broadcast."
+            : "Every player receives this shared world event.";
+        label.appendChild(visibility);
+      }
       // bodyWrap (not body itself) is the grid's 2nd column — body keeps its
       // exact class/role as the typeText/renderBoldedText target either way,
       // but any richer beat extras below live as normal stacked children of
@@ -4646,7 +4661,20 @@ async function finishGameBoot() {
   $("#hdr-ai").textContent = st.ai_ready ? "AI: READY" : "AI: READY TO TEST";
   if (st.campaign_active) {
     $("#story-feed").innerHTML = "";
-    appendStoryEntries([{ text: "Welcome back to " + (st.state.world || "Worldwalker") + ".", tag: "system" }]);
+    const multiplayerState = st.state?._multiplayer;
+    if (multiplayerState?.active) {
+      APP.multiplayerLastResult = Number(multiplayerState.last_result_round || 0);
+      renderMultiplayer(multiplayerState);
+      const privateChronicle = Array.isArray(st.state._multiplayer_chronicle)
+        ? st.state._multiplayer_chronicle : [];
+      if (privateChronicle.length) appendStoryEntries(privateChronicle);
+      else appendStoryEntries([{
+        text: "Your private Chronicle begins here. Nearby scenes, shared events, and reports will appear as your character learns them.",
+        tag: "system", multiplayer_scope: "local",
+      }]);
+    } else {
+      appendStoryEntries([{ text: "Welcome back to " + (st.state.world || "Worldwalker") + ".", tag: "system" }]);
+    }
   } else {
     appendStoryEntries([
       { text: "Welcome to Worldwalker.", tag: "system" },
@@ -4660,7 +4688,7 @@ async function finishGameBoot() {
   initCollapsiblePanels();
   refreshUsagePill();
   if (APP.accountsEnabled) {
-    await refreshMultiplayerStatus(true);
+    await refreshMultiplayerStatus(false);
     startMultiplayerPolling();
   }
 }

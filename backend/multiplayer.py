@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import secrets
 import sqlite3
 import string
@@ -22,6 +23,7 @@ from pathlib import Path
 ROUND_SECONDS = 10 * 60
 CONNECTED_SECONDS = 45
 MAX_PLAYERS = 2
+CHRONICLE_LIMIT = 600
 
 
 def _now():
@@ -129,6 +131,228 @@ def apply_character_update(character, patch):
     return clean
 
 
+def _norm(value):
+    return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+
+def _same_place(left, right):
+    """Conservative proximity check for two character/location records."""
+    left_location, right_location = _norm(left.get("location")), _norm(right.get("location"))
+    if not left_location or not right_location or left_location != right_location:
+        return False
+    left_sub, right_sub = _norm(left.get("sublocation")), _norm(right.get("sublocation"))
+    return not left_sub or not right_sub or left_sub == right_sub
+
+
+def _at_event(character, location="", sublocation=""):
+    if not _norm(location):
+        return False
+    return _same_place(character, {"location": location, "sublocation": sublocation})
+
+
+def _participant_records(participants, characters_after):
+    records = {}
+    for person in participants or []:
+        user_id = str(person.get("user_id") or "")
+        before = copy.deepcopy(person.get("character") or {})
+        after = copy.deepcopy((characters_after or {}).get(user_id) or before)
+        records[user_id] = {
+            "user_id": user_id,
+            "username": str(person.get("username") or ""),
+            "name": str(after.get("name") or before.get("name") or person.get("username") or ""),
+            "before": before, "after": after,
+        }
+    return records
+
+
+def _actor_for(update, records):
+    explicit = str(update.get("actor_user_id") or "")
+    if explicit in records:
+        return explicit
+    actor_name = _norm(update.get("actor_character") or update.get("actor") or "")
+    related = _norm(update.get("related_action") or "")
+    narrative = _norm(update.get("narrative") or "")
+    for user_id, record in records.items():
+        name = _norm(record["name"])
+        username = _norm(record["username"])
+        if actor_name and actor_name in {name, username}:
+            return user_id
+        if name and (related.startswith(name + " ") or related == name or narrative.startswith(name + " ")):
+            return user_id
+    return ""
+
+
+def _co_located(actor_id, records):
+    if actor_id not in records:
+        return set()
+    actor = records[actor_id]["after"]
+    return {user_id for user_id, record in records.items() if _same_place(actor, record["after"])}
+
+
+def _event_audience(update, records):
+    """Resolve who can know one narrated update without leaking omniscience.
+
+    AI-supplied audience IDs are authoritative.  The remaining rules are a
+    deterministic safety net for older/local models that omit the new fields.
+    """
+    all_users = set(records)
+    explicit = update.get("audience_user_ids")
+    if isinstance(explicit, list):
+        audience = {str(user_id) for user_id in explicit if str(user_id) in records}
+        if audience or explicit == []:
+            return audience
+    scope = _norm(update.get("information_scope") or update.get("visibility"))
+    channel = _norm(update.get("delivery_channel") or update.get("channel"))
+    if scope in {"global", "shared", "broadcast", "public"} or channel in {"broadcast", "world broadcast", "system broadcast"}:
+        return all_users
+    actor_id = _actor_for(update, records)
+    if scope in {"private", "personal"} and actor_id:
+        return {actor_id}
+    location = update.get("location") or update.get("event_location") or ""
+    sublocation = update.get("sublocation") or update.get("event_sublocation") or ""
+    if _norm(location):
+        present = {
+            user_id for user_id, record in records.items()
+            if _at_event(record["before"], location, sublocation) or _at_event(record["after"], location, sublocation)
+        }
+        if present:
+            return present
+    if actor_id:
+        return {actor_id} if scope in {"private", "personal"} else (_co_located(actor_id, records) or {actor_id})
+    # Explicit report/message channels must name recipients; an omitted list
+    # reveals nothing rather than broadcasting a private letter by accident.
+    if channel in {"message", "letter", "conversation", "witness", "ability", "research"}:
+        return set()
+    # Backward compatibility for models predating visibility metadata: broad
+    # world/canon cards remain shared unless they supplied a concrete place.
+    if _norm(update.get("type")) in {"world event", "canon event"}:
+        return all_users
+    return all_users
+
+
+def _heading(text):
+    match = re.match(r"^\[([^\]]+)\]", str(text or "").strip())
+    return _norm(match.group(1)) if match else ""
+
+
+def _scope_label(update, audience, all_users):
+    scope = _norm(update.get("information_scope") or update.get("visibility"))
+    channel = _norm(update.get("delivery_channel") or update.get("channel"))
+    if scope in {"private", "personal", "local"}:
+        return "local"
+    if scope in {"global", "shared", "public"}:
+        return "shared"
+    if channel in {"message", "letter", "rumor", "report", "news", "broadcast", "research"} or scope in {"report", "rumor"}:
+        return "reported"
+    return "shared" if audience == all_users else "local"
+
+
+def _entry_actor(entry, records):
+    text = str(entry.get("text") or "")
+    detail = str(entry.get("detail") or "") if isinstance(entry.get("detail"), str) else ""
+    haystack = _norm(detail + " " + text)
+    for user_id, record in records.items():
+        name = _norm(record["name"])
+        username = _norm(record["username"])
+        if name and (haystack.startswith(name + " ") or f"action {name} " in haystack or _norm(text).startswith(name + " ")):
+            return user_id
+        if username and (haystack.startswith(username + " ") or f"action {username} " in haystack):
+            return user_id
+    return ""
+
+
+def split_player_results(result, participants, characters_after, host_user_id=""):
+    """Create one non-omniscient result/Chronicle payload per player."""
+    records = _participant_records(participants, characters_after)
+    all_users = set(records)
+    if not records:
+        return {}
+    updates = [u for u in (result.get("updates") or []) if isinstance(u, dict)]
+    audiences = [_event_audience(update, records) for update in updates]
+    update_queues = {}
+    for index, update in enumerate(updates):
+        key = _norm(update.get("title") or update.get("type") or "update")
+        update_queues.setdefault(key, []).append(index)
+    story_by_user = {user_id: [] for user_id in records}
+    story_audiences = []
+    private_mechanical = re.compile(r"^(growth|training|xp|level|skill|class|title|stat|power|quest|agenda|breakthrough)")
+    for raw_entry in (result.get("story") or []):
+        if not isinstance(raw_entry, dict) or not str(raw_entry.get("text") or "").strip():
+            continue
+        entry = copy.deepcopy(raw_entry)
+        key = _heading(entry.get("text"))
+        linked_index = None
+        if key and update_queues.get(key):
+            linked_index = update_queues[key].pop(0)
+        if linked_index is not None:
+            update = updates[linked_index]
+            audience = audiences[linked_index]
+            scope_label = _scope_label(update, audience, all_users)
+            source = str(update.get("delivery_channel") or update.get("channel") or "")
+        else:
+            actor_id = _entry_actor(entry, records)
+            if actor_id:
+                audience = _co_located(actor_id, records) or {actor_id}
+                scope_label, source = "local", ""
+            elif key and private_mechanical.match(key):
+                audience = {str(host_user_id)} if str(host_user_id) in records else {next(iter(records))}
+                scope_label, source = "local", ""
+            else:
+                audience, scope_label, source = all_users, "shared", ""
+        story_audiences.append((entry, audience))
+        for user_id in audience:
+            if user_id not in story_by_user:
+                continue
+            visible = copy.deepcopy(entry)
+            visible["multiplayer_scope"] = scope_label
+            if source:
+                visible["multiplayer_source"] = source
+            story_by_user[user_id].append(visible)
+
+    explicit_interrupt = result.get("interruption_user_ids")
+    if isinstance(explicit_interrupt, list):
+        interruption_audience = {str(user_id) for user_id in explicit_interrupt if str(user_id) in records}
+    else:
+        interruption_audience = set()
+        for entry, audience in story_audiences:
+            if entry.get("tag") in {"canon_event", "danger"}:
+                interruption_audience.update(audience)
+        if result.get("interrupted") and not interruption_audience:
+            interruption_audience = all_users
+
+    per_player = {}
+    for user_id in records:
+        compact = {key: copy.deepcopy(result.get(key)) for key in (
+            "status", "elapsed", "danger_notice_required", "goal_status", "validation",
+            "continuity_warnings", "integrity_report") if key in result}
+        compact["story"] = story_by_user[user_id]
+        compact["updates"] = [copy.deepcopy(update) for update, audience in zip(updates, audiences) if user_id in audience]
+        compact["rolls"] = []
+        for roll in result.get("rolls") or []:
+            actor_id = _entry_actor({"text": str(roll.get("action") or roll.get("reason") or "")}, records) if isinstance(roll, dict) else ""
+            if not actor_id or user_id in (_co_located(actor_id, records) or {actor_id}):
+                compact["rolls"].append(copy.deepcopy(roll))
+        compact["notifications"] = []
+        for note in result.get("notifications") or []:
+            note_audience = note.get("audience_user_ids") if isinstance(note, dict) else None
+            if not isinstance(note_audience, list) or user_id in {str(value) for value in note_audience}:
+                compact["notifications"].append(copy.deepcopy(note))
+        involved = user_id in interruption_audience
+        compact["interrupted"] = bool(result.get("interrupted") and involved)
+        compact["interruption_kind"] = result.get("interruption_kind", "") if involved else ""
+        compact["interruption_reason"] = result.get("interruption_reason", "") if involved else ""
+        compact["intervention_prompt"] = result.get("intervention_prompt", "") if involved else ""
+        compact["major_event_reached"] = bool(result.get("major_event_reached") and involved)
+        compact["major_event_title"] = result.get("major_event_title", "") if involved else ""
+        character = records[user_id]["after"]
+        compact["died"] = bool(not character.get("alive", True) or int(character.get("hp", 1) or 0) <= 0)
+        compact["narrative"] = "\n\n".join(
+            str(entry.get("text") or "") for entry in story_by_user[user_id] if entry.get("tag") in {"narrative", "system", "canon_event"}
+        )[-6000:]
+        per_player[user_id] = compact
+    return per_player
+
+
 class MultiplayerStore:
     def __init__(self, account_store):
         self.accounts = account_store
@@ -197,8 +421,27 @@ class MultiplayerStore:
                     PRIMARY KEY(room_id, user_id, round_number, action_index),
                     FOREIGN KEY(room_id) REFERENCES multiplayer_rooms(id) ON DELETE CASCADE
                 );
+                CREATE TABLE IF NOT EXISTS multiplayer_results (
+                    room_id TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    user_id TEXT NOT NULL,
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY(room_id, round_number, user_id),
+                    FOREIGN KEY(room_id) REFERENCES multiplayer_rooms(id) ON DELETE CASCADE
+                );
+                CREATE TABLE IF NOT EXISTS multiplayer_chronicle (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    room_id TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    round_number INTEGER NOT NULL,
+                    entry_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(room_id) REFERENCES multiplayer_rooms(id) ON DELETE CASCADE
+                );
                 CREATE INDEX IF NOT EXISTS idx_multiplayer_active ON multiplayer_members(user_id, active);
                 CREATE INDEX IF NOT EXISTS idx_multiplayer_deadline ON multiplayer_rooms(status, resolving, round_deadline);
+                CREATE INDEX IF NOT EXISTS idx_multiplayer_chronicle_user ON multiplayer_chronicle(room_id,user_id,id);
             """)
 
     def room_root(self, room_id):
@@ -411,8 +654,28 @@ class MultiplayerStore:
                 "last_error": room["last_error"],
             }
             if since_round is not None and int(room["last_result_round"]) > int(since_round or 0):
-                result["result"] = json.loads(room["last_result_json"] or "{}")
+                personal = db.execute("""SELECT result_json FROM multiplayer_results
+                    WHERE room_id=? AND round_number=? AND user_id=?""",
+                    (room_id, int(room["last_result_round"]), user_id)).fetchone()
+                result["result"] = json.loads(personal["result_json"] if personal else (room["last_result_json"] or "{}"))
             return result
+
+    def chronicle(self, room_id, user_id, limit=300):
+        limit = max(1, min(CHRONICLE_LIMIT, int(limit or 300)))
+        with self._connect() as db:
+            rows = db.execute("""SELECT round_number,entry_json FROM multiplayer_chronicle
+                WHERE room_id=? AND user_id=? ORDER BY id DESC LIMIT ?""",
+                (room_id, user_id, limit)).fetchall()
+        entries = []
+        for row in reversed(rows):
+            try:
+                entry = json.loads(row["entry_json"] or "{}")
+            except (TypeError, ValueError):
+                continue
+            if isinstance(entry, dict):
+                entry.setdefault("multiplayer_round", int(row["round_number"]))
+                entries.append(entry)
+        return entries
 
     def resolution_plan(self, room_id):
         now = _now()
@@ -468,7 +731,7 @@ class MultiplayerStore:
     def save_character(self, room_id, user_id, character):
         self.save_characters(room_id, {user_id: character})
 
-    def complete(self, room_id, result):
+    def complete(self, room_id, result, player_results=None):
         compact = {key: copy.deepcopy(result.get(key)) for key in (
             "status", "narrative", "interrupted", "died", "elapsed", "interruption_reason",
             "interruption_kind", "intervention_prompt", "major_event_reached", "major_event_title",
@@ -479,12 +742,33 @@ class MultiplayerStore:
                 return
             completed_round = int(room["round_number"])
             next_round = completed_round + 1
+            personal_results = player_results if isinstance(player_results, dict) else {}
+            now = _stamp()
+            for user_id, personal_result in personal_results.items():
+                if not isinstance(personal_result, dict):
+                    continue
+                db.execute("""INSERT OR REPLACE INTO multiplayer_results
+                    (room_id,round_number,user_id,result_json,created_at) VALUES(?,?,?,?,?)""",
+                    (room_id, completed_round, str(user_id),
+                     json.dumps(personal_result, ensure_ascii=False, separators=(",", ":")), now))
+                for entry in personal_result.get("story") or []:
+                    if isinstance(entry, dict) and str(entry.get("text") or "").strip():
+                        db.execute("""INSERT INTO multiplayer_chronicle
+                            (room_id,user_id,round_number,entry_json,created_at) VALUES(?,?,?,?,?)""",
+                            (room_id, str(user_id), completed_round,
+                             json.dumps(entry, ensure_ascii=False, separators=(",", ":")), now))
             db.execute("""UPDATE multiplayer_rooms SET round_number=?,round_deadline=?,resolving=0,
                 last_result_round=?,last_result_json=?,last_error='' WHERE id=?""",
                 (next_round, _stamp(_now() + timedelta(seconds=ROUND_SECONDS)), completed_round,
                  json.dumps(compact, ensure_ascii=False, separators=(",", ":")), room_id))
             db.execute("UPDATE multiplayer_members SET ready=0 WHERE room_id=?", (room_id,))
             db.execute("DELETE FROM multiplayer_actions WHERE room_id=? AND round_number<=?", (room_id, completed_round))
+            for user_id in personal_results:
+                excess = db.execute("""SELECT id FROM multiplayer_chronicle WHERE room_id=? AND user_id=?
+                    ORDER BY id DESC LIMIT -1 OFFSET ?""", (room_id, str(user_id), CHRONICLE_LIMIT)).fetchall()
+                if excess:
+                    db.executemany("DELETE FROM multiplayer_chronicle WHERE id=?", [(row["id"],) for row in excess])
+            db.execute("DELETE FROM multiplayer_results WHERE room_id=? AND round_number<?", (room_id, max(0, completed_round - 20)))
 
     def fail(self, room_id, error):
         with self._connect() as db:
