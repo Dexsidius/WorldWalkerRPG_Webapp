@@ -1537,30 +1537,8 @@ body[data-world="Naruto"] .panel-head{
 body[data-world="Naruto"] .story-card .panel-head > span:first-child::after{
   content:"印"; margin-left:8px; font-size:13px; opacity:.45; color:var(--danger); vertical-align:middle;
 }
-/* A real forehead protector across the top of the portrait — the single
-   most recognizable prop in the franchise, so it gets actual visual weight
-   instead of living only as a small corner glyph. Bleeds past both edges
-   of the frame (clipped by its own overflow:hidden) to read as a metal
-   plate stitched to a strap, not a flat colored bar. Reuses ::after since
-   ::before on this element already carries the pre-portrait watermark. The
-   horizontal gradient layer darkens both ends toward near-black, reading
-   as the strap fading into shadow at the edges rather than a flat band. */
-body[data-world="Naruto"] .portrait-frame::after{
-  content:"葉"; position:absolute; top:0; left:-16px; right:-16px; z-index:5; height:26px;
-  display:flex; align-items:center; justify-content:center;
-  background:
-    linear-gradient(90deg, rgba(23,20,15,.92), transparent 14%, transparent 86%, rgba(23,20,15,.92)),
-    linear-gradient(180deg,#d4dbe0,#8b95a0 45%,#68727c);
-  border-bottom:4px solid #17140f;
-  box-shadow:inset 0 2px 3px rgba(255,255,255,.45), inset 0 -3px 6px rgba(0,0,0,.4);
-  font:700 13px/1 'Yuji Syuku', serif; color:#20221f; opacity:.85; text-shadow:0 1px 0 rgba(255,255,255,.5);
-}
-/* Pushed down to clear the plate above instead of sitting under it. */
-body[data-world="Naruto"] #btn-portrait-regenerate{ top:41px; }
-body[data-world="Naruto"] #btn-portrait-manage{ top:80px; }
 /* A small hanko (name-seal) badge next to Status — the closest real field
-   to "rank" — echoing the forehead-protector plate as a second, smaller
-   signature touch rather than a one-off. */
+   to "rank" — a second, small signature touch rather than a one-off. */
 body[data-world="Naruto"] #stat-status::after{
   content:"忍"; display:inline-flex; align-items:center; justify-content:center;
   width:16px; height:16px; margin-left:6px; background:var(--nrt-seal); color:#f3e6d6;
