@@ -6,7 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.21.0** (schema 17).
+Current app/save version: **3.21.1** (schema 17).
+
+Version 3.21.1 lets original Bleach characters preview and reroll a complete,
+coherent Zanpakutō concept before confirming the campaign. Previewing dormant
+Shikai and Bankai abilities does not grant either release; unless the background
+explicitly establishes ownership, both milestones must still be earned in play.
 
 Version 3.21 gives every setting a deterministic world-law profile, flexible
 development paths, setting-specific downtime, persistent signature-technique

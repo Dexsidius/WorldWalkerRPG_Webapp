@@ -986,7 +986,7 @@ Return JSON only, with no markdown."""
             detail.update(self.combat_skill_metadata(name, detail["effect"]))
             skills[name] = detail
 
-    def generate_zanpakuto_profile(self, background, has_shikai=False, has_bankai=False):
+    def generate_zanpakuto_profile(self, background, has_shikai=False, has_bankai=False, exclude_name=""):
         """Author one coherent release line for an explicitly released start.
 
         Normal Soul Reaper starts intentionally defer this until the in-game
@@ -996,16 +996,18 @@ Return JSON only, with no markdown."""
         """
         aspect = self.ability_aspect(background)
         fallbacks = {
-            "Ember": ("Homurakage", "Wake beneath the ash", "Stores heat from blocked blows and releases it as controlled cutting fire."),
-            "Tide": ("Shiosai", "Draw the returning tide", "Redirects nearby liquid and spiritual flow into curved blades and defensive currents."),
-            "Gale": ("Kazehiki", "Carry the unheard word", "Shapes compressed wind along the blade for changing reach and deflecting trajectories."),
-            "Stone": ("Iwagane", "Stand where the mountain remembers", "Condenses spiritual pressure into weighted armor and impact-breaking edges."),
-            "Echo": ("Hibikigane", "Answer what the silence keeps", "Reads and returns vibrations through blade, ground and nearby spiritual matter."),
-            "Flash": ("Senrin", "Cross the distance between heartbeats", "Leaves short-lived spiritual paths that sharpen one committed movement or cut."),
-            "Shadow": ("Kageutsushi", "Darken the space between", "Binds the blade's shadow to surfaces for misdirection, restraint and angled attacks."),
-            "Radiance": ("Akebonohoshi", "Open the sleepless dawn", "Shapes pale light into revealing marks, guarded zones and focused purifying cuts."),
+            "Ember": [("Homurakage", "Wake beneath the ash", "Stores heat from blocked blows and releases it as controlled cutting fire."), ("Enkotsu", "Temper the living flame", "Brands spiritual heat into struck surfaces, then draws the marks together in cutting lines.")],
+            "Tide": [("Shiosai", "Draw the returning tide", "Redirects nearby liquid and spiritual flow into curved blades and defensive currents."), ("Mizukagami", "Reflect the moonlit current", "Creates fluid mirrors that bend the path and force of incoming spiritual attacks.")],
+            "Gale": [("Kazehiki", "Carry the unheard word", "Shapes compressed wind along the blade for changing reach and deflecting trajectories."), ("Amatsukaze", "Scatter the waiting sky", "Sets invisible air currents that accelerate allies or shear across anyone who crosses them.")],
+            "Stone": [("Iwagane", "Stand where the mountain remembers", "Condenses spiritual pressure into weighted armor and impact-breaking edges."), ("Gansho", "Raise the patient earth", "Anchors spiritual mass into chosen points, making them immovable until the wielder releases them.")],
+            "Echo": [("Hibikigane", "Answer what the silence keeps", "Reads and returns vibrations through blade, ground and nearby spiritual matter."), ("Kanaderu", "Resound through the hollow heart", "Records one spiritual rhythm at a time and reproduces it as a disruptive counter-frequency.")],
+            "Flash": [("Senrin", "Cross the distance between heartbeats", "Leaves short-lived spiritual paths that sharpen one committed movement or cut."), ("Hikarimichi", "Trace the road of light", "Links marked points with luminous routes the wielder can traverse in a single burst.")],
+            "Shadow": [("Kageutsushi", "Darken the space between", "Binds the blade's shadow to surfaces for misdirection, restraint and angled attacks."), ("Yoinui", "Stitch the falling dusk", "Sews nearby shadows into temporary seams that bind movement or redirect a passing strike.")],
+            "Radiance": [("Akebonohoshi", "Open the sleepless dawn", "Shapes pale light into revealing marks, guarded zones and focused purifying cuts."), ("Shirahoshi", "Illuminate the hidden path", "Places white spiritual stars that expose concealed presences and converge into purifying beams.")],
         }
-        name, command, shikai_effect = fallbacks.get(aspect, fallbacks["Echo"])
+        candidates = fallbacks.get(aspect, fallbacks["Echo"])
+        alternatives = [row for row in candidates if row[0].casefold() != str(exclude_name or "").casefold()] or candidates
+        name, command, shikai_effect = random.choice(alternatives)
         fallback = {
             "name": name, "sealed_appearance": "A plain academy Asauchi whose guard has slowly taken on a personal motif.",
             "spirit": f"A demanding {aspect.lower()}-aligned figure that tests whether the wielder's stated values survive pressure.",
@@ -1023,6 +1025,8 @@ Return JSON only, with no markdown."""
         if self.ai_bg_ready():
             instructions = f"""Design one original Bleach Zanpakuto for this player character. Do not copy any canon release.
 The background is authoritative data. Shikai and Bankai must be two stages of one identity rooted in the wielder's history, values and limitations. Starting ownership: Shikai={bool(has_shikai)}, Bankai={bool(has_bankai)}. Even a powerful release needs a real Reiryoku cost and counterplay. Return JSON only."""
+            if exclude_name:
+                instructions += f"\nThis is a reroll. Create a genuinely different identity and mechanic; do not reuse the name {exclude_name}."
             payload = {"background": str(background or ""), "schema": {key: "concise setting-native detail" for key in fallback}}
             try:
                 raw = self.ai_bg.request(instructions, payload, max_output_tokens=700)
@@ -1030,7 +1034,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     authored = {key: str(raw.get(key) or "").strip() for key in fallback if str(raw.get(key) or "").strip()}
             except Exception as exc:
                 self._last_special_generation_error = str(exc)[:240]
-        profile = {**fallback, **authored, "stage": "Bankai" if has_bankai else "Shikai", "development_evidence": ["Established in the creation background"]}
+        stage = "Bankai" if has_bankai else "Shikai" if has_shikai else "Dormant"
+        evidence = ["Established in the creation background"] if has_shikai else ["Previewed potential; both releases remain unearned"]
+        profile = {**fallback, **authored, "stage": stage, "development_evidence": evidence}
         return profile
 
     def generate_hidden_class(self, world, background, boost, primary_stats, stats, concealed=False):
@@ -1483,8 +1489,14 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             skills.update(academy_kido_skills(archetype, senior=senior))
             has_bankai = owns_release(background, "bankai")
             has_shikai = has_bankai or owns_release(background, "shikai")
+            if allow_starting_specials or has_shikai:
+                # Preview the sword's latent identity for every original Soul
+                # Reaper. A concept is not ownership: normal starts still need
+                # to earn Shikai and Bankai through play.
+                bleach_release_profile = self.generate_zanpakuto_profile(
+                    background, has_shikai=has_shikai, has_bankai=has_bankai,
+                )
             if has_shikai:
-                bleach_release_profile = self.generate_zanpakuto_profile(background, has_shikai=True, has_bankai=has_bankai)
                 skills[f"Shikai — {bleach_release_profile['shikai_name']}"] = {
                     "rank": "Shikai", "bonus": 10 + boost // 20,
                     "description": bleach_release_profile["shikai_effect"], "effect": bleach_release_profile["shikai_effect"],
@@ -1631,10 +1643,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 package["special_patch"]["Squad Choice Privilege"] = "Exceptional talent — may choose among willing divisions after interviews"
             release = profile.get("bleach_release_profile")
             if isinstance(release, dict):
+                release_stage = str(release.get("stage") or "Dormant")
+                owns_shikai = release_stage in {"Shikai", "Bankai"}
                 package["special_patch"].update({
                     "Zanpakuto": release.get("name", "Named Zanpakuto"), "Zanpakuto Profile": copy.deepcopy(release),
-                    "Shikai": f"Achieved — {release.get('shikai_name', release.get('name', 'Named release'))}",
-                    "Bankai": release.get("bankai_name", "Achieved") if release.get("stage") == "Bankai" else "Unachieved",
+                    "Shikai": f"Achieved — {release.get('shikai_name', release.get('name', 'Named release'))}" if owns_shikai else "Unachieved",
+                    "Bankai": release.get("bankai_name", "Achieved") if release_stage == "Bankai" else "Unachieved",
                 })
         if package.get("title"):
             profile["titles"] = [package["title"]]
@@ -1719,8 +1733,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         profile = result.get("starting_profile") if isinstance(result.get("starting_profile"), dict) else {}
         world = result.get("world", "Custom World")
         kind = str(kind or "").lower()
-        if not profile or kind not in {"class", "ability", "backstory", "loadout"}:
-            raise ValueError("Choose class, ability, backstory, or loadout to reroll.")
+        if not profile or kind not in {"class", "ability", "backstory", "loadout", "zanpakuto"}:
+            raise ValueError("Choose class, ability, Zanpakuto, backstory, or loadout to reroll.")
+        if kind == "zanpakuto" and world != "Bleach":
+            raise ValueError("Zanpakuto rerolls are available only for original Bleach characters.")
         boost = int(profile.get("_boost", 0) or 0)
         primary = profile.get("primary_stats") or primary_stats_for(world, result.get("archetype", ""))
         if kind == "class":
@@ -1752,6 +1768,38 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             profile.setdefault("skills", {})[ability["name"]] = copy.deepcopy(ability["details"])
             self.install_background_ability_skills(profile["skills"], ability)
             profile["generated_ability"] = ability
+        elif kind == "zanpakuto":
+            old = profile.get("bleach_release_profile") if isinstance(profile.get("bleach_release_profile"), dict) else {}
+            for skill_name in list(profile.setdefault("skills", {})):
+                detail = profile["skills"].get(skill_name)
+                if isinstance(detail, dict) and detail.get("release_stage") in {"Shikai", "Bankai"}:
+                    profile["skills"].pop(skill_name, None)
+            has_bankai = str(old.get("stage") or "") == "Bankai" or owns_release(background, "bankai")
+            has_shikai = has_bankai or str(old.get("stage") or "") == "Shikai" or owns_release(background, "shikai")
+            release = self.generate_zanpakuto_profile(
+                background, has_shikai=has_shikai, has_bankai=has_bankai,
+                exclude_name=old.get("name", ""),
+            )
+            profile["bleach_release_profile"] = release
+            if has_shikai:
+                profile["skills"][f"Shikai — {release['shikai_name']}"] = {
+                    "rank": "Shikai", "bonus": 10 + boost // 20,
+                    "description": release["shikai_effect"], "effect": release["shikai_effect"],
+                    "limitation": release["shikai_limitation"],
+                    "growth_path": "Deepen the Zanpakuto bond, develop applications and earn the Bankai prerequisites.",
+                    "combat_usable": True, "effect_type": "transform", "category": "transformation",
+                    "target_type": "self", "duration_rounds": 4, "release_stage": "Shikai",
+                }
+            if has_bankai:
+                profile["skills"][release["bankai_name"]] = {
+                    "rank": "Bankai", "bonus": 14 + boost // 20,
+                    "description": release["bankai_effect"], "effect": release["bankai_effect"],
+                    "limitation": release["bankai_cost"],
+                    "growth_path": "Extend safe duration, refine control and integrate Bankai without abandoning the Shikai's core identity.",
+                    "combat_usable": True, "effect_type": "transform", "category": "transformation",
+                    "target_type": "self", "duration_rounds": 5, "release_stage": "Bankai",
+                }
+            profile["prerequisite_tracks"] = zanpakuto_tracks(has_shikai=has_shikai, has_bankai=has_bankai)
         elif kind == "backstory":
             rebuilt = self.build_background_profile(
                 world, result.get("origin", ""), result.get("archetype", ""), background, boost, primary,
@@ -2076,10 +2124,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             if world == "Bleach":
                 release = profile.get("bleach_release_profile")
                 if isinstance(release, dict):
+                    release_stage = str(release.get("stage") or "Dormant")
+                    owns_shikai = release_stage in {"Shikai", "Bankai"}
                     self.state["special"].update({
                         "Zanpakuto": release.get("name", "Named Zanpakuto"), "Zanpakuto Profile": copy.deepcopy(release),
-                        "Shikai": f"Achieved — {release.get('shikai_name', release.get('name', 'Named release'))}",
-                        "Bankai": release.get("bankai_name", "Achieved") if release.get("stage") == "Bankai" else "Unachieved",
+                        "Shikai": f"Achieved — {release.get('shikai_name', release.get('name', 'Named release'))}" if owns_shikai else "Unachieved",
+                        "Bankai": release.get("bankai_name", "Achieved") if release_stage == "Bankai" else "Unachieved",
                     })
                 has_shikai = str(self.state["special"].get("Shikai", "")).lower() not in {"", "unachieved", "none"}
                 has_bankai = str(self.state["special"].get("Bankai", "")).lower() not in {"", "unachieved", "none"}
