@@ -1,16 +1,16 @@
 """Flask application: serves the frontend, game assets, and the JSON API
 that the browser-based UI drives the game engine through."""
-import io, json, os, secrets, threading, traceback, sys
+import io, json, os, secrets, threading, traceback, sys, time
 from datetime import timedelta
 from urllib.parse import quote
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, send_file, g, session
 from werkzeug.local import LocalProxy
 
-from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for
+from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for, power_profile_for
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
-from portrait_generator import PORTRAIT_CACHE_DIR, generate_portrait, save_reference, portrait_history, revert_portrait, portrait_usage
+from portrait_generator import PORTRAIT_CACHE_DIR, generate_portrait, save_reference, portrait_history, revert_portrait, portrait_usage, portrait_view
 from lore import (list_lore_sources, import_lore_pack, import_lore_url, lore_library_status,
                   lore_automation_status, configure_lore_automation, refresh_lore_sources,
                   seed_recommended_lore_sources)
@@ -27,6 +27,8 @@ from simulation_integrity import (integrity_snapshot, campaign_search,
 from evaluations import list_evaluations, run_model_comparison, run_model_evaluation
 from support import repair_campaign_state, build_diagnostic_bundle
 from friend_accounts import FriendAccountStore, FriendGameRegistry, persistent_secret
+from multiplayer import (MultiplayerStore, character_from_state, player_view,
+                         apply_character_update)
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else BACKEND_DIR.parent
@@ -58,6 +60,7 @@ app.config.update(
 _single_game = GameSession()
 _account_store = FriendAccountStore() if ACCOUNTS_ENABLED else None
 _game_registry = FriendGameRegistry(_account_store) if _account_store else None
+_multiplayer_store = MultiplayerStore(_account_store) if _account_store else None
 
 
 def _request_game():
@@ -100,7 +103,14 @@ def bind_friend_account():
             return jsonify({"error": "Sign in to play.", "authentication_required": True}), 401
         return None
     g.worldwalker_user = user
-    g.worldwalker_game = _game_registry.get(user["id"])
+    g.worldwalker_personal_game = _game_registry.get(user["id"])
+    room = _multiplayer_store.active_room(user["id"]) if _multiplayer_store else None
+    if room:
+        g.worldwalker_room = room
+        g.worldwalker_game = _game_registry.get_room(room, _multiplayer_store.room_root(room["id"]))
+    else:
+        g.worldwalker_room = None
+        g.worldwalker_game = g.worldwalker_personal_game
     if request.method not in {"GET", "HEAD", "OPTIONS"} and request.path not in {"/api/auth/login", "/api/auth/register"}:
         provided = request.headers.get("X-Worldwalker-CSRF", "")
         if not secrets.compare_digest(provided, _csrf_token()):
@@ -144,6 +154,7 @@ def _start_due_lore_refresh_once():
 @app.before_request
 def start_background_lore_refresh():
     _start_due_lore_refresh_once()
+    _start_multiplayer_worker_once()
 
 
 def acquire_busy():
@@ -161,6 +172,39 @@ def release_busy():
     game.busy = False
 
 
+def request_public_state():
+    """Shared world plus the signed-in member's own character and plan."""
+    state = game.public_state()
+    room = getattr(g, "worldwalker_room", None)
+    user = getattr(g, "worldwalker_user", None)
+    if room and user and _multiplayer_store:
+        member = _multiplayer_store.member(room["id"], user["id"])
+        if member:
+            state = player_view(state, member.get("character", {}),
+                                _multiplayer_store.actions(room["id"], user["id"], room["round_number"]))
+            settings_game = getattr(g, "worldwalker_personal_game", None) or game
+            state.update(portrait_view(state, settings_game.settings))
+            state["_power_profile"] = power_profile_for(
+                state.get("world", "Custom World"), state.get("stats", {}),
+                state.get("special", {}).get("Archetype", "") if isinstance(state.get("special"), dict) else "",
+            )
+            state["_multiplayer"] = _multiplayer_store.status(room["id"], user["id"], heartbeat=False)
+    return state
+
+
+def request_portrait_state():
+    """Mutable character-shaped state for per-player multiplayer portraits."""
+    room = getattr(g, "worldwalker_room", None)
+    user = getattr(g, "worldwalker_user", None)
+    if room and user and _multiplayer_store:
+        member = _multiplayer_store.member(room["id"], user["id"])
+        if member:
+            merged = dict(game.state)
+            merged.update(member.get("character", {}))
+            return merged, member["character"]
+    return game.state, game.state
+
+
 def busy_error():
     return jsonify({"error": "Another AI request is already in progress."}), 409
 
@@ -168,6 +212,120 @@ def busy_error():
 def err(e, code=500):
     traceback.print_exc()
     return jsonify({"error": str(e)}), code
+
+
+# ---------- shared two-player campaign coordinator ----------
+_multiplayer_worker_lock = threading.Lock()
+_multiplayer_worker_started = False
+
+
+def _room_game(room_id):
+    # The intentionally plain DB lookup below avoids depending on a request
+    # context; timer resolutions run in a daemon thread.
+    with _multiplayer_store._connect() as db:
+        row = db.execute("SELECT * FROM multiplayer_rooms WHERE id=?", (room_id,)).fetchone()
+    if not row:
+        raise ValueError("Multiplayer room no longer exists.")
+    room = dict(row)
+    return room, _game_registry.get_room(room, _multiplayer_store.room_root(room_id))
+
+
+def _resolve_multiplayer_room(room_id, force=False):
+    if not _multiplayer_store or not _multiplayer_store.claim(room_id, force=force):
+        return False
+    target_game = None
+    try:
+        plan = _multiplayer_store.resolution_plan(room_id)
+        if not plan:
+            raise ValueError("Multiplayer room is no longer active.")
+        room, target_game = _room_game(room_id)
+        if target_game.busy:
+            raise RuntimeError("The shared campaign is already processing another request.")
+        target_game.busy = True
+        participants = []
+        for person in plan["participants"]:
+            character = person.get("character", {})
+            participants.append({
+                "user_id": person["user_id"], "character_name": character.get("name", person["username"]),
+                "location": character.get("location", target_game.state.get("location", "")),
+                "stats": character.get("stats", {}), "skills": character.get("skills", {}),
+                "status": character.get("status", "Normal"), "connected": person["connected"],
+                "ready": person["ready"], "passes": person["passes"], "actions": person["actions"],
+            })
+        no_ready_actions = not any(not person["passes"] and person["actions"] for person in plan["participants"])
+        amount = 1 if no_ready_actions else int(room["time_amount"])
+        unit = "moment" if no_ready_actions else room["time_unit"]
+        intensity = room["intensity"]
+        orders = plan["orders"]
+        target_game.state["queued_actions"] = []
+        target_game.state["standing_orders"] = []
+        target_game.multiplayer_context = {"round": int(room["round_number"]), "participants": participants}
+        assessed = target_game.assess_time_skip(amount, unit, orders, intensity, use_model=False)
+        manual_rolls = {}
+        result = target_game.run_time_skip(
+            amount, unit, assessed.get("orders", orders), intensity, assessed.get("assessment", {}),
+            confirmed_lethal=True, confirmed_power_goal=True, manual_rolls=manual_rolls,
+            danger_warning_acknowledged=True,
+        )
+        # Timeout resolution cannot wait for a browser-only dice modal. The
+        # server rolls the same d100 entropy and records it in the Chronicle.
+        for _ in range(20):
+            if result.get("status") != "manual_roll_required":
+                break
+            manual_rolls[str(result.get("check_id") or "major")] = secrets.randbelow(100) + 1
+            result = target_game.run_time_skip(
+                amount, unit, assessed.get("orders", orders), intensity, assessed.get("assessment", {}),
+                confirmed_lethal=True, confirmed_power_goal=True, manual_rolls=manual_rolls,
+                danger_warning_acknowledged=True,
+            )
+        if result.get("status") != "resolved":
+            raise RuntimeError("The shared turn could not pass its resolution gate.")
+
+        updates = result.pop("multiplayer_character_updates", {})
+        characters = {}
+        host_id = room["host_user_id"]
+        for person in plan["participants"]:
+            user_id = person["user_id"]
+            if user_id == host_id:
+                characters[user_id] = character_from_state(target_game.state)
+            else:
+                characters[user_id] = apply_character_update(person["character"], updates.get(user_id, {}))
+        _multiplayer_store.save_characters(room_id, characters)
+        target_game.state["queued_actions"] = []
+        target_game.state["standing_orders"] = []
+        target_game.save()
+        _multiplayer_store.complete(room_id, result)
+        return True
+    except Exception as exc:
+        traceback.print_exc()
+        _multiplayer_store.fail(room_id, exc)
+        return False
+    finally:
+        if target_game is not None:
+            target_game.multiplayer_context = None
+            target_game.busy = False
+
+
+def _multiplayer_timer_loop():
+    while True:
+        try:
+            for room_id in _multiplayer_store.due_rooms():
+                _resolve_multiplayer_room(room_id, force=False)
+        except Exception:
+            traceback.print_exc()
+        time.sleep(5)
+
+
+def _start_multiplayer_worker_once():
+    global _multiplayer_worker_started
+    if not _multiplayer_store:
+        return
+    with _multiplayer_worker_lock:
+        if _multiplayer_worker_started:
+            return
+        _multiplayer_worker_started = True
+        threading.Thread(target=_multiplayer_timer_loop, daemon=True,
+                         name="worldwalker-multiplayer-clock").start()
 
 
 # ---------- static / frontend ----------
@@ -276,6 +434,107 @@ def api_auth_logout():
     return jsonify({"ok": True})
 
 
+# ---------- private two-player rooms ----------
+@app.route("/api/multiplayer/status")
+def api_multiplayer_status():
+    if not _multiplayer_store:
+        return jsonify({"active": False, "available": False})
+    user = g.worldwalker_user
+    room = _multiplayer_store.active_room(user["id"])
+    if not room:
+        return jsonify({"active": False, "available": True})
+    since = request.args.get("since_round")
+    try:
+        since = int(since) if since is not None else None
+    except ValueError:
+        since = None
+    return jsonify(_multiplayer_store.status(room["id"], user["id"], heartbeat=True, since_round=since))
+
+
+@app.route("/api/multiplayer/create", methods=["POST"])
+def api_multiplayer_create():
+    if not _multiplayer_store:
+        return jsonify({"error": "Friend accounts are required for multiplayer."}), 400
+    personal = getattr(g, "worldwalker_personal_game", None)
+    if not personal or not personal.campaign_active:
+        return jsonify({"error": "Start, load, or import the campaign you want to copy first."}), 400
+    try:
+        status = _multiplayer_store.create_room(g.worldwalker_user, personal.save_bundle("multiplayer-copy"))
+        return jsonify(status), 201
+    except Exception as exc:
+        return err(exc, 400)
+
+
+@app.route("/api/multiplayer/join", methods=["POST"])
+def api_multiplayer_join():
+    if not _multiplayer_store:
+        return jsonify({"error": "Friend accounts are required for multiplayer."}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        status = _multiplayer_store.join_room(
+            g.worldwalker_user, data.get("join_code", ""), data.get("character_name", ""),
+            data.get("background", ""),
+        )
+        return jsonify(status)
+    except Exception as exc:
+        return err(exc, 400)
+
+
+@app.route("/api/multiplayer/leave", methods=["POST"])
+def api_multiplayer_leave():
+    room = getattr(g, "worldwalker_room", None)
+    if room:
+        try:
+            game.save()
+        except Exception:
+            traceback.print_exc()
+        _multiplayer_store.leave(room["id"], g.worldwalker_user["id"])
+        if room["host_user_id"] == g.worldwalker_user["id"]:
+            _game_registry.remove_room(room["id"])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/multiplayer/ready", methods=["POST"])
+def api_multiplayer_ready():
+    room = getattr(g, "worldwalker_room", None)
+    if not room:
+        return jsonify({"error": "Join a multiplayer campaign first."}), 400
+    data = request.get_json(silent=True) or {}
+    status = _multiplayer_store.set_ready(room["id"], g.worldwalker_user["id"], bool(data.get("ready", True)))
+    if _multiplayer_store.all_connected_ready(room["id"]):
+        threading.Thread(target=_resolve_multiplayer_room, args=(room["id"], True), daemon=True,
+                         name=f"worldwalker-room-{room['id'][:8]}").start()
+        status["resolving"] = True
+    return jsonify(status)
+
+
+@app.route("/api/multiplayer/time", methods=["POST"])
+def api_multiplayer_time():
+    room = getattr(g, "worldwalker_room", None)
+    if not room:
+        return jsonify({"error": "Join a multiplayer campaign first."}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        return jsonify(_multiplayer_store.set_time(
+            room["id"], g.worldwalker_user["id"], data.get("amount", 1),
+            data.get("unit", "moment"), data.get("intensity", "normal"),
+        ))
+    except Exception as exc:
+        return err(exc, 400)
+
+
+@app.route("/api/multiplayer/resolve", methods=["POST"])
+def api_multiplayer_resolve():
+    room = getattr(g, "worldwalker_room", None)
+    if not room:
+        return jsonify({"error": "Join a multiplayer campaign first."}), 400
+    if room["host_user_id"] != g.worldwalker_user["id"]:
+        return jsonify({"error": "Only the host can advance before the ten-minute timer expires."}), 403
+    threading.Thread(target=_resolve_multiplayer_room, args=(room["id"], True), daemon=True,
+                     name=f"worldwalker-room-{room['id'][:8]}").start()
+    return jsonify({"ok": True, "resolving": True}), 202
+
+
 # ---------- world / campaign data ----------
 @app.route("/api/version")
 def api_version():
@@ -306,6 +565,8 @@ def api_worlds():
 
 @app.route("/api/campaign/new", methods=["POST"])
 def api_campaign_new():
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Leave multiplayer before starting a different campaign. The shared copy will remain separate."}), 409
     d = request.get_json(force=True)
     try:
         world = d.get("world", "Custom World")
@@ -373,7 +634,7 @@ def api_campaign_opening():
 # ---------- turn loop ----------
 @app.route("/api/state")
 def api_state():
-    return jsonify({"state": game.public_state(), "busy": game.busy, "campaign_active": game.campaign_active,
+    return jsonify({"state": request_public_state(), "busy": game.busy, "campaign_active": game.campaign_active,
                      "ai_ready": game.ai_ready(), "local_mode": game.local_mode()})
 
 
@@ -389,7 +650,11 @@ def api_action_submit():
         # Legacy endpoint kept for older frontends, but v2.4's contract is
         # strict: submitting plans only queues them. Advance is the sole
         # resolution/time/world-response endpoint.
-        return jsonify({"status": "queued", "queued_actions": game.queue_action(action), "state": game.public_state()})
+        room = getattr(g, "worldwalker_room", None)
+        user = getattr(g, "worldwalker_user", None)
+        queued = (_multiplayer_store.queue_action(room["id"], user["id"], action)
+                  if room and user else game.queue_action(action))
+        return jsonify({"status": "queued", "queued_actions": queued, "state": request_public_state()})
     except Exception as e:
         return err(e, 400)
 
@@ -417,7 +682,12 @@ def api_actions_queue():
     if not game.campaign_active:
         return jsonify({"error": "Start or load a campaign first."}), 400
     try:
-        return jsonify({"queued_actions": game.queue_action((request.get_json(force=True).get("action") or ""))})
+        action = request.get_json(force=True).get("action") or ""
+        room = getattr(g, "worldwalker_room", None)
+        user = getattr(g, "worldwalker_user", None)
+        queued = (_multiplayer_store.queue_action(room["id"], user["id"], action)
+                  if room and user else game.queue_action(action))
+        return jsonify({"queued_actions": queued})
     except Exception as e:
         return err(e, 400)
 
@@ -425,7 +695,12 @@ def api_actions_queue():
 @app.route("/api/actions/remove", methods=["POST"])
 def api_actions_remove():
     try:
-        return jsonify({"queued_actions": game.remove_queued_action(request.get_json(force=True).get("index", -1))})
+        index = request.get_json(force=True).get("index", -1)
+        room = getattr(g, "worldwalker_room", None)
+        user = getattr(g, "worldwalker_user", None)
+        queued = (_multiplayer_store.remove_action(room["id"], user["id"], index)
+                  if room and user else game.remove_queued_action(index))
+        return jsonify({"queued_actions": queued})
     except Exception as e:
         return err(e, 400)
 
@@ -542,6 +817,8 @@ def api_undo():
 # ---------- time skip ----------
 @app.route("/api/time/assess", methods=["POST"])
 def api_time_assess():
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Multiplayer actions resolve through Ready and the shared ten-minute round."}), 409
     d = request.get_json(force=True)
     if not game.ai_ready():
         return jsonify({"error": "AI not configured."}), 400
@@ -559,6 +836,8 @@ def api_time_assess():
 
 @app.route("/api/time/resolve", methods=["POST"])
 def api_time_resolve():
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Multiplayer actions resolve through Ready and the shared ten-minute round."}), 409
     d = request.get_json(force=True)
     if not acquire_busy():
         return busy_error()
@@ -919,7 +1198,11 @@ def api_quick_action():
     d = request.get_json(force=True)
     text = (d.get("text") or "").strip()
     try:
-        return jsonify({"status": "queued", "queued_actions": game.queue_action(text), "state": game.public_state()})
+        room = getattr(g, "worldwalker_room", None)
+        user = getattr(g, "worldwalker_user", None)
+        queued = (_multiplayer_store.queue_action(room["id"], user["id"], text)
+                  if room and user else game.queue_action(text))
+        return jsonify({"status": "queued", "queued_actions": queued, "state": request_public_state()})
     except Exception as e:
         return err(e, 400)
 
@@ -960,7 +1243,9 @@ def api_portrait_generate():
     if not _portrait_lock.acquire(blocking=False):
         return jsonify({"error": "A portrait is already being generated."}), 409
     try:
-        result = generate_portrait(game.state, game.settings, force=bool(d.get("force")))
+        portrait_state, _ = request_portrait_state()
+        settings_game = getattr(g, "worldwalker_personal_game", None) or game
+        result = generate_portrait(portrait_state, settings_game.settings, force=bool(d.get("force")))
         return jsonify(result)
     except Exception as e:
         return err(e)
@@ -971,10 +1256,11 @@ def api_portrait_generate():
 @app.route("/api/portrait/identity", methods=["POST"])
 def api_portrait_identity():
     d = request.get_json(force=True)
-    identity = game.state.setdefault("portrait_identity", {})
+    portrait_state, character = request_portrait_state()
+    identity = character.setdefault("portrait_identity", {})
     history = identity.setdefault("history", [])
-    history.append({"appearance_desc": game.state.get("appearance_desc", ""),
-                    "portrait_traits": list(game.state.get("portrait_traits", [])),
+    history.append({"appearance_desc": portrait_state.get("appearance_desc", ""),
+                    "portrait_traits": list(portrait_state.get("portrait_traits", [])),
                     "canonical_description": identity.get("canonical_description", ""),
                     "temporary_traits": list(identity.get("temporary_traits", [])),
                     "turn": game.state.get("turn", 0)})
@@ -986,8 +1272,13 @@ def api_portrait_identity():
         identity["temporary_traits"] = [str(x)[:300] for x in value] if isinstance(value, list) else []
     if "locked" in d:
         identity["locked"] = bool(d.get("locked"))
-    game.autosave()
-    return jsonify({"identity": identity, "state": game.public_state()})
+    room = getattr(g, "worldwalker_room", None)
+    user = getattr(g, "worldwalker_user", None)
+    if room and user:
+        _multiplayer_store.save_character(room["id"], user["id"], character)
+    else:
+        game.autosave()
+    return jsonify({"identity": identity, "state": request_public_state()})
 
 
 @app.route("/api/portrait/reference", methods=["POST"])
@@ -998,31 +1289,35 @@ def api_portrait_reference():
     if not uploaded:
         return jsonify({"error": "Choose a portrait image first."}), 400
     try:
-        result = save_reference(game.state, uploaded.read(12 * 1024 * 1024 + 1))
+        portrait_state, _ = request_portrait_state()
+        result = save_reference(portrait_state, uploaded.read(12 * 1024 * 1024 + 1))
         game.autosave()
-        return jsonify({**result, "state": game.public_state()})
+        return jsonify({**result, "state": request_public_state()})
     except Exception as e:
         return err(e, 400)
 
 
 @app.route("/api/portrait/history")
 def api_portrait_history():
-    return jsonify({"history": portrait_history(game.state), "identity": game.state.get("portrait_identity", {})})
+    portrait_state, character = request_portrait_state()
+    return jsonify({"history": portrait_history(portrait_state), "identity": character.get("portrait_identity", {})})
 
 
 @app.route("/api/portrait/revert", methods=["POST"])
 def api_portrait_revert():
     try:
-        return jsonify({**revert_portrait(game.state), "state": game.public_state()})
+        portrait_state, _ = request_portrait_state()
+        return jsonify({**revert_portrait(portrait_state), "state": request_public_state()})
     except Exception as e:
         return err(e, 400)
 
 
 @app.route("/api/settings", methods=["GET"])
 def api_settings_get():
-    s = dict(game.settings)
+    settings_game = getattr(g, "worldwalker_personal_game", None) or game
+    s = dict(settings_game.settings)
     s.pop("api_key", None)
-    s["has_api_key"] = bool(game.settings.get("api_key"))
+    s["has_api_key"] = bool(settings_game.settings.get("api_key"))
     return jsonify(s)
 
 
@@ -1036,7 +1331,8 @@ def api_settings_post():
         "portrait_generation_enabled", "portrait_auto_generate", "image_model", "local_image_model", "portrait_quality", "developer_mode",
         "onboarding_seen", "simulation_mode", "canon_foreknowledge"
     ] if k in d}
-    game.update_settings(patch)
+    settings_game = getattr(g, "worldwalker_personal_game", None) or game
+    settings_game.update_settings(patch)
     return jsonify({"ok": True})
 
 
@@ -1044,7 +1340,8 @@ def api_settings_post():
 def api_detect_models():
     d = request.get_json(force=True)
     try:
-        models = game.detect_models(d.get("base_url", ""), d.get("token", ""))
+        settings_game = getattr(g, "worldwalker_personal_game", None) or game
+        models = settings_game.detect_models(d.get("base_url", ""), d.get("token", ""))
         return jsonify({"models": models})
     except Exception as e:
         return jsonify({"error": str(e)}), 400
@@ -1064,6 +1361,8 @@ def api_save():
 
 @app.route("/api/save/delete", methods=["POST"])
 def api_save_delete():
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Leave multiplayer before deleting personal campaign files."}), 409
     try:
         return jsonify(game.delete_save((request.get_json(force=True).get("name") or "")))
     except Exception as e:
@@ -1072,6 +1371,8 @@ def api_save_delete():
 
 @app.route("/api/save/recover", methods=["POST"])
 def api_save_recover():
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Leave multiplayer before recovering a personal save."}), 409
     try:
         state = game.recover_save(request.get_json(force=True).get("name", ""))
         return jsonify({"state": state, "story": game.story_log})
@@ -1090,6 +1391,8 @@ def api_save_export():
 
 @app.route("/api/save/import", methods=["POST"])
 def api_save_import():
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Leave multiplayer before importing another campaign."}), 409
     uploaded = request.files.get("file")
     if not uploaded:
         return jsonify({"error": "Choose a Worldwalker JSON export."}), 400
@@ -1104,6 +1407,8 @@ def api_save_import():
 
 @app.route("/api/load", methods=["POST"])
 def api_load():
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Leave multiplayer before loading a personal campaign."}), 409
     d = request.get_json(force=True)
     try:
         state = game.load(d.get("name", ""))
@@ -1201,7 +1506,11 @@ def api_campaign_health_repair():
 def api_actions_update():
     try:
         d = request.get_json(force=True)
-        return jsonify({"queued_actions": game.update_queued_action(d.get("index", -1), d.get("action", ""))})
+        room = getattr(g, "worldwalker_room", None)
+        user = getattr(g, "worldwalker_user", None)
+        queued = (_multiplayer_store.update_action(room["id"], user["id"], d.get("index", -1), d.get("action", ""))
+                  if room and user else game.update_queued_action(d.get("index", -1), d.get("action", "")))
+        return jsonify({"queued_actions": queued})
     except Exception as e:
         return err(e, 400)
 
@@ -1210,7 +1519,11 @@ def api_actions_update():
 def api_actions_move():
     try:
         d = request.get_json(force=True)
-        return jsonify({"queued_actions": game.move_queued_action(d.get("index", -1), d.get("to_index", -1))})
+        room = getattr(g, "worldwalker_room", None)
+        user = getattr(g, "worldwalker_user", None)
+        queued = (_multiplayer_store.move_action(room["id"], user["id"], d.get("index", -1), d.get("to_index", -1))
+                  if room and user else game.move_queued_action(d.get("index", -1), d.get("to_index", -1)))
+        return jsonify({"queued_actions": queued})
     except Exception as e:
         return err(e, 400)
 

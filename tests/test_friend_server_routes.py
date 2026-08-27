@@ -96,6 +96,69 @@ class FriendServerRouteTests(unittest.TestCase):
             )
         self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
 
+    def test_two_accounts_join_one_room_with_separate_characters_and_plans(self):
+        script = textwrap.dedent(r"""
+            import sys
+            from pathlib import Path
+            sys.path.insert(0, str(Path.cwd() / "backend"))
+            from app import app
+
+            host = app.test_client()
+            friend = app.test_client()
+            host_auth = host.post("/api/auth/register", json={"username":"mp_host","password":"password-one"}).get_json()
+            friend_auth = friend.post("/api/auth/register", json={"username":"mp_friend","password":"password-two"}).get_json()
+            h = {"X-Worldwalker-CSRF":host_auth["csrf_token"]}
+            f = {"X-Worldwalker-CSRF":friend_auth["csrf_token"]}
+            made = host.post("/api/campaign/new", json={
+                "name":"Yahiko", "world":"Naruto", "difficulty":"Adventurer",
+                "background":"Founder of the original Akatsuki."
+            }, headers=h)
+            assert made.status_code == 200, made.data
+            room = host.post("/api/multiplayer/create", json={}, headers=h)
+            assert room.status_code == 201, room.data
+            code = room.get_json()["join_code"]
+            joined = friend.post("/api/multiplayer/join", json={
+                "join_code":code, "character_name":"Konan", "background":"Paper-user and Akatsuki founder."
+            }, headers=f)
+            assert joined.status_code == 200, joined.data
+            assert len(joined.get_json()["members"]) == 2
+
+            host_q = host.post("/api/actions/queue", json={"action":"Address the gathered rebels"}, headers=h)
+            friend_q = friend.post("/api/actions/queue", json={"action":"Scout Hanzo's patrols"}, headers=f)
+            assert host_q.get_json()["queued_actions"] == ["Address the gathered rebels"]
+            assert friend_q.get_json()["queued_actions"] == ["Scout Hanzo's patrols"]
+            host_state = host.get("/api/state").get_json()["state"]
+            friend_state = friend.get("/api/state").get_json()["state"]
+            assert host_state["name"] == "Yahiko", host_state["name"]
+            assert friend_state["name"] == "Konan", friend_state["name"]
+            assert host_state["queued_actions"] == ["Address the gathered rebels"]
+            assert friend_state["queued_actions"] == ["Scout Hanzo's patrols"]
+
+            denied = friend.post("/api/multiplayer/time", json={"amount":7,"unit":"days"}, headers=f)
+            assert denied.status_code == 400
+            chosen = host.post("/api/multiplayer/time", json={"amount":7,"unit":"days","intensity":"intense"}, headers=h)
+            assert chosen.status_code == 200
+            ready = host.post("/api/multiplayer/ready", json={"ready":True}, headers=h)
+            assert ready.status_code == 200 and ready.get_json()["your_ready"]
+            friend_status = friend.get("/api/multiplayer/status").get_json()
+            assert not friend_status["your_ready"]
+            assert friend_status["time_amount"] == 7 and friend_status["time_unit"] == "days"
+            assert 0 < friend_status["seconds_left"] <= 600
+        """)
+        with tempfile.TemporaryDirectory() as td:
+            env = os.environ.copy()
+            env.update({
+                "WORLDWALKER_DATA_DIR": str(Path(td) / "data"),
+                "WORLDWALKER_ACCOUNTS_ENABLED": "1",
+                "WORLDWALKER_SECURE_COOKIES": "0",
+                "WORLDWALKER_MAX_ACCOUNTS": "10",
+            })
+            result = subprocess.run(
+                [sys.executable, "-c", script], cwd=ROOT, env=env,
+                capture_output=True, text=True, timeout=90,
+            )
+        self.assertEqual(result.returncode, 0, result.stdout + "\n" + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

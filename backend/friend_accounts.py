@@ -143,6 +143,7 @@ class FriendGameRegistry:
         self.accounts = accounts
         self._lock = threading.RLock()
         self._games: dict[str, GameSession] = {}
+        self._room_games: dict[str, GameSession] = {}
 
     def _seed_settings(self, destination: Path):
         if destination.exists():
@@ -180,3 +181,24 @@ class FriendGameRegistry:
     def remove(self, user_id: str):
         with self._lock:
             self._games.pop(user_id, None)
+
+    def get_room(self, room, room_root: Path) -> GameSession:
+        """Return the one authoritative engine session for a shared room."""
+        room_id = str(room["id"])
+        with self._lock:
+            existing = self._room_games.get(room_id)
+            if existing is not None:
+                return existing
+            host_root = self.accounts.user_root(str(room["host_user_id"]))
+            settings_path = host_root / "settings.json"
+            self._seed_settings(settings_path)
+            game = GameSession(save_dir=Path(room_root), settings_path=settings_path, account_id=f"room:{room_id}")
+            game.shared_save_path = Path(room_root) / "shared_campaign.json"
+            if game.shared_save_path.exists():
+                game.load("shared_campaign")
+            self._room_games[room_id] = game
+            return game
+
+    def remove_room(self, room_id: str):
+        with self._lock:
+            self._room_games.pop(str(room_id), None)

@@ -31,7 +31,7 @@ EXPECTED_NARUTO_TRACKS = {
 
 class WorldwalkerV3162Tests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.17.0")
+        self.assertEqual(APP_VERSION, "3.18.0")
 
     def test_all_default_bleach_tracks_are_bundled(self):
         folder = ROOT / "music" / "Bleach"
@@ -71,9 +71,10 @@ class WorldwalkerV3162Tests(unittest.TestCase):
         finally:
             response.close()
 
-    def test_pyinstaller_keeps_the_portable_music_directory(self):
+    def test_pyinstaller_does_not_embed_a_duplicate_music_directory(self):
         spec = (ROOT / "WorldwalkerRPG.spec").read_text(encoding="utf-8")
-        self.assertIn("('music', 'music')", spec)
+        self.assertNotIn("('music', 'music')", spec)
+        self.assertIn("Music is copied beside the finished EXE", spec)
 
 
 if __name__ == "__main__":

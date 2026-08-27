@@ -786,6 +786,17 @@ class TimeSkipMixin:
             "Training gains scale with actual sessions, intensity, aptitude, instruction, resources and recovery; do not compress a month into one session.",
             "Return sparse JSON: omit empty optional fields, empty arrays and empty objects.",
         ]
+        multiplayer_context = getattr(self, "multiplayer_context", None)
+        if isinstance(multiplayer_context, dict) and multiplayer_context.get("participants"):
+            payload["multiplayer"] = copy.deepcopy(multiplayer_context)
+            payload["requirements"].extend([
+                "This is one shared multiplayer turn. Every planned action begins with its controlling character's name. Resolve each ready character as an independent protagonist; characters marked passes=true or connected=false take no deliberate action and must never repeat old standing orders.",
+                "Tag every relevant update title or related_action with the acting character. Preserve one shared clock and world continuity even if the characters are in different scenes.",
+                "Return multiplayer_character_updates keyed by the supplied user_id. Include only that character's changed mechanical fields (stats, pools, status, location, skills, titles, inventory, equipment, special abilities, level/XP and activity); never put shared world facts there.",
+            ])
+            payload.setdefault("schema", {})["multiplayer_character_updates"] = {
+                "user_id": "changed character fields only; one object per participant"
+            }
         use_major_model = bool(event_mode or canon_stop or any(bool(chk.get("major_event")) for chk in checks))
         narrator_client = self.ai_major if use_major_model and self.settings.get("major_event_model") else self.ai
         task = "major_event" if (event_mode or canon_stop) else ("moment" if moment_mode else "time_skip")
@@ -1814,7 +1825,9 @@ class TimeSkipMixin:
                 "validation": validation, "continuity_warnings": continuity_warnings,
                 "integrity_report": integrity_report,
                 "deferred_actions": self.state.get("queued_actions", []),
-                "completed_actions": data.get("completed_actions", []), "updates": updates + local_world_events}
+                "completed_actions": data.get("completed_actions", []), "updates": updates + local_world_events,
+                "multiplayer_character_updates": copy.deepcopy(data.get("multiplayer_character_updates", {}))
+                if isinstance(data.get("multiplayer_character_updates"), dict) else {}}
 
     TOWER_FLOOR_DEADLINE_DAYS = 90
 

@@ -70,6 +70,7 @@
       <span id="hdr-autosave" class="pill save-pill" title="Last autosave">Not saved</span>
       <span id="hdr-ai" class="pill ai-pill">AI: READY TO TEST</span>
       <span id="hdr-cost" class="pill cost-pill" title="Estimated AI spend this session" hidden></span>
+      <button id="btn-multiplayer" class="account-pill multiplayer-pill" type="button" hidden><span>◆</span><b id="hdr-multiplayer-label">MULTIPLAYER</b></button>
       <button id="btn-account" class="account-pill" type="button" title="Sign out of this friend account" hidden><span>●</span><b id="hdr-account-name"></b> · SIGN OUT</button>
       <button id="btn-settings-gear" class="icon-btn" title="AI &amp; Portrait Setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </div>
@@ -298,6 +299,7 @@
             <button id="btn-music-refresh" type="button" title="Rescan music folder">↻</button>
             <button id="btn-music-folder" type="button" title="Open this world's music folder">📁</button>
           </div>
+          <label class="music-volume" for="music-widget-volume"><span>VOLUME</span><input id="music-widget-volume" type="range" min="0" max="1" step="0.05" value="0.35" /><b id="music-volume-value">35%</b></label>
           <p class="hint" id="music-help">Add MP3/MP4 files to this world's music folder.</p>
         </div>
       </div>
@@ -306,6 +308,51 @@
 </div>
 
 <!-- ============ MODALS ============ -->
+
+<div class="modal-backdrop" id="modal-multiplayer">
+  <div class="modal multiplayer-modal" role="dialog" aria-modal="true" aria-labelledby="multiplayer-title">
+    <header class="modal-head"><span id="multiplayer-title">Two-Player Campaign</span><button class="modal-close" data-close="modal-multiplayer">✕</button></header>
+    <div class="modal-body">
+      <section id="multiplayer-inactive">
+        <div class="system-summary"><b>PLAY THE SAME WORLD TOGETHER</b><span>Create a shared copy of your currently loaded campaign, or join a friend's campaign with their six-character code. Your original single-player save is never overwritten.</span></div>
+        <div class="multiplayer-start-grid">
+          <div class="multiplayer-card">
+            <h3>Host this campaign</h3>
+            <p class="hint">Load or import the campaign you want first. Its current character becomes your multiplayer character.</p>
+            <button id="btn-multiplayer-create" class="btn-primary full" type="button">CREATE SHARED COPY</button>
+          </div>
+          <form id="form-multiplayer-join" class="multiplayer-card">
+            <h3>Join a friend</h3>
+            <label>Invite code<input id="multiplayer-join-code" maxlength="6" placeholder="ABC123" required /></label>
+            <label>Your character's name<input id="multiplayer-character-name" maxlength="80" placeholder="Your character" required /></label>
+            <label>Background<textarea id="multiplayer-character-background" rows="3" maxlength="3000" placeholder="Who are they in this world?"></textarea></label>
+            <button class="btn-primary full" type="submit">JOIN CAMPAIGN</button>
+          </form>
+        </div>
+      </section>
+      <section id="multiplayer-active" hidden>
+        <div class="multiplayer-room-head">
+          <div><small>INVITE CODE</small><strong id="multiplayer-invite-code">------</strong></div>
+          <div><small>ROUND</small><strong id="multiplayer-round">1</strong></div>
+          <div><small>AUTO ADVANCE</small><strong id="multiplayer-timer">10:00</strong></div>
+        </div>
+        <p id="multiplayer-rule" class="hint">After ten minutes, only ready and connected players act. Disconnected or unready players pass. If nobody is ready, the world advances one Moment.</p>
+        <div id="multiplayer-players" class="multiplayer-players"></div>
+        <div id="multiplayer-host-time" class="multiplayer-host-time" hidden>
+          <h3>Shared time advance</h3>
+          <div class="time-row"><input id="multiplayer-time-amount" type="number" min="1" max="999" value="1" /><select id="multiplayer-time-unit"><option value="moment">moment</option><option value="days">days</option><option value="weeks">weeks</option><option value="months">months</option><option value="next_event">next major event</option></select><select id="multiplayer-intensity"><option value="light">light</option><option value="normal" selected>normal</option><option value="intense">intense</option><option value="extreme">extreme</option></select></div>
+          <button id="btn-multiplayer-save-time" class="btn-ghost full" type="button">SAVE SHARED TIME</button>
+          <button id="btn-multiplayer-resolve" class="btn-accent full" type="button">RESOLVE READY PLAYERS NOW</button>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-multiplayer-ready" class="btn-primary" type="button">READY</button>
+          <button id="btn-multiplayer-leave" class="btn-ghost" type="button">LEAVE MULTIPLAYER</button>
+        </div>
+        <p id="multiplayer-error" class="auth-error" hidden></p>
+      </section>
+    </div>
+  </div>
+</div>
 
 <div class="modal-backdrop auth-backdrop" id="modal-auth">
   <div class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
@@ -327,7 +374,7 @@
       <form id="form-register" class="auth-card auth-card-new">
         <h2>Begin a new account</h2>
         <label for="register-username">Username</label>
-        <input id="register-username" name="username" autocomplete="username" maxlength="24" pattern="[-A-Za-z0-9_]{3,24}" required />
+        <input id="register-username" name="username" autocomplete="username" maxlength="24" pattern="[A-Za-z0-9_\-]{3,24}" required />
         <label for="register-password">Password</label>
         <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="6" required />
         <div id="invite-code-row" hidden>

@@ -172,6 +172,9 @@ def _save_dir(instance=None):
 
 class PersistenceMixin:
     def savepath(self):
+        shared = getattr(self, "shared_save_path", None)
+        if shared:
+            return Path(shared)
         return _save_dir(self) / (safe_filename(self.state.get("name", "Traveler")) + "_" + safe_filename(self.state.get("world", "World")) + ".json")
 
     def save_bundle(self, kind="manual"):

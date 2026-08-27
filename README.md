@@ -6,7 +6,16 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.17.0** (schema 16).
+Current app/save version: **3.18.0** (schema 16).
+
+Version 3.18 adds durable two-player campaigns to the hosted friend server.
+The host shares a copy of any current campaign with a six-character invite
+code; each account keeps its own character, action plan, readiness and portrait
+while both players inhabit one authoritative world and Chronicle. Rounds last
+ten minutes, resolve early when both players are ready, pass disconnected or
+unready characters, and advance one Moment when nobody is ready. Shared rooms
+survive refreshes and server restarts. This version also adds a persistent
+music-widget volume slider and exposes the complete world time on hover.
 
 Version 3.17 adds private friend accounts to the hosted build. Everyone can
 use the same Cloudflare URL while retaining an isolated live session, settings,

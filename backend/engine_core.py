@@ -199,6 +199,10 @@ class CoreMixin:
         self.last_lore_context = ""
         self.last_assessment = {}
         self._pending_reentry_hours = None
+        # Set only while a shared multiplayer round is being resolved.  It is
+        # deliberately transient: room membership/readiness lives in SQLite,
+        # not inside a portable single-player campaign export.
+        self.multiplayer_context = None
 
     def load_settings(self):
         try:

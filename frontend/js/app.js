@@ -100,6 +100,9 @@ const APP = {
   animationsEnabled: true,
   music: { world: "", tracks: [], index: 0, userStarted: false },
   musicVolume: 0.35,
+  multiplayer: null,
+  multiplayerLastResult: 0,
+  multiplayerPoll: null,
   activeChatThread: null,
   pendingLethal: null,   // {kind:'action'|'timeskip', action, assessment, timeskip:{...}}
   pendingPowerGoal: null, // the time-skip payload awaiting confirmed_power_goal
@@ -1089,7 +1092,10 @@ function renderState(state) {
   if (hasRace) $("#stat-race").textContent = s.race;
   $("#stat-age").textContent = s.age ? String(s.age) : "Unknown";
   $("#stat-status").textContent = (s.status && s.status.length) ? s.status.join(", ") : "Normal";
-  $("#stat-time").textContent = s.world_time || "Day 1 — Morning";
+  const fullWorldTime = s.world_time || "Day 1 — Morning";
+  $("#stat-time").textContent = fullWorldTime;
+  $("#stat-time").title = fullWorldTime;
+  $("#stat-time").setAttribute("aria-label", `Current time: ${fullWorldTime}`);
   const towerLabel = $("#stat-tower-timer-label"), towerTimer = $("#stat-tower-timer");
   if (typeof s._tower_days_left === "number") {
     towerLabel.hidden = false; towerTimer.hidden = false;
@@ -1309,6 +1315,18 @@ $("#btn-music-folder").addEventListener("click", () => openMusicFolder().catch((
 musicPlayer().addEventListener("ended", () => loadMusicTrack(APP.music.index + 1, true));
 musicPlayer().addEventListener("play", renderMusicStatus);
 musicPlayer().addEventListener("pause", renderMusicStatus);
+
+function setMusicWidgetVolume(value, persist = false) {
+  const volume = Math.max(0, Math.min(1, Number(value ?? .35)));
+  APP.musicVolume = volume;
+  musicPlayer().volume = volume;
+  if ($("#music-widget-volume")) $("#music-widget-volume").value = volume;
+  if ($("#st-music-volume")) $("#st-music-volume").value = volume;
+  if ($("#music-volume-value")) $("#music-volume-value").textContent = `${Math.round(volume * 100)}%`;
+  if (persist) apiPost("/api/settings", { music_volume: volume }).catch((error) => showToast(error.message, "danger"));
+}
+$("#music-widget-volume").addEventListener("input", (event) => setMusicWidgetVolume(event.target.value, false));
+$("#music-widget-volume").addEventListener("change", (event) => setMusicWidgetVolume(event.target.value, true));
 
 $("#queued-actions").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-remove-action], [data-edit-action], [data-move-action]");
@@ -2193,6 +2211,18 @@ async function submitCombatAction(action) {
   // this round is resolved entirely locally and returns near-instantly, so
   // showing an AI-busy state here would misrepresent what's actually free.
   if (combatRoundBusy || APP.busy || !APP.state?.combat?.active) return;
+  if (APP.multiplayer) {
+    try {
+      const ability = (action === "attack" || action === "overwhelm") ? $("#combat-ability").value : "";
+      const phrase = ability ? `${action} using ${ability}` : action;
+      const queued = await apiPost("/api/actions/queue", { action: `In the current combat, ${phrase}.` });
+      APP.state.queued_actions = queued.queued_actions || [];
+      renderQueuedActions(APP.state.queued_actions);
+      renderMultiplayer(await apiPost("/api/multiplayer/ready", { ready: true }));
+      showToast("Combat choice locked in for this shared round.", "notify");
+    } catch (error) { showToast(error.message, "danger"); }
+    return;
+  }
   combatRoundBusy = true;
   setCombatButtonsDisabled(true);
   try {
@@ -2431,6 +2461,21 @@ $("#btn-begin-timeskip").addEventListener("click", async () => {
 
 async function beginTimeSkip(amount, unit, orders, intensity) {
   if (!APP.campaignActive) { showToast("Start a campaign first.", "system"); return; }
+  if (APP.multiplayer) {
+    try {
+      if (orders?.trim()) {
+        for (const action of orders.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)) await apiPost("/api/actions/queue", { action });
+      }
+      if (APP.multiplayer.is_host) {
+        await apiPost("/api/multiplayer/time", { amount, unit, intensity });
+      }
+      renderMultiplayer(await apiPost("/api/multiplayer/ready", { ready: true }));
+      $("#action-input").value = "";
+      $("#time-plan").value = "";
+      showToast("Ready. The round resolves when both players are ready or the ten-minute timer expires.", "notify");
+    } catch (error) { showToast(error.message, "danger"); }
+    return;
+  }
   setBusy(true);
   try {
     const assessData = await apiPost("/api/time/assess", { amount, unit, orders, intensity });
@@ -4192,7 +4237,7 @@ $("#btn-save-settings").addEventListener("click", async () => {
   APP.soundEnabled = patch.sound_enabled;
   if (!APP.soundEnabled) stopWorldCue();
   APP.musicEnabled = patch.music_enabled;
-  APP.musicVolume = patch.music_volume;
+  setMusicWidgetVolume(patch.music_volume, false);
   fadeAudioTo(musicPlayer(), patch.music_volume, 300);
   if (!APP.musicEnabled) musicPlayer().pause();
   APP.animationsEnabled = patch.animations_enabled;
@@ -4461,7 +4506,127 @@ function applyAccountSession(auth) {
   $("#btn-welcome-signout").hidden = !APP.account;
   $("#hdr-account-name").textContent = APP.account?.username || "";
   $("#invite-code-row").hidden = !auth.invite_required;
+  $("#btn-multiplayer").hidden = !APP.account;
 }
+
+// ---------------------------------------------------------------------------
+// Two-player shared campaigns
+// ---------------------------------------------------------------------------
+function multiplayerClock(seconds) {
+  const safe = Math.max(0, Number(seconds || 0));
+  return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(Math.floor(safe % 60)).padStart(2, "0")}`;
+}
+
+function renderMultiplayer(status) {
+  APP.multiplayer = status?.active ? status : null;
+  const button = $("#btn-multiplayer");
+  button.hidden = !APP.accountsEnabled || !APP.account;
+  button.classList.toggle("active", !!APP.multiplayer);
+  $("#hdr-multiplayer-label").textContent = APP.multiplayer
+    ? `R${status.round} · ${status.resolving ? "RESOLVING" : multiplayerClock(status.seconds_left)}`
+    : "MULTIPLAYER";
+  $("#multiplayer-inactive").hidden = !!APP.multiplayer;
+  $("#multiplayer-active").hidden = !APP.multiplayer;
+  if (!APP.multiplayer) {
+    $("#btn-advance").textContent = "ADVANCE";
+    return;
+  }
+  $("#multiplayer-invite-code").textContent = status.join_code || "------";
+  $("#multiplayer-round").textContent = status.round;
+  $("#multiplayer-timer").textContent = status.resolving ? "RESOLVING" : multiplayerClock(status.seconds_left);
+  $("#multiplayer-players").innerHTML = (status.members || []).map((member) => {
+    const classes = ["multiplayer-player", member.ready ? "ready" : "", member.connected ? "" : "offline"].filter(Boolean).join(" ");
+    const state = !member.connected ? "Disconnected · Passes" : member.ready ? "Ready" : "Planning";
+    return `<article class="${classes}"><header><b>${escapeHtml(member.character_name)}</b><span>${escapeHtml(member.role)}${member.is_you ? " · You" : ""}</span></header><small>${escapeHtml(member.username)} · ${state}</small></article>`;
+  }).join("");
+  $("#multiplayer-host-time").hidden = !status.is_host;
+  $("#multiplayer-time-amount").value = status.time_amount || 1;
+  $("#multiplayer-time-unit").value = status.time_unit || "moment";
+  $("#multiplayer-intensity").value = status.intensity || "normal";
+  $("#btn-multiplayer-ready").textContent = status.your_ready ? "NOT READY — EDIT PLAN" : "READY";
+  $("#btn-multiplayer-ready").classList.toggle("btn-ghost", !!status.your_ready);
+  $("#btn-multiplayer-ready").classList.toggle("btn-primary", !status.your_ready);
+  $("#btn-multiplayer-ready").disabled = !!status.resolving;
+  $("#btn-multiplayer-resolve").disabled = !!status.resolving;
+  $("#btn-advance").textContent = status.your_ready ? "READY ✓" : "READY";
+  $("#btn-advance").disabled = !!status.resolving || !!status.your_ready;
+  $("#multiplayer-error").hidden = !status.last_error;
+  $("#multiplayer-error").textContent = status.last_error || "";
+  if (APP.state) {
+    APP.state.queued_actions = status.your_actions || [];
+    renderQueuedActions(APP.state.queued_actions);
+  }
+}
+
+async function refreshMultiplayerStatus(showNewResult = true) {
+  if (!APP.accountsEnabled || !APP.account) return;
+  try {
+    const status = await apiGet(`/api/multiplayer/status?since_round=${APP.multiplayerLastResult || 0}`);
+    if (status.result && showNewResult) {
+      APP.multiplayerLastResult = status.last_result_round || APP.multiplayerLastResult;
+      appendStoryEntries(status.result.story || []);
+      (status.result.notifications || []).forEach((note) => showToast(note.message || note, "notify"));
+      const latest = await apiGet("/api/state");
+      APP.campaignActive = latest.campaign_active;
+      renderState(latest.state);
+      playSfx("time_skip");
+    } else if (status.last_result_round) {
+      APP.multiplayerLastResult = Math.max(APP.multiplayerLastResult, status.last_result_round);
+    }
+    renderMultiplayer(status);
+  } catch (error) {
+    console.error("Multiplayer poll failed", error);
+  }
+}
+
+function startMultiplayerPolling() {
+  clearInterval(APP.multiplayerPoll);
+  APP.multiplayerPoll = setInterval(() => refreshMultiplayerStatus(true), 2500);
+}
+
+$("#btn-multiplayer").addEventListener("click", async () => {
+  await refreshMultiplayerStatus(false);
+  openModal("modal-multiplayer");
+});
+$("#btn-multiplayer-create").addEventListener("click", async () => {
+  try {
+    await apiPost("/api/multiplayer/create", {});
+    window.location.reload();
+  } catch (error) { showToast(error.message, "danger"); }
+});
+$("#form-multiplayer-join").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await apiPost("/api/multiplayer/join", {
+      join_code: $("#multiplayer-join-code").value.trim().toUpperCase(),
+      character_name: $("#multiplayer-character-name").value.trim(),
+      background: $("#multiplayer-character-background").value.trim(),
+    });
+    window.location.reload();
+  } catch (error) { showToast(error.message, "danger"); }
+});
+$("#btn-multiplayer-ready").addEventListener("click", async () => {
+  try { renderMultiplayer(await apiPost("/api/multiplayer/ready", { ready: !APP.multiplayer?.your_ready })); }
+  catch (error) { showToast(error.message, "danger"); }
+});
+$("#btn-multiplayer-save-time").addEventListener("click", async () => {
+  try {
+    renderMultiplayer(await apiPost("/api/multiplayer/time", {
+      amount: Number($("#multiplayer-time-amount").value || 1), unit: $("#multiplayer-time-unit").value,
+      intensity: $("#multiplayer-intensity").value,
+    }));
+    showToast("Shared time advance saved.", "notify");
+  } catch (error) { showToast(error.message, "danger"); }
+});
+$("#btn-multiplayer-resolve").addEventListener("click", async () => {
+  try { await apiPost("/api/multiplayer/resolve", {}); await refreshMultiplayerStatus(false); }
+  catch (error) { showToast(error.message, "danger"); }
+});
+$("#btn-multiplayer-leave").addEventListener("click", async () => {
+  if (!window.confirm(APP.multiplayer?.is_host ? "Close this multiplayer room and return to your original single-player campaign?" : "Leave this multiplayer campaign?")) return;
+  try { await apiPost("/api/multiplayer/leave", {}); window.location.reload(); }
+  catch (error) { showToast(error.message, "danger"); }
+});
 
 function showAuthError(message) {
   const box = $("#auth-error");
@@ -4474,7 +4639,7 @@ async function finishGameBoot() {
   APP.soundEnabled = !!settings.sound_enabled;
   APP.musicEnabled = settings.music_enabled !== false;
   APP.musicVolume = Number(settings.music_volume ?? .35);
-  musicPlayer().volume = APP.musicVolume;
+  setMusicWidgetVolume(APP.musicVolume, false);
   APP.animationsEnabled = !!settings.animations_enabled;
   APP.campaignActive = st.campaign_active;
   renderState(st.state);
@@ -4494,6 +4659,10 @@ async function finishGameBoot() {
   }
   initCollapsiblePanels();
   refreshUsagePill();
+  if (APP.accountsEnabled) {
+    await refreshMultiplayerStatus(true);
+    startMultiplayerPolling();
+  }
 }
 
 $("#form-login").addEventListener("submit", async (event) => {

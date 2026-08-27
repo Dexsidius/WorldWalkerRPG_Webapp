@@ -335,6 +335,7 @@ input,select,textarea{ font-family:inherit; }
 .kv{ display:grid; grid-template-columns:auto 1fr; gap:4px 10px; margin:10px 0 0; font-size:12px; }
 .kv dt{ color:var(--muted); font-weight:700; }
 .kv dd{ margin:0; color:var(--sub); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#stat-time[title]{ cursor:help; }
 
 /* attributes — compact list rows, icon + name left, value + mod right */
 .attr-grid{ display:flex; flex-direction:column; }
@@ -825,6 +826,42 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 .music-buttons button{ min-width:0; padding:6px 2px; border:1px solid var(--border-soft); border-radius:7px; background:rgba(0,0,0,.2); color:var(--sub); }
 .music-buttons button:hover{ color:var(--gold); border-color:var(--accent); }
 .music-controls .hint{ margin:7px 0 0; overflow-wrap:anywhere; }
+.music-volume{ display:grid; grid-template-columns:auto minmax(70px,1fr) 34px; align-items:center; gap:7px; margin-top:9px; color:var(--muted); font-size:8px; font-weight:900; letter-spacing:.08em; }
+.music-volume input{ min-width:0; width:100%; accent-color:var(--gold); }
+.music-volume b{ color:var(--sub); font-size:9px; text-align:right; letter-spacing:0; }
+
+.multiplayer-pill{ border-color:rgba(var(--accent2-rgb),.55); color:var(--accent2); }
+.multiplayer-pill.active{ color:#b8ffe9; box-shadow:inset 0 0 18px rgba(var(--accent2-rgb),.1); }
+.multiplayer-modal{ width:min(820px,94vw); }
+.multiplayer-start-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; }
+.multiplayer-card{ padding:16px; border:1px solid var(--border-soft); border-radius:10px; background:rgba(0,0,0,.18); }
+.multiplayer-card h3{ margin:0 0 10px; color:var(--gold); }
+.multiplayer-card label{ display:block; margin:9px 0; color:var(--sub); font-size:10px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; }
+.multiplayer-card input,.multiplayer-card textarea{ width:100%; margin-top:5px; }
+.multiplayer-room-head{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.multiplayer-room-head>div{ padding:12px; text-align:center; border:1px solid var(--border-soft); border-radius:9px; background:rgba(var(--accent-rgb),.08); }
+.multiplayer-room-head small{ display:block; color:var(--muted); font-size:8px; font-weight:900; letter-spacing:.11em; }
+.multiplayer-room-head strong{ display:block; margin-top:5px; color:var(--gold); font:700 18px var(--font-display); }
+.multiplayer-players{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin:14px 0; }
+.multiplayer-player{ padding:12px; border:1px solid var(--border-soft); border-radius:9px; background:rgba(0,0,0,.2); }
+.multiplayer-player.ready{ border-color:rgba(var(--success-rgb),.5); }
+.multiplayer-player.offline{ opacity:.65; border-style:dashed; }
+.multiplayer-player header{ display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.multiplayer-player b{ color:var(--text); }
+.multiplayer-player span{ color:var(--sub); font-size:10px; }
+.multiplayer-player small{ display:block; margin-top:5px; color:var(--muted); }
+.multiplayer-host-time{ padding:12px; border:1px solid var(--border-soft); border-radius:9px; }
+.multiplayer-host-time h3{ margin:0 0 9px; color:var(--gold); }
+.multiplayer-host-time .time-row{ grid-template-columns:74px minmax(130px,1fr) minmax(90px,1fr); }
+.multiplayer-host-time button{ margin-top:8px; }
+@media(max-width:720px){
+  .multiplayer-start-grid,.multiplayer-players{ grid-template-columns:1fr; }
+  .multiplayer-room-head{ grid-template-columns:1fr 1fr 1fr; }
+  .multiplayer-room-head>div{ padding:9px 4px; }
+  .multiplayer-room-head strong{ font-size:14px; }
+  .multiplayer-host-time .time-row{ grid-template-columns:64px 1fr; }
+  .multiplayer-host-time .time-row select:last-child{ grid-column:1/-1; }
+}
 
 /* ==========================================================================
    Toasts + cinematic banner
