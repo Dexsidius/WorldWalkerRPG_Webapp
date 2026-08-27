@@ -109,6 +109,8 @@ const APP = {
   lastLocation: null,
   lastCombatActive: false,
   lastMajorVisualKey: "",
+  activeWorldCue: null,
+  narutoDeathCueActive: false,
 };
 
 // ---------------------------------------------------------------------------
@@ -141,6 +143,77 @@ function playSfx(name) {
     el.currentTime = 0;
     el.play().catch(() => {});
   } catch (e) {}
+}
+
+const WORLD_CUE_VOLUMES = {
+  naruto_advance: .58,
+  naruto_character_start: .7,
+  naruto_pain_start: .78,
+  naruto_death: .76,
+};
+
+function stopWorldCue(restoreMusic = true) {
+  const cue = APP.activeWorldCue;
+  if (cue) {
+    try { cue.pause(); cue.currentTime = 0; } catch (_) {}
+    APP.activeWorldCue = null;
+  }
+  const player = musicPlayer();
+  if (restoreMusic && player && !player.paused) fadeAudioTo(player, APP.musicVolume ?? .35, 350);
+}
+
+function playWorldCue(name) {
+  if (!APP.soundEnabled) return;
+  const el = document.getElementById("snd-" + name);
+  if (!el) return;
+  if (APP.activeWorldCue && APP.activeWorldCue !== el) stopWorldCue(false);
+  const player = musicPlayer();
+  const shouldDuckMusic = player && !player.paused;
+  if (shouldDuckMusic) fadeAudioTo(player, Math.min(.1, APP.musicVolume ?? .35), 180);
+  APP.activeWorldCue = el;
+  try {
+    el.playbackRate = 1;
+    el.volume = WORLD_CUE_VOLUMES[name] ?? .72;
+    el.currentTime = 0;
+    el.onended = () => {
+      if (APP.activeWorldCue !== el) return;
+      APP.activeWorldCue = null;
+      if (shouldDuckMusic && !player.paused) fadeAudioTo(player, APP.musicVolume ?? .35, 450);
+    };
+    el.play().catch(() => {
+      if (APP.activeWorldCue === el) APP.activeWorldCue = null;
+      if (shouldDuckMusic && !player.paused) fadeAudioTo(player, APP.musicVolume ?? .35, 250);
+    });
+  } catch (_) {
+    if (APP.activeWorldCue === el) APP.activeWorldCue = null;
+  }
+}
+
+function playNarutoAdvanceCue() {
+  if (APP.state?.world === "Naruto") playWorldCue("naruto_advance");
+}
+
+function playCampaignStartCue(campaign) {
+  if (campaign?.world !== "Naruto") { playSfx("world_event"); return; }
+  if (campaign.canon_character_id === "pain_birth") playWorldCue("naruto_pain_start");
+  else if (!campaign.canon_character_id) playWorldCue("naruto_character_start");
+  else playSfx("world_event");
+}
+
+function playDeathCue() {
+  if (APP.state?.world !== "Naruto") { playSfx("danger"); return; }
+  if (APP.narutoDeathCueActive) return;
+  APP.narutoDeathCueActive = true;
+  playWorldCue("naruto_death");
+}
+
+function playNewCanonEventCues(previousState, nextState) {
+  if (nextState?.world !== "Naruto") return;
+  const previous = new Set(previousState?.canon_events_fired || []);
+  const fresh = (nextState.canon_events_fired || []).filter((title) => !previous.has(title));
+  if (fresh.some((title) => String(title).toLowerCase() === "pain's assault on konoha")) {
+    playWorldCue("naruto_pain_start");
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -952,6 +1025,7 @@ function applyWorldInterfaceTheme(world) {
 function renderState(state) {
   APP.state = state;
   const s = state;
+  if (Number(s.hp || 0) > 0) APP.narutoDeathCueActive = false;
   document.body.setAttribute("data-world", s.world || "Custom World");
   document.body.classList.toggle("motion-off", !APP.animationsEnabled);
   applyWorldInterfaceTheme(s.world || "Custom World");
@@ -1854,6 +1928,7 @@ async function handleTurnResult(result, action) {
     appendStoryEntries([{ text: "[ACTION NOT POSSIBLE]\n" + result.reason, tag: "meta" }]);
     return;
   }
+  const previousState = APP.state;
   appendStoryEntries(result.story);
   if (result.roll) {
     playSfx("dice");
@@ -1861,9 +1936,10 @@ async function handleTurnResult(result, action) {
     if (!result.roll.success) { flashScreen("danger"); shakeApp(); }
   }
   renderState(result.state);
+  playNewCanonEventCues(previousState, result.state);
   handleNotifications(result.notifications);
   if (result.died) {
-    playSfx("danger"); shakeApp();
+    playDeathCue(); shakeApp();
     openModal("modal-death");
   }
   refreshUsagePill();
@@ -2141,7 +2217,7 @@ async function submitCombatAction(action) {
         await handleTurnResult(narrated);
       } finally { setBusy(false); }
     } else if (result.player_died) {
-      playSfx("danger"); shakeApp();
+      playDeathCue(); shakeApp();
     }
   } catch (e) { showToast(e.message, "danger"); }
   finally { combatRoundBusy = false; setCombatButtonsDisabled(false); }
@@ -2320,6 +2396,7 @@ syncTimeControl("#td-unit", "#td-amount", "#td-amount-field");
 
 $("#btn-advance").addEventListener("click", async () => {
   if (APP.busy || !APP.campaignActive) return;
+  playNarutoAdvanceCue();
   const draft = $("#action-input").value.trim();
   if (draft) await submitAction(draft);
   const unit = $("#time-unit").value;
@@ -2338,6 +2415,7 @@ $("#btn-begin-timeskip").addEventListener("click", async () => {
   const amount = ["moment", "next_event"].includes(unit) ? 1 : parseInt($("#td-amount").value || "1", 10);
   const orders = $("#td-orders").value;
   const intensity = $("#td-intensity").value;
+  playNarutoAdvanceCue();
   closeModal("modal-time-detail");
   await beginTimeSkip(amount, unit, orders, intensity);
 });
@@ -2730,8 +2808,10 @@ function clientDurationMinutes(amount, unit) {
 }
 
 function handleTimeSkipResult(result, payload) {
+  const previousState = APP.state;
   appendStoryEntries(result.story);
   renderState(result.state);
+  playNewCanonEventCues(previousState, result.state);
   // A resolved skip always returns the backend to moment mode. Mirror that
   // locally so the selector and World Systems label never disagree.
   $("#time-unit").value = "moment";
@@ -2748,7 +2828,7 @@ function handleTimeSkipResult(result, payload) {
     // A time skip can end in death too (an extreme roll, the Tower's floor
     // countdown) — same death/rewind modal every other death path already
     // uses, just reached from a different resolution pipeline.
-    playSfx("danger"); shakeApp();
+    playDeathCue(); shakeApp();
     openModal("modal-death");
   }
   if (result.major_event_reached) {
@@ -3929,7 +4009,8 @@ $("#campaign-preview").addEventListener("click", async (event) => {
 $("#btn-preview-back").addEventListener("click", () => closeModal("modal-campaign-preview"));
 $("#btn-confirm-campaign").addEventListener("click", async () => {
   if (!APP.pendingCampaign || APP.busy) return;
-  setBusy(true); APP.deferPortraitGeneration = true; playSfx("world_event");
+  setBusy(true); APP.deferPortraitGeneration = true;
+  playCampaignStartCue(APP.pendingCampaign);
   try {
     const created = await apiPost("/api/campaign/new", APP.pendingCampaign);
     APP.campaignActive = true; APP.portraitAttempted.clear();
@@ -4100,6 +4181,7 @@ $("#btn-save-settings").addEventListener("click", async () => {
   if ($("#st-api-key").value.trim()) patch.api_key = $("#st-api-key").value.trim();
   await apiPost("/api/settings", patch);
   APP.soundEnabled = patch.sound_enabled;
+  if (!APP.soundEnabled) stopWorldCue();
   APP.musicEnabled = patch.music_enabled;
   APP.musicVolume = patch.music_volume;
   fadeAudioTo(musicPlayer(), patch.music_volume, 300);

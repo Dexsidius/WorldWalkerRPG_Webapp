@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.16.0** (schema 16).
+Current app/save version: **3.16.1** (schema 16).
+
+Version 3.16.1 adds compact Naruto-specific sound cues: a short Advance sound,
+a hand-sign cue for original-character starts, Pain's theme for the Pain canon
+start and the beginning of Pain's Assault, and a death cue for Naruto campaigns.
+The cues respect the sound-effects setting, avoid overlapping one another, and
+briefly lower active background music.
 
 Version 3.16 adds a deterministic depth audit across every bundled world,
 structured scene identity for much more reliable environment artwork, and
