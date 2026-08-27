@@ -2045,6 +2045,13 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 f"Established races in this world include: {', '.join(options)}. If the player's background clearly describes something else, invent a specific, fitting race name instead of forcing it into one of these — it just needs to logically follow this world's actual rules for what that race can do (a slime that breathes fire needs an in-fiction reason a human turned monster wouldn't). Keep it a short name (1-3 words), not a sentence."
             )
         requirements.append("If the player's original background was vague, complete the missing upbringing, family or community context, training history, formative event, important relationship, motivation, and complication. Keep supplied facts unchanged, make the additions setting-valid, and return the enriched account in state_patch.background.")
+        countdown = self.canon_countdown()
+        if countdown.get("available"):
+            requirements.append(
+                f"The opening is fixed at {self.state.get('canon_anchor', 'the selected starting era')}. "
+                f"The next dated canon event, {countdown.get('title')}, is still {countdown.get('label')}. "
+                "Do not move it forward, begin it now, or imply that it already happened. Open only in the selected era's present-day situation."
+            )
         requirements.append("Every starting ability and hidden-class signature skill must remain named in state_patch.skills and be explainable through its in-world origin, effect, limitation or cost, growth path, and canon_balance. Introduce it naturally in the opening; it is a real capability, not a rumor or disposable plot hook. Preserve class_profile, its original non-canon identity, and its mechanical stat bonuses. A unique generated class or bloodline is as real as a canon one and may develop new applications whenever its recorded rules and the narrative permit.")
         requirements.append("Open with a concrete situation and at least one actionable lead tied to this location, background, goal or upcoming world pressure. End with exactly 3 optional next actions: follow the lead, prepare/progress, or explore an alternate hook.")
         p = {"task": "opening", "state": self.task_state_for_ai("opening"), "requirements": requirements,

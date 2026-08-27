@@ -12,10 +12,11 @@ import hashlib
 import html
 import ipaddress
 import socket
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.error import HTTPError
+from urllib.parse import urlparse, urljoin, urldefrag, unquote, urlencode
 from urllib.request import Request, urlopen
 from util import DATA_DIR, safe_filename
 from bleach_data import CANON_HADO, CANON_BAKUDO
@@ -23,6 +24,29 @@ from bleach_data import CANON_HADO, CANON_BAKUDO
 LORE_DIR = Path(__file__).resolve().parent.parent / "assets" / "lore"
 USER_LORE_DIR = DATA_DIR / "lore"
 USER_LORE_DIR.mkdir(parents=True, exist_ok=True)
+LORE_AUTOMATION_PATH = DATA_DIR / "lore_automation.json"
+
+LORE_AUTOMATION_DEFAULTS = {
+    "enabled": False,
+    "interval_days": 30,
+    "discover_related_pages": False,
+    "max_pages_per_refresh": 8,
+}
+
+# One stable entry page per setting.  They are only downloaded after the
+# player enables automatic coverage; related pages remain separately opt-in
+# and bounded.  Fandom pages are fetched through their lightweight MediaWiki
+# JSON API by _mediawiki_api_url below.
+RECOMMENDED_LORE_SOURCES = {
+    "One Piece": [("https://onepiece.fandom.com/wiki/One_Piece", "wiki")],
+    "Hunter x Hunter": [("https://hunterxhunter.fandom.com/wiki/Hunter_%C3%97_Hunter", "wiki")],
+    "Naruto": [("https://naruto.fandom.com/wiki/Naruto_(series)", "wiki")],
+    "Solo Max-Level Newbie": [("https://koreanwebtoons.fandom.com/wiki/I%27m_the_Max-Level_Newbie", "wiki")],
+    "Overgeared": [("https://overgeared.fandom.com/wiki/Grid", "wiki")],
+    "Reincarnated as a Slime": [("https://tensura.fandom.com/wiki/Rimuru_Tempest", "wiki")],
+    "Bleach": [("https://www.viz.com/bleach", "official_source"),
+               ("https://bleach.fandom.com/wiki/Bleach", "wiki")],
+}
 
 # Higher-ranked evidence wins when two sources make incompatible claims.
 # This is intentionally explicit instead of assuming every imported file is
@@ -35,6 +59,76 @@ SOURCE_AUTHORITY = {
 
 _LORE_CACHE = {}
 _LORE_CACHE_STATS = {"hits": 0, "misses": 0, "generation": 0}
+
+
+def _automation_data():
+    data = {"settings": dict(LORE_AUTOMATION_DEFAULTS), "sources": [], "history": []}
+    try:
+        loaded = json.loads(LORE_AUTOMATION_PATH.read_text(encoding="utf-8"))
+        if isinstance(loaded, dict):
+            data["settings"].update(loaded.get("settings") if isinstance(loaded.get("settings"), dict) else {})
+            data["sources"] = loaded.get("sources") if isinstance(loaded.get("sources"), list) else []
+            data["history"] = loaded.get("history") if isinstance(loaded.get("history"), list) else []
+    except (OSError, ValueError, TypeError):
+        pass
+    data["settings"]["interval_days"] = max(1, min(365, int(data["settings"].get("interval_days", 30) or 30)))
+    data["settings"]["max_pages_per_refresh"] = max(1, min(25, int(data["settings"].get("max_pages_per_refresh", 8) or 8)))
+    return data
+
+
+def _save_automation(data):
+    LORE_AUTOMATION_PATH.parent.mkdir(parents=True, exist_ok=True)
+    LORE_AUTOMATION_PATH.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def configure_lore_automation(settings):
+    data = _automation_data()
+    allowed = {"enabled", "interval_days", "discover_related_pages", "max_pages_per_refresh"}
+    for key in allowed:
+        if key in (settings or {}):
+            data["settings"][key] = settings[key]
+    data["settings"]["enabled"] = bool(data["settings"].get("enabled"))
+    data["settings"]["discover_related_pages"] = bool(data["settings"].get("discover_related_pages"))
+    data["settings"]["interval_days"] = max(1, min(365, int(data["settings"].get("interval_days", 30) or 30)))
+    data["settings"]["max_pages_per_refresh"] = max(1, min(25, int(data["settings"].get("max_pages_per_refresh", 8) or 8)))
+    _save_automation(data)
+    return lore_automation_status()
+
+
+def seed_recommended_lore_sources(world=None):
+    data = _automation_data()
+    known = {(row.get("world"), row.get("url")) for row in data["sources"]}
+    added = 0
+    for world_name, rows in RECOMMENDED_LORE_SOURCES.items():
+        if world and world_name != world:
+            continue
+        for url, source_type in rows:
+            if (world_name, url) in known:
+                continue
+            source_id = hashlib.sha256(f"{world_name}|{url}".encode("utf-8")).hexdigest()[:16]
+            data["sources"].append({"id": source_id, "url": url, "world": world_name,
+                                    "source_type": source_type, "enabled": True, "discover": True,
+                                    "recommended": True, "status": "queued"})
+            known.add((world_name, url)); added += 1
+    _save_automation(data)
+    return added
+
+
+def register_lore_source(url, world="Custom World", source_type="wiki", enabled=True, discover=False):
+    source_url = _validate_public_url(url)
+    data = _automation_data()
+    source_id = hashlib.sha256(f"{world}|{source_url}".encode("utf-8")).hexdigest()[:16]
+    existing = next((row for row in data["sources"] if row.get("id") == source_id), None)
+    values = {"id": source_id, "url": source_url, "world": str(world or "Custom World")[:120],
+              "source_type": source_type if source_type in SOURCE_AUTHORITY else "unknown",
+              "enabled": bool(enabled), "discover": bool(discover)}
+    if existing is None:
+        existing = values
+        data["sources"].append(existing)
+    else:
+        existing.update(values)
+    _save_automation(data)
+    return dict(existing)
 
 BUILTIN_LORE = {
     "One Piece": [
@@ -188,10 +282,14 @@ def import_lore_pack(filename, raw, world="Custom World"):
 class _ReadablePage(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.title, self.parts, self._tag, self._skip = "", [], "", 0
+        self.title, self.parts, self.links, self._tag, self._skip = "", [], [], "", 0
 
     def handle_starttag(self, tag, attrs):
         self._tag = tag.lower()
+        if self._tag == "a":
+            href = dict(attrs).get("href")
+            if href:
+                self.links.append(str(href))
         if self._tag in {"script", "style", "nav", "footer", "header", "form", "svg"}:
             self._skip += 1
 
@@ -206,7 +304,7 @@ class _ReadablePage(HTMLParser):
             return
         if self._tag == "title" and not self.title:
             self.title = clean
-        elif self._tag in {"p", "li", "h1", "h2", "h3"} and len(clean) >= 25:
+        elif self._tag in {"p", "li", "h1", "h2", "h3", "h4", "td", "th", "dt", "dd"} and len(clean) >= 12:
             self.parts.append(clean)
 
 
@@ -225,27 +323,103 @@ def _validate_public_url(url):
     return parsed.geturl()
 
 
-def import_lore_url(url, world="Custom World", source_type="wiki"):
-    """Download one user-approved source into the local ranked lore library."""
-    source_type = str(source_type or "wiki").lower().strip()
-    if source_type not in SOURCE_AUTHORITY:
-        source_type = "unknown"
+def _related_links(base_url, links, limit=25):
+    """Bounded, same-host discovery.  No unbounded wiki/forum crawling."""
+    base = urlparse(base_url)
+    out = []
+    blocked = re.compile(r"(?:/login|/signup|/edit|/history|/special:|action=|oldid=|\.jpg$|\.png$|\.gif$|\.zip$|\.pdf$)", re.I)
+    for href in links:
+        candidate = urldefrag(urljoin(base_url, href))[0]
+        parsed = urlparse(candidate)
+        if parsed.scheme not in {"http", "https"} or parsed.hostname != base.hostname or blocked.search(candidate):
+            continue
+        if candidate.rstrip("/") == base_url.rstrip("/") or candidate in out:
+            continue
+        out.append(candidate)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _mediawiki_api_url(source_url):
+    """Use the public JSON API for Fandom pages instead of ad-heavy HTML."""
+    parsed = urlparse(source_url)
+    if not parsed.hostname or not parsed.hostname.lower().endswith(".fandom.com") or not parsed.path.startswith("/wiki/"):
+        return source_url
+    title = unquote(parsed.path.split("/wiki/", 1)[1]).replace("_", " ").strip()
+    if not title:
+        return source_url
+    query = urlencode({"action": "parse", "page": title, "prop": "wikitext|links",
+                       "redirects": "1", "format": "json", "formatversion": "2"})
+    return f"{parsed.scheme}://{parsed.netloc}/api.php?{query}"
+
+
+def _fetch_lore_url(url, validators=None):
     source_url = _validate_public_url(url)
-    request = Request(source_url, headers={"User-Agent": "WorldwalkerRPG/3 lore updater"})
-    with urlopen(request, timeout=20) as response:
+    headers = {"User-Agent": "WorldwalkerRPG/3.16 lore updater"}
+    validators = validators or {}
+    if validators.get("etag"):
+        headers["If-None-Match"] = str(validators["etag"])
+    if validators.get("last_modified"):
+        headers["If-Modified-Since"] = str(validators["last_modified"])
+    fetch_url = _mediawiki_api_url(source_url)
+    request = Request(fetch_url, headers=headers)
+    try:
+        response_context = urlopen(request, timeout=20)
+    except HTTPError as exc:
+        if exc.code == 304:
+            return {"not_modified": True, "url": source_url, "fetch_url": fetch_url, "etag": validators.get("etag", ""),
+                    "last_modified": validators.get("last_modified", ""), "links": []}
+        raise
+    with response_context as response:
         final_url = _validate_public_url(response.geturl())
         raw = response.read(512 * 1024 + 1)
         content_type = str(response.headers.get("Content-Type") or "").lower()
+        etag = str(response.headers.get("ETag") or "")[:500]
+        last_modified = str(response.headers.get("Last-Modified") or "")[:500]
     if len(raw) > 512 * 1024:
         raise ValueError("Lore web sources must be 512 KB or smaller.")
+    return {"not_modified": False, "url": source_url, "fetch_url": final_url, "raw": raw, "content_type": content_type,
+            "etag": etag, "last_modified": last_modified}
+
+
+def _entry_from_download(download, world, source_type):
+    final_url = download["url"]
+    raw = download["raw"]
+    content_type = download["content_type"]
     decoded = raw.decode("utf-8", errors="replace")
     title = urlparse(final_url).path.rstrip("/").split("/")[-1].replace("_", " ") or urlparse(final_url).hostname
+    links = []
+    claim_source = ""
     if "json" in content_type or final_url.lower().endswith(".json"):
         try:
             data = json.loads(decoded)
             if isinstance(data, dict) and isinstance(data.get("extract"), str):
                 text = data["extract"]
                 title = str(data.get("title") or title)
+            elif isinstance(data, dict) and isinstance(data.get("parse"), dict):
+                page = data["parse"]
+                text = str(page.get("wikitext") or "")
+                claim_source = text
+                title = str(page.get("title") or title)
+                links = [urljoin(final_url, "/wiki/" + str(row.get("title") or "").replace(" ", "_"))
+                         for row in (page.get("links") or []) if row.get("title") and int(row.get("ns", 0) or 0) == 0]
+                links = _related_links(final_url, links)
+                # Cheap local wikitext cleanup. Templates/tables are metadata
+                # noise for retrieval; link labels and prose are preserved.
+                text = re.sub(r"\{\{[^{}]{0,2000}\}\}", " ", text, flags=re.S)
+                text = re.sub(r"\{\|.*?\|\}", " ", text, flags=re.S)
+                text = re.sub(r"\[\[(?:[^\]|]+\|)?([^\]]+)\]\]", r"\1", text)
+                text = re.sub(r"<ref\b[^>]*>.*?</ref>|<[^>]+>", " ", text, flags=re.S | re.I)
+                text = re.sub(r"'{2,5}", "", text)
+                text = re.sub(r"^[=|!#*:;\-]+|[=]+$", "", text, flags=re.M)
+            elif isinstance(data, dict) and isinstance(data.get("query", {}).get("pages"), list) and data["query"]["pages"]:
+                page = data["query"]["pages"][0]
+                text = str(page.get("extract") or "")
+                title = str(page.get("title") or title)
+                links = [urljoin(final_url, "/wiki/" + str(row.get("title") or "").replace(" ", "_"))
+                         for row in (page.get("links") or []) if row.get("title")]
+                links = _related_links(final_url, links)
             else:
                 text = json.dumps(data, ensure_ascii=False)
         except json.JSONDecodeError as exc:
@@ -254,20 +428,160 @@ def import_lore_url(url, world="Custom World", source_type="wiki"):
         parser = _ReadablePage(); parser.feed(decoded)
         title = parser.title or title
         text = "\n".join(dict.fromkeys(parser.parts))
+        links = _related_links(final_url, parser.links)
     else:
         text = decoded
     text = re.sub(r"\n{3,}", "\n\n", text).strip()[:8000]
     if len(text) < 80:
         raise ValueError("The source did not expose enough readable text to import.")
     keywords = " ".join(dict.fromkeys(re.findall(r"[A-Za-z0-9'ōū-]{4,}", f"{title} {text[:5000]}")))[:1000]
+    claims = _extract_local_claims(title, claim_source or text)
     entry = {"title": str(title)[:160], "keys": keywords, "text": text, "source": urlparse(final_url).hostname,
-             "source_type": source_type, "citation": final_url, "claims": {},
+             "source_type": source_type, "citation": final_url, "claims": claims,
              "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    return entry, links
+
+
+def _extract_local_claims(title, text):
+    """Extract only explicit fact-label rows; never ask AI to summarize."""
+    allowed = {"status", "affiliation", "occupation", "rank", "class", "species", "race", "birthday",
+               "age", "ability", "abilities", "debut", "location", "leader", "owner", "type"}
+    claims = {}
+    for line in str(text or "").splitlines():
+        match = re.match(r"^\s*(?:\||\*\*)?\s*([A-Za-z][A-Za-z _-]{1,32})\s*(?:=|:)\s*(.{1,300})$", line.strip())
+        if not match:
+            continue
+        field = re.sub(r"\s+", " ", match.group(1).strip().lower())
+        if field not in allowed:
+            continue
+        value = re.sub(r"\{\{[^{}]*\}\}|<[^>]+>|'{2,5}", "", match.group(2))
+        value = re.sub(r"\[\[(?:[^\]|]+\|)?([^\]]+)\]\]", r"\1", value)
+        value = re.sub(r"\s+", " ", value).strip(" |")
+        if 1 < len(value) <= 240:
+            claims[f"{str(title).strip().lower()}::{field}"] = value
+        if len(claims) >= 20:
+            break
+    return claims
+
+
+def _save_web_entry(entry, world):
+    final_url = entry["citation"]
     digest = hashlib.sha256(final_url.encode("utf-8")).hexdigest()[:14]
     target = USER_LORE_DIR / f"web_{safe_filename(world)}_{digest}.json"
     target.write_text(json.dumps({world: [entry]}, indent=2, ensure_ascii=False), encoding="utf-8")
     reload_lore()
-    return {"name": target.name, "path": str(target), "entries": 1, "worlds": [world], "citation": final_url, "updated": True}
+    return target
+
+
+def import_lore_url(url, world="Custom World", source_type="wiki", auto_refresh=True, discover=False):
+    """Download one approved source and register it for optional refresh."""
+    source_type = str(source_type or "wiki").lower().strip()
+    if source_type not in SOURCE_AUTHORITY:
+        source_type = "unknown"
+    download = _fetch_lore_url(url)
+    entry, links = _entry_from_download(download, world, source_type)
+    target = _save_web_entry(entry, world)
+    record = register_lore_source(download["url"], world, source_type, enabled=auto_refresh, discover=discover)
+    data = _automation_data()
+    stored = next((row for row in data["sources"] if row.get("id") == record["id"]), None)
+    if stored is not None:
+        stored.update({"last_checked": entry["updated_at"], "last_updated": entry["updated_at"],
+                       "etag": download.get("etag", ""), "last_modified": download.get("last_modified", ""),
+                       "content_hash": hashlib.sha256(entry["text"].encode("utf-8")).hexdigest(),
+                       "status": "updated", "error": "", "related_found": len(links)})
+        _save_automation(data)
+    return {"name": target.name, "path": str(target), "entries": 1, "worlds": [world],
+            "citation": download["url"], "updated": True, "auto_source": record, "related_found": len(links)}
+
+
+def _source_due(source, settings, now):
+    if not source.get("enabled", True):
+        return False
+    try:
+        checked = datetime.fromisoformat(str(source.get("last_checked") or "").replace("Z", "+00:00"))
+        if checked.tzinfo is None:
+            checked = checked.replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return True
+    return now - checked >= timedelta(days=int(settings.get("interval_days", 30)))
+
+
+def refresh_lore_sources(force=False, world=None):
+    """Refresh due approved sources with zero AI calls.
+
+    HTML extraction, checksums, conditional requests, discovery and authority
+    ranking are local.  Explicit claim conflicts stay visible and are included
+    only in a later *relevant* normal GM prompt, avoiding a separate summary
+    call for every downloaded page.
+    """
+    data = _automation_data()
+    settings = data["settings"]
+    now = datetime.now(timezone.utc)
+    if not settings.get("enabled") and not force:
+        return {"status": "disabled", "checked": 0, "updated": 0, "unchanged": 0, "failed": 0,
+                "discovered": 0, "ai_calls": 0}
+    candidates = [row for row in data["sources"] if (not world or row.get("world") == world)
+                  and (force or _source_due(row, settings, now))]
+    candidates = candidates[:int(settings.get("max_pages_per_refresh", 8))]
+    result = {"status": "complete", "checked": 0, "updated": 0, "unchanged": 0, "failed": 0,
+              "discovered": 0, "ai_calls": 0, "errors": []}
+    known = {(row.get("world"), row.get("url")) for row in data["sources"]}
+    for source in candidates:
+        result["checked"] += 1
+        checked_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        try:
+            download = _fetch_lore_url(source.get("url"), source)
+            source["last_checked"] = checked_at
+            source["etag"] = download.get("etag", source.get("etag", ""))
+            source["last_modified"] = download.get("last_modified", source.get("last_modified", ""))
+            if download.get("not_modified"):
+                source["status"] = "unchanged"
+                source["error"] = ""
+                result["unchanged"] += 1
+                continue
+            entry, links = _entry_from_download(download, source.get("world", "Custom World"), source.get("source_type", "wiki"))
+            digest = hashlib.sha256(entry["text"].encode("utf-8")).hexdigest()
+            if digest == source.get("content_hash"):
+                source["status"] = "unchanged"
+                result["unchanged"] += 1
+            else:
+                _save_web_entry(entry, source.get("world", "Custom World"))
+                source.update({"last_updated": checked_at, "content_hash": digest, "status": "updated"})
+                result["updated"] += 1
+            source["error"] = ""
+            source["related_found"] = len(links)
+            if settings.get("discover_related_pages") and source.get("discover"):
+                remaining = int(settings.get("max_pages_per_refresh", 8)) - result["discovered"]
+                for link in links[:max(0, remaining)]:
+                    key = (source.get("world"), link)
+                    if key in known:
+                        continue
+                    source_id = hashlib.sha256(f"{key[0]}|{link}".encode("utf-8")).hexdigest()[:16]
+                    data["sources"].append({"id": source_id, "url": link, "world": key[0],
+                                            "source_type": source.get("source_type", "wiki"), "enabled": True,
+                                            "discover": False, "discovered_from": source.get("url"), "status": "queued"})
+                    known.add(key)
+                    result["discovered"] += 1
+        except Exception as exc:
+            source.update({"last_checked": checked_at, "status": "error", "error": str(exc)[:300]})
+            result["failed"] += 1
+            result["errors"].append({"url": source.get("url"), "error": str(exc)[:300]})
+    data["history"].append({"at": now.isoformat(timespec="seconds"), **{k: v for k, v in result.items() if k != "errors"}})
+    data["history"] = data["history"][-25:]
+    _save_automation(data)
+    return result
+
+
+def lore_automation_status(world=None):
+    data = _automation_data()
+    now = datetime.now(timezone.utc)
+    sources = [dict(row) for row in data["sources"] if not world or row.get("world") == world]
+    conflicts = detect_lore_conflicts([entry for world_name in ([world] if world else BUILTIN_LORE) for entry in all_lore_entries(world_name)])
+    return {"settings": data["settings"], "sources": sources,
+            "due": sum(_source_due(row, data["settings"], now) for row in sources),
+            "conflict_queue": conflicts, "last_run": data["history"][-1] if data["history"] else None,
+            "cost_policy": {"routine_refresh_ai_calls": 0,
+                            "conflicts": "Authority-ranked locally; relevant disputed evidence is included in the next normal GM call only."}}
 
 def _normalized_entry(entry, default_source="Source not recorded", default_type="unknown"):
     row = dict(entry)

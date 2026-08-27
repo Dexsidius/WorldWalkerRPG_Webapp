@@ -261,9 +261,65 @@ WORLD_NEUTRAL_SCENES = {
 }
 
 
+_INDOOR_WORDS = ("room", "chamber", "hall", "shop", "stall", "inn", "tavern", "restaurant", "academy", "classroom", "office", "clinic", "hospital", "forge", "workshop", "interior", "indoors", "cave", "dungeon", "crypt", "tunnel")
+_OUTDOOR_WORDS = ("street", "square", "plaza", "forest", "woods", "field", "road", "harbor", "port", "deck", "village", "town", "city", "mountain", "valley", "desert", "beach", "island", "outdoors", "outside")
+
+
+def scene_context(state):
+    """Return the structured identity of the player's *current* scene.
+
+    Location remains authoritative.  Optional location_details enrich it with
+    a room/district, indoor state and live local conditions without letting an
+    old Chronicle battle or a distant world event hijack the banner.
+    """
+    world = str(state.get("world") or "Custom World")
+    location = str(state.get("location") or "").strip()
+    details_by_location = state.get("location_details") if isinstance(state.get("location_details"), dict) else {}
+    details = details_by_location.get(location) if isinstance(details_by_location.get(location), dict) else {}
+    sublocation = str(details.get("sublocation") or details.get("room") or details.get("building") or details.get("district") or "").strip()
+    setting = str(details.get("setting") or details.get("environment") or details.get("biome") or "").strip()
+    place_blob = " · ".join(x for x in (sublocation, location, setting) if x)
+    lowered = place_blob.lower()
+    explicit_indoor = details.get("indoors")
+    if isinstance(explicit_indoor, bool):
+        indoors = explicit_indoor
+    elif any(word in lowered for word in _INDOOR_WORDS):
+        indoors = True
+    elif any(word in lowered for word in _OUTDOOR_WORDS):
+        indoors = False
+    else:
+        indoors = None
+    calendar = state.get("calendar") if isinstance(state.get("calendar"), dict) else {}
+    hour = calendar.get("hour")
+    try:
+        hour = int(hour)
+    except (TypeError, ValueError):
+        hour = None
+    time_text = str(details.get("time") or state.get("world_time") or "").lower()
+    if hour is not None:
+        phase = "night" if hour < 5 or hour >= 20 else "dawn" if hour < 8 else "day" if hour < 17 else "dusk"
+    elif any(word in time_text for word in ("night", "midnight", "moon", "star")):
+        phase = "night"
+    elif any(word in time_text for word in ("evening", "sunset", "dusk")):
+        phase = "dusk"
+    elif any(word in time_text for word in ("dawn", "sunrise")):
+        phase = "dawn"
+    else:
+        phase = "day"
+    combat = state.get("combat") if isinstance(state.get("combat"), dict) else {}
+    return {
+        "world": world, "location": location, "sublocation": sublocation,
+        "place": place_blob or location, "setting": setting, "indoors": indoors,
+        "time": phase, "weather": str(details.get("weather") or state.get("weather") or "clear").lower(),
+        "activity": str(details.get("activity") or state.get("current_activity") or "").strip(),
+        "combat": bool(combat.get("active")), "combat_state": combat,
+    }
+
+
 def scene_category(state):
-    location = str(state.get("location", ""))
-    combat = state.get("combat", {}) if isinstance(state.get("combat"), dict) else {}
+    context = scene_context(state)
+    location = context["place"]
+    combat = context["combat_state"]
     # A completed fight intentionally keeps its mechanical log around until
     # the final narration pass can consume it.  That inactive record is not a
     # live scene signal: otherwise a character who fled, returned home and
@@ -283,20 +339,22 @@ def scene_category(state):
     place_category = _category_from_place(location)
     if place_category:
         return place_category
-    weather = str(state.get("weather", "")).lower()
-    if any(k in weather for k in ("heavy rain", "storm", "downpour", "monsoon")):
+    weather = context["weather"]
+    # Outdoor weather may change a generic city/region image.  It must never
+    # replace a known interior (the old source of rainy shops and snowy halls).
+    if context["indoors"] is not True and any(k in weather for k in ("heavy rain", "storm", "downpour", "monsoon")):
         return "rain_city"
-    if any(k in weather for k in ("snow", "blizzard", "sleet")):
+    if context["indoors"] is not True and any(k in weather for k in ("snow", "blizzard", "sleet")):
         return "snow_region"
     # Only live player-facing activity is allowed to influence a vague
     # location. Old Chronicle/timeline prose often contains battles far away
     # from the character and was the source of merchant stalls receiving
     # battlefield art after unrelated world updates.
     blob = " ".join([
-        str(state.get("current_activity", "")),
+        context["activity"],
         " ".join(str(x) for x in state.get("queued_actions", [])[-3:]),
         " ".join(str(x) for x in state.get("standing_orders", [])[-3:]),
-        str(state.get("world_time", "")),
+        context["time"],
     ]).lower()
     if any(k in blob for k in ["train", "practice", "study technique", "spar", "meditat"]):
         return "training_ground"
@@ -336,7 +394,8 @@ def scene_category(state):
 def scene_art_confidence(state, category=None):
     """Explain how strongly the selected art matches the live physical scene."""
     category = category or scene_category(state)
-    location = str(state.get("location", "")).strip()
+    context = scene_context(state)
+    location = context["place"].strip()
     if state.get("active_canon_event"):
         return {"score": 100, "label": "Exact event", "reason": "A dedicated active-event banner has priority."}
     if isinstance(state.get("combat"), dict) and state.get("combat", {}).get("active"):
@@ -362,10 +421,10 @@ def scene_art_confidence(state, category=None):
     }
     if category in activity_matches and any(word in activity for word in activity_matches[category]):
         return {"score": 84, "label": "Activity match", "reason": "The current player activity selected this environment."}
-    weather = str(state.get("weather", "")).lower()
+    weather = context["weather"]
     if category in {"rain_city", "snow_region"} and weather not in {"", "clear"}:
         return {"score": 78, "label": "Weather match", "reason": f"The current {weather} weather selected this environment."}
-    time_blob = str(state.get("world_time", "")).lower()
+    time_blob = context["time"]
     if category == "starry_sky" and any(word in time_blob for word in ("night", "midnight", "evening")):
         return {"score": 76, "label": "Time-of-day match", "reason": "The current time explicitly indicates night."}
     return {"score": 48, "label": "World fallback", "reason": "The sub-location is too vague for a confident match; neutral world art is safer."}
@@ -427,7 +486,8 @@ def scene_image_url(state):
     if override.exists():
         return f"/assets/user/{slug}/background.png", cat
     generated_dir = ASSET_ROOT / "generated_scenes"
-    location = str(state.get("location", "")).lower()
+    context = scene_context(state)
+    location = context["place"].lower()
     landmarks = LANDMARK_SCENES.get(world, ())
     action_categories = {"duel", "monster_battlefield", "monster_lair", "dungeon_cave"}
     local_detail_words = ("merchant", "stall", "shop", "bazaar", "market", "alley", "street", "inn", "tavern", "restaurant")
@@ -459,8 +519,11 @@ def scene_art_signature(state):
     churn. Weather only matters when it actually selects a weather scene.
     """
     url, category = scene_image_url(state)
-    payload = "|".join((str(state.get("world", "Custom World")),
-                        str(state.get("location", "")), str(category), str(url or ""),
+    context = scene_context(state)
+    payload = "|".join((context["world"], context["location"], context["sublocation"],
+                        str(context["indoors"]), context["time"] if category == "starry_sky" else "",
+                        context["weather"] if category in {"rain_city", "snow_region"} else "",
+                        str(context["combat"]), str(category), str(url or ""),
                         str(state.get("active_canon_event", ""))))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:20]
 

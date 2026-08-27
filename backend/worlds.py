@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.15.0"
+APP_VERSION = "3.16.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -457,7 +457,7 @@ CANON_TIMELINES = {
         {"major": False, "day": 60, "title": "Zabuza's ambush", "location": "Land of Waves", "summary": "The Demon of the Hidden Mist attacks the escort team directly, aided by his masked companion Haku."},
         {"major": False, "day": 65, "title": "A quiet conversation in the woods", "location": "Land of Waves", "summary": "Haku speaks candidly about strength and precious people with Naruto in the forest, neither realizing they'll soon meet as enemies."},
         {"day": 70, "title": "Battle of the Great Naruto Bridge", "location": "Land of Waves", "summary": "Zabuza and Haku are confronted a final time; Haku dies protecting Zabuza, Zabuza kills Gato, and dies from Gato's men's wounds. The bridge battle reshapes Team 7's understanding of shinobi life and death."},
-        {"major": False, "day": 76, "title": "Return to Konohagakure", "location": "Konohagakure", "summary": "Team 7 completes the Naruto Bridge and returns home, resuming routine missions."},
+        {"major": False, "day": 76, "title": "Team 7 returns from the Land of Waves", "location": "Konohagakure", "summary": "Team 7 completes the Naruto Bridge and returns home, resuming routine missions."},
         {"major": False, "day": 100, "title": "Chūnin Exam nominations", "location": "Konohagakure", "summary": "Jōnin instructors across the village nominate their genin teams for the upcoming Chūnin Exams as foreign shinobi begin arriving in Konoha."},
         {"day": 161, "title": "Chūnin Exams begin", "location": "Konohagakure", "summary": "Genin from multiple villages gather for the written exam and the Forest of Death survival trial. Orochimaru infiltrates the exam and marks Sasuke with the cursed seal."},
         {"major": False, "day": 166, "title": "Chūnin Exam preliminaries", "location": "Konohagakure", "summary": "One-on-one preliminary matches thin the surviving genin ahead of the final tournament, revealing hidden strength and rivalries; Naruto meets Jiraiya the same night."},
@@ -469,7 +469,7 @@ CANON_TIMELINES = {
         {"day": 238, "title": "Sasuke's Departure", "location": "Konohagakure", "banner": "sasukes_departure", "summary": "Consumed by the pull of Orochimaru's power, Sasuke abandons Konoha in the night after clashing with Naruto on the hospital rooftop."},
         {"day": 241, "title": "Sasuke Retrieval Mission", "location": "Land of Rice Fields", "banner": "sasuke_retrieval_mission", "summary": "A team of genin pursues Sasuke to bring him back, each facing one of Orochimaru's Sound Four in a running battle that costs the team dearly; Naruto and Sasuke's confrontation at the Valley of the End ends with Sasuke continuing on to Orochimaru."},
         {"major": False, "day": 330, "title": "Naruto departs with Jiraiya", "location": "Konohagakure", "summary": "Naruto leaves Konoha with Jiraiya for two and a half years of training, after Jiraiya tells him of Akatsuki's true threat."},
-        {"major": False, "day": 1069, "title": "Return to Konohagakure", "location": "Konohagakure", "summary": "Naruto and Jiraiya return to the village after roughly two and a half years, and Naruto retakes Kakashi's old bell test alongside Sakura."},
+        {"major": False, "day": 1069, "title": "Naruto returns after the training journey", "location": "Konohagakure", "summary": "Naruto and Jiraiya return to the village after roughly two and a half years, and Naruto retakes Kakashi's old bell test alongside Sakura."},
         {"day": 1076, "title": "Gaara's death and rescue", "location": "Sunagakure", "banner": "gaara_rescue", "summary": "Akatsuki's Deidara and Sasori extract Shukaku from Gaara, killing him; Sakura and Chiyo defeat Sasori, and Chiyo sacrifices her own life to revive Gaara — the crew's first direct confrontation with Akatsuki."},
         {"major": False, "day": 1337, "title": "Asuma Sarutobi's death", "location": "Land of Fire", "summary": "Hidan of Akatsuki kills Asuma Sarutobi before Shikamaru's team avenges him."},
         {"day": 1360, "title": "Jiraiya's death in Amegakure", "location": "Amegakure", "summary": "Jiraiya infiltrates Amegakure to learn the truth behind Pain, fights Pain and Konan, and dies delivering crucial intelligence back to Konoha with his final moments."},
@@ -756,6 +756,26 @@ def format_calendar_date(world, canon_day, calendar_epoch=None, anchor_day=None)
     invented but consistent named-month date for worlds with a
     WORLD_CALENDARS entry, and a plain Year/Month/Day count for anything
     else (Custom World, an unrecognized world pack)."""
+    # Bleach never supplies a dependable numbered civil year for these story
+    # beats.  Re-anchoring every selectable era to "Year 1" made the one-year
+    # start look identical to the one-week start and, worse, made players
+    # reasonably believe Ichigo's awakening was due immediately.  Keep its
+    # dates honest and useful by naming their distance from the day Ichigo
+    # receives Soul Reaper powers (canon day zero).
+    if world == "Bleach":
+        relative_day = int(canon_day)
+        if relative_day == 0:
+            return "The day Ichigo receives Soul Reaper powers"
+        distance = abs(relative_day)
+        if distance == 365:
+            span = "1 year"
+        elif distance >= 365 and distance % 365 == 0:
+            span = f"{distance // 365} years"
+        else:
+            span = f"{distance} day{'s' if distance != 1 else ''}"
+        direction = "before" if relative_day < 0 else "after"
+        return f"{span} {direction} Ichigo receives Soul Reaper powers"
+
     year, month, day = canon_day_to_calendar_parts(world, canon_day, anchor_day)
     if world == "Solo Max-Level Newbie":
         try:
@@ -1259,7 +1279,7 @@ def playable_characters_for(world):
 # and the New Campaign form falls back to that world's single wd["start"].
 WORLD_START_OPTIONS = {
     "One Piece": [
-        {"label": "Foosha Village (East Blue civilian)", "location": "Foosha Village", "note": ""},
+        {"label": "Foosha Village (East Blue civilian)", "location": "Foosha Village", "note": "Starting in a quiet East Blue village as a local, traveler, dock worker, would-be sailor, or young adventurer preparing to leave home."},
         {"label": "Shells Town (Marine recruit)", "location": "Shells Town", "note": "Starting posted as a Marine recruit at Shells Town."},
         {"label": "Goa Kingdom (kingdom-born)", "location": "Goa Kingdom", "note": "Starting life in the Goa Kingdom."},
         {"label": "Shimotsuki Village (swordsman village)", "location": "Shimotsuki Village", "note": "Starting in an East Blue village known for its sword dojo and Wano-descended traditions."},
@@ -1296,7 +1316,7 @@ WORLD_START_OPTIONS = {
         {"label": "Punk Hazard (forbidden research island)", "location": "Punk Hazard", "note": "Starting on the restricted island as a survivor, captive, researcher, government asset, or infiltrator in a compatible era."},
     ],
     "Hunter x Hunter": [
-        {"label": "Whale Island (rural start)", "location": "Whale Island", "note": ""},
+        {"label": "Whale Island (rural start)", "location": "Whale Island", "note": "Starting in a close-knit fishing community as a local, visitor, wilderness-trained youth, or Hunter hopeful preparing to see the wider world."},
         {"label": "Yorknew City (urban start)", "location": "Yorknew City", "note": "Starting in the streets of Yorknew City."},
         {"label": "Hunter Exam Site (already an applicant)", "location": "Hunter Exam Site", "note": "Already en route to sit the Hunter Exam."},
         {"label": "Heavens Arena (fighter or spectator)", "location": "Heavens Arena", "note": "Starting around the fighting tower as a competitor, worker, trainer, or visitor; Nen knowledge still depends on the background and era."},
@@ -1308,7 +1328,7 @@ WORLD_START_OPTIONS = {
         {"label": "Zevil Island (field trial)", "location": "Zevil Island", "note": "Starting during or around a Hunter Exam field phase, expedition, recovery operation, or independent survival test."},
     ],
     "Naruto": [
-        {"label": "Konohagakure", "location": "Konohagakure", "note": ""},
+        {"label": "Konohagakure", "location": "Konohagakure", "note": "Starting in the Hidden Leaf with family ties, rank, training, duties, and village access determined by the chosen origin and background."},
         {"label": "Sunagakure", "location": "Sunagakure", "note": "A shinobi of Sunagakure, the Hidden Sand Village."},
         {"label": "Kirigakure", "location": "Kirigakure", "note": "A shinobi of Kirigakure, the Hidden Mist Village."},
         {"label": "Kumogakure", "location": "Kumogakure", "note": "A shinobi of Kumogakure, the Hidden Cloud Village."},

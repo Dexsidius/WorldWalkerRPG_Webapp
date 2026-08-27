@@ -12,7 +12,7 @@ from lore import format_lore_context
 from portrait_generator import portrait_view
 from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
-from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, scene_art_confidence, scene_selection_reason, scene_display_label, scene_art_signature
+from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, scene_art_confidence, scene_selection_reason, scene_display_label, scene_art_signature, scene_context
 from reliability import visible_class_profile, visible_skills
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks, tension_level, resolve_shop_purchase, resolve_purchase_offer)
@@ -231,7 +231,7 @@ class JournalMixin:
         return {
             "app_version": APP_VERSION, "schema_version": self.state.get("schema_version"),
             "campaign": {"name": self.state.get("name"), "world": self.state.get("world"), "turn": self.state.get("turn")},
-            "scene": {"category": scene_category_name, "label": scene_display_label(self.state, scene_url, scene_category_name), "image": scene_url, "location": self.state.get("location"), "weather": self.state.get("weather"),
+            "scene": {"category": scene_category_name, "label": scene_display_label(self.state, scene_url, scene_category_name), "image": scene_url, "location": self.state.get("location"), "weather": self.state.get("weather"), "context": scene_context(self.state),
                       "confidence": scene_art_confidence(self.state), "reason": scene_selection_reason(self.state)},
             "portrait": portrait_view(self.state, self.settings), "last_assessment": self.last_assessment,
             "last_lore_context": self.last_lore_context, "validation_log": self.state.get("validation_log", [])[-30:],
@@ -264,6 +264,7 @@ class JournalMixin:
         s["_scene_label"] = scene_display_label(self.state, scene_url, cat)
         s["_scene_confidence"] = scene_art_confidence(self.state, cat)
         s["_scene_reason"] = scene_selection_reason(self.state)
+        s["_scene_context"] = scene_context(self.state)
         s["_scene_signature"] = scene_art_signature(self.state)
         s["_scene_regeneration_policy"] = "Reuse cached art until the physical location, encounter type, or active major event changes."
         s["class_profile"] = visible_class_profile(self.state)

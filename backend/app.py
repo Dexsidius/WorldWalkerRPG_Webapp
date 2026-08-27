@@ -9,7 +9,10 @@ from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORL
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
 from portrait_generator import PORTRAIT_CACHE_DIR, generate_portrait, save_reference, portrait_history, revert_portrait, portrait_usage
-from lore import list_lore_sources, import_lore_pack, import_lore_url, lore_library_status
+from lore import (list_lore_sources, import_lore_pack, import_lore_url, lore_library_status,
+                  lore_automation_status, configure_lore_automation, refresh_lore_sources,
+                  seed_recommended_lore_sources)
+from content_audit import audit_all_worlds
 from systems import (normalize_tuning, progression_preset_for, relationship_snapshot,
                      campaign_health, map_snapshot, quest_presentation_for,
                      normalize_quest_state_machine)
@@ -59,6 +62,27 @@ _bg_pending = []
 _busy_lock = threading.Lock()
 _evaluation_lock = threading.Lock()
 _portrait_lock = threading.Lock()
+_lore_refresh_lock = threading.Lock()
+_lore_refresh_started = False
+
+
+def _start_due_lore_refresh_once():
+    """Launch one non-blocking due-source pass on app startup/first use."""
+    global _lore_refresh_started
+    with _lore_refresh_lock:
+        if _lore_refresh_started:
+            return
+        _lore_refresh_started = True
+    status = lore_automation_status()
+    if not status.get("settings", {}).get("enabled") or not status.get("due"):
+        return
+    threading.Thread(target=refresh_lore_sources, kwargs={"force": False}, daemon=True,
+                     name="worldwalker-lore-refresh").start()
+
+
+@app.before_request
+def start_background_lore_refresh():
+    _start_due_lore_refresh_once()
 
 
 def acquire_busy():
@@ -626,6 +650,7 @@ def api_panels():
         "relationships_view": relationship_snapshot(s),
         "progression_preset": progression_preset_for(world), "difficulty_controls": normalize_tuning(s),
         "campaign_health": campaign_health(s), "lore_sources": list_lore_sources(),
+        "lore_automation": lore_automation_status(s.get("world", "Custom World")),
         "director_notes": s.get("director_notes", ""),
         "narrative_memory": narrative_memory_snapshot(s),
         "npc_knowledge": knowledge_snapshot(s),
@@ -694,7 +719,8 @@ def api_campaign_tuning():
 @app.route("/api/lore")
 def api_lore_sources():
     return jsonify({"sources": list_lore_sources(), "folder": str(DATA_DIR / "lore"),
-                    "status": lore_library_status(game.state.get("world", "Custom World"))})
+                    "status": lore_library_status(game.state.get("world", "Custom World")),
+                    "automation": lore_automation_status(game.state.get("world", "Custom World"))})
 
 
 @app.route("/api/lore/import", methods=["POST"])
@@ -715,12 +741,47 @@ def api_lore_update_url():
     try:
         result = import_lore_url(
             d.get("url", ""), d.get("world") or game.state.get("world", "Custom World"),
-            d.get("source_type", "wiki"),
+            d.get("source_type", "wiki"), auto_refresh=bool(d.get("auto_refresh", True)),
+            discover=bool(d.get("discover", False)),
         )
         return jsonify({"updated": result, "sources": list_lore_sources(),
-                        "status": lore_library_status(game.state.get("world", "Custom World"))})
+                        "status": lore_library_status(game.state.get("world", "Custom World")),
+                        "automation": lore_automation_status(game.state.get("world", "Custom World"))})
     except Exception as e:
         return err(e, 400)
+
+
+@app.route("/api/lore/automation", methods=["GET", "POST"])
+def api_lore_automation():
+    world = game.state.get("world", "Custom World")
+    if request.method == "GET":
+        return jsonify(lore_automation_status(world))
+    try:
+        settings = request.get_json(silent=True) or {}
+        status = configure_lore_automation(settings)
+        if settings.get("enabled") and settings.get("recommended_sources", True):
+            seed_recommended_lore_sources()
+            status = lore_automation_status(world)
+        return jsonify(status)
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/lore/refresh", methods=["POST"])
+def api_lore_refresh():
+    d = request.get_json(silent=True) or {}
+    try:
+        result = refresh_lore_sources(force=bool(d.get("force", True)),
+                                      world=d.get("world") or game.state.get("world", "Custom World"))
+        return jsonify({"refresh": result, "automation": lore_automation_status(game.state.get("world", "Custom World")),
+                        "sources": list_lore_sources(), "status": lore_library_status(game.state.get("world", "Custom World"))})
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/content-audit")
+def api_content_audit():
+    return jsonify(audit_all_worlds())
 
 
 @app.route("/api/quick_action", methods=["POST"])
@@ -975,6 +1036,7 @@ def api_diagnostics():
     data["npc_knowledge"] = knowledge_snapshot(game.state)
     data["causality"] = causality_snapshot(game.state)
     data["lore_status"] = lore_library_status(game.state.get("world", "Custom World"))
+    data["content_audit"] = audit_all_worlds()["summary"]
     return jsonify(data)
 
 

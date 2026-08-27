@@ -363,6 +363,14 @@ const WORLD_CALENDAR_MONTHS = {
 };
 
 function formatCalendarDate(world, canonDay, calendarEpoch, anchorDay) {
+  if (world === "Bleach") {
+    const relativeDay = Math.trunc(Number(canonDay) || 0);
+    if (relativeDay === 0) return "The day Ichigo receives Soul Reaper powers";
+    const distance = Math.abs(relativeDay);
+    const span = distance === 365 ? "1 year" :
+      (distance >= 365 && distance % 365 === 0 ? `${distance / 365} years` : `${distance} day${distance === 1 ? "" : "s"}`);
+    return `${span} ${relativeDay < 0 ? "before" : "after"} Ichigo receives Soul Reaper powers`;
+  }
   const startDay = (anchorDay !== undefined && anchorDay !== null) ? anchorDay : (WORLD_START_DAY[world] ?? -7);
   const daysPerMonth = 30, daysPerYear = 360;
   const absoluteDay = Number(canonDay) - startDay;
@@ -683,7 +691,7 @@ function renderSkillCard(name, rawDetail) {
     }
   }
   if (typeof rawDetail !== "object" || Array.isArray(rawDetail)) {
-    return `<article class="skill-journal-card"><h3>✦ ${escapeHtml(name)}</h3><p>${escapeHtml(compactReadable(rawDetail) || "This skill has not been described yet.")}</p></article>`;
+    return `<details class="skill-journal-card expandable-special-card"><summary><h3>✦ ${escapeHtml(name)}</h3><span class="expand-label"></span></summary><div class="expandable-special-body"><p>${escapeHtml(compactReadable(rawDetail) || "This skill has not been described yet.")}</p></div></details>`;
   }
   const detail = rawDetail;
   const rank = compactReadable(detail.rank ?? detail.tier ?? detail.level);
@@ -701,7 +709,7 @@ function renderSkillCard(name, rawDetail) {
     ["How to improve", detail.growth_path || detail.growth || detail.next_steps],
   ].map(([label, value]) => [label, compactReadable(value)]).filter(([, value]) => value);
   const chips = [rank ? `<span>${escapeHtml(rank)}</span>` : "", category ? `<span>${escapeHtml(humanLabel(category))}</span>` : "", bonus !== null ? `<span>${bonus >= 0 ? "+" : ""}${escapeHtml(bonus)} check bonus</span>` : ""].filter(Boolean).join("");
-  return `<article class="skill-journal-card"><header><h3>✦ ${escapeHtml(name)}</h3>${chips ? `<div class="skill-chips">${chips}</div>` : ""}</header><p class="skill-summary">${escapeHtml(summary)}</p>${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</article>`;
+  return `<details class="skill-journal-card expandable-special-card"><summary><h3>✦ ${escapeHtml(name)}</h3><div class="skill-summary-actions">${chips ? `<div class="skill-chips">${chips}</div>` : ""}<span class="expand-label"></span></div></summary><div class="expandable-special-body"><p class="skill-summary">${escapeHtml(summary)}</p>${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</div></details>`;
 }
 
 function formatDuration(minutes) {
@@ -740,7 +748,7 @@ function renderClassCard(rawClass) {
   ].map(([label, value]) => [label, compactReadable(value)]).filter(([, value]) => value);
   const discovery = cls.discovery && typeof cls.discovery === "object" ? cls.discovery : null;
   const discoveryRow = discovery ? `<div class="class-discovery"><div><b>Discovery</b><span>${escapeHtml(discovery.stage || "dormant")} · ${escapeHtml(discovery.progress ?? 0)}%</span></div><i style="width:${Math.max(0, Math.min(100, Number(discovery.progress || 0)))}%"></i>${textList(discovery.reveal_requirements).length ? `<small>${textList(discovery.reveal_requirements).map(escapeHtml).join(" · ")}</small>` : ""}</div>` : "";
-  return `<article class="skill-journal-card class-profile-card"><header><h3>◆ ${escapeHtml(cls.name)}</h3><div class="skill-chips"><span>${escapeHtml(cls.kind || "Hidden Class")}</span><span>${escapeHtml(cls.rank || "Rare")}</span></div></header><p class="skill-summary">${escapeHtml(compactReadable(cls.description) || "A rare path whose full nature is still being discovered.")}</p>${discoveryRow}${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</article>`;
+  return `<details class="skill-journal-card class-profile-card expandable-special-card"><summary><h3>◆ ${escapeHtml(cls.name)}</h3><div class="skill-summary-actions"><div class="skill-chips"><span>${escapeHtml(cls.kind || "Hidden Class")}</span><span>${escapeHtml(cls.rank || "Rare")}</span></div><span class="expand-label"></span></div></summary><div class="expandable-special-body"><p class="skill-summary">${escapeHtml(compactReadable(cls.description) || "A rare path whose full nature is still being discovered.")}</p>${discoveryRow}${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</div></details>`;
 }
 
 function renderBleachReleases(special) {
@@ -749,8 +757,8 @@ function renderBleachReleases(special) {
   const bankai = String(special?.Bankai || "Unachieved");
   const achieved = (value) => !/^(?:unachieved|none|unknown|)$/i.test(value);
   const row = (label, value) => value ? `<div class="release-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(compactReadable(value))}</span></div>` : "";
-  const shikaiCard = `<article class="release-card shikai-card ${achieved(shikai) ? "awakened" : "sealed"}"><header><span>始解</span><div><small>FIRST RELEASE</small><h3>${escapeHtml(achieved(shikai) ? (profile.shikai_name || shikai) : "Shikai — Unachieved")}</h3></div></header>${achieved(shikai) ? `${row("Release command", profile.release_command)}${row("Form", profile.shikai_form)}${row("Ability", profile.shikai_effect)}${row("Limits", profile.shikai_limitation)}${row("Counters", profile.shikai_counters)}` : `<p>Learn the spirit's identity and true name through Jinzen, training, battle and a personal inner-world trial.</p>`}</article>`;
-  const bankaiCard = `<article class="release-card bankai-card ${achieved(bankai) ? "awakened" : "sealed"}"><header><span>卍解</span><div><small>FINAL RELEASE</small><h3>${escapeHtml(achieved(bankai) ? (profile.bankai_name || bankai) : "Bankai — Unachieved")}</h3></div></header>${achieved(bankai) ? `${row("Manifestation", profile.bankai_manifestation)}${row("Ability", profile.bankai_effect)}${row("Cost", profile.bankai_cost)}${row("Counters", profile.bankai_counters)}` : `<p>Requires an achieved Shikai, spirit manifestation, sufficient spiritual capacity and a character-specific mastery trial.</p>`}</article>`;
+  const shikaiCard = `<details class="release-card shikai-card expandable-special-card ${achieved(shikai) ? "awakened" : "sealed"}"><summary><header><span>始解</span><div><small>FIRST RELEASE</small><h3>${escapeHtml(achieved(shikai) ? (profile.shikai_name || shikai) : "Shikai — Unachieved")}</h3></div><i class="expand-label"></i></header></summary><div class="expandable-special-body">${achieved(shikai) ? `${row("Release command", profile.release_command)}${row("Form", profile.shikai_form)}${row("Ability", profile.shikai_effect)}${row("Limits", profile.shikai_limitation)}${row("Counters", profile.shikai_counters)}` : `<p>Learn the spirit's identity and true name through Jinzen, training, battle and a personal inner-world trial.</p>`}</div></details>`;
+  const bankaiCard = `<details class="release-card bankai-card expandable-special-card ${achieved(bankai) ? "awakened" : "sealed"}"><summary><header><span>卍解</span><div><small>FINAL RELEASE</small><h3>${escapeHtml(achieved(bankai) ? (profile.bankai_name || bankai) : "Bankai — Unachieved")}</h3></div><i class="expand-label"></i></header></summary><div class="expandable-special-body">${achieved(bankai) ? `${row("Manifestation", profile.bankai_manifestation)}${row("Ability", profile.bankai_effect)}${row("Cost", profile.bankai_cost)}${row("Counters", profile.bankai_counters)}` : `<p>Requires an achieved Shikai, spirit manifestation, sufficient spiritual capacity and a character-specific mastery trial.</p>`}</div></details>`;
   return `<section class="bleach-release-grid">${shikaiCard}${bankaiCard}</section>`;
 }
 
@@ -771,7 +779,7 @@ function worldIdentityLabel(state) {
 
 function renderWorldProgression(world, special, classProfile, data = {}) {
   const value = (raw, fallback = "Not established") => compactReadable(raw) || fallback;
-  const card = (eyebrow, title, rows, tone = "") => `<article class="world-system-card ${tone}"><header><small>${escapeHtml(eyebrow)}</small><h3>${escapeHtml(value(title))}</h3></header>${rows.filter(([,v]) => v !== undefined && v !== null && value(v, "") !== "").map(([label,v]) => `<div><b>${escapeHtml(label)}</b><span>${escapeHtml(value(v))}</span></div>`).join("")}</article>`;
+  const card = (eyebrow, title, rows, tone = "") => `<details class="world-system-card expandable-special-card ${tone}"><summary><header><small>${escapeHtml(eyebrow)}</small><h3>${escapeHtml(value(title))}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body">${rows.filter(([,v]) => v !== undefined && v !== null && value(v, "") !== "").map(([label,v]) => `<div class="world-system-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value(v))}</span></div>`).join("")}</div></details>`;
   const namedRows = (rows, empty = "None recorded") => rows?.length ? rows.map((row) => {
     const title = row?.name || row?.class || "Record";
     const detail = row && typeof row === "object"
@@ -836,19 +844,22 @@ function loadPortraitImage(url) {
 
 function renderAiPortrait(s) {
   const img = $("#portrait-img");
-  const hasRealPortrait = !!((s._portrait_generated || s._portrait_reference) && s._portrait_image);
-  if (hasRealPortrait) {
+  const hasDisplayPortrait = !!s._portrait_image;
+  if (hasDisplayPortrait) {
     loadPortraitImage(s._portrait_image);
   } else {
-    // No generated art yet — the frame just stays blank instead of falling
-    // back to a procedural sprite.
-    img.classList.remove("loaded");
-    img.removeAttribute("data-src");
-    img.removeAttribute("src");
+    // Do not clear a successfully loaded portrait just because an effect or
+    // transformation changed its generation signature.  The backend also
+    // supplies the newest campaign portrait while the replacement renders;
+    // this guard prevents a single delayed state response from flashing the
+    // frame blank.
+    if (!img.getAttribute("src")) img.classList.remove("loaded");
   }
   const status = $("#portrait-status");
   status.classList.toggle("generated", !!s._portrait_generated);
   if (s._portrait_generated) status.textContent = "AI PORTRAIT · CACHED";
+  else if (s._portrait_previous) status.textContent = "UPDATING · PREVIOUS PORTRAIT SHOWN";
+  else if (s._portrait_reference) status.textContent = "REFERENCE PORTRAIT";
   else if (!s._portrait_generation_enabled) status.textContent = "PORTRAITS OFF";
   else if (!s._portrait_generation_ready) status.textContent = "SET UP IMAGE AI FOR ART";
   else status.textContent = s._portrait_auto_generate ? "AI PORTRAIT QUEUED" : "AI PORTRAIT · GENERATE WHEN READY";
@@ -972,7 +983,7 @@ function renderState(state) {
   if (locationText) { $("#portrait-location-text").textContent = locationText; locationEl.hidden = false; }
   else locationEl.hidden = true;
   const posBadge = $("#position-badge");
-  if (s.position && s.position.trim()) { posBadge.textContent = "★ " + s.position; posBadge.style.display = ""; }
+  if (s.position && s.position.trim()) { posBadge.textContent = s.position; posBadge.style.display = ""; }
   else posBadge.style.display = "none";
 
   // scene
@@ -3341,7 +3352,9 @@ async function openJournal(tab) {
   } else if (tab === "lore") {
     const sources = data.lore_sources || [];
     const conflicts = data.lore_status?.conflicts || [];
-    panel.innerHTML = `<div class="system-summary"><b>AUTHORITY-RANKED LORE LIBRARY</b><span>Official sources outrank references, wikis, forums, and fan analysis. Conflicting claims remain visible instead of being silently blended.</span></div><form id="lore-url-form" class="lore-import"><label>Update from a source URL<input id="lore-url" type="url" placeholder="https://…" required></label><select id="lore-url-type"><option value="official_source">Official source</option><option value="official_reference">Official reference</option><option value="wiki" selected>Wiki</option><option value="forum">Forum</option><option value="fan_analysis">Fan analysis</option></select><button class="btn-primary" type="submit">UPDATE LIBRARY</button><small class="hint">Downloads only when you press Update. The source URL, type, and update time are saved with the local note.</small></form><form id="lore-import-form" class="lore-import"><label>Add a lore pack<input id="lore-file" type="file" accept=".json,.md,.txt" required></label><select id="lore-world"><option>${escapeHtml(data.world || "Custom World")}</option><option>Custom World</option></select><button class="btn-primary" type="submit">IMPORT</button></form>` +
+    const auto = data.lore_automation || {settings:{}, sources:[], due:0};
+    const aset = auto.settings || {};
+    panel.innerHTML = `<div class="system-summary"><b>AUTHORITY-RANKED LORE LIBRARY</b><span>Pages are extracted and indexed locally. Routine updates use no AI calls; conflicting evidence is authority-ranked and only enters an already-needed GM prompt when relevant.</span></div><form id="lore-auto-form" class="lore-auto-form"><label class="lore-toggle"><input id="lore-auto-enabled" type="checkbox" ${aset.enabled ? "checked" : ""}><span><b>Automatic source refresh</b><small>Check approved sources when the game starts and they are due.</small></span></label><label>Refresh interval<select id="lore-auto-interval"><option value="7" ${Number(aset.interval_days)===7?"selected":""}>Weekly</option><option value="30" ${Number(aset.interval_days)!==7&&Number(aset.interval_days)!==90?"selected":""}>Monthly</option><option value="90" ${Number(aset.interval_days)===90?"selected":""}>Every 3 months</option></select></label><label class="lore-toggle"><input id="lore-auto-discovery" type="checkbox" ${aset.discover_related_pages ? "checked" : ""}><span><b>Bounded related-page discovery</b><small>Same website only, at most ${escapeHtml(aset.max_pages_per_refresh || 8)} queued pages per refresh.</small></span></label><button class="btn-primary" type="submit">SAVE</button><button class="btn-ghost" type="button" data-lore-refresh>REFRESH DUE NOW</button><small class="hint">${escapeHtml(auto.sources?.length || 0)} approved source(s) for this world · ${escapeHtml(auto.due || 0)} due · 0 dedicated AI calls per routine refresh.</small></form><form id="lore-url-form" class="lore-import"><label>Add or update an approved URL<input id="lore-url" type="url" placeholder="https://…" required></label><select id="lore-url-type"><option value="official_source">Official source</option><option value="official_reference">Official reference</option><option value="wiki" selected>Wiki</option><option value="forum">Forum</option><option value="fan_analysis">Fan analysis</option></select><button class="btn-primary" type="submit">UPDATE LIBRARY</button><label class="lore-toggle lore-source-options"><input id="lore-url-auto" type="checkbox" checked><span>Keep refreshed</span></label><label class="lore-toggle lore-source-options"><input id="lore-url-discover" type="checkbox"><span>Discover related pages</span></label></form><form id="lore-import-form" class="lore-import"><label>Add a lore pack<input id="lore-file" type="file" accept=".json,.md,.txt" required></label><select id="lore-world"><option>${escapeHtml(data.world || "Custom World")}</option><option>Custom World</option></select><button class="btn-primary" type="submit">IMPORT</button></form>` +
       (sources.length ? sources.map((source) => `<div class="jrow"><b>${escapeHtml(source.name)}</b><br>${escapeHtml(source.kind)} · authority ${escapeHtml(source.authority || 0)}/100 · ${escapeHtml(source.entries || 0)} entries${source.source_types?.length ? ` · ${source.source_types.map(escapeHtml).join(", ")}` : source.source_type ? ` · ${escapeHtml(source.source_type)}` : ""}${source.worlds?.length ? ` · ${source.worlds.map(escapeHtml).join(", ")}` : ""}</div>`).join("") : '<div class="jrow">Only built-in setting guidance is available.</div>') +
       `<h3>Source conflicts</h3>` + (conflicts.length ? conflicts.map((row) => `<details class="lore-conflict"><summary><b>${escapeHtml(row.claim)}</b><span>Resolved at ${escapeHtml(row.authority)}/100</span></summary><p>${escapeHtml(row.resolution)}</p><small>Preferred source: ${escapeHtml(row.source)} (${escapeHtml(row.source_type)})</small><ul>${(row.alternatives || []).map((alt) => `<li>Disputed: ${escapeHtml(alt.value)} — ${escapeHtml(alt.source)} (${escapeHtml(alt.authority)}/100)</li>`).join("")}</ul></details>`).join("") : '<div class="jrow hint">No explicit claim conflicts detected for this world.</div>') +
       `<p class="hint">JSON entries may include title, keys, text, source, source_type, citation, and claims. Source types: official_source, official_reference, licensed_reference, curated, wiki, forum, fan_analysis, imported, or custom.</p>`;
@@ -3546,9 +3559,15 @@ $("#journal-panel").addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = event.target.querySelector("button"); button.disabled = true;
     try {
-      await apiPost("/api/lore/update-url", {url: $("#lore-url").value, source_type: $("#lore-url-type").value, world: APP.state?.world || "Custom World"});
+      await apiPost("/api/lore/update-url", {url: $("#lore-url").value, source_type: $("#lore-url-type").value, world: APP.state?.world || "Custom World", auto_refresh: $("#lore-url-auto").checked, discover: $("#lore-url-discover").checked});
       showToast("Lore source updated and cached locally.", "notify"); await openJournal("lore");
     } catch (e) { showToast(e.message, "danger"); button.disabled = false; }
+  } else if (event.target.id === "lore-auto-form") {
+    event.preventDefault();
+    try {
+      await apiPost("/api/lore/automation", {enabled: $("#lore-auto-enabled").checked, interval_days: Number($("#lore-auto-interval").value), discover_related_pages: $("#lore-auto-discovery").checked, recommended_sources:true, world: APP.state?.world || "Custom World"});
+      showToast("Automatic lore coverage settings saved.", "notify"); await openJournal("lore");
+    } catch (error) { showToast(error.message, "danger"); }
   } else if (event.target.id === "lore-import-form") {
     event.preventDefault();
     const file = $("#lore-file").files[0];
@@ -3560,6 +3579,17 @@ $("#journal-panel").addEventListener("submit", async (event) => {
 });
 
 $("#journal-panel").addEventListener("click", async (event) => {
+  const loreRefresh = event.target.closest("[data-lore-refresh]");
+  if (loreRefresh) {
+    loreRefresh.disabled = true;
+    try {
+      const result = await apiPost("/api/lore/refresh", {force:false, world: APP.state?.world || "Custom World"});
+      const report = result.refresh || {};
+      showToast(`Lore refresh: ${report.updated || 0} updated, ${report.unchanged || 0} unchanged${report.failed ? `, ${report.failed} failed` : ""}.`, report.failed ? "danger" : "notify");
+      await openJournal("lore");
+    } catch (error) { showToast(error.message, "danger"); loreRefresh.disabled = false; }
+    return;
+  }
   const repairButton = event.target.closest("[data-health-repair]");
   if (repairButton) {
     repairButton.disabled = true;

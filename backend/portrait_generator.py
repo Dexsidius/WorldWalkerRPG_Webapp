@@ -280,15 +280,23 @@ def portrait_view(state, settings):
     signature = portrait_signature(state)
     cached = cached_path(state)
     reference = reference_path(state)
+    # A visible transformation/effect deliberately changes the cache key.
+    # Generation is asynchronous, so there is a short period where the new
+    # key has no file yet.  Keep the newest portrait for this campaign on
+    # screen during that period instead of returning only generic art (or
+    # None) and making the character vanish between turns.
+    previous = latest_path(state) if not cached and not reference else None
+    image = cached or reference or previous
     return {
         "_portrait_signature": signature,
-        "_portrait_image": f"/portrait-cache/{cached.name}" if cached else f"/portrait-cache/{reference.name}" if reference else fallback_url(state),
+        "_portrait_image": f"/portrait-cache/{image.name}" if image else fallback_url(state),
         "_portrait_generated": bool(cached),
         "_portrait_reference": bool(reference and not cached),
+        "_portrait_previous": bool(previous),
         "_portrait_generation_enabled": bool(settings.get("portrait_generation_enabled", True)),
         "_portrait_auto_generate": bool(settings.get("portrait_auto_generate", False)),
         "_portrait_generation_ready": portrait_ready(settings),
-        "_portrait_regeneration_policy": "Only significant visible appearance, equipment, affiliation clothing, or transformation changes create a new cache key.",
+        "_portrait_regeneration_policy": "Only significant visible appearance, equipment, affiliation clothing, or transformation changes create a new cache key; the last valid portrait remains visible until its replacement loads.",
     }
 
 
