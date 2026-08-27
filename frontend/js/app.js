@@ -507,7 +507,7 @@ function appendStoryEntries(entries) {
   const feed = $("#story-feed");
   const cleanEntries = (entries || []).filter((entry) => entry && String(entry.text || "").trim());
   if (!cleanEntries.length) return;
-  if (APP.state?.world === "Jujutsu Kaisen" && cleanEntries.some((entry) => /\bblack flash\b/i.test(String(entry.text || "")))) triggerBlackFlash();
+  if (APP.state?.world === "Jujutsu Kaisen" && cleanEntries.some((entry) => /^\[JUJUTSU RECORD\][\s\S]*\bBLACK FLASH\b/i.test(String(entry.text || "")))) triggerBlackFlash();
   // A multi-day skip returns entries stamped with different canon_day
   // values — split those into separate dated cards (like a history feed)
   // instead of lumping a whole week under one header. Entries without a
@@ -884,7 +884,8 @@ function renderJjkBirthSlot(slot) {
   const rows = [
     ["Rule", slot.governing_rule], ["Activation", slot.activation], ["Targets", slot.targets],
     [slot.slot_type === "Heavenly Restriction" ? "Sacrifice" : "Limits", slot.sacrifice || slot.limitations],
-    ["Weaknesses", slot.weaknesses], ["Enhancement", slot.enhancement], ["Growth", slot.growth_path],
+    ["Applications", (slot.applications || []).map(row => typeof row === "object" ? `${row.name}: ${row.effect}${row.limitation ? ` — ${row.limitation}` : ""}` : row)],
+    ["Costs", slot.costs], ["Counters", slot.counters], ["Weaknesses", slot.weaknesses], ["Enhancement", slot.enhancement], ["Growth", slot.growth_path],
     ["Domain potential", slot.domain_potential], ["Power", slot.power_grade],
   ].filter(([, value]) => compactReadable(value));
   return `<details class="world-system-card jjk-technique-card expandable-special-card" open><summary><header><small>${escapeHtml(slot.slot_type || "BIRTH SLOT")}</small><h3>${escapeHtml(slot.name || "Unrevealed")}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body">${rows.map(([label, value]) => `<div class="world-system-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(compactReadable(value))}</span></div>`).join("")}</div></details>`;
@@ -931,8 +932,19 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
     return `<section class="world-system-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system")}${card("CHAKRA & TECHNIQUES", p.kekkei_genkai && p.kekkei_genkai !== "None" ? p.kekkei_genkai : "Shinobi Development", [["Nature affinities",p.nature_affinities],["Known jutsu",p.known_jutsu],["Summons",p.summons],["Transformations",p.transformations]], "naruto-system")}</section>`;
   }
   if (world === "Jujutsu Kaisen") {
-    const slot = data.jjk_system?.birth_slot || special["Innate Technique Profile"] || special["Heavenly Restriction Profile"] || {};
-    return `<section class="world-system-grid">${renderJjkBirthSlot(slot)}${card("JUJUTSU RECORD", special.Grade || "Unassessed", [["Official status",special["Official Status"]], ["School",special.School], ["Domain",special["Domain Expansion"]], ["Reverse cursed technique",special["Reverse Cursed Technique"]], ["Black Flashes",special["Black Flashes"] ?? 0]], "jjk-system")}</section>`;
+    const sys = data.jjk_system || {}, slot = sys.birth_slot || special["Innate Technique Profile"] || special["Heavenly Restriction Profile"] || {};
+    const progress = Object.entries(sys.progression || {}).map(([name,row]) => `${name}: ${Math.round(Number(row?.mastery || 0))}%`);
+    const vows = (sys.binding_vows || []).map(vow => `${vow.name || "Binding Vow"}: ${vow.promise || "Promise recorded"} · Benefit: ${vow.benefit || "Recorded"} · Price: ${vow.price || "Recorded"} · ${vow.status || "Active"}`);
+    const intel = Object.entries(sys.technique_intel || {}).map(([name,row]) => `${name}: confirmed — ${textList(row?.confirmed).join(", ") || "none"}; suspected — ${textList(row?.suspected).join(", ") || "none"}; unknown — ${textList(row?.unknowns).join(", ") || "unrecorded"}`);
+    const exposure = Object.entries(sys.technique_exposure?.witnesses || {}).map(([name,facts]) => `${name}: ${textList(facts).join(", ")}`);
+    const domain = sys.domain || {}, grade = sys.grade_record || {}, black = sys.black_flash || {};
+    const clan = sys.clan || {}, soul = sys.soul || {}, curse = sys.curse_development || {}, hr = sys.heavenly_restriction_mastery || {};
+    const domainCard = slot.slot_type === "Innate Cursed Technique" ? card("DOMAIN DEVELOPMENT", domain.name || "Innate Domain", [["Status",sys.domain_status || domain.status], ["Manifestation",domain.manifestation], ["Sure-hit",domain.sure_hit], ["Cost",domain.cost], ["Counterplay",domain.counterplay]], "jjk-domain-system") : "";
+    const hrCard = slot.slot_type === "Heavenly Restriction" ? card("RESTRICTION MASTERY", slot.name, [["Body",`${Math.round(Number(hr.body || 0))}%`], ["Perception",`${Math.round(Number(hr.perception || 0))}%`], ["Cursed-tool fluency",`${Math.round(Number(hr.tool_fluency || 0))}%`], ["Adaptations",hr.adaptations]], "jjk-hr-system") : "";
+    const clanCard = clan.name && clan.name !== "None" ? card("CLAN POSITION", clan.name, [["Standing",clan.standing], ["Obligations",clan.obligations], ["Favors",clan.favors], ["Sanctions",clan.sanctions], ["Inheritance claim",clan.inheritance_claim]], "jjk-clan-system") : "";
+    const curseCard = sys.curse_identity && Object.keys(sys.curse_identity).length ? card("CURSED SPIRIT DEVELOPMENT", sys.curse_identity.source || "Sentient Curse", [["Origin instinct",sys.curse_identity.instinct], ["Feeding growth",sys.feeding_growth || 0], ["Humans killed",sys.humans_killed || 0], ["Fear resonance",curse.fear_resonance || 0], ["Infamy",curse.infamy || 0], ["Public assessment",curse.public_assessment], ["Territory",curse.territory]], "jjk-curse-system") : "";
+    const soulCard = (soul.occupants || []).length || soul.possession_risk !== "None" ? card("SOUL & POSSESSION", `${Math.round(Number(soul.self_control ?? 100))}% self-control`, [["Soul integrity",`${Math.round(Number(soul.integrity ?? 100))}%`], ["Occupants",(soul.occupants || []).map(x=>`${x.name}: ${x.control || x.type}`)], ["Possession risk",soul.possession_risk]], "jjk-soul-system") : "";
+    return `<section class="world-system-grid jjk-system-grid">${renderJjkBirthSlot(slot)}${card("JUJUTSU RECORD", special.Grade || "Unassessed", [["Official status",special["Official Status"]], ["School",special.School], ["Promotion review",grade.promotion_recommendation], ["Missions",grade.missions_completed || 0], ["Exorcisms",grade.confirmed_exorcisms || 0], ["Reverse cursed technique",sys.reverse_cursed_technique], ["Maximum technique",sys.maximum_technique], ["Black Flashes",`${sys.black_flash_count || 0} · ${black.in_the_zone_turns ? `in the zone (${black.in_the_zone_turns} turns)` : "not in the zone"}`]], "jjk-system")}${domainCard}${hrCard}${clanCard}${curseCard}${soulCard}</section><details class="lit-system-section jjk-development-section"><summary>Progression, binding vows, and technique intelligence</summary><div class="lit-system-body">${card("DEVELOPMENT TRACKS", `${(sys.unlocks || []).length} unlocks`, [["Mastery",progress], ["Unlocked",sys.unlocks]], "jjk-system")}${card("BINDING VOWS", `${vows.length} active or recorded`, [["Terms",vows]], "jjk-vow-system")}${card("TECHNIQUE INTELLIGENCE", `${intel.length} opponents tracked`, [["What you know",intel], ["Who has seen your technique",exposure]], "jjk-intel-system")}</div></details>`;
   }
   if (world === "Solo Max-Level Newbie") {
     const p = special["System Profile"] || {}, sys = data.solo_system || {}, floor = sys.floor_state || {};

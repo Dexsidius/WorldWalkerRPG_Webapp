@@ -29,6 +29,7 @@ from simulation_integrity import (parse_action_goals, register_action_goals,
                                   validate_turn_response, refresh_npc_schedules,
                                   transmit_information, canon_dependency_graph)
 from lit_systems import process_lit_turn
+from jjk_system import advance_jjk_state
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -1652,6 +1653,10 @@ class TimeSkipMixin:
             elapsed_amount = elapsed.get("amount", requested_amount)
             elapsed_unit = elapsed.get("unit", requested_unit)
             pending_canon_appends = self.advance_clock(before, elapsed_amount, elapsed_unit)
+            jjk_notes = advance_jjk_state(
+                self.state, before, context.get("actions", []), data.get("narrative", ""),
+                data.get("events", []), self.duration_minutes(elapsed_amount, elapsed_unit),
+            )
             lit_notes = process_lit_turn(
                 before, self.state, context.get("actions", []), data.get("narrative", ""),
                 self.duration_minutes(elapsed_amount, elapsed_unit),
@@ -1727,6 +1732,8 @@ class TimeSkipMixin:
             if lit_notes:
                 heading = "SATISFY SYSTEM" if self.state.get("world") == "Overgeared" else "TOWER SYSTEM"
                 self.append(f"[{heading}]\n" + "\n".join(lit_notes), "system")
+            if jjk_notes:
+                self.append("[JUJUTSU RECORD]\n" + "\n".join(jjk_notes), "system")
             self.append_growth_deltas(before)
             interrupted = bool(data.get("interrupted"))
             interruption_kind = str(data.get("interruption_kind") or "").lower()

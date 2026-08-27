@@ -1636,6 +1636,16 @@ body[data-world="Jujutsu Kaisen"] .scene-viewport{ border-bottom:2px solid #ad82
 body[data-world="Jujutsu Kaisen"] .brand::after{ content:"呪"; }
 .jjk-technique-card{ border-color:rgba(173,130,255,.62)!important; background:linear-gradient(145deg,rgba(173,130,255,.1),rgba(8,8,12,.94))!important; }
 .jjk-technique-card summary h3{ color:#f1e9ff; }
+.jjk-system-grid .world-system-card{ border-radius:2px; border-left-width:3px; }
+.jjk-system-grid .world-system-card>summary>header{ background:linear-gradient(90deg,rgba(173,130,255,.11),transparent); }
+.jjk-domain-system{ border-left-color:#ff4f72!important; box-shadow:inset 0 0 28px rgba(255,79,114,.045); }
+.jjk-hr-system{ border-left-color:#e8e4d9!important; }
+.jjk-clan-system{ border-left-color:#d5b45f!important; }
+.jjk-curse-system{ border-left-color:#8053b9!important; }
+.jjk-soul-system{ border-left-color:#69c8d4!important; }
+.jjk-development-section>summary{ background:linear-gradient(90deg,rgba(173,130,255,.12),transparent); }
+.jjk-vow-system{ border-color:rgba(255,79,114,.52)!important; }
+.jjk-intel-system{ border-color:rgba(105,200,212,.45)!important; }
 .creation-world-options{ margin:14px 0; padding:14px; border:1px solid var(--border); border-radius:10px; background:rgba(173,130,255,.06); }
 .creation-toggle{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
 .creation-toggle input{ margin-top:4px; accent-color:var(--accent); }

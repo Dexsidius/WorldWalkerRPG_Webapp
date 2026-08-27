@@ -25,7 +25,7 @@ from simulation_integrity import (register_action_goals, reconcile_action_goals,
                                   transmit_information)
 from lit_systems import initialize_lit_systems, process_lit_turn
 from overgeared_classes import starter_kit_for, class_action_bonus
-from jjk_system import feeding_growth_for_target, is_curse_origin
+from jjk_system import advance_jjk_state
 
 
 DEFAULT_SETTINGS = {
@@ -570,36 +570,9 @@ Return ONLY valid JSON."""
         self.append("[TRAINING REPORT]\n" + "\n".join(lines), "meta")
         return self.state["last_training_summary"]
 
-    def apply_jjk_turn_effects(self, before, actions, narrative, events):
-        """Keep curse feeding and Black Flash mechanical instead of prose-only."""
-        if self.state.get("world") != "Jujutsu Kaisen":
-            return []
-        notes = []
-        resolved_text = " ".join([str(narrative or ""),
-                                  *(str((e or {}).get("message") or "") for e in events or [] if isinstance(e, dict))])
-        system = self.state.setdefault("jjk_system", {})
-        special = self.state.setdefault("special", {})
-        # Narrative and event summaries commonly repeat the same strike. Record
-        # one confirmed Black Flash per resolution instead of counting prose
-        # mentions as separate accomplishments.
-        black_flashes = 1 if re.search(r"\bblack flash\b", resolved_text, re.I) else 0
-        if black_flashes:
-            prior = int(system.get("black_flash_count", special.get("Black Flashes", 0)) or 0)
-            system["black_flash_count"] = prior + black_flashes
-            special["Black Flashes"] = system["black_flash_count"]
-            notes.append(f"BLACK FLASH RECORDED — lifetime total {system['black_flash_count']}")
-        origin = str(special.get("Origin") or "")
-        killed = bool(re.search(r"\b(kill(?:ed|s)?|devour(?:ed|s)?|consumed|drained)\b[^.]{0,80}\b(human|civilian|sorcerer|curse user|person|people)\b", resolved_text, re.I))
-        if is_curse_origin(origin) and killed:
-            target = "special grade" if re.search(r"special[- ]grade", resolved_text, re.I) else "grade 1" if re.search(r"grade[ -]1", resolved_text, re.I) else "grade 2" if re.search(r"grade[ -]2", resolved_text, re.I) else "grade 3" if re.search(r"grade[ -]3", resolved_text, re.I) else "grade 4 sorcerer" if re.search(r"sorcerer|curse user", resolved_text, re.I) else "ordinary human"
-            growth = feeding_growth_for_target(target)
-            system["humans_killed"] = int(system.get("humans_killed", 0) or 0) + 1
-            system["feeding_growth"] = int(system.get("feeding_growth", 0) or 0) + growth
-            for stat, scale in (("Cursed Energy Reserves", 1.0), ("Cursed Energy Output", .55), ("Cursed Energy Control", .18)):
-                if stat in self.state.get("stats", {}):
-                    self.state["stats"][stat] = int(self.state["stats"][stat]) + max(1, round(growth * scale))
-            notes.append(f"CURSE FEEDING — {target} yielded {growth} growth; stronger cursed-energy prey scales exponentially")
-        return notes
+    def apply_jjk_turn_effects(self, before, actions, narrative, events, elapsed_minutes=5):
+        """Persist the complete JJK development record after a resolved beat."""
+        return advance_jjk_state(self.state, before, actions, narrative, events, elapsed_minutes)
 
     def apply_resolution(self, data, is_opening=False, pending_action=None, progression_context=None):
         with self.lock:
@@ -653,7 +626,7 @@ Return ONLY valid JSON."""
                                      context.get("elapsed_minutes", 5), context.get("intensity", "normal"), data.get("events", []))
             if not is_opening:
                 self.reconcile_title_events(data.get("events", []))
-                for note in self.apply_jjk_turn_effects(before, turn_actions, data.get("narrative", ""), data.get("events", [])):
+                for note in self.apply_jjk_turn_effects(before, turn_actions, data.get("narrative", ""), data.get("events", []), context.get("elapsed_minutes", 5)):
                     self.append(f"[JUJUTSU RECORD]\n{note}", "system")
             self.sync_derived_pools(before)
             if is_opening:

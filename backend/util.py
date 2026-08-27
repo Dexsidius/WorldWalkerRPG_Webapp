@@ -191,7 +191,10 @@ LANDMARK_SCENES = {
     ),
     "Jujutsu Kaisen": (
         (("tokyo jujutsu high", "tombs of the star corridor", "cursed warehouse"), "jjk_tokyo_high"),
-        (("kyoto jujutsu high", "kamo estate"), "jjk_kyoto_high"),
+        (("gojo estate", "zenin estate", "kamo estate", "great clan estate", "clan compound"), "jjk_clan_estate"),
+        (("kyoto jujutsu high",), "jjk_kyoto_high"),
+        (("subway", "metro station", "underground station", "service tunnel"), "jjk_subway_tunnel"),
+        (("abandoned hospital", "cursed hospital"), "jjk_cursed_hospital"),
         (("shibuya", "tokyo", "colony"), "jjk_shibuya_night"),
     ),
 }
@@ -327,6 +330,13 @@ def scene_category(state):
     context = scene_context(state)
     location = context["place"]
     combat = context["combat_state"]
+    live_activity = " ".join([
+        context["activity"],
+        " ".join(str(x) for x in state.get("queued_actions", [])[-3:]),
+        " ".join(str(x) for x in state.get("standing_orders", [])[-3:]),
+    ]).lower()
+    if state.get("world") == "Jujutsu Kaisen" and any(k in live_activity for k in ("domain expansion", "innate domain", "sure-hit", "sure hit")):
+        return "jjk_domain_interior"
     # A completed fight intentionally keeps its mechanical log around until
     # the final narration pass can consume it.  That inactive record is not a
     # live scene signal: otherwise a character who fled, returned home and
@@ -402,6 +412,8 @@ def scene_art_confidence(state, category=None):
     """Explain how strongly the selected art matches the live physical scene."""
     category = category or scene_category(state)
     context = scene_context(state)
+    if str(category).startswith("jjk_"):
+        return {"score": 90, "label": "Jujutsu scene match", "reason": "The active Jujutsu Kaisen scene selected dedicated setting art."}
     location = context["place"].strip()
     if state.get("active_canon_event"):
         return {"score": 100, "label": "Exact event", "reason": "A dedicated active-event banner has priority."}
@@ -498,7 +510,7 @@ def scene_image_url(state):
     landmarks = LANDMARK_SCENES.get(world, ())
     action_categories = {"duel", "monster_battlefield", "monster_lair", "dungeon_cave"}
     local_detail_words = ("merchant", "stall", "shop", "bazaar", "market", "alley", "street", "inn", "tavern", "restaurant")
-    if not active_combat and cat not in action_categories and not any(word in location for word in local_detail_words):
+    if not active_combat and cat != "jjk_domain_interior" and (cat not in action_categories or world == "Jujutsu Kaisen") and not any(word in location for word in local_detail_words):
         for terms, landmark_name in landmarks:
             if any(term in location for term in terms):
                 for ext in ("gif", "webp", "png"):

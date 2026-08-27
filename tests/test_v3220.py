@@ -111,7 +111,7 @@ class WorldwalkerV3220JujutsuKaisenTests(unittest.TestCase):
         game = GameSession()
         game.state = copy.deepcopy(BASE_STATE)
         game.state.update(world="Jujutsu Kaisen", special={}, stats={name: 20 for name in abilities_for("Jujutsu Kaisen")})
-        notes = game.apply_jjk_turn_effects(copy.deepcopy(game.state), [], "A Black Flash lands.", [{"message": "BLACK FLASH erupts."}])
+        notes = game.apply_jjk_turn_effects(copy.deepcopy(game.state), ["Strike the curse with cursed energy timed for Black Flash"], "A Black Flash lands.", [{"message": "BLACK FLASH erupts."}])
         self.assertEqual(game.state["jjk_system"]["black_flash_count"], 1)
         self.assertIn("BLACK FLASH RECORDED", notes[0])
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")

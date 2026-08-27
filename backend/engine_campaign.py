@@ -24,7 +24,8 @@ from lit_systems import initialize_lit_systems
 from skill_system import infer_skill_metadata
 from overgeared_classes import canon_class_prompt_reference, infer_class_type, starter_kit_for
 from jjk_system import (apply_birth_slot, generate_birth_slot, generate_curse_identity,
-                        initialize_jjk_state, is_curse_origin, normalized_grade)
+                        initialize_jjk_state, is_curse_origin, normalized_grade,
+                        normalize_birth_slot_package)
 
 
 DEFAULT_SETTINGS = {
@@ -1554,20 +1555,27 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         if world == "Jujutsu Kaisen" and allow_starting_specials:
             jjk_birth_slot = generate_birth_slot(background, bool(jjk_guarantee_strong), seed=f"{origin}|{start_location}|{random.random()}")
             if self.ai_bg_ready():
-                schema = {key: "concise JJK-native value" for key in (
-                    "name", "governing_rule", "activation", "targets", "limitations", "weaknesses", "growth_path", "domain_potential")}
+                schema = {
+                    "name":"unique technique name", "governing_rule":"one exact immutable rule",
+                    "activation":"how it is invoked", "targets":"valid targets/range",
+                    "applications":[{"name":"named extension tied to this rule", "effect":"specific effect", "limitation":"application-specific constraint"}],
+                    "limitations":"real boundaries or plainly no special limitation", "weaknesses":"real counterplay or plainly no inherent weakness",
+                    "costs":"energy/setup/attention costs", "counters":["specific counterplay"],
+                    "growth_path":"ways the same rule can deepen", "domain_name":"original domain name",
+                    "domain_manifestation":"inner landscape", "sure_hit":"how this exact rule becomes guaranteed",
+                    "domain_cost":"cost and burnout", "domain_counters":["anti-domain response"],
+                }
                 try:
                     authored = self.ai_bg.request(
-                        "Design one original Jujutsu Kaisen innate technique for this character. Respect the exclusive birth slot. Use the background and requested power guarantee. Match canon techniques in depth, uniqueness, complexity and possible power. If the background clearly establishes Heavenly Restriction, keep the fallback restriction instead. Do not invent a fake weakness when the power genuinely has none. Return JSON only.",
+                        "Design one complete original Jujutsu Kaisen innate-technique package. Every application, cost, counter and Domain must follow the same governing rule; do not rename a fallback while retaining its old applications. Respect the exclusive birth slot. Use the background and requested power guarantee. Match canon techniques in depth, uniqueness, complexity and possible power. If the background clearly establishes Heavenly Restriction, keep the fallback restriction instead. Do not invent a fake weakness when the power genuinely has none. Return JSON only.",
                         {"background":background, "origin":origin, "guarantee_strong":bool(jjk_guarantee_strong), "fallback":jjk_birth_slot, "schema":schema},
-                        max_output_tokens=650,
+                        max_output_tokens=950,
                     )
                     if isinstance(authored, dict) and jjk_birth_slot.get("slot_type") == "Innate Cursed Technique":
-                        for key in schema:
-                            if str(authored.get(key) or "").strip():
-                                jjk_birth_slot[key] = str(authored[key]).strip()
+                        jjk_birth_slot = normalize_birth_slot_package(authored, jjk_birth_slot)
                 except Exception as exc:
                     self._last_special_generation_error = str(exc)[:240]
+            jjk_birth_slot = normalize_birth_slot_package(jjk_birth_slot)
             if is_curse_origin(origin):
                 jjk_curse_identity = generate_curse_identity(background, seed=start_location)
             staged = apply_birth_slot({"stats":adjusted, "skills":skills}, jjk_birth_slot,
@@ -1645,6 +1653,40 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 package["equipment"] = {"Natural Weapon":"Manifested cursed body"}
             else:
                 package.setdefault("equipment", {"Field Gear":"Protective talismans and school-issued field supplies"})
+            if origin.startswith(("Tokyo Jujutsu High", "Kyoto Jujutsu High")):
+                school = "Tokyo Jujutsu High" if origin.startswith("Tokyo") else "Kyoto Jujutsu High"
+                package["quests"] = [{
+                    "name":"First Recorded Field Assignment", "status":"Active", "category":"main", "giver":f"{school} mission office",
+                    "explanation":"A supervised manifestation report will establish the character's judgment, technique use and first verifiable grade record; exorcism is not the only acceptable resolution when civilians or information matter more.",
+                    "current_knowledge":["Residual cursed energy has been confirmed at a public site", "The curse's exact rule and grade are still unknown"],
+                    "objectives":["Meet the assigned supervisor", "Investigate before exposing the technique", "Protect civilians and resolve or contain the manifestation"],
+                    "clear_conditions":["Return with the manifestation resolved and a credible field report"],
+                    "first_step":"Report to the mission office for the location, teammates and available records.",
+                }]
+            elif origin == "Great Clan Member":
+                package["quests"] = [{
+                    "name":"A Name Inside the Three Families", "status":"Active", "category":"personal", "giver":"Family obligation",
+                    "explanation":"The character's generated clan grants access and pressure together. A current family matter will define whether elders see an asset, rival, heir, embarrassment or bargaining piece.",
+                    "current_knowledge":["The clan expects a concrete demonstration of usefulness", "Internal support and opposition must be learned through real relationships"],
+                    "objectives":["Identify the current family demand", "Choose whom inside the clan to trust", "Answer the demand without surrendering the character's own goal"],
+                    "clear_conditions":["Establish a named clan position, ally and consequence"], "first_step":"Attend the requested family audience and learn who sponsored it.",
+                }]
+            elif origin == "Independent Curse User":
+                package["quests"] = [{
+                    "name":"The Manifestation No School Claimed", "status":"Active", "category":"main", "giver":"A paid rumor",
+                    "explanation":"An unregistered curse user has heard of a manifestation that official channels have not yet resolved. The job can earn money, knowledge, enemies or contact with jujutsu society depending on how it is handled.",
+                    "current_knowledge":["The client knows the site but not the curse's rule", "Jujutsu Headquarters may notice an unauthorized intervention"],
+                    "objectives":["Verify the client and location", "Discover the curse's rule", "Resolve the incident on chosen terms"],
+                    "clear_conditions":["End the local threat and deal with whoever learns of the intervention"], "first_step":"Meet the client without revealing more of the technique than necessary.",
+                }]
+            elif origin == "Sentient Cursed Spirit":
+                package["quests"] = [{
+                    "name":"Choose What Kind of Curse Survives", "status":"Active", "category":"personal", "giver":"The instinct that formed you",
+                    "explanation":"Intelligence allows the curse to obey, reinterpret or resist its founding fear. Feeding can create explosive growth, but victims, witnesses and territory determine the kind of attention that follows.",
+                    "current_knowledge":["Ordinary humans provide little growth", "Sorcerers and people rich in cursed energy provide exponentially more", "Being witnessed can lead to an official grade and organized pursuit"],
+                    "objectives":["Understand the human fear that created you", "Choose a feeding or non-feeding survival method", "Establish a first lair, relationship or hunting ground"],
+                    "clear_conditions":["Define a stable survival pattern and its first lasting consequence"], "first_step":"Observe the nearest humans and cursed-energy presence before exposing yourself.",
+                }]
         # Every selectable origin receives a saved mechanical identity even
         # when it does not have a bespoke high-status package above.  This is
         # intentionally local and deterministic: ordinary starts should not
@@ -1901,7 +1943,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 if isinstance(detail, dict) and (detail.get("parent_technique") == old.get("name") or detail.get("category") == "cursed technique"):
                     profile["skills"].pop(skill_name, None)
             profile["stats"] = copy.deepcopy(profile.get("_base_stats") or profile.get("stats") or {})
-            slot = generate_birth_slot(background, bool(result.get("jjk_guarantee_strong")), seed=f"reroll|{random.random()}")
+            slot = normalize_birth_slot_package(generate_birth_slot(background, bool(result.get("jjk_guarantee_strong")), seed=f"reroll|{random.random()}"))
             staged = apply_birth_slot({"stats":profile["stats"], "skills":profile["skills"]}, slot,
                                       result.get("jjk_curse_grade", "") if is_curse_origin(result.get("origin", "")) else "")
             profile["stats"], profile["skills"], profile["jjk_birth_slot"] = staged["stats"], staged["skills"], slot
@@ -2037,7 +2079,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     "growth_path":"Learn cursed-energy control, preserve control of the body and develop Yuji's own fighting method.",
                     "power_grade":"Exceptional vessel",
                 }
-            normalized["jjk_birth_slot"] = slot
+            normalized["jjk_birth_slot"] = normalize_birth_slot_package(slot)
         package = {
             "position": scenario.get("position", ""), "affiliations": copy.deepcopy(scenario.get("affiliations") or []),
             "reputation": copy.deepcopy(scenario.get("reputation") or {}), "special_patch": copy.deepcopy(scenario.get("special_patch") or {}),
