@@ -19,6 +19,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
                      uses_literal_quests, quest_presentation_for)
 from simulation import (advance_npc_intentions, record_simulation_events,
                         normalize_assessment_for_agency)
+from world_depth import contextual_opportunities, normalize_world_depth, record_canon_ripples, record_downtime
 from simulation_integrity import (register_action_goals, reconcile_action_goals,
                                   validate_turn_response, refresh_npc_schedules,
                                   transmit_information)
@@ -672,6 +673,10 @@ Return ONLY valid JSON."""
                 self.state["suggested_actions"] = self.guided_suggestions([relationship_offer["prompt"], *self.state.get("suggested_actions", [])])
                 self.append(f"[OPTIONAL CHARACTER MOMENT — {relationship_offer['npc']}]\n{relationship_offer['reason']} This is optional; time will not move until you choose and Advance.", "meta")
             update_campaign_direction(self.state, turn_actions, data.get("events", []), 0 if is_opening else int(context.get("elapsed_minutes", 5) or 5))
+            normalize_world_depth(self.state, before)
+            record_canon_ripples(self.state, data.get("events", []))
+            if not is_opening:
+                record_downtime(self.state, turn_actions, int(context.get("elapsed_minutes", 5) or 5))
             build_cause_effect(before, self.state, turn_actions, context.get("rolls", []))
             update_narrative_memory(
                 before, self.state,
@@ -790,6 +795,9 @@ Return ONLY valid JSON."""
             if isinstance(track, dict) and track.get("next_steps"):
                 suggestions.append(f"Progress toward {track.get('name', 'your goal')}: {track['next_steps'][0]}")
                 break
+        for lead in contextual_opportunities(self.state)[:1]:
+            if self._suggestion_is_current(lead):
+                suggestions.append(lead)
         # Prefer a SPECIFIC, already-established name over a generic template
         # whenever one exists — a known contact or an unexplored discovered
         # location beats "ask around" every time this data is available.

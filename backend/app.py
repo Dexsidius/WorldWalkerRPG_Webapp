@@ -1038,6 +1038,7 @@ def api_panels():
         "overgeared_system": s.get("overgeared_system", {}),
         "class_encyclopedia": class_encyclopedia() if world == "Overgeared" else {},
         "solo_system": s.get("solo_system", {}),
+        "world_depth": s.get("world_depth", {}),
         "class_profile": visible_class_profile(s),
         "combat": s.get("combat", {}),
         "world_events": s.get("world_events", []),

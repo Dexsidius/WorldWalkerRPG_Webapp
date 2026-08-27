@@ -6,7 +6,17 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.20.0** (schema 16).
+Current app/save version: **3.21.0** (schema 17).
+
+Version 3.21 gives every setting a deterministic world-law profile, flexible
+development paths, setting-specific downtime, persistent signature-technique
+records, faction doctrine, canon-event ripples, contextual opportunities, and
+distinct elite encounter structure. These systems reuse the normal narration
+call rather than adding another AI request. The Progress Journal explains
+possible routes and genuine prerequisites without turning them into a fixed
+skill tree. One Piece crews and ships, Hunter Nen restrictions, Naruto jutsu
+research, Solo floor ecology, Overgeared build synergy, Slime evolution and
+nation play, and Bleach Zanpakuto/squad growth now have persistent state.
 
 Version 3.20 makes Satisfy classes complete starting playstyles instead of
 labels. Every creation archetype has real starting skills, a class quest,
@@ -45,6 +55,10 @@ use the same Cloudflare URL while retaining an isolated live session, settings,
 saves, autosaves, and imported campaigns. The Docker image now runs through
 Gunicorn, and older campaign exports can be imported directly into the signed-in
 account. Desktop and local-phone hosting remain single-player and unchanged.
+API keys are also stored per account: one player cannot read or overwrite
+another player's key, and a newly registered account never inherits a server or
+host key. In a shared multiplayer room, the room host's configured key powers
+the authoritative simulation without exposing that key to the other player.
 
 Version 3.16.2 bundles seven default Bleach tracks and four default Naruto
 tracks in their portable world music folders. They are available immediately

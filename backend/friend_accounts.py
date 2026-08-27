@@ -154,11 +154,13 @@ class FriendGameRegistry:
                 configured.update(json.loads(SETTINGS_PATH.read_text(encoding="utf-8")))
             except (OSError, ValueError, TypeError):
                 pass
-        # Container deployments can configure the shared cloud model without
-        # putting a key into a release or into each friend's browser.
+        # Provider/model preferences are safe defaults. Credentials are never
+        # copied from desktop/global settings into a new friend account: each
+        # player owns the api_key/local_token stored under their UUID folder.
+        configured.pop("api_key", None)
+        configured.pop("local_token", None)
         environment = {
             "provider": os.getenv("WORLDWALKER_AI_PROVIDER", "cloud" if os.getenv("OPENAI_API_KEY") else ""),
-            "api_key": os.getenv("OPENAI_API_KEY", ""),
             "model": os.getenv("WORLDWALKER_AI_MODEL", ""),
             "secondary_model": os.getenv("WORLDWALKER_SECONDARY_MODEL", ""),
             "major_event_model": os.getenv("WORLDWALKER_MAJOR_MODEL", ""),

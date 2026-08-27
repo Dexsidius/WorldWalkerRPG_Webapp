@@ -2,6 +2,8 @@ import sys
 import tempfile
 import unittest
 import copy
+import json
+import os
 from pathlib import Path
 from unittest.mock import patch
 
@@ -38,6 +40,11 @@ class FriendAccountTests(unittest.TestCase):
             self.assertIsNot(game_one, game_two)
             self.assertNotEqual(game_one.save_dir, game_two.save_dir)
             self.assertNotEqual(game_one.settings_path, game_two.settings_path)
+            game_one.update_settings({"provider": "cloud", "api_key": "account-one-secret", "model": "gpt-5.6-luna"})
+            game_two.update_settings({"provider": "cloud", "api_key": "account-two-secret", "model": "gpt-5.6-luna"})
+            self.assertEqual(json.loads(game_one.settings_path.read_text(encoding="utf-8"))["api_key"], "account-one-secret")
+            self.assertEqual(json.loads(game_two.settings_path.read_text(encoding="utf-8"))["api_key"], "account-two-secret")
+            self.assertNotEqual(game_one.settings["api_key"], game_two.settings["api_key"])
             game_one.state["name"] = "Only First Friend"
             game_one.state["world"] = "Naruto"
             game_one.campaign_active = True
@@ -45,6 +52,21 @@ class FriendAccountTests(unittest.TestCase):
             self.assertEqual(len(game_one.list_saves()), 1)
             self.assertEqual(game_two.list_saves(), [])
             self.assertFalse(any(game_two.save_dir.rglob("*.json")))
+
+    def test_new_account_never_inherits_global_or_environment_api_secret(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            shared = root / "shared-settings.json"
+            shared.write_text(json.dumps({"provider": "cloud", "model": "gpt-5.6-luna", "api_key": "host-secret", "local_token": "host-token"}), encoding="utf-8")
+            with patch("friend_accounts.SETTINGS_PATH", shared), patch.dict(os.environ, {"OPENAI_API_KEY": "environment-secret"}):
+                store = FriendAccountStore(root / "accounts")
+                account = store.register("isolated", "password123")
+                game = FriendGameRegistry(store).get(account["id"])
+                saved = json.loads(game.settings_path.read_text(encoding="utf-8"))
+                self.assertEqual(saved.get("model"), "gpt-5.6-luna")
+                self.assertNotIn("api_key", saved)
+                self.assertNotIn("local_token", saved)
+                self.assertEqual(game.settings.get("api_key"), "")
 
     def test_registration_limit_and_invite_code(self):
         with tempfile.TemporaryDirectory() as td, patch.dict(

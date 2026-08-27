@@ -70,10 +70,13 @@ class FriendServerRouteTests(unittest.TestCase):
             cross_load = second.post("/api/load", json={"name":save_id}, headers={"X-Worldwalker-CSRF":csrf_two})
             assert cross_load.status_code != 200
 
-            changed = first.post("/api/settings", json={"narration":"Detailed"}, headers={"X-Worldwalker-CSRF":csrf_one})
+            changed = first.post("/api/settings", json={"narration":"Detailed", "provider":"cloud", "api_key":"first-account-only", "model":"gpt-5.6-luna"}, headers={"X-Worldwalker-CSRF":csrf_one})
             assert changed.status_code == 200
-            assert first.get("/api/settings").get_json()["narration"] == "Detailed"
-            assert second.get("/api/settings").get_json()["narration"] != "Detailed"
+            first_settings = first.get("/api/settings").get_json()
+            second_settings = second.get("/api/settings").get_json()
+            assert first_settings["narration"] == "Detailed" and first_settings["has_api_key"] is True
+            assert "api_key" not in first_settings
+            assert second_settings["narration"] != "Detailed" and second_settings["has_api_key"] is False
 
             logout = first.post("/api/auth/logout", json={}, headers={"X-Worldwalker-CSRF":csrf_one})
             assert logout.status_code == 200

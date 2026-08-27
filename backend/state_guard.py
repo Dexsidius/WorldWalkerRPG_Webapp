@@ -13,6 +13,7 @@ from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for
 from knowledge import normalize_npc_knowledge
 from bleach_data import CANON_HADO, CANON_BAKUDO
 from world_progression import normalize_world_progression
+from world_depth import normalize_world_depth
 from lit_systems import initialize_lit_systems
 from skill_system import normalize_skill_map
 from politics import normalize_political_state
@@ -64,7 +65,7 @@ APP_OWNED = {
     "information_packets", "npc_schedules", "canon_event_states",
     "simulation_validation",
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
-    "overgeared_system", "solo_system",
+    "overgeared_system", "solo_system", "world_depth",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -73,7 +74,7 @@ NESTED_DICT_FIELDS = {
     "stats", "hidden_stats", "skills", "class_profile", "equipment", "relationships",
     "reputation", "special", "contacts", "chat_threads", "combat", "portrait_identity",
     "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
-    "difficulty_controls", "progression_preset", "overgeared_system", "solo_system",
+    "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "world_depth",
     "polity_state",
 }
 NESTED_LIST_FIELDS = {
@@ -322,6 +323,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     repairs = _repair(state)
     repairs.extend(_repair_bleach_mechanics(state, before))
     repairs.extend(normalize_world_progression(state, before))
+    repairs.extend(normalize_world_depth(state, before))
     repairs.extend(initialize_lit_systems(state))
     repairs.extend(normalize_political_state(state, before))
     knowledge_changes = normalize_npc_knowledge(state, before, source)
@@ -367,6 +369,7 @@ def migrate_state(state, from_version="unknown"):
     repairs = _repair(migrated)
     migrated["skills"] = normalize_skill_map(migrated.get("skills", {}))
     repairs.extend(normalize_world_progression(migrated))
+    repairs.extend(normalize_world_depth(migrated))
     repairs.extend(initialize_lit_systems(migrated))
     repairs.extend(normalize_political_state(migrated))
     migrated.setdefault("diagnostics", {})["migration"] = {

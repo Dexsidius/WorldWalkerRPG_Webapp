@@ -133,6 +133,21 @@ def normalize_world_progression(state, before=None):
         special["Haki"] = legacy_haki
         special.setdefault("Crew Role", special.get("Archetype", "Unassigned"))
         special.setdefault("Ship", "None")
+        crew = _profile(special.get("Crew Profile"))
+        crew.setdefault("name", special.get("Crew", "None"))
+        crew.setdefault("role", special.get("Crew Role", "Unassigned"))
+        crew.setdefault("members", copy.deepcopy(state.get("companions", [])))
+        crew.setdefault("shared_dreams", [])
+        crew.setdefault("bonds", {})
+        crew.setdefault("current_voyage", "")
+        ship = _profile(special.get("Ship Profile"))
+        ship.setdefault("name", special.get("Ship", "None"))
+        ship.setdefault("condition", "Serviceable" if ship["name"] not in {"", "None"} else "No ship")
+        ship.setdefault("capabilities", [])
+        ship.setdefault("upgrades", [])
+        ship.setdefault("needs", [])
+        special["Crew Profile"], special["Ship Profile"] = crew, ship
+        special.setdefault("Public Reputation", {"bounty": _safe_int(special.get("Bounty", 0)), "fame": 0, "infamy": 0})
         repairs.append("Synchronized One Piece progression profile")
 
     elif world == "Hunter x Hunter":
@@ -156,8 +171,18 @@ def normalize_world_progression(state, before=None):
         hatsu.setdefault("evidence", [])
         hatsu.setdefault("growth_path", "Learn the four major principles and define an ability that reflects the user's nature.")
         nen["hatsu_profile"] = hatsu
+        nen.setdefault("category_efficiency", {
+            "primary": category,
+            "note": "Affinity improves natural efficiency but does not prohibit creative mixed-category techniques.",
+        })
+        nen.setdefault("vow_registry", copy.deepcopy(hatsu.get("vows", [])))
+        nen.setdefault("restriction_consequences", copy.deepcopy(hatsu.get("limitations", [])))
         if hatsu.get("name"):
             special["Hatsu"] = hatsu["name"]
+        special.setdefault("Hunter Career", {
+            "license": special.get("Hunter License", "Unlicensed"),
+            "specialties": [], "completed_work": [], "professional_access": [], "verified_intelligence": [],
+        })
         special["Nen Profile"] = nen
         repairs.append("Synchronized Nen progression profile")
 
@@ -203,6 +228,11 @@ def normalize_world_progression(state, before=None):
         special["Known Jutsu"] = copy.deepcopy(profile["known_jutsu"])
         special["Nature Affinity"] = copy.deepcopy(profile["nature_affinities"] or "Unknown")
         profile.setdefault("mission_record", {})
+        profile.setdefault("team", [])
+        profile.setdefault("mentors", [])
+        profile.setdefault("clan_relationships", {})
+        profile.setdefault("jutsu_research", [])
+        profile.setdefault("elemental_notes", [])
         special["Shinobi Profile"] = profile
         repairs.append("Synchronized shinobi progression profile")
 
@@ -215,6 +245,11 @@ def normalize_world_progression(state, before=None):
         profile["achievements"] = copy.deepcopy(special.get("Achievements", state.get("achievements", profile.get("achievements", []))))
         profile["hidden_conditions"] = _safe_int(special.get("Hidden Conditions Found", profile.get("hidden_conditions", 0)))
         profile.setdefault("active_system_notices", [])
+        profile.setdefault("build_synergies", [])
+        profile.setdefault("rival_progress", {})
+        profile.setdefault("floor_ecology", {
+            "known_factions": [], "known_rules": [], "alternate_clears": [], "confirmed_hazards": [],
+        })
         special["System Profile"] = profile
         repairs.append("Synchronized System progression profile")
 
@@ -237,6 +272,9 @@ def normalize_world_progression(state, before=None):
         profile["known_recipes"] = copy.deepcopy(state.get("known_recipes", profile.get("known_recipes", [])))
         profile["guild"] = special.get("Guild", profile.get("guild", "None"))
         profile["npc_affinity"] = copy.deepcopy(special.get("NPC Affinity", profile.get("npc_affinity", {})))
+        profile.setdefault("equipment_synergies", [])
+        profile.setdefault("skill_combinations", [])
+        profile.setdefault("rankings", {"overall": "Unranked", "class": "Unranked", "guild": "None"})
         special["Satisfy Profile"] = profile
         repairs.append("Synchronized Satisfy progression profile")
 
@@ -261,8 +299,32 @@ def normalize_world_progression(state, before=None):
                 profile[bucket].append(starting["name"])
         special["Named Skills"] = list(dict.fromkeys(profile["unique_skills"] + profile["ultimate_skills"] + named))
         profile.setdefault("evolution_requirements", [])
+        profile.setdefault("skill_synthesis", [])
+        profile.setdefault("subordinate_evolutions", {})
+        profile.setdefault("nation_development", {
+            "settlements": [], "specialists": [], "alliances": [], "pressures": [],
+        })
         special["Evolution Profile"] = profile
         repairs.append("Synchronized evolution progression profile")
+
+    elif world == "Bleach":
+        profile = _profile(special.get("Zanpakuto Profile"))
+        profile.setdefault("name", special.get("Zanpakuto", "Unnamed Asauchi"))
+        profile.setdefault("spirit", "Not yet understood")
+        profile.setdefault("inner_world", "Not yet reached")
+        profile.setdefault("relationship", "Distant" if str(special.get("Shikai", "Unachieved")).lower() in {"unachieved", "none", "unknown", ""} else "Recognized")
+        profile.setdefault("relationship_evidence", [])
+        profile.setdefault("shikai_applications", [])
+        profile.setdefault("bankai_mastery", "Unachieved" if str(special.get("Bankai", "Unachieved")).lower() in {"unachieved", "none", "unknown", ""} else "Awakened")
+        special["Zanpakuto Profile"] = profile
+        special.setdefault("Soul Reaper Record", {
+            "academy_status": special.get("Academy Status", "Graduate"),
+            "division": special.get("Squad", "Awaiting placement"),
+            "duty": special.get("Current Duty", "Awaiting assignment"),
+            "discipline_progress": {"Zanjutsu": 0, "Hakuda": 0, "Hoho": 0, "Kido": 0, "Reiatsu Control": 0},
+            "mentors": [], "patrol_record": [], "division_relationships": {},
+        })
+        repairs.append("Synchronized Soul Reaper progression profile")
 
     return repairs
 

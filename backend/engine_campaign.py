@@ -19,6 +19,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
 from bleach_data import (academy_kido_skills, kido_reference_summary,
                          owns_release, zanpakuto_tracks)
 from world_progression import normalize_world_progression
+from world_depth import normalize_world_depth
 from lit_systems import initialize_lit_systems
 from skill_system import infer_skill_metadata
 from overgeared_classes import canon_class_prompt_reference, infer_class_type, starter_kit_for
@@ -2092,6 +2093,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 self.state["purchase_offer"] = None
                 self.state["purchase_offers"] = []
             normalize_world_progression(self.state)
+            normalize_world_depth(self.state)
             initialize_lit_systems(self.state)
             if world == "Overgeared" and isinstance(profile.get("standard_class_profile"), dict):
                 starter = profile["standard_class_profile"]

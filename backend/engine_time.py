@@ -21,6 +21,7 @@ from simulation import (deterministic_assessment, prioritize_updates,
                         advance_npc_intentions, record_simulation_events,
                         agency_bypasses_check, explicit_world_method,
                         player_favoring_difficulty)
+from world_depth import normalize_world_depth, record_canon_ripples, record_downtime
 from director import (build_cause_effect, ensure_productive_failures,
                       maybe_offer_relationship_scene, update_campaign_direction)
 from simulation_integrity import (parse_action_goals, register_action_goals,
@@ -1795,6 +1796,9 @@ class TimeSkipMixin:
                 self.state["suggested_actions"] = self.guided_suggestions([relationship_offer["prompt"], *self.state.get("suggested_actions", [])])
                 self.append(f"[OPTIONAL CHARACTER MOMENT — {relationship_offer['npc']}]\n{relationship_offer['reason']} This is optional; time will not move until you choose and Advance.", "meta")
             update_campaign_direction(self.state, context.get("actions", []), updates + local_world_events, elapsed_minutes)
+            normalize_world_depth(self.state, before)
+            record_downtime(self.state, context.get("actions", []), elapsed_minutes)
+            record_canon_ripples(self.state, updates + local_world_events)
             cause_effect = build_cause_effect(before, self.state, context.get("actions", []), context.get("rolls", []))
             self.state["last_ai_route"] = {"role": "Major Event GM" if context.get("model_used") and context.get("model_used") == self.settings.get("major_event_model") else "Main GM",
                                            "model": context.get("model_used") or self.settings.get("model", ""), "turn": self.state.get("turn", 0)}

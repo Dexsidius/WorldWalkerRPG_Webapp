@@ -8,6 +8,7 @@ from pathlib import Path
 
 from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, world_supports_races, WORLD_RACES, tower_floor_theme, TOWER_FLOOR_COUNT, tower_band, power_profile_for
 from world_progression import WORLD_MECHANIC_RULES, NARRATIVE_CRAFTING_RULE
+from world_depth import world_depth_rules
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -790,7 +791,7 @@ Return ONLY valid JSON. No markdown fences."""
         difficulty = DIFFICULTIES[self.state["difficulty"]]
         tuning = normalize_tuning(self.state)
         profile = progression_preset_for(self.state.get("world"))
-        mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "") + NARRATIVE_CRAFTING_RULE
+        mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "") + NARRATIVE_CRAFTING_RULE + world_depth_rules(self.state)
         narration = self.settings.get("narration", "Concise")
         agency_rules = self.player_agency_rules()
         shared = f"""You are the authoritative Game Master for a persistent Worldwalker RPG campaign.
