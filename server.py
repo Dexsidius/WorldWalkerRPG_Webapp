@@ -1,7 +1,9 @@
-"""Headless server entry point for running Worldwalker RPG on Linux/Docker,
-without pywebview or a desktop window. Each running instance/container is a
-single, independent game (one shared game state per process — see the
-deployment README for what that means when hosting multiple players).
+"""Headless friend-server entry point for Worldwalker RPG on Linux/Docker.
+
+The hosted build enables lightweight accounts and gives every signed-in friend
+an independent GameSession and persistent save/settings folder. Gunicorn loads
+this module as ``server:app``; direct ``python server.py`` remains useful for
+simple development testing.
 
 Configure with environment variables:
   HOST       - bind address (default 0.0.0.0, i.e. reachable from other machines)
@@ -16,6 +18,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
+
+# The headless build is the hosted/private-friends edition. Desktop and local
+# phone mode import backend/app.py through launcher.py instead and remain the
+# familiar single-player experience unless this is explicitly overridden.
+os.environ.setdefault("WORLDWALKER_ACCOUNTS_ENABLED", "1")
 
 from flask import request, Response
 

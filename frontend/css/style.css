@@ -173,6 +173,13 @@ input,select,textarea{ font-family:inherit; }
 .topbar-center .sep{ margin:0 8px; opacity:.5; }
 #hdr-location{ color:var(--text); font-weight:600; }
 .topbar-right{ display:flex; align-items:center; gap:10px; }
+.account-pill{
+  min-height:30px; padding:5px 10px; border:1px solid rgba(var(--accent2-rgb),.48); border-radius:999px;
+  background:rgba(var(--accent2-rgb),.10); color:var(--sub); font-size:9px; font-weight:800; letter-spacing:.045em;
+}
+.account-pill span{ color:var(--success); margin-right:4px; }
+.account-pill b{ color:var(--text); font-size:10px; }
+.account-pill:hover{ border-color:var(--accent2); color:var(--text); background:rgba(var(--accent2-rgb),.18); }
 .pill{
   font-size:11px; font-weight:700; letter-spacing:.04em;
   padding:6px 12px; border-radius:999px;
@@ -892,7 +899,30 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 .welcome-choice{ min-height:48px; margin-top:10px; flex-direction:row; gap:8px; }
 #modal-welcome{ z-index:6000; }
 #welcome-save-note{ margin-top:14px; text-align:center; }
+.welcome-signout{ margin:2px auto 0; padding:5px; border:0; background:transparent; color:var(--muted); font-size:10px; text-decoration:underline; }
+.welcome-signout:hover{ color:var(--text); }
 @media(max-width:720px){ .welcome-modal{ grid-template-columns:1fr; width:92vw; } .welcome-art{ min-height:180px; border-right:0; border-bottom:1px solid var(--border-soft); } .welcome-content{ padding:28px 24px; } }
+.auth-backdrop{ z-index:9000; background:rgba(3,5,12,.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
+.auth-modal{
+  width:min(860px,94vw); max-height:min(760px,94dvh); overflow:auto; padding:34px;
+  background:radial-gradient(620px 280px at 50% -10%,rgba(var(--accent2-rgb),.22),transparent 70%),linear-gradient(145deg,rgba(22,32,47,.98),rgba(8,12,23,.98));
+  border:1px solid rgba(var(--accent-rgb),.5); box-shadow:0 30px 90px rgba(0,0,0,.75),inset 0 1px rgba(255,255,255,.05);
+}
+.auth-emblem{ width:76px; height:76px; margin:0 auto 12px; background:url('/assets/branding/worldwalker-emblem.png') center/contain no-repeat; filter:drop-shadow(0 0 18px rgba(var(--accent-rgb),.35)); }
+.auth-copy{ text-align:center; max-width:620px; margin:0 auto 24px; }
+.auth-copy h1{ margin:7px 0 8px; color:var(--gold); font:700 27px/1.15 var(--font-display); }
+.auth-copy p,.auth-footnote{ color:var(--sub); font-size:12px; line-height:1.55; }
+.auth-columns{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.auth-card{ padding:20px; border:1px solid var(--border-soft); border-radius:var(--radius); background:rgba(5,9,18,.62); }
+.auth-card-new{ border-color:rgba(var(--accent-rgb),.34); }
+.auth-card h2{ margin:0 0 15px; color:var(--text); font:700 16px var(--font-display); }
+.auth-card label{ display:block; margin:11px 0 6px; color:var(--sub); font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
+.auth-card input{ width:100%; min-height:42px; margin:0; background:#0b1220; color:var(--text); border:1px solid var(--border); border-radius:8px; padding:9px 11px; }
+.auth-card input:focus{ outline:none; border-color:var(--accent2); box-shadow:0 0 0 3px rgba(var(--accent2-rgb),.12); }
+.auth-card button{ margin-top:17px; min-height:42px; }
+.auth-error{ margin:16px 0 0; padding:10px 12px; border:1px solid rgba(var(--danger-rgb),.5); border-radius:9px; color:#ffaaa5; background:rgba(var(--danger-rgb),.12); text-align:center; font-size:12px; }
+.auth-footnote{ margin:16px 0 0; text-align:center; }
+@media(max-width:720px){ .auth-modal{ padding:22px 16px; } .auth-columns{ grid-template-columns:1fr; } .auth-emblem{ width:56px; height:56px; } .auth-copy h1{ font-size:22px; } }
 .modal-lg{ width:640px; }
 .onboarding-step{ padding:12px 0; border-top:1px solid var(--border-soft); }
 .onboarding-step:first-of-type{ border-top:0; padding-top:0; }

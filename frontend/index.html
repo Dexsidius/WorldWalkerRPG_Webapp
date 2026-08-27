@@ -70,6 +70,7 @@
       <span id="hdr-autosave" class="pill save-pill" title="Last autosave">Not saved</span>
       <span id="hdr-ai" class="pill ai-pill">AI: READY TO TEST</span>
       <span id="hdr-cost" class="pill cost-pill" title="Estimated AI spend this session" hidden></span>
+      <button id="btn-account" class="account-pill" type="button" title="Sign out of this friend account" hidden><span>●</span><b id="hdr-account-name"></b> · SIGN OUT</button>
       <button id="btn-settings-gear" class="icon-btn" title="AI &amp; Portrait Setup"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </div>
   </header>
@@ -306,16 +307,52 @@
 
 <!-- ============ MODALS ============ -->
 
+<div class="modal-backdrop auth-backdrop" id="modal-auth">
+  <div class="modal auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+    <div class="auth-emblem" aria-hidden="true"></div>
+    <div class="auth-copy">
+      <div class="welcome-kicker">PRIVATE FRIEND SERVER</div>
+      <h1 id="auth-title">Choose your Worldwalker</h1>
+      <p>Sign in to see only your campaigns, or create a friend account for this server.</p>
+    </div>
+    <div class="auth-columns">
+      <form id="form-login" class="auth-card">
+        <h2>Continue your story</h2>
+        <label for="login-username">Username</label>
+        <input id="login-username" name="username" autocomplete="username" maxlength="24" required />
+        <label for="login-password">Password</label>
+        <input id="login-password" name="password" type="password" autocomplete="current-password" minlength="6" required />
+        <button class="btn-primary full" type="submit">SIGN IN</button>
+      </form>
+      <form id="form-register" class="auth-card auth-card-new">
+        <h2>Begin a new account</h2>
+        <label for="register-username">Username</label>
+        <input id="register-username" name="username" autocomplete="username" maxlength="24" pattern="[-A-Za-z0-9_]{3,24}" required />
+        <label for="register-password">Password</label>
+        <input id="register-password" name="password" type="password" autocomplete="new-password" minlength="6" required />
+        <div id="invite-code-row" hidden>
+          <label for="register-invite">Friend invite code</label>
+          <input id="register-invite" name="invite_code" type="password" autocomplete="off" />
+        </div>
+        <button class="btn-ghost full" type="submit">CREATE ACCOUNT</button>
+      </form>
+    </div>
+    <p id="auth-error" class="auth-error" hidden></p>
+    <p class="auth-footnote">Campaigns and autosaves stay private to this username on this server.</p>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-welcome">
   <div class="modal welcome-modal">
     <div class="welcome-art" aria-hidden="true"></div>
     <div class="welcome-content">
       <div class="welcome-kicker">WORLDWALKER RPG</div>
       <h1>Where will you walk?</h1>
-      <p>Begin a fresh story or return to a campaign saved on this computer.</p>
+      <p>Begin a fresh story or return to one of your saved campaigns.</p>
       <button id="btn-welcome-new" class="btn-primary full welcome-choice" type="button">✦ START NEW CAMPAIGN</button>
       <button id="btn-welcome-load" class="btn-ghost full welcome-choice" type="button">↺ LOAD SAVED GAME</button>
       <p id="welcome-save-note" class="hint">Checking for saved campaigns…</p>
+      <button id="btn-welcome-signout" class="welcome-signout" type="button" hidden>Not your account? Sign out</button>
     </div>
   </div>
 </div>

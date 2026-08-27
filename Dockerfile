@@ -5,7 +5,8 @@ WORKDIR /app
 # Only Flask is needed for headless server mode — pywebview (the desktop
 # window wrapper) is intentionally excluded, since it needs a GUI toolkit
 # that has no place in a container.
-RUN pip install --no-cache-dir "flask>=3.1"
+COPY requirements-server.txt .
+RUN pip install --no-cache-dir -r requirements-server.txt
 
 COPY backend/ backend/
 COPY frontend/ frontend/
@@ -23,6 +24,7 @@ VOLUME /data
 EXPOSE 8765
 ENV HOST=0.0.0.0
 ENV PORT=8765
+ENV WORLDWALKER_ACCOUNTS_ENABLED=1
 
 # A bind-mounted host folder (./data/playerN on the NAS) can end up owned by
 # a different UID than the one this container runs as — some NAS Docker
@@ -34,4 +36,4 @@ ENV PORT=8765
 # this can't happen regardless of exactly how the NAS maps ownership — fine
 # for a private, friends-only game server, not something to do on anything
 # handling real secrets.
-CMD ["sh", "-c", "chmod -R 777 /data 2>/dev/null || true; exec python server.py"]
+CMD ["sh", "-c", "chmod -R 777 /data 2>/dev/null || true; exec gunicorn --bind ${HOST:-0.0.0.0}:${PORT:-8765} --workers 1 --threads ${GUNICORN_THREADS:-8} --timeout ${GUNICORN_TIMEOUT:-600} --access-logfile - --error-logfile - server:app"]

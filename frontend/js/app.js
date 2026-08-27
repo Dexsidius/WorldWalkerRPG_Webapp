@@ -34,10 +34,16 @@ function titleLabel(t) {
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
-async function api(path, opts) {
-  const res = await fetch(path, opts);
+async function api(path, opts = {}) {
+  const requestOptions = { ...opts };
+  const headers = new Headers(opts.headers || {});
+  const method = String(opts.method || "GET").toUpperCase();
+  if (APP?.csrfToken && !["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("X-Worldwalker-CSRF", APP.csrfToken);
+  requestOptions.headers = headers;
+  const res = await fetch(path, requestOptions);
   let data = {};
   try { data = await res.json(); } catch (e) { /* empty body */ }
+  if (res.status === 401 && data.authentication_required) openModal("modal-auth");
   if (!res.ok) throw new Error(data.error || res.statusText || "Request failed");
   return data;
 }
@@ -82,6 +88,9 @@ initPhoneMode();
 // Global app state
 // ---------------------------------------------------------------------------
 const APP = {
+  accountsEnabled: false,
+  account: null,
+  csrfToken: "",
   worldsMeta: null,
   state: null,
   campaignActive: false,
@@ -1847,7 +1856,7 @@ function closeModal(id) {
 }
 $$(".modal-close").forEach((b) => b.addEventListener("click", () => closeModal(b.getAttribute("data-close"))));
 $$(".modal-backdrop").forEach((m) => m.addEventListener("click", (e) => {
-  const locked = new Set(["modal-welcome", "modal-difficult-check", "modal-timing-challenge", "modal-tactical-challenge", "modal-major-roll", "modal-lethal", "modal-power-goal", "modal-event-window"]);
+  const locked = new Set(["modal-auth", "modal-welcome", "modal-difficult-check", "modal-timing-challenge", "modal-tactical-challenge", "modal-major-roll", "modal-lethal", "modal-power-goal", "modal-event-window"]);
   if (e.target === m && !locked.has(m.id)) closeModal(m.id);
 }));
 
@@ -4443,37 +4452,97 @@ function initCollapsiblePanels() {
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-async function boot() {
-  try {
-    const [settings, st] = await Promise.all([apiGet("/api/settings"), apiGet("/api/state")]);
-    APP.soundEnabled = !!settings.sound_enabled;
-    APP.musicEnabled = settings.music_enabled !== false;
-    APP.musicVolume = Number(settings.music_volume ?? .35);
-    musicPlayer().volume = APP.musicVolume;
-    APP.animationsEnabled = !!settings.animations_enabled;
-    APP.campaignActive = st.campaign_active;
-    renderState(st.state);
-    $("#hdr-ai").textContent = st.ai_ready ? "AI: READY" : "AI: READY TO TEST";
-    if (st.campaign_active) {
-      $("#story-feed").innerHTML = "";
-      // story already flushed server-side across requests; nothing to replay on fresh boot
-      appendStoryEntries([{ text: "Welcome back to " + (st.state.world || "Worldwalker") + ".", tag: "system" }]);
-    } else {
-      appendStoryEntries([
-        { text: "Welcome to Worldwalker.", tag: "system" },
-        { text: "You stand at the threshold of endless possibilities.", tag: "system" },
-        { text: "The road ahead is long, but every legend begins with a single choice.", tag: "system" },
-        { text: "What will you do?", tag: "system" },
-      ]);
-      await refreshWelcomeSaveCount();
-      openModal("modal-welcome");
-    }
-  } catch (e) {
-    console.error(e);
-    $("#welcome-save-note").textContent = "The game server did not respond. Restart Worldwalker and try again.";
+function applyAccountSession(auth) {
+  APP.accountsEnabled = !!auth.accounts_enabled;
+  APP.account = auth.user || null;
+  APP.csrfToken = auth.csrf_token || APP.csrfToken || "";
+  const accountButton = $("#btn-account");
+  accountButton.hidden = !APP.account;
+  $("#btn-welcome-signout").hidden = !APP.account;
+  $("#hdr-account-name").textContent = APP.account?.username || "";
+  $("#invite-code-row").hidden = !auth.invite_required;
+}
+
+function showAuthError(message) {
+  const box = $("#auth-error");
+  box.textContent = message || "Unable to sign in.";
+  box.hidden = false;
+}
+
+async function finishGameBoot() {
+  const [settings, st] = await Promise.all([apiGet("/api/settings"), apiGet("/api/state")]);
+  APP.soundEnabled = !!settings.sound_enabled;
+  APP.musicEnabled = settings.music_enabled !== false;
+  APP.musicVolume = Number(settings.music_volume ?? .35);
+  musicPlayer().volume = APP.musicVolume;
+  APP.animationsEnabled = !!settings.animations_enabled;
+  APP.campaignActive = st.campaign_active;
+  renderState(st.state);
+  $("#hdr-ai").textContent = st.ai_ready ? "AI: READY" : "AI: READY TO TEST";
+  if (st.campaign_active) {
+    $("#story-feed").innerHTML = "";
+    appendStoryEntries([{ text: "Welcome back to " + (st.state.world || "Worldwalker") + ".", tag: "system" }]);
+  } else {
+    appendStoryEntries([
+      { text: "Welcome to Worldwalker.", tag: "system" },
+      { text: "You stand at the threshold of endless possibilities.", tag: "system" },
+      { text: "The road ahead is long, but every legend begins with a single choice.", tag: "system" },
+      { text: "What will you do?", tag: "system" },
+    ]);
+    await refreshWelcomeSaveCount();
     openModal("modal-welcome");
   }
   initCollapsiblePanels();
   refreshUsagePill();
+}
+
+$("#form-login").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#auth-error").hidden = true;
+  try {
+    const result = await apiPost("/api/auth/login", {
+      username: $("#login-username").value.trim(), password: $("#login-password").value,
+    });
+    applyAccountSession({ accounts_enabled: true, user: result.user, csrf_token: result.csrf_token, invite_required: !$("#invite-code-row").hidden });
+    closeModal("modal-auth");
+    await finishGameBoot();
+  } catch (error) { showAuthError(error.message); }
+});
+
+$("#form-register").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  $("#auth-error").hidden = true;
+  try {
+    const result = await apiPost("/api/auth/register", {
+      username: $("#register-username").value.trim(), password: $("#register-password").value,
+      invite_code: $("#register-invite").value,
+    });
+    applyAccountSession({ accounts_enabled: true, user: result.user, csrf_token: result.csrf_token, invite_required: !$("#invite-code-row").hidden });
+    closeModal("modal-auth");
+    await finishGameBoot();
+  } catch (error) { showAuthError(error.message); }
+});
+
+async function signOutAccount() {
+  try { await apiPost("/api/auth/logout", {}); } catch (_) { /* reload still clears stale UI state */ }
+  window.location.reload();
+}
+$("#btn-account").addEventListener("click", signOutAccount);
+$("#btn-welcome-signout").addEventListener("click", signOutAccount);
+
+async function boot() {
+  try {
+    const auth = await apiGet("/api/auth/session");
+    applyAccountSession(auth);
+    if (auth.accounts_enabled && !auth.authenticated) {
+      openModal("modal-auth");
+      return;
+    }
+    await finishGameBoot();
+  } catch (e) {
+    console.error(e);
+    showAuthError("The game server did not respond. Refresh the page and try again.");
+    openModal("modal-auth");
+  }
 }
 boot();

@@ -1,9 +1,11 @@
 """Flask application: serves the frontend, game assets, and the JSON API
 that the browser-based UI drives the game engine through."""
 import io, json, os, secrets, threading, traceback, sys
+from datetime import timedelta
 from urllib.parse import quote
 from pathlib import Path
-from flask import Flask, jsonify, request, send_from_directory, send_file
+from flask import Flask, jsonify, request, send_from_directory, send_file, g, session
+from werkzeug.local import LocalProxy
 
 from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
@@ -24,6 +26,7 @@ from simulation_integrity import (integrity_snapshot, campaign_search,
                                   travel_route, canon_dependency_graph)
 from evaluations import list_evaluations, run_model_comparison, run_model_evaluation
 from support import repair_campaign_state, build_diagnostic_bundle
+from friend_accounts import FriendAccountStore, FriendGameRegistry, persistent_secret
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else BACKEND_DIR.parent
@@ -43,7 +46,66 @@ ensure_music_folders()
 
 app = Flask(__name__, static_folder=None)
 app.json.sort_keys = False  # preserve dict insertion order (ability lists, skills, etc. are meaningfully ordered)
-game = GameSession()
+ACCOUNTS_ENABLED = os.getenv("WORLDWALKER_ACCOUNTS_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+app.secret_key = persistent_secret()
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.getenv("WORLDWALKER_SECURE_COOKIES", "1" if ACCOUNTS_ENABLED else "0").strip().lower() in {"1", "true", "yes", "on"},
+    PERMANENT_SESSION_LIFETIME=timedelta(days=30),
+)
+
+_single_game = GameSession()
+_account_store = FriendAccountStore() if ACCOUNTS_ENABLED else None
+_game_registry = FriendGameRegistry(_account_store) if _account_store else None
+
+
+def _request_game():
+    if not ACCOUNTS_ENABLED:
+        return _single_game
+    bound = getattr(g, "worldwalker_game", None)
+    if bound is None:
+        raise RuntimeError("Sign in before using the game API.")
+    return bound
+
+
+# Existing routes can keep referring to `game`; in friend-server mode this
+# resolves to the signed-in user's isolated session for the current request.
+game = LocalProxy(_request_game)
+
+
+def _csrf_token():
+    token = session.get("csrf_token")
+    if not token:
+        token = secrets.token_urlsafe(24)
+        session["csrf_token"] = token
+    return token
+
+
+@app.before_request
+def bind_friend_account():
+    if not ACCOUNTS_ENABLED:
+        g.worldwalker_game = _single_game
+        return None
+    # HTML, built-in art/music and the auth bootstrap remain public so the
+    # sign-in screen can render. Generated portraits and every game API are
+    # bound to an authenticated friend.
+    public_api = {"/api/version", "/api/auth/session", "/api/auth/login", "/api/auth/register"}
+    needs_account = request.path.startswith("/api/") or request.path.startswith("/portrait-cache/")
+    user_id = str(session.get("user_id") or "")
+    user = _account_store.public_user(user_id) if user_id else None
+    if not user:
+        session.pop("user_id", None)
+        if needs_account and request.path not in public_api:
+            return jsonify({"error": "Sign in to play.", "authentication_required": True}), 401
+        return None
+    g.worldwalker_user = user
+    g.worldwalker_game = _game_registry.get(user["id"])
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and request.path not in {"/api/auth/login", "/api/auth/register"}:
+        provided = request.headers.get("X-Worldwalker-CSRF", "")
+        if not secrets.compare_digest(provided, _csrf_token()):
+            return jsonify({"error": "Your login session needs to be refreshed."}), 403
+    return None
 
 
 @app.after_request
@@ -56,8 +118,7 @@ def disable_desktop_cache(response):
     return response
 
 _bg_lock = threading.Lock()
-_bg_running = False
-_bg_pending = []
+_bg_state = {}
 
 _busy_lock = threading.Lock()
 _evaluation_lock = threading.Lock()
@@ -152,6 +213,67 @@ def music_file(path):
 @app.route("/portrait-cache/<path:filename>")
 def portrait_cache(filename):
     return send_from_directory(PORTRAIT_CACHE_DIR, filename)
+
+
+# ---------- private friend accounts ----------
+@app.route("/api/auth/session")
+def api_auth_session():
+    user = getattr(g, "worldwalker_user", None)
+    return jsonify({
+        "accounts_enabled": ACCOUNTS_ENABLED,
+        "authenticated": bool(user),
+        "user": user,
+        "csrf_token": _csrf_token() if ACCOUNTS_ENABLED else "",
+        "invite_required": bool(os.getenv("WORLDWALKER_INVITE_CODE", "").strip()) if ACCOUNTS_ENABLED else False,
+    })
+
+
+@app.route("/api/auth/register", methods=["POST"])
+def api_auth_register():
+    if not ACCOUNTS_ENABLED:
+        return jsonify({"error": "Friend accounts are not enabled on this copy."}), 400
+    d = request.get_json(silent=True) or {}
+    try:
+        user = _account_store.register(d.get("username", ""), d.get("password", ""), d.get("invite_code", ""))
+        session.clear()
+        session.permanent = True
+        session["user_id"] = user["id"]
+        token = _csrf_token()
+        return jsonify({"ok": True, "user": user, "csrf_token": token}), 201
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_auth_login():
+    if not ACCOUNTS_ENABLED:
+        return jsonify({"error": "Friend accounts are not enabled on this copy."}), 400
+    d = request.get_json(silent=True) or {}
+    try:
+        user = _account_store.authenticate(d.get("username", ""), d.get("password", ""))
+        session.clear()
+        session.permanent = True
+        session["user_id"] = user["id"]
+        token = _csrf_token()
+        return jsonify({"ok": True, "user": user, "csrf_token": token})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 401
+
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_auth_logout():
+    user_id = str(session.get("user_id") or "")
+    if getattr(g, "worldwalker_game", None) is not None and game.campaign_active:
+        try:
+            game.save()
+        except Exception:
+            traceback.print_exc()
+    session.clear()
+    # Dropping the in-memory copy ensures the next login starts from durable
+    # saves rather than inheriting unsaved transient UI/session state.
+    if _game_registry and user_id:
+        _game_registry.remove(user_id)
+    return jsonify({"ok": True})
 
 
 # ---------- world / campaign data ----------
@@ -521,49 +643,57 @@ def api_advisor_ask():
 
 
 # ---------- background world simulation (non-blocking) ----------
-def _run_background_jobs():
-    global _bg_running
+def _background_key():
+    user = getattr(g, "worldwalker_user", None)
+    return user["id"] if user else "single-player"
+
+
+def _run_background_jobs(key, target_game):
     try:
-        local = game.run_local_background()
+        local = target_game.run_local_background()
         # Economy and Balanced never spend an extra background-model call.
         # Deep mode opts into at most one such call every four resolved
         # turns, alternating communications and wider-world narration.
-        if game.background_ai_due():
-            if int(game.state.get("turn", 0) or 0) % 8:
-                chat = game.maybe_generate_incoming_chat()
+        if target_game.background_ai_due():
+            if int(target_game.state.get("turn", 0) or 0) % 8:
+                chat = target_game.maybe_generate_incoming_chat()
                 if chat:
                     with _bg_lock:
-                        _bg_pending.append({"type": "chat", **chat, "state": game.public_state()})
+                        _bg_state[key]["pending"].append({"type": "chat", **chat, "state": target_game.public_state()})
             else:
-                tick = game.create_world_event_if_due()
+                tick = target_game.create_world_event_if_due()
                 if tick and tick.get("heard_event"):
                     with _bg_lock:
-                        _bg_pending.append({"type": "world_event", "message": tick["heard_event"], "state": game.public_state()})
+                        _bg_state[key]["pending"].append({"type": "world_event", "message": tick["heard_event"], "state": target_game.public_state()})
         with _bg_lock:
-            _bg_pending.append({"type": "maintenance", **local, "state": game.public_state()})
+            _bg_state[key]["pending"].append({"type": "maintenance", **local, "state": target_game.public_state()})
     except Exception:
         traceback.print_exc()
     finally:
         with _bg_lock:
-            _bg_running = False
+            _bg_state.setdefault(key, {"running": False, "pending": []})["running"] = False
 
 
 @app.route("/api/background/run", methods=["POST"])
 def api_background_run():
-    global _bg_running
+    key = _background_key()
+    target_game = _request_game()
     with _bg_lock:
-        if _bg_running or game.busy:
+        state = _bg_state.setdefault(key, {"running": False, "pending": []})
+        if state["running"] or target_game.busy:
             return jsonify({"started": False})
-        _bg_running = True
-    threading.Thread(target=_run_background_jobs, daemon=True).start()
+        state["running"] = True
+    threading.Thread(target=_run_background_jobs, args=(key, target_game), daemon=True).start()
     return jsonify({"started": True})
 
 
 @app.route("/api/background/poll")
 def api_background_poll():
+    key = _background_key()
     with _bg_lock:
-        items, _bg_pending_local = _bg_pending[:], None
-        _bg_pending.clear()
+        state = _bg_state.setdefault(key, {"running": False, "pending": []})
+        items = state["pending"][:]
+        state["pending"].clear()
     return jsonify({"events": items})
 
 

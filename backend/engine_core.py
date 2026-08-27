@@ -173,8 +173,16 @@ BACKGROUND_HOMES = (
 
 
 class CoreMixin:
-    def __init__(self):
+    def __init__(self, save_dir=None, settings_path=None, account_id=""):
         self.lock = threading.RLock()
+        # None preserves the original test/desktop behavior where callers may
+        # redirect game.SAVE_DIR after constructing the session. Friend-server
+        # sessions always receive an explicit private directory.
+        self.save_dir = Path(save_dir) if save_dir else None
+        self.settings_path = Path(settings_path) if settings_path else SETTINGS_PATH
+        self.account_id = str(account_id or "")
+        (self.save_dir or SAVE_DIR).mkdir(parents=True, exist_ok=True)
+        self.settings_path.parent.mkdir(parents=True, exist_ok=True)
         self.settings = self.load_settings()
         self.ai = self.make_client(self.settings.get("model", ""))
         self.ai_bg = self.make_client(self.settings.get("secondary_model", "") or self.settings.get("model", ""))
@@ -194,12 +202,14 @@ class CoreMixin:
 
     def load_settings(self):
         try:
-            return {**DEFAULT_SETTINGS, **json.loads(SETTINGS_PATH.read_text(encoding="utf-8"))}
+            return {**DEFAULT_SETTINGS, **json.loads(self.settings_path.read_text(encoding="utf-8"))}
         except Exception:
             return dict(DEFAULT_SETTINGS)
 
     def save_settings(self):
-        SETTINGS_PATH.write_text(json.dumps(self.settings, indent=2), encoding="utf-8")
+        temporary = self.settings_path.with_suffix(self.settings_path.suffix + ".tmp")
+        temporary.write_text(json.dumps(self.settings, indent=2), encoding="utf-8")
+        temporary.replace(self.settings_path)
 
     def make_client(self, model):
         s = self.settings

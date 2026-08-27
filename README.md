@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.16.2** (schema 16).
+Current app/save version: **3.17.0** (schema 16).
+
+Version 3.17 adds private friend accounts to the hosted build. Everyone can
+use the same Cloudflare URL while retaining an isolated live session, settings,
+saves, autosaves, and imported campaigns. The Docker image now runs through
+Gunicorn, and older campaign exports can be imported directly into the signed-in
+account. Desktop and local-phone hosting remain single-player and unchanged.
 
 Version 3.16.2 bundles seven default Bleach tracks and four default Naruto
 tracks in their portable world music folders. They are available immediately

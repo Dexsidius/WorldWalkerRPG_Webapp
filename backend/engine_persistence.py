@@ -159,18 +159,20 @@ BACKGROUND_HOMES = (
 
 
 
-def _save_dir():
+def _save_dir(instance=None):
     """Reads game.SAVE_DIR live (falling back to util's) so tests — and any
     real caller — can redirect where saves land by patching game.SAVE_DIR,
     exactly like the original single-file game.py allowed. Deferred import:
     by the time this runs, game.py has already finished importing us."""
+    if instance is not None and getattr(instance, "save_dir", None):
+        return Path(instance.save_dir)
     import game
     return getattr(game, "SAVE_DIR", SAVE_DIR)
 
 
 class PersistenceMixin:
     def savepath(self):
-        return _save_dir() / (safe_filename(self.state.get("name", "Traveler")) + "_" + safe_filename(self.state.get("world", "World")) + ".json")
+        return _save_dir(self) / (safe_filename(self.state.get("name", "Traveler")) + "_" + safe_filename(self.state.get("world", "World")) + ".json")
 
     def save_bundle(self, kind="manual"):
         self.state["campaign_last_saved_version"] = APP_VERSION
@@ -199,9 +201,8 @@ class PersistenceMixin:
         self.write_save_atomic(p, "manual")
         return str(p)
 
-    @staticmethod
-    def autosave_candidates(stem):
-        auto_dir = _save_dir() / "_autosaves"
+    def autosave_candidates(self, stem):
+        auto_dir = _save_dir(self) / "_autosaves"
         candidates = list(auto_dir.glob(stem + "_autosave_*.json"))
         current = auto_dir / f"{stem}_autosave.json"
         if current.exists(): candidates.append(current)
@@ -210,7 +211,7 @@ class PersistenceMixin:
     def autosave(self):
         if self.settings.get("autosave", True):
             try:
-                auto_dir = _save_dir() / "_autosaves"
+                auto_dir = _save_dir(self) / "_autosaves"
                 auto_dir.mkdir(parents=True, exist_ok=True)
                 stem = self.savepath().stem
                 target = auto_dir / f"{stem}_autosave.json"
@@ -244,9 +245,9 @@ class PersistenceMixin:
 
     def list_saves(self):
         items = []
-        for p in sorted(_save_dir().glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        for p in sorted(_save_dir(self).glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
             items.append(self._save_entry(p, "manual"))
-        auto_dir = _save_dir() / "_autosaves"
+        auto_dir = _save_dir(self) / "_autosaves"
         if auto_dir.exists():
             newest_by_campaign = {}
             for p in sorted(auto_dir.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
@@ -259,8 +260,8 @@ class PersistenceMixin:
     def save_path_for_id(self, name):
         raw = str(name or "")
         if raw.startswith("autosave/"):
-            return _save_dir() / "_autosaves" / Path(raw.split("/", 1)[1]).name
-        return _save_dir() / f"{safe_filename(raw)}.json"
+            return _save_dir(self) / "_autosaves" / Path(raw.split("/", 1)[1]).name
+        return _save_dir(self) / f"{safe_filename(raw)}.json"
 
     def delete_save(self, name):
         p = self.save_path_for_id(name)
@@ -279,10 +280,10 @@ class PersistenceMixin:
         imported_state = migrate_state(bundle["state"], source_version)
         normalize_quest_state_machine(imported_state)
         base = safe_filename(imported_state.get("name", "Imported") + "_" + imported_state.get("world", "World"))
-        target = _save_dir() / f"{base}.json"
+        target = _save_dir(self) / f"{base}.json"
         suffix = 2
         while target.exists():
-            target = _save_dir() / f"{base}_{suffix}.json"; suffix += 1
+            target = _save_dir(self) / f"{base}_{suffix}.json"; suffix += 1
         clean = {
             "version": APP_VERSION, "schema_version": imported_state.get("schema_version", 4),
             "save_kind": "imported", "saved_at": datetime.now().isoformat(timespec="seconds"),

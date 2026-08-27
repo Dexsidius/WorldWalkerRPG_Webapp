@@ -5,7 +5,10 @@ a = Analysis(
     ['launcher.py'],
     pathex=['backend'],
     binaries=[],
-    datas=[('frontend', 'frontend'), ('assets', 'assets'), ('music', 'music')],
+    # Music is copied beside the finished EXE by the release packaging step.
+    # Frozen launcher.py deliberately reads that user-editable top-level folder;
+    # embedding a second copy under _internal only doubled every release ZIP.
+    datas=[('frontend', 'frontend'), ('assets', 'assets')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
