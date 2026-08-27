@@ -25,7 +25,7 @@ class WorldwalkerV371Tests(unittest.TestCase):
         return state
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.16.1")
+        self.assertEqual(APP_VERSION, "3.16.2")
 
     def test_lower_modes_remove_unsupported_model_impossibility(self):
         assessment = {"impossible": True, "requires_check": True,
