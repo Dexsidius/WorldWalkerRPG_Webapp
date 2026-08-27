@@ -244,10 +244,10 @@ WORLD_ABILITY_FORMS = {
          "meet hidden conditions, diversify applications, and earn System achievements"),
     ],
     "Overgeared": [
-        ("Rare Skill: {aspect} Craft", "a personal knack translated into a Satisfy-compatible skill",
-         "adds {aspect_lower}-themed properties to appropriate crafted items or class techniques",
-         "success depends on materials, production skill, design quality, and class compatibility",
-         "raise production mastery, acquire better materials, and complete a related class quest"),
+        ("Rare Skill: {aspect} Method", "a personal knack translated into a Satisfy-compatible class skill",
+         "applies a narrow {aspect_lower}-themed advantage to actions that genuinely fit the character's chosen class and playstyle",
+         "the skill cannot replace missing levels, resources, prerequisites, cooldowns, or class compatibility",
+         "use it in varied class-appropriate situations, complete related quests, and earn a specialization"),
     ],
     "Reincarnated as a Slime": [
         ("Extra Skill: {aspect} Weave", "a desire and prior-life inclination crystallized into a world-valid skill",

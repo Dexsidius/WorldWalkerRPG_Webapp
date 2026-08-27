@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.18.1"
+APP_VERSION = "3.19.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -260,10 +260,10 @@ WORLD_DATA = {
         "special": {"Unspent Stat Points":0,"Copied Abilities":[],"Achievements":[],"Floor":0,"Hidden Conditions Found":0}
     },
     "Overgeared": {
-        "tagline": "Classes, hidden classes, crafting, legendary equipment, NPC affinity, guild politics, and Satisfy.",
+        "tagline": "A living Satisfy: limitless classes, raids, magic, companions, guilds, kingdoms, professions, and hidden paths.",
         "resource": "Mana",
-        "progression": ["Level","XP","Class","Stats","Skills","Crafting","Affinity","Reputation","Titles"],
-        "rules": "Use an Overgeared-style VRMMO framework. Classes, hidden classes, item ratings, crafting proficiency, NPC affinity, guilds, kingdoms, quests and player competition matter. Exceptional equipment changes power substantially. NPCs are persistent people with memories and interests.",
+        "progression": ["Level","XP","Class","Stats","Skills","Class Advancement","Affinity","Guild","Reputation","Titles","Optional Professions"],
+        "rules": "Use the full Overgeared/Satisfy VRMMO framework. Satisfy supports ordinary, rare, epic, unique, legendary, growth-type and stranger classes across combat, weapons, magic, faith/support, command/social, companions, exploration, production and hybrids. Hidden classes arise from meaningful conditions and may be original when they match Satisfy's logic. Raids, quests, guilds, kingdoms, NPC relationships, player competition, equipment and professions all matter. Crafting is one optional route, not the assumed route. NPCs are persistent people with memories and interests.",
         "start": "Winston",
         "factions": {"Players":0,"Local Lords":0,"Church":0,"Guilds":0,"Kingdom":0},
         "map": [
@@ -830,10 +830,10 @@ WORLD_PRIMERS = {
         "starting_note": "Campaigns begin right as the Tower first appears — nobody yet has more than a few days' experience with it.",
     },
     "Overgeared": {
-        "premise": "Satisfy is a hyper-realistic virtual-reality MMO where skill, crafting and clever play matter as much as raw stats. Legendary figures, ancient smiths and buried world-changing secrets are all still out there for a sufficiently determined — or lucky — player to find.",
-        "tone": "Grounded MMO-fantasy power fantasy: meticulous crafting and itemization detail mixed with real cunning and hard-earned growth rather than pure luck.",
-        "power_system": "Classes, stats and Skills work as expected for a VRMMO, but true depth comes from itemization — Legendary and higher-grade gear, forgotten smithing and crafting techniques, and Skill combinations most players never discover.",
-        "factions": ["Major guilds and their sponsoring real-world corporations, competing for server-wide influence", "NPC kingdoms, nobility and factions with their own persistent politics", "Independent crafters, explorers and power players carving out their own niche"],
+        "premise": "Satisfy is a hyper-realistic virtual-reality MMO large enough to support nearly any fantasy life: adventurer, knight, magician, healer, commander, summoner, explorer, merchant, ruler, artisan, or an unprecedented path uncovered through play. Its NPCs live persistent lives and its hidden conditions can turn an overlooked choice into a world-famous class.",
+        "tone": "Grounded MMO-fantasy power fantasy: mechanical depth, real relationships, tactical raids, political consequences, discovery and hard-earned growth—with crafting available to characters who actually choose it.",
+        "power_system": "Levels, stats, equipment and Skills matter, but a class defines how they become a playstyle. Satisfy recognizes combat, magic, support, social, command, companion, exploration, production and hybrid paths; rare classes gain identity through distinctive features, quests, restrictions and evolutions rather than simply larger numbers.",
+        "factions": ["Major player guilds competing through raids, territory, politics and server-wide accomplishments", "NPC kingdoms, churches, noble houses and communities with their own persistent agendas", "Independent adventurers, specialists, merchants, explorers, rulers and artisans establishing unique reputations"],
         "locations": ["Winston and similar starting kingdoms and towns", "Reidan and other contested or overlooked frontier territories", "The wider continent's dungeons, ruins and unclaimed wilderness"],
         "starting_note": "Campaigns typically begin with a character still finding their footing, long before anyone recognizes their name.",
     },
@@ -1489,13 +1489,13 @@ WORLD_EXPANSIONS = {
     "Overgeared": {
         "currency":"Gold", "currency_baseline":200,
         "economy_notes":"Canon reference scale: this is a VRMMO economy with real, large numbers — basic potions/repairs/travel run single-to-low-double-digit Gold, decent crafted gear reaches the hundreds to low thousands, and a genuinely notable item or a solid raid/dungeon haul can be worth millions of Gold (canon examples: a single named weapon valued around 8,000,000 Gold; a guild's raid haul around 21,000,000 Gold). A crafter, trader, or active dungeon-clearer should see Gold swing by real, escalating amounts — a beginning adventurer's numbers and a renowned blacksmith's or top guild's are different orders of magnitude entirely.",
-        "origins":["New Player","Crafter","Mercenary Player","Merchant","Blacksmith Apprentice","Quest Hunter","Veteran Adventurer","Renowned Craftsman"],
-        "archetypes":["Warrior","Swordsman","Archer","Mage","Assassin","Blacksmith","Support","Alchemist"],
-        "training":["Weapon Proficiency","Blacksmithing","Crafting","Skill Grinding","Stat Training","NPC Affinity"],
-        "shop_types":["Smithy","General Store","Auction House","Potion Shop","Guild Market"],
-        "loot":["Gold","Ore","Crafting Material","Recipe","Equipment","Quest Item"],
-        "encounters":["Field Monsters","Bandits","Rival Players","Dungeon Mob","Elite Monster","Boss"],
-        "systems":["Class","Crafting","Item Rating","Guild","NPC Affinity","Reputation"]
+        "origins":["New Player","Guild Recruit","Mercenary Player","Quest Hunter","Magic Academy Student","Temple Initiate","Beast Tamer","Merchant","Crafter","Blacksmith Apprentice","Veteran Adventurer","Renowned Craftsman"],
+        "archetypes":["Warrior","Knight","Swordsman","Spearman","Archer","Mage","Magic Swordsman","Assassin","Martial Artist","Tank","Priest/Healer","Support","Summoner","Tactician","Beast Master","Explorer","Merchant/Orator","Blacksmith","Alchemist","Tailor","Architect"],
+        "training":["Weapon Proficiency","Spell Mastery","Party Coordination","Raid Practice","Class Quest Research","Companion Training","Leadership","Exploration","NPC Affinity","Blacksmithing","Alchemy","Production Mastery"],
+        "shop_types":["General Store","Weapon Shop","Magic Shop","Temple Quartermaster","Auction House","Potion Shop","Companion Market","Guild Market","Smithy"],
+        "loot":["Gold","Equipment","Spellbook","Class Quest Clue","Companion Contract","Quest Item","Recipe","Memorable Material"],
+        "encounters":["Field Monsters","Bandits","Rival Players","Dungeon Party","Guild Conflict","NPC Crisis","Political Dispute","Elite Monster","Raid Boss","Hidden Class Trial"],
+        "systems":["Class","Class Advancement","Skills","Level","Guild","Party Role","NPC Affinity","Reputation","Item Rating","Optional Production"]
     },
     "Bleach": {
         "currency":"Yen", "currency_baseline":0, "tracks_currency":False,
@@ -1634,9 +1634,16 @@ ARCHETYPE_PRIMARY_STAT = {
     },
     "Overgeared": {
         "Warrior": ["Strength", "Constitution"], "Swordsman": ["Dexterity", "Strength"],
-        "Archer": ["Dexterity", "Wisdom"], "Mage": ["Intelligence", "Wisdom"], "Assassin": ["Dexterity", "Luck"],
-        "Blacksmith": ["Strength", "Constitution"], "Support": ["Wisdom", "Intelligence"],
-        "Alchemist": ["Intelligence", "Wisdom"],
+        "Knight": ["Constitution", "Strength"], "Spearman": ["Strength", "Dexterity"],
+        "Archer": ["Dexterity", "Wisdom"], "Mage": ["Intelligence", "Wisdom"],
+        "Magic Swordsman": ["Strength", "Intelligence"], "Assassin": ["Dexterity", "Luck"],
+        "Martial Artist": ["Strength", "Dexterity"], "Tank": ["Constitution", "Strength"],
+        "Priest/Healer": ["Wisdom", "Intelligence"], "Support": ["Wisdom", "Intelligence"],
+        "Summoner": ["Intelligence", "Wisdom"], "Tactician": ["Wisdom", "Intelligence"],
+        "Beast Master": ["Wisdom", "Dexterity"], "Explorer": ["Luck", "Dexterity"],
+        "Merchant/Orator": ["Luck", "Wisdom"], "Blacksmith": ["Strength", "Constitution"],
+        "Alchemist": ["Intelligence", "Wisdom"], "Tailor": ["Dexterity", "Wisdom"],
+        "Architect": ["Intelligence", "Wisdom"],
     },
     "Custom World": {
         "Warrior": ["Strength", "Constitution"], "Scout": ["Dexterity", "Wisdom"], "Scholar": ["Intelligence"],

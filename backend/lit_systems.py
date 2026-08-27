@@ -12,6 +12,7 @@ import copy
 import re
 
 from worlds import tower_floor_theme
+from overgeared_classes import infer_class_type
 
 
 ITEM_RATING_ORDER = {
@@ -29,10 +30,15 @@ REUSABLE_RE = re.compile(
     r"accessory|tool|kit|artifact|relic|key|map|book|tome|device|potion|"
     r"letter|document|contract|badge|token|permit|journal|blueprint|recipe)\b", re.I,
 )
-CRAFT_RE = re.compile(r"\b(?:craft|forge|smith|smelt|sew|brew|enchant|make|create|build|repair|produce)\b", re.I)
+CRAFT_RE = re.compile(
+    r"\b(?:craft|forge|smith|smelt|sew|brew|enchant|repair|produce|fabricate)\b|"
+    r"\b(?:make|create|build|construct)\b.{0,32}\b(?:item|weapon|armor|armour|gear|potion|tool|building|structure|machine|device|clothes|accessory)\b",
+    re.I,
+)
 CLASS_RE = re.compile(r"\b(?:class|signature skill|class quest|specialization|successor)\b", re.I)
 SOCIAL_RE = re.compile(r"\b(?:talk|help|gift|promise|befriend|support|save|betray|threaten|negotiate|relationship)\b", re.I)
 GUILD_RE = re.compile(r"\b(?:guild|territory|lord|kingdom|settlement|reidan|govern|army)\b", re.I)
+ADVENTURE_RE = re.compile(r"\b(?:quest|raid|dungeon|fight|attack|defend|hunt|explore|scout|travel|train|practice|study|heal|support|cast|summon|command|lead|negotiate|trade|perform|discover|investigate|protect)\b", re.I)
 SOLO_INSPECT_RE = re.compile(r"\b(?:inspect|analy[sz]e|observe|study|search|scout|investigate|test|look for|hidden condition)\b", re.I)
 SOLO_COPY_RE = re.compile(r"\b(?:copy|steal|replicate|acquire)\b.{0,45}\b(?:skill|ability|power|technique)\b", re.I)
 
@@ -230,27 +236,68 @@ def _production_path_for_text(text):
     return "General Production"
 
 
+def _production_relevant(profile, special, class_profile):
+    text = " ".join(str(x or "") for x in (
+        profile.get("primary_class"), special.get("Class"), special.get("Archetype"),
+        class_profile.get("name"), class_profile.get("class_type"), class_profile.get("description"),
+    ))
+    return bool(
+        _number(profile.get("crafting_mastery", special.get("Crafting Mastery", 0))) > 0
+        or _list(profile.get("production_specialties"))
+        or "Production" in infer_class_type(text)
+        or re.search(r"\b(?:craft|blacksmith|tailor|alchemist|architect|artisan|maker|miner|farmer|chef|scientist)\b", text, re.I)
+    )
+
+
+def _class_action_aligned(class_type, action_text):
+    text = str(action_text or "")
+    if not text.strip():
+        return False
+    patterns = {
+        "Production": CRAFT_RE,
+        "Support": re.compile(r"\b(?:heal|support|cleanse|buff|protect|aid|rescue|prayer|bless|restore)\b", re.I),
+        "Command / Social": re.compile(r"\b(?:command|lead|plan|negotiate|speak|convince|organize|govern|guild|army|trade)\b", re.I),
+        "Magic": re.compile(r"\b(?:cast|spell|magic|mana|ritual|enchant|study|research)\b", re.I),
+        "Companion / Summoning": re.compile(r"\b(?:summon|contract|companion|pet|beast|minion|formation|command)\b", re.I),
+        "Exploration / Utility": re.compile(r"\b(?:explore|scout|search|track|steal|infiltrate|map|discover|investigate|disarm)\b", re.I),
+        "Combat": re.compile(r"\b(?:fight|attack|defend|duel|raid|hunt|block|strike|shoot|stab|train|practice)\b", re.I),
+    }
+    matched = any(regex.search(text) for label, regex in patterns.items() if label in str(class_type))
+    return matched or bool(ADVENTURE_RE.search(text))
+
+
 def _seed_overgeared(state):
     special = state.setdefault("special", {})
     profile = special.setdefault("Satisfy Profile", {})
     mastery = _number(profile.get("crafting_mastery", special.get("Crafting Mastery", 0)))
     class_profile = state.get("class_profile") if isinstance(state.get("class_profile"), dict) else {}
     class_name = str(profile.get("primary_class") or special.get("Class") or class_profile.get("name") or "Beginner")
+    class_type = str(profile.get("class_type") or class_profile.get("class_type") or infer_class_type(
+        class_name, special.get("Archetype"), class_profile.get("description"), class_profile.get("effect")
+    ))
+    profile["class_type"] = class_type
+    production_relevant = _production_relevant(profile, special, class_profile)
     starting_path = _production_path_for_text(" ".join([
         class_name, str(special.get("Archetype", "")),
         " ".join(str(x) for x in _list(profile.get("production_specialties"))),
     ]))
     system = state.setdefault("overgeared_system", {})
-    system.setdefault("production_paths", {
-        starting_path: {"mastery": mastery, "rank": _production_rank(mastery), "progress": 0},
-    })
+    paths = system.setdefault("production_paths", {})
+    if production_relevant and not paths:
+        paths[starting_path] = {"mastery": mastery, "rank": _production_rank(mastery), "progress": 0}
+    elif not production_relevant and set(paths) == {"General Production"} and not _number(paths["General Production"].get("mastery"), 0):
+        paths.clear()
     system.setdefault("class_progression", {
         "class": class_name,
+        "class_type": class_type,
         "rarity": str(profile.get("class_rarity") or class_profile.get("rank") or "Normal"),
         "stage": "Foundation", "stage_progress": 0,
         "next_unlock": str(class_profile.get("growth_path") or "Use the class successfully and complete a defining class quest."),
         "unlocked_features": [str(class_profile.get("signature_skill"))] if class_profile.get("signature_skill") else [],
     })
+    system["class_progression"]["class"] = class_name
+    system["class_progression"]["class_type"] = class_type
+    system.setdefault("role_development", {"aligned_actions": 0, "major_achievements": [], "recent_growth": []})
     system.setdefault("class_questlines", [])
     if class_name and not system["class_questlines"]:
         system["class_questlines"].append({
@@ -267,7 +314,12 @@ def _seed_overgeared(state):
     stats = state.get("stats") if isinstance(state.get("stats"), dict) else {}
     level = _number(state.get("level"), 1)
     rankings.setdefault("Combat standing", {"score": level * 10 + max(stats.values(), default=0), "band": "Developing"})
-    rankings.setdefault("Production standing", {"score": mastery, "band": _production_rank(mastery)})
+    rankings.setdefault("Class standing", {"score": _number(system["class_progression"].get("stage_progress"), 0), "band": str(system["class_progression"].get("stage", "Foundation"))})
+    rankings.setdefault("Adventure standing", {"score": level * 8, "band": "Developing"})
+    if production_relevant:
+        rankings.setdefault("Production standing", {"score": mastery, "band": _production_rank(mastery)})
+    else:
+        rankings.pop("Production standing", None)
     rankings.setdefault("NPC reputation", {"score": 0, "band": "Unknown"})
     rankings.setdefault("Guild influence", {"score": 0, "band": "Independent"})
     economy = system.setdefault("economy", {})
@@ -375,10 +427,15 @@ def _overgeared_turn(before, state, action_text, narrative, elapsed_minutes):
             })
             notes.append("CRAFTING ORDER ACCEPTED — its materials, specifications, deadline, and payment remain governed by the Chronicle.")
 
-    if CLASS_RE.search(action_text) or CRAFT_RE.search(action_text):
+    class_type = str(profile.get("class_type") or system["class_progression"].get("class_type") or "Adventuring / Flexible")
+    if CLASS_RE.search(action_text) or _class_action_aligned(class_type, action_text):
         cp = system["class_progression"]
-        gain = max(1, round(days * (5 if CLASS_RE.search(action_text) else 2)))
+        gain = max(1, round(days * (5 if CLASS_RE.search(action_text) else 3)))
         cp["stage_progress"] = min(100, _number(cp.get("stage_progress"), 0) + gain)
+        role = system["role_development"]
+        role["aligned_actions"] = _number(role.get("aligned_actions"), 0) + 1
+        role.setdefault("recent_growth", []).append({"turn": _number(state.get("turn"), 0) + 1, "class_type": class_type, "progress": gain, "action": str(action_text)[:180]})
+        role["recent_growth"] = role["recent_growth"][-20:]
         for quest in system["class_questlines"]:
             if quest.get("status") == "Active":
                 quest["progress"] = min(100, _number(quest.get("progress"), 0) + gain)
@@ -414,10 +471,13 @@ def _overgeared_turn(before, state, action_text, narrative, elapsed_minutes):
     affinity_peak = max((_number(x.get("score"), 0) for x in system["npc_affinity"].values()), default=0)
     system["rankings"] = {
         "Combat standing": {"score": level * 10 + max(state.get("stats", {}).values(), default=0), "band": "Rising" if level >= 20 else "Developing"},
-        "Production standing": {"score": mastery + best_rating * 100, "band": _production_rank(mastery)},
+        "Class standing": {"score": level * 10 + _number(system["class_progression"].get("stage_progress"), 0), "band": str(system["class_progression"].get("stage", "Foundation"))},
+        "Adventure standing": {"score": level * 8 + _number(system["role_development"].get("aligned_actions"), 0) * 2, "band": "Recognized" if level >= 20 else "Developing"},
         "NPC reputation": {"score": affinity_peak, "band": "Recognized" if affinity_peak >= 25 else "Unknown"},
         "Guild influence": {"score": _number(system["guild"].get("resources"), 0), "band": "Independent" if system["guild"].get("name") == "None" else "Affiliated"},
     }
+    if _production_relevant(profile, special, state.get("class_profile") if isinstance(state.get("class_profile"), dict) else {}):
+        system["rankings"]["Production standing"] = {"score": mastery + best_rating * 100, "band": _production_rank(mastery)}
     currency = state.get("currency") if isinstance(state.get("currency"), dict) else {}
     before_currency = (before or {}).get("currency") if isinstance((before or {}).get("currency"), dict) else {}
     system["economy"] = {

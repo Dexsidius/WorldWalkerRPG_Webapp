@@ -46,14 +46,15 @@ class WorldwalkerV300Tests(unittest.TestCase):
             )
 
     def test_version_3_and_schema_8_are_declared(self):
-        self.assertEqual(APP_VERSION, "3.18.1")
+        self.assertEqual(APP_VERSION, "3.19.0")
         self.assertEqual(BASE_STATE["schema_version"], 16)
         self.assertIn("class_profile", BASE_STATE)
 
     def test_explicit_hidden_class_is_complete_and_mechanical(self):
         profile = self.profile("Overgeared", "I begin with a hidden class.")
         hidden = profile["hidden_class"]
-        self.assertEqual(hidden["name"], "Relicbound Artificer")
+        self.assertNotIn(hidden["name"], {"Unidentified Hidden Class", "Unidentified Class Signature"})
+        self.assertTrue(hidden["class_type"])
         for field in ("kind", "rank", "description", "effect", "limitation", "growth_path", "signature_skill"):
             self.assertTrue(hidden[field])
         self.assertTrue(hidden["stat_bonuses"])

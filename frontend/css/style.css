@@ -1614,7 +1614,7 @@ body[data-world="Reincarnated as a Slime"]{
 body[data-world="Reincarnated as a Slime"] .panel{ border-radius:22px 10px 22px 10px; }
 body[data-world="Reincarnated as a Slime"] .panel-head{ letter-spacing:.04em; }
 
-/* Overgeared — forge / MMO fantasy */
+/* Overgeared — broad Satisfy MMO fantasy */
 body[data-world="Overgeared"]{
   --bg:#17100b; --bg-2:#120c08; --panel:#261b13; --panel-soft:#2e2116; --header:#3a2a1a;
   --border:#5a4227; --border-soft:#40301f; --accent:#c7924b; --accent-rgb:199,146,75;
@@ -1684,7 +1684,7 @@ body[data-world="One Piece"] .brand::after{ content:"⚓"; }
 body[data-world="Hunter x Hunter"] .brand::after{ content:"▱"; }
 body[data-world="Naruto"] .brand::after{ content:"印"; }
 body[data-world="Solo Max-Level Newbie"] .brand::after{ content:"[SYSTEM]"; font-family:var(--font-mono); }
-body[data-world="Overgeared"] .brand::after{ content:"⚒"; }
+body[data-world="Overgeared"] .brand::after{ content:"◈"; }
 body[data-world="Reincarnated as a Slime"] .brand::after{ content:"◉"; }
 body[data-world="Bleach"] .brand::after{ content:"魂"; }
 

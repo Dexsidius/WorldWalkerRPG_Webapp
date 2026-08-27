@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.18.1** (schema 16).
+Current app/save version: **3.19.0** (schema 16).
+
+Version 3.19 turns Overgeared into the full world of Satisfy instead of a
+mostly crafting-focused route. Character creation now offers martial, magical,
+support, command, companion, exploration, social, production and hybrid roles.
+Original class authorship studies the complete canon class catalog as design
+precedent while creating a distinct class for the player's background. Class-
+aligned adventures advance every role; production records only appear after a
+character actually chooses a production path.
 
 Version 3.18.1 gives each multiplayer character a durable, proximity-aware
 Chronicle. Local scenes reach characters who are present, private moments stay

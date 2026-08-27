@@ -21,6 +21,7 @@ from knowledge import npc_knowledge_boundaries, concealed_player_facts
 from simulation import (compile_context_snapshot, normalize_simulation_mode,
                         simulation_profile, output_budget)
 from simulation_integrity import canon_dependency_graph
+from overgeared_classes import canon_class_prompt_reference
 
 
 DEFAULT_SETTINGS = {
@@ -125,10 +126,10 @@ WORLD_ABILITY_FORMS = {
          "meet hidden conditions, diversify applications, and earn System achievements"),
     ],
     "Overgeared": [
-        ("Rare Skill: {aspect} Craft", "a personal knack translated into a Satisfy-compatible skill",
-         "adds {aspect_lower}-themed properties to appropriate crafted items or class techniques",
-         "success depends on materials, production skill, design quality, and class compatibility",
-         "raise production mastery, acquire better materials, and complete a related class quest"),
+        ("Rare Skill: {aspect} Method", "a personal knack translated into a Satisfy-compatible class skill",
+         "applies a narrow {aspect_lower}-themed advantage to actions that genuinely fit the character's chosen class and playstyle",
+         "the skill cannot replace missing levels, resources, prerequisites, cooldowns, or class compatibility",
+         "use it in varied class-appropriate situations, complete related quests, and earn a specialization"),
     ],
     "Reincarnated as a Slime": [
         ("Extra Skill: {aspect} Weave", "a desire and prior-life inclination crystallized into a world-valid skill",
@@ -391,7 +392,18 @@ class CoreMixin:
         lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
                                    limit=self.simulation_profile()["lore_limit"])
         self.last_lore_context = lore
-        return self.gm_rules(query) + (("\n\n" + lore) if lore else "") + self.rated_good_example_snippet()
+        return self.gm_rules(query) + (("\n\n" + lore) if lore else "") + self.satisfy_class_design_context(query) + self.rated_good_example_snippet()
+
+    def satisfy_class_design_context(self, query=""):
+        """Load the large canon catalog only on turns that may author a class."""
+        if self.state.get("world") != "Overgeared":
+            return ""
+        text = str(query or "")
+        class_term = re.search(r"\b(?:class|successor|specialization|job path|profession path)\b", text, re.I)
+        authorship = re.search(r"\b(?:create|generate|invent|design|gain|receive|earn|unlock|discover|awaken|evolve|advance|change|choose|become|hidden|rare|unique|legendary|growth)\b", text, re.I)
+        if not (class_term and authorship):
+            return ""
+        return "\n\nCLASS-AUTHORSHIP REFERENCE (use only for this class decision):\n" + canon_class_prompt_reference()
 
     _COMBAT_SIGNAL_RE = re.compile(
         r"\b(attack|fight|strike|stab|slash|shoot|punch|kick|draw (?:my|your|his|her|their) (?:blade|sword|weapon|gun)|"
@@ -823,7 +835,7 @@ COMBAT-SUMMARY JOB
         lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
                                    limit=self.simulation_profile()["lore_limit"])
         self.last_lore_context = lore
-        return rules + (("\n\n" + lore) if lore else "") + self.rated_good_example_snippet()
+        return rules + (("\n\n" + lore) if lore else "") + self.satisfy_class_design_context(query) + self.rated_good_example_snippet()
 
     def gm_rules(self, action_hint=""):
         wd = WORLD_DATA[self.state["world"]]

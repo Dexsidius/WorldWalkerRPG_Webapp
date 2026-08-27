@@ -917,7 +917,11 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
     const rankings = Object.entries(sys.rankings || {}).map(([name,row]) => `${name}: ${row.band || "Unranked"} · ${row.score || 0}`);
     const orders = (sys.crafting_orders || []).map((o) => `${o.name}: ${o.progress || 0}% — ${o.status || "Active"}`);
     const classProgress = sys.class_progression || {};
-    return `<section class="world-system-grid">${card("SATISFY CLASS", p.primary_class || special.Class, [["Rarity",p.class_rarity],["Secondary class",p.secondary_class],["Class stage",`${classProgress.stage || "Foundation"} · ${classProgress.stage_progress || 0}%`],["Next unlock",classProgress.next_unlock],["Guild",p.guild]], "overgeared-system")}${card("PRODUCTION PATHS", `${p.crafting_mastery ?? 0} peak mastery`, [["Separate disciplines",paths],["Specialties",p.production_specialties],["Known recipes",p.known_recipes]], "overgeared-system")}</section>${renderClassCard(classProfile)}<details class="lit-system-section"><summary>Affinity, guild, territory, orders, economy, and rankings</summary><div class="lit-system-body">${card("NPC AFFINITY", `${affinities.length} tracked`, [["Relationships",affinities]], "overgeared-system")}${card("GUILD & TERRITORY", sys.guild?.name || "Independent", [["Guild rank",sys.guild?.rank],["Guild resources",sys.guild?.resources],["Controlled territory",sys.territory?.controlled],["Morale",sys.territory?.morale],["Projects",sys.territory?.projects]], "overgeared-system")}${card("CRAFTING ORDERS", `${orders.length} tracked`, [["Orders",orders],["Reminder","Materials and routine output remain in the Chronicle; only memorable reusable products enter the Bag."]], "overgeared-system")}${card("ECONOMY & RANKINGS", `${sys.economy?.personal_gold ?? 0} personal Gold`, [["This turn",`${Number(sys.economy?.change_this_turn || 0) >= 0 ? "+" : ""}${sys.economy?.change_this_turn || 0} Gold`],["Workshop income",sys.economy?.workshop_income],["Guild funds",sys.economy?.guild_funds],["Territory revenue",sys.economy?.territory_revenue],["Public standings",rankings]], "overgeared-system")}</div></details>`;
+    const role = sys.role_development || {};
+    const hasProduction = paths.length > 0 || Number(p.crafting_mastery || 0) > 0 || orders.length > 0;
+    const productionCard = hasProduction ? card("PRODUCTION PATHS", `${p.crafting_mastery ?? 0} peak mastery`, [["Separate disciplines",paths],["Specialties",p.production_specialties],["Known recipes",p.known_recipes]], "overgeared-system") : "";
+    const ordersCard = hasProduction ? card("CRAFTING ORDERS", `${orders.length} tracked`, [["Orders",orders],["Reminder","Materials and routine output remain in the Chronicle; only memorable reusable products enter the Bag."]], "overgeared-system") : "";
+    return `<section class="world-system-grid">${card("SATISFY CLASS", p.primary_class || special.Class, [["Type",p.class_type || classProgress.class_type],["Rarity",p.class_rarity],["Secondary class",p.secondary_class],["Class stage",`${classProgress.stage || "Foundation"} · ${classProgress.stage_progress || 0}%`],["Next unlock",classProgress.next_unlock],["Guild",p.guild]], "overgeared-system")}${card("ROLE DEVELOPMENT", `${role.aligned_actions || 0} class-aligned actions`, [["Class features",p.class_features],["Specializations",p.specializations],["Advancement",p.advancement],["Major achievements",role.major_achievements]], "overgeared-system")}${productionCard}</section>${renderClassCard(classProfile)}<details class="lit-system-section"><summary>Relationships, guild, territory, economy, and rankings</summary><div class="lit-system-body">${card("NPC AFFINITY", `${affinities.length} tracked`, [["Relationships",affinities]], "overgeared-system")}${card("GUILD & TERRITORY", sys.guild?.name || "Independent", [["Guild rank",sys.guild?.rank],["Guild resources",sys.guild?.resources],["Controlled territory",sys.territory?.controlled],["Morale",sys.territory?.morale],["Projects",sys.territory?.projects]], "overgeared-system")}${ordersCard}${card("ECONOMY & RANKINGS", `${sys.economy?.personal_gold ?? 0} personal Gold`, [["This turn",`${Number(sys.economy?.change_this_turn || 0) >= 0 ? "+" : ""}${sys.economy?.change_this_turn || 0} Gold`],["Guild funds",sys.economy?.guild_funds],["Territory revenue",sys.economy?.territory_revenue],["Public standings",rankings]], "overgeared-system")}</div></details>`;
   }
   if (world === "Reincarnated as a Slime") {
     const p = special["Evolution Profile"] || {};
@@ -1552,7 +1556,7 @@ function ambientModeFor(category, weather, s) {
   if (s?.world === "One Piece") return "wind";
   if (s?.world === "Naruto") return "sakura";
   if (s?.world === "Hunter x Hunter") return "leaves";
-  if (s?.world === "Overgeared") return "embers";
+  if (s?.world === "Overgeared") return activityFor(s) === "crafting" ? "embers" : "motes";
   if (s?.world === "Bleach") return "spirit";
   if (s?.world === "Solo Max-Level Newbie") return "system";
   if (s?.world === "Reincarnated as a Slime") return "magic";
@@ -1598,7 +1602,7 @@ function applyNativeSceneFx(category, weather, s) {
 function applyPortraitAmbient(s) {
   const layer = $("#portrait-ambient");
   if (!layer) return;
-  const mode = s?.combat?.active ? "sparks" : s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "sakura" : s?.world === "Solo Max-Level Newbie" ? "system" : s?.world === "Overgeared" ? "embers" : s?.world === "Reincarnated as a Slime" ? "magic" : s?.world === "One Piece" ? "wind" : "motes";
+  const mode = s?.combat?.active ? "sparks" : s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "sakura" : s?.world === "Solo Max-Level Newbie" ? "system" : s?.world === "Overgeared" ? (activityFor(s) === "crafting" ? "embers" : "motes") : s?.world === "Reincarnated as a Slime" ? "magic" : s?.world === "One Piece" ? "wind" : "motes";
   fillAmbientLayer(layer, mode, mode === "sakura" ? 16 : 12, `portrait:${s?.world}:${mode}`);
 }
 

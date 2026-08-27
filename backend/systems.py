@@ -30,7 +30,7 @@ WORLD_PROGRESSION_PRESETS = {
     "Hunter x Hunter": {"label": "Nen fundamentals and deliberate conditions", "training_rate": .92, "breakthrough_rate": .85, "xp_rate": 0.0, "travel_scale": 1.10},
     "Naruto": {"label": "Chakra practice, missions, and instruction", "training_rate": 1.00, "breakthrough_rate": 1.00, "xp_rate": 0.0, "travel_scale": 1.00},
     "Solo Max-Level Newbie": {"label": "Tower XP and achievement progression", "training_rate": .88, "breakthrough_rate": 1.05, "xp_rate": 1.18, "travel_scale": .85},
-    "Overgeared": {"label": "Satisfy XP, classes, affinity, and production mastery", "training_rate": .95, "breakthrough_rate": 1.08, "xp_rate": 1.10, "travel_scale": .90},
+    "Overgeared": {"label": "Satisfy XP, class advancement, quests, affinity, and optional professions", "training_rate": .95, "breakthrough_rate": 1.08, "xp_rate": 1.10, "travel_scale": .90},
     "Reincarnated as a Slime": {"label": "Skills, magicules, naming, and evolution", "training_rate": 1.04, "breakthrough_rate": .92, "xp_rate": 0.0, "travel_scale": 1.05},
     "Bleach": {"label": "Zanjutsu drills, Kido study, and a bond with one's Zanpakuto", "training_rate": .96, "breakthrough_rate": .90, "xp_rate": 0.0, "travel_scale": 1.05},
     "Custom World": {"label": "Setting-defined growth", "training_rate": 1.00, "breakthrough_rate": 1.00, "xp_rate": 1.00, "travel_scale": 1.00},

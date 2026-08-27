@@ -21,6 +21,7 @@ from bleach_data import (academy_kido_skills, kido_reference_summary,
 from world_progression import normalize_world_progression
 from lit_systems import initialize_lit_systems
 from skill_system import infer_skill_metadata
+from overgeared_classes import canon_class_prompt_reference, infer_class_type
 
 
 DEFAULT_SETTINGS = {
@@ -49,7 +50,7 @@ WORLD_STARTER_GEAR = {
     "Hunter x Hunter": "Practical travel gear and training wraps",
     "Naruto": "Kunai pouch, shuriken and field supplies",
     "Solo Max-Level Newbie": "Beginner weapon and emergency potion",
-    "Overgeared": "Beginner equipment set and trade tools",
+    "Overgeared": "Beginner equipment appropriate to the chosen Satisfy class",
     "Reincarnated as a Slime": "Species-appropriate natural weapon or focus",
     "Bleach": "Unnamed Asauchi, academy uniform, soul pager and basic field kit",
     "Custom World": "Setting-appropriate weapon and travel kit",
@@ -76,6 +77,14 @@ STARTER_SKILL_DESCRIPTIONS = {
     ("Overgeared", "Blacksmith"): "Selects materials, controls heat, shapes and repairs equipment, and evaluates the causes of common production failures.",
     ("Overgeared", "Warrior"): "Uses weapon spacing, armor, stamina, and basic combat skills expected of a beginning Satisfy warrior.",
     ("Overgeared", "Alchemist"): "Identifies common reagents, follows production recipes, controls brewing conditions, and diagnoses ordinary failures.",
+    ("Overgeared", "Knight"): "Uses armor, guard skills, threat control, mounted or formation discipline, and the protections expected of a beginning Satisfy knight.",
+    ("Overgeared", "Magic Swordsman"): "Alternates basic weapon skills and learned magic without pretending either discipline is already mastered.",
+    ("Overgeared", "Priest/Healer"): "Uses beginner healing, cleansing, support positioning, resource management, and the obligations of a faith-based Satisfy class.",
+    ("Overgeared", "Summoner"): "Maintains a beginner contract, issues clear commands, protects a companion, and manages divided attention and mana.",
+    ("Overgeared", "Tactician"): "Reads party roles, encounter geometry, cooldown timing, and objectives to propose practical coordination rather than magical certainty.",
+    ("Overgeared", "Beast Master"): "Reads monster behavior, forms setting-valid bonds, directs a trained companion, and recognizes when control is impossible.",
+    ("Overgeared", "Explorer"): "Scouts routes, notices environmental clues, maps dungeons, and evaluates risks without automatically revealing hidden conditions.",
+    ("Overgeared", "Merchant/Orator"): "Appraises ordinary opportunities, negotiates, presents proposals, and builds reputation without overriding an NPC's interests or consent.",
     ("Hunter x Hunter", "Tracker"): "Reads tracks, prepares routes, notices environmental clues, and follows a quarry without assuming supernatural senses.",
     ("Hunter x Hunter", "Beast Hunter"): "Studies dangerous fauna, reads habitats, prepares captures, and avoids mistaking fieldcraft for unlearned Nen.",
     ("Hunter x Hunter", "Blacklist Hunter"): "Builds criminal dossiers, plans safe arrests, preserves evidence, and works through lawful Hunter channels.",
@@ -140,10 +149,16 @@ WORLD_ARCHETYPE_GEAR = {
     },
     "Overgeared": {
         "Warrior": "Plain Iron Longsword", "Swordsman": "Balanced One-Handed Sword",
-        "Archer": "Basic Recurve Bow", "Mage": "Apprentice's Wooden Staff",
-        "Assassin": "Paired Daggers", "Blacksmith": "Smithing Hammer and Tongs",
-        "Support": "Novice Healing Rod",
-        "Alchemist": "Beginner Alchemy Kit and Reagent Case",
+        "Knight": "Training Shield, Arming Sword, and Mail Shirt", "Spearman": "Ashwood Spear",
+        "Archer": "Basic Recurve Bow", "Mage": "Apprentice's Wooden Staff and Spellbook",
+        "Magic Swordsman": "Mana-conductive Training Blade", "Assassin": "Paired Daggers",
+        "Martial Artist": "Reinforced Knuckle Guards", "Tank": "Tower Shield and Mace",
+        "Priest/Healer": "Novice Healing Rod and Temple Symbol", "Support": "Novice Support Focus",
+        "Summoner": "Beginner Contract Token and Focus Wand", "Tactician": "Command Slate and Signal Kit",
+        "Beast Master": "Training Whistle and Companion Care Kit", "Explorer": "Field Map, Grappling Line, and Shortsword",
+        "Merchant/Orator": "Appraisal Lens and Contract Ledger", "Blacksmith": "Smithing Hammer and Tongs",
+        "Alchemist": "Beginner Alchemy Kit and Reagent Case", "Tailor": "Sewing Kit and Cloth Shears",
+        "Architect": "Drafting Kit and Survey Tools",
     },
     "Custom World": {
         "Warrior": "Sword and Shield", "Scout": "Hunting Bow",
@@ -231,10 +246,14 @@ WORLD_ABILITY_FORMS = {
          "meet hidden conditions, diversify applications, and earn System achievements"),
     ],
     "Overgeared": [
-        ("Rare Skill: {aspect} Craft", "a personal knack translated into a Satisfy-compatible skill",
-         "adds {aspect_lower}-themed properties to appropriate crafted items or class techniques",
-         "success depends on materials, production skill, design quality, and class compatibility",
-         "raise production mastery, acquire better materials, and complete a related class quest"),
+        ("Rare Skill: {aspect} Method", "a personal knack translated into a Satisfy-compatible class skill",
+         "applies a narrow {aspect_lower}-themed advantage to actions that genuinely fit the character's chosen class and playstyle",
+         "the skill cannot replace missing levels, resources, prerequisites, cooldowns, or class compatibility",
+         "use it in varied class-appropriate situations, complete related quests, and earn a specialization"),
+        ("Rare Skill: {aspect} Insight", "an unusual pattern of play recognized by Satisfy's class system",
+         "reveals a practical {aspect_lower}-aligned option in combat, magic, support, command, exploration, social play, or production as appropriate to the character",
+         "it provides an opportunity rather than an automatic result and only functions inside the chosen class's real capabilities",
+         "prove the insight through difficult achievements and unlock a class evolution or linked skill"),
     ],
     "Reincarnated as a Slime": [
         ("Extra Skill: {aspect} Weave", "a desire and prior-life inclination crystallized into a world-valid skill",
@@ -332,6 +351,14 @@ WORLD_ORIGIN_START_PACKAGES = {
             "skills": _start_skill("Tower Systems Knowledge", "Understands the former game's interfaces, common encounters, and progression routes, while accepting that lethal reality may differ.", "Veteran", 7)},
     },
     "Overgeared": {
+        "Guild Recruit": {"position": "New Guild Member",
+            "skills": _start_skill("Party Coordination", "Uses party roles, aggro awareness, cooldown calls, and guild communication during ordinary Satisfy encounters.")},
+        "Magic Academy Student": {"position": "Novice Magic Student",
+            "skills": _start_skill("Satisfy Spellcasting", "Uses beginner spell activation, targeting, mana control, and interruption awareness without implying advanced magic.")},
+        "Temple Initiate": {"position": "Temple Initiate",
+            "skills": _start_skill("Temple Support Rites", "Uses beginner healing and support prayers, triage, party positioning, and the faith obligations attached to the class.")},
+        "Beast Tamer": {"position": "Novice Beast Tamer",
+            "skills": _start_skill("Companion Handling", "Reads ordinary monster behavior, cares for a willing companion, and issues simple commands under pressure.")},
         "Crafter": {"position": "Production Player", "special_patch": {"Class": "Crafter", "Crafting Mastery": 18},
             "skills": _start_skill("Production Fundamentals", "Uses Satisfy's production interfaces, material grades, recipes, and quality feedback to make reliable beginner items.")},
         "Blacksmith Apprentice": {"position": "Blacksmith Apprentice", "special_patch": {"Class": "Blacksmith", "Crafting Mastery": 25},
@@ -435,11 +462,11 @@ WORLD_EXPLICIT_HIDDEN_CLASS_FORMS = {
         "The class reveals limited clues and improves compatible actions when the player genuinely pursues a {aspect_lower}-aligned alternate route.",
         "Clues are incomplete, rewards still require the real condition, and unsuitable stages provide no advantage.",
         "Clear hidden conditions, earn related achievements, and survive increasingly strict class trials.", "{aspect} Route Sense"),
-    "Overgeared": ("{aspect} Relicwright", "Hidden Class",
-        "A production-combat class specializing in equipment that carries stable {aspect_lower}-aligned traits.",
-        "Compatible crafting and maintenance can develop one bonded item's narrow {aspect_lower}-themed property.",
-        "The property still requires materials, skill, compatible ratings, and repeated successful work; one item can be bonded at first.",
-        "Raise production mastery, obtain better materials, and complete the class's relic commissions.", "{aspect} Relic Bond"),
+    "Overgeared": ("{aspect} Pathkeeper", "Hidden Growth Class",
+        "A Satisfy class that converts the character's stated {aspect_lower}-aligned identity into a coherent personal playstyle rather than assuming a production role.",
+        "The class grants one narrow {aspect_lower}-aligned feature appropriate to the background's combat, magic, support, command, summoning, exploration, social, or production focus.",
+        "Its effects still require appropriate stats, resources, cooldowns, conditions, and class-compatible actions; early access is not mastery.",
+        "Complete class trials, achieve meaningful feats in the chosen role, and select a specialization shaped by actual play.", "{aspect} Calling"),
     "Reincarnated as a Slime": ("{aspect} Skill Weaver", "Unique Evolution Path",
         "An unusual evolutionary path that recognizes compatible {aspect_lower}-aligned fragments in learned and intrinsic skills.",
         "The user can gradually synthesize closely related fragments into one efficient {aspect_lower}-themed technique.",
@@ -508,7 +535,27 @@ WORLD_HIDDEN_CLASS_FORMS = {
          "Clear hidden conditions, earn unusual achievements, and survive floors above the expected route.", "Condition Sense"),
     ],
     "Overgeared": [
-        ("Relicbound Artificer", "Hidden Class",
+        ("Echo Vanguard", "Hidden Combat Growth Class",
+         "A frontline class that records how the player survives powerful techniques and develops deliberate counters through later victories.",
+         "After enduring and understanding a hostile technique, the class can prepare one limited defensive response against its underlying pattern.",
+         "It cannot copy the technique, grants no immunity, and loses efficiency against altered or overwhelmingly stronger versions.",
+         "Survive named opponents, prove each counter in battle, and choose between guardian, duelist, or raid-vanguard advancement.", "Recorded Counter"),
+        ("Constellation Shepherd", "Hidden Companion Class",
+         "A command-and-summoning class that develops contracted companions as a coordinated party instead of disposable pets.",
+         "The player can designate simple complementary roles and share a narrow tactical signal with one willing companion.",
+         "Contracts require consent or a valid System condition, divided attention limits commands, and companion death has lasting consequences.",
+         "Form genuine contracts, clear encounters through coordination, and unlock formation or mounted specializations.", "Guiding Formation"),
+        ("Threshold Magus", "Hidden Magic Growth Class",
+         "A spell class that gains depth by solving encounters with carefully altered range, timing, and activation conditions.",
+         "The class can modify one modest parameter of a mastered spell after declaring a meaningful constraint.",
+         "It cannot alter an unmastered spell, remove its resource cost, or change several parameters at once.",
+         "Master varied spells, clear constraint-based class quests, and specialize in territory, ritual, or battle magic.", "Conditional Casting"),
+        ("Oathbound Mediator", "Hidden Support / Social Class",
+         "A support class whose declared agreements become visible System objectives for willing participants.",
+         "A mutually accepted promise grants a small coordination benefit while every party actively honors its terms.",
+         "It cannot compel consent or loyalty, and betrayal immediately ends the benefit while creating reputational consequences.",
+         "Resolve disputes, keep difficult bargains, and advance toward diplomatic, guild, or battlefield-command paths.", "Shared Terms"),
+        ("Relicbound Artificer", "Hidden Production-Combat Class",
          "A production-combat class that forms a lasting bond with one evolving piece of equipment.",
          "Successful use and careful maintenance let the bonded item accumulate traits that ordinary equipment would lose.",
          "Only one item can be bonded at first, and its growth still requires materials, skill, and compatible achievements.",
@@ -570,6 +617,10 @@ WORLD_BACKGROUND_COLOR = {
         ("an unlicensed blacksmith", "a ruined commission taught the real price of cutting corners"),
         ("a jaded former guild crafter", "a stolen recipe exposed how little goodwill exists among top players"),
         ("a stubborn old adventurer", "a near-fatal dungeon run left a debt only steady, unglamorous work could repay"),
+        ("a veteran raid leader", "a failed boss attempt taught that timing and trust matter more than damage charts"),
+        ("an eccentric class researcher", "an overlooked quest choice revealed that Satisfy's class system rewards unusual conviction"),
+        ("a village priest NPC", "protecting an unpopular resident opened a support route most players had ignored"),
+        ("a retired arena champion", "a public defeat exposed the difference between a strong build and real tactical judgment"),
     ),
     "Reincarnated as a Slime": (
         ("an elder familiar with local monsters", "a territorial crisis revealed both the value and danger of unusual abilities"),
@@ -772,7 +823,8 @@ class CampaignMixin:
             "Overgeared": (
                 "A hidden class must be a complete Satisfy class on par in design opportunity with story hidden classes: "
                 "a strong defining feature, System conditions, class quests, meaningful progression, and real limitations. "
-                "Its first-level use may be narrow even when its eventual ceiling is legendary."
+                "Its first-level use may be narrow even when its eventual ceiling is legendary.\n" +
+                canon_class_prompt_reference()
             ),
             "Naruto": (
                 "A requested kekkei genkai must be an inherited biological/chakra trait with several coherent applications, "
@@ -798,6 +850,7 @@ Return JSON only, with no markdown."""
             "relevant_lore": format_lore_context(world, f"signature powers abilities {kind} {text}", limit=6),
             "schema": ({
                 "name": "unique proper class name", "kind": "setting-native class category", "rank": "rarity/grade",
+                "class_type": "combat, magic, support, command/social, companion/summoning, exploration/utility, production, or hybrid",
                 "description": "identity and playstyle", "effect": "starting class feature with 2-3 coherent uses",
                 "limitation": "costs, counters, and failure boundaries", "growth_path": "3 concrete advancement milestones",
                 "signature_skill": "unique proper skill name", "signature_effect": "what the signature skill does now",
@@ -982,8 +1035,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             if boost >= 180 else
             "A rare starting path with one dependable feature now and a ceiling comparable to established hidden paths only after its own quests, mastery, and costs are fulfilled."
         )
+        requested_class_type = infer_class_type(background) if world == "Overgeared" else kind
+        if world == "Overgeared" and requested_class_type == "Adventuring / Flexible":
+            requested_class_type = infer_class_type(name, description, effect)
         fallback = {
             "name": name, "kind": kind, "rank": class_rank,
+            "class_type": requested_class_type,
             "description": description, "effect": effect, "limitation": limitation,
             "growth_path": growth, "signature_skill": signature, "signature_effect": effect,
             "canon_balance": class_balance,
@@ -992,6 +1049,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         blueprint = self._original_special_blueprint("class", world, background, boost, fallback)
         name = blueprint.get("name", name)
         kind = blueprint.get("kind", kind)
+        class_type = blueprint.get("class_type") or requested_class_type
         description = blueprint.get("description", description)
         effect = blueprint.get("effect", effect)
         limitation = blueprint.get("limitation", limitation)
@@ -1011,6 +1069,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             "name": name,
             "true_name": name,
             "kind": kind,
+            "class_type": class_type,
             "rank": rank,
             "revealed": not concealed,
             "discovery": {

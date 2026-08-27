@@ -7,6 +7,8 @@ turns all read the same facts instead of interpreting loose prose differently.
 import copy
 import re
 
+from overgeared_classes import COMPACT_CLASS_GENERATION_RULE, infer_class_type
+
 
 def _safe_int(value, default=0):
     """Coerce AI/save values without letting descriptive placeholders crash turns."""
@@ -26,7 +28,7 @@ WORLD_PROGRESSION_LABELS = {
     "Hunter x Hunter": "Nen Development",
     "Naruto": "Shinobi Record",
     "Solo Max-Level Newbie": "System Status",
-    "Overgeared": "Class & Production",
+    "Overgeared": "Satisfy Class & Adventure",
     "Reincarnated as a Slime": "Evolution & Skills",
     "Bleach": "Zanpakuto Releases",
 }
@@ -51,7 +53,8 @@ WORLD-SYSTEM RECORD: Keep official Shinobi Rank separate from measured combat ab
 WORLD-SYSTEM RECORD: Keep special['System Profile'] with floor, unspent_stat_points, copied_abilities, copy_capacity, achievements and hidden_conditions. System rewards, copied skills, titles, conditions and floor clears must be explicit and persistent. A copied ability records source, rank, effect, copy_condition, condition_progress, restriction and slot_cost. Foreknowledge separates remembered game information from facts confirmed in lethal reality; it reveals routes only when the character knows them and never silently completes their conditions. When a floor is truly cleared, update tower_floor. Present important rewards as concise System notices in the prose. Rivals, administrators and party roles remain independent actors rather than passive flavor.
 """,
     "Overgeared": """
-WORLD-SYSTEM RECORD: Keep special['Satisfy Profile'] with primary_class, secondary_class, class_rarity, crafting_mastery, production_specialties, known_recipes, guild and npc_affinity. Combat level, class development and each production discipline are separate progress tracks. A generated class must have a unique identity, rarity, class features, signature skill, restrictions, advancement route and persistent class-quest milestones. NPC affinity unlocks story-valid training, prices, quests, loyalty, romance, workshop or political access; NPC personality still controls consent. Guild, territory, economy and public rankings respond to actual accomplishments. Legendary potential is not instant mastery.
+WORLD-SYSTEM RECORD: Keep special['Satisfy Profile'] with primary_class, secondary_class, class_type, class_rarity, class_features, specializations, advancement, guild and npc_affinity. Crafting fields (crafting_mastery, production_specialties and known_recipes) exist only for characters who actually pursue production. Combat level, class development, party contribution, reputation and any chosen profession are separate progress tracks. A generated class must have a unique identity, rarity, class features, signature skill, restrictions, advancement route and persistent class-quest milestones. NPC affinity unlocks story-valid training, prices, quests, loyalty, romance, workshop or political access; NPC personality still controls consent. Guild, territory, economy and public rankings respond to actual accomplishments. Legendary potential is not instant mastery.
+""" + COMPACT_CLASS_GENERATION_RULE + """
 """,
     "Reincarnated as a Slime": """
 WORLD-SYSTEM RECORD: Keep special['Evolution Profile'] with species, stage, named_status, magicule_capacity, resistances, intrinsic_skills, extra_skills, unique_skills, ultimate_skills and evolution_requirements. Original Skills are allowed but must follow the setting's hierarchy, record effect, magicule cost, limitations, resistances/counters, acquisition cause and synthesis/evolution route. Naming, species evolution and Demon Lord awakening require their real triggers and remain distinct from ordinary training.
@@ -223,6 +226,12 @@ def normalize_world_progression(state, before=None):
         profile["primary_class"] = sync(profile, "primary_class", "Class", class_profile.get("name", "Beginner"))
         profile["secondary_class"] = sync(profile, "secondary_class", "Secondary Class", "None")
         profile["class_rarity"] = class_profile.get("rank", profile.get("class_rarity", "Normal"))
+        profile["class_type"] = class_profile.get("class_type") or profile.get("class_type") or infer_class_type(
+            profile["primary_class"], special.get("Archetype"), class_profile.get("description"), class_profile.get("effect")
+        )
+        profile["class_features"] = copy.deepcopy(profile.get("class_features") or ([class_profile.get("signature_skill")] if class_profile.get("signature_skill") else []))
+        profile.setdefault("specializations", [])
+        profile.setdefault("advancement", class_profile.get("growth_path") or "Develop the class through meaningful class-aligned actions and quests.")
         profile["crafting_mastery"] = _safe_int(sync(profile, "crafting_mastery", "Crafting Mastery", 0))
         profile.setdefault("production_specialties", [])
         profile["known_recipes"] = copy.deepcopy(state.get("known_recipes", profile.get("known_recipes", [])))
