@@ -21,7 +21,7 @@ from bleach_data import (academy_kido_skills, kido_reference_summary,
 from world_progression import normalize_world_progression
 from lit_systems import initialize_lit_systems
 from skill_system import infer_skill_metadata
-from overgeared_classes import canon_class_prompt_reference, infer_class_type
+from overgeared_classes import canon_class_prompt_reference, infer_class_type, starter_kit_for
 
 
 DEFAULT_SETTINGS = {
@@ -670,6 +670,19 @@ BACKGROUND_HOMES = (
     "They were raised mostly by example rather than instruction, learning more from watching than from being taught outright.",
 )
 
+OVERGEARED_ROLE_CONTEXT = {
+    "Summoner": ("a small party that treated contracted creatures as partners", "a panicked summon ignored a careless order and saved a teammate another way"),
+    "Beast Master": ("a monster-handling camp outside a starter city", "an injured beast responded to patience when force had already failed"),
+    "Priest/Healer": ("a busy temple clinic serving adventurers and NPC residents alike", "a raid survivor lived because someone stayed behind to stabilize them"),
+    "Support": ("a pickup party whose strongest damage dealers could not cooperate", "one well-timed enhancement turned a wipe into an organized retreat"),
+    "Tactician": ("a low-ranked guild team repeatedly outmatched on paper", "a failed raid proved that a correct plan still needs trust and clear calls"),
+    "Explorer": ("a mapping group that sold reliable routes instead of rumors", "an ignored environmental detail exposed a hidden path through a deadly area"),
+    "Merchant/Orator": ("a player-run market where reputation mattered as much as Gold", "a profitable bargain collapsed when one side had no reason to honor it"),
+    "Mage": ("a provincial magic guild with more theory than funding", "an unstable spell interaction rewarded careful observation instead of raw output"),
+    "Magic Swordsman": ("a training hall skeptical of hybrid builds", "switching disciplines at the wrong moment cost an otherwise winnable duel"),
+    "Tank": ("a beginner raid group that survived only when someone held the line", "a mistimed guard exposed every ally behind it"),
+}
+
 
 
 class CampaignMixin:
@@ -1110,6 +1123,14 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         home_context = random.choice(BACKGROUND_HOMES)
         origin_label = str(origin or "the local community").strip()
         role_label = str(archetype or "adventurer").strip()
+        if world == "Overgeared":
+            role_home, role_event = OVERGEARED_ROLE_CONTEXT.get(
+                role_label,
+                (f"a mixed group of Satisfy players learning the realities of the {role_label.lower()} role",
+                 f"an early {role_label.lower()} challenge exposed the difference between a class label and dependable execution"),
+            )
+            home_context = f"Their first dependable community in Satisfy was {role_home}."
+            formative_event = role_event
 
         if re.search(r"\b(prodigy|genius)\b|stronger than.{0,28}\b(?:my|their|his|her|the same) age|far ahead of (?:my|their|his|her) peers", lowered):
             learning_rate, aptitude = 1.6, "Prodigious aptitude"
@@ -1143,15 +1164,17 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             "They still lack the experience and resources to turn promising instincts into dependable results."
         )
         supplied = raw.rstrip().rstrip(".") + "." if raw else f"They begin as a {origin_label.lower()} pursuing the path of a {role_label.lower()}."
-        expanded = " ".join((
-            supplied,
-            home_context,
-            training,
-            relationship,
-            f"A decisive turning point came when {formative_event}.",
-            motivation,
-            complication,
-        ))
+        # Vary the shape as well as the nouns. This keeps previews from
+        # reading like the same six labeled template slots pasted together.
+        structures = (
+            (supplied, home_context, f"{mentor_name} entered their path as {mentor}; the relationship still carries guidance, friction, and unfinished expectations.",
+             f"Everything changed when {formative_event}.", training, motivation, complication),
+            (supplied, f"Before the campaign begins, {formative_event}.", home_context, training,
+             f"That history left {mentor_name}, {mentor}, as both a useful connection and an unfinished expectation.", motivation, complication),
+            (supplied, home_context, training, f"The lesson became personal after {formative_event}.",
+             f"Since then, {mentor_name}—{mentor}—has remained part teacher, part unfinished expectation.", motivation, complication),
+        )
+        expanded = " ".join(random.choice(structures))
         accelerators = []
         if learning_rate > 1:
             accelerators.append("Prior practice and unusually fast pattern recognition")
@@ -1409,6 +1432,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         # Skills are reserved for actual techniques, spells, formations,
         # releases, class features, and other setting-recognizable abilities.
         skills = {}
+        standard_class_profile = None
+        if world == "Overgeared":
+            standard_class_profile = starter_kit_for(archetype)
+            skills.update(copy.deepcopy(standard_class_profile.get("skills", {})))
         hidden_class = None
         generated_ability = None
         class_requested = allow_starting_specials and self.hidden_class_requested(background)
@@ -1491,6 +1518,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "_boost": boost, "_core_skill_name": skill_name,
                 "bleach_release_profile": bleach_release_profile, "prerequisite_tracks": bleach_tracks,
                 "naruto_lineage_profile": naruto_lineage_profile,
+                "standard_class_profile": standard_class_profile,
                 "background_stat_adjustments": background_adjustments,
                 "_background_supplied": bool(str(background or "").strip()),
                 **background_profile}
@@ -2065,6 +2093,28 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 self.state["purchase_offers"] = []
             normalize_world_progression(self.state)
             initialize_lit_systems(self.state)
+            if world == "Overgeared" and isinstance(profile.get("standard_class_profile"), dict):
+                starter = profile["standard_class_profile"]
+                system = self.state.setdefault("overgeared_system", {})
+                quest = starter.get("quest") if isinstance(starter.get("quest"), dict) else {}
+                known_quests = {str(x.get("name")) for x in self.state.get("quests", []) if isinstance(x, dict)}
+                if quest and quest.get("name") not in known_quests:
+                    self.state.setdefault("quests", []).append({
+                        "name": quest["name"], "status": "Active",
+                        "explanation": f"Your {starter['name']} class has recognized a first class-specific route: {quest['goal']}",
+                        "current_knowledge": [quest["goal"]], "clear_conditions": [quest["goal"]],
+                        "rewards": [quest["reward"]], "source": f"{starter['name']} class",
+                    })
+                if starter.get("companion"):
+                    companion = copy.deepcopy(starter["companion"])
+                    known = {str(x.get("name")) for x in self.state.get("companions", []) if isinstance(x, dict)}
+                    if companion["name"] not in known:
+                        self.state.setdefault("companions", []).append(companion)
+                    system.setdefault("companion_contracts", {})[companion["name"]] = copy.deepcopy(companion)
+                    self.state.setdefault("npc_memories", {})[companion["name"]] = {
+                        "attitude": "Bonded", "goal": companion["growth_path"], "last_known_location": start,
+                        "recurring": True, "opinion_of_player": "Newly bonded partner",
+                    }
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
             self.state["suggested_actions"] = self.guided_suggestions([])

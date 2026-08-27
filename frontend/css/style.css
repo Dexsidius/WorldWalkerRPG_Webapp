@@ -320,6 +320,8 @@ input,select,textarea{ font-family:inherit; }
 .bar-hp{ background:linear-gradient(90deg,#8a2e2e,var(--danger)); }
 .bar-resource{ background:linear-gradient(90deg,#7a5b1e,var(--gold)); }
 .bar-xp{ background:linear-gradient(90deg,var(--accent2),#9fd8e6); }
+.banner-card.satisfy-system{ border-color:#82d8ff; background:linear-gradient(135deg,rgba(20,73,113,.97),rgba(8,22,39,.98)); box-shadow:0 0 34px rgba(64,180,255,.28); }
+.banner-card.tower-system{ border-color:#ac8cff; background:linear-gradient(135deg,rgba(54,31,99,.97),rgba(13,10,31,.98)); box-shadow:0 0 34px rgba(143,97,255,.3); }
 .bar-value{ width:64px; text-align:right; font-size:10.5px; color:var(--sub); font-variant-numeric:tabular-nums; }
 .xp-row{ margin-top:2px; margin-bottom:10px; }
 .xp-row .bar-track{ height:6px; }

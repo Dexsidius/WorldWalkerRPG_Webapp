@@ -23,6 +23,7 @@ from simulation_integrity import (register_action_goals, reconcile_action_goals,
                                   validate_turn_response, refresh_npc_schedules,
                                   transmit_information)
 from lit_systems import initialize_lit_systems, process_lit_turn
+from overgeared_classes import starter_kit_for, class_action_bonus
 
 
 DEFAULT_SETTINGS = {
@@ -184,6 +185,7 @@ class TurnsMixin:
         assessment = normalize_assessment_for_agency(
             self.state, action, self.ai.request(extra, p, max_output_tokens=700)
         )
+        assessment["action"] = str(action)
         self.last_assessment = copy.deepcopy(assessment)
         return assessment
 
@@ -231,7 +233,7 @@ class TurnsMixin:
         return min(30, score)
 
     @staticmethod
-    def bonus_breakdown(ability, stat_bonus, skill, skill_bonus, title_bonus, situational_bonus, lucky_bonus=0):
+    def bonus_breakdown(ability, stat_bonus, skill, skill_bonus, title_bonus, situational_bonus, lucky_bonus=0, class_bonus=0):
         """Every component feeding a check's total, in the order it's most
         useful to read — only the ones actually doing something, so a
         breakdown never pads itself out with '+0 Luck'."""
@@ -239,6 +241,7 @@ class TurnsMixin:
         if stat_bonus: parts.append({"label": ability or "Attribute", "value": stat_bonus})
         if skill and skill_bonus: parts.append({"label": skill, "value": skill_bonus})
         if title_bonus: parts.append({"label": "Titles", "value": title_bonus})
+        if class_bonus: parts.append({"label": "Class feature", "value": class_bonus})
         if situational_bonus: parts.append({"label": "Situation", "value": situational_bonus})
         if lucky_bonus: parts.append({"label": "Breakthrough", "value": lucky_bonus})
         return parts
@@ -256,6 +259,7 @@ class TurnsMixin:
         sk = assessment.get("skill")
         sb, tb = self.skill_bonus(sk), self.title_bonus()
         situational = clamp(int(assessment.get("situational_bonus", 0) or 0), -20, 20)
+        class_bonus = class_action_bonus(self.state, assessment.get("action", ""))
         low = assessment.get("difficulty_min")
         high = assessment.get("difficulty_max")
         if low is None or high is None:  # migrate cached v2.4 assessments safely
@@ -271,15 +275,15 @@ class TurnsMixin:
         raw = clamp(int(manual_roll), 1, 100) if manual_roll is not None else random.randint(1, 100)
         breakthrough = raw >= 99
         lucky_bonus = 15 if breakthrough else 0
-        total = raw + stat_bonus + sb + tb + situational + lucky_bonus
+        total = raw + stat_bonus + sb + tb + situational + class_bonus + lucky_bonus
         success = total > difficulty
         return {"roll": raw, "chosen": raw, "mode": "manual" if manual_roll is not None else "automatic",
                 "ability": ability, "ability_value": stat, "relevant_average_stat": benchmark,
                 "stat_bonus": stat_bonus, "skill": sk, "skill_bonus": sb, "title_bonus": tb,
-                "situational_bonus": situational, "lucky_bonus": lucky_bonus, "total": total,
+                "situational_bonus": situational, "class_feature_bonus": class_bonus, "lucky_bonus": lucky_bonus, "total": total,
                 "difficulty": difficulty, "difficulty_range": [low, high], "success": success,
                 "breakthrough": breakthrough,
-                "bonus_breakdown": self.bonus_breakdown(ability, stat_bonus, sk, sb, tb, situational, lucky_bonus)}
+                "bonus_breakdown": self.bonus_breakdown(ability, stat_bonus, sk, sb, tb, situational, lucky_bonus, class_bonus)}
 
     @staticmethod
     def format_roll_summary(action, result):
@@ -305,7 +309,8 @@ class TurnsMixin:
         skill_bonus = self.skill_bonus(check.get("skill"))
         title_bonus = self.title_bonus()
         situational = clamp(int(check.get("situational_bonus", 0) or 0), -20, 20)
-        known_bonus = stat_bonus + skill_bonus + title_bonus + situational
+        class_bonus = class_action_bonus(self.state, action or check.get("action", ""))
+        known_bonus = stat_bonus + skill_bonus + title_bonus + situational + class_bonus
         low, high = check.get("difficulty_min"), check.get("difficulty_max")
         if low is None or high is None:
             legacy = int(check.get("base_dc", 15) or 15)
@@ -320,7 +325,7 @@ class TurnsMixin:
         low, high = clamp(int(low) + time_modifier + shift, 1, 100), clamp(int(high) + time_modifier + shift, 1, 100)
         if low > high: low, high = high, low
         raw_needed = max(1, min(101, int(round(((low + high) / 2) + 1 - known_bonus))))
-        breakdown = self.bonus_breakdown(ability, stat_bonus, check.get("skill"), skill_bonus, title_bonus, situational)
+        breakdown = self.bonus_breakdown(ability, stat_bonus, check.get("skill"), skill_bonus, title_bonus, situational, 0, class_bonus)
         return {"id": str(check.get("id") or check.get("reason") or "check"), "action": str(action or check.get("reason") or "Uncertain action"),
                 "reason": str(check.get("reason") or "Uncertain outcome"), "ability": ability, "skill": check.get("skill"),
                 "difficulty_range": [low + 1, high + 1], "known_bonus": known_bonus, "expected_raw_needed": raw_needed,
@@ -350,6 +355,7 @@ class TurnsMixin:
         assessment = normalize_assessment_for_agency(
             self.state, action, cached_assessment or self.assess(action)
         )
+        assessment["action"] = str(action)
         self.last_assessment = copy.deepcopy(assessment)
         self.upsert_prerequisite_track(assessment.get("prerequisite_track"))
         if assessment.get("impossible"):
@@ -796,7 +802,14 @@ Return ONLY valid JSON."""
         world = self.state.get("world", "Custom World")
         training = expansion_for(world).get("training", [])
         archetype = (self.state.get("special", {}) or {}).get("Archetype", "")
-        if training:
+        if world == "Overgeared" and archetype:
+            starter = starter_kit_for(archetype)
+            location = self.state.get("location", "the current area")
+            for lead in starter.get("suggestions", []):
+                lead = str(lead).strip()
+                if lead:
+                    suggestions.append(f"At {location}, {lead[:1].lower() + lead[1:]}")
+        elif training:
             suggestions.append(f"Spend real time training in {training[0]}{f' as a {archetype}' if archetype else ''}")
         suggestions.append(f"Ask around {self.state.get('location', 'the area')} for relevant rumors and opportunities")
         suggestions.append("Pursue whatever your background and goals would realistically point you toward next")
@@ -966,6 +979,7 @@ Return ONLY valid JSON."""
         minutes_each = minutes / max(1, len(actions))
         training_words = ("train", "practice", "study", "research", "drill", "meditat", "spar", "learn", "master", "craft")
         danger_words = ("fight", "battle", "defeat", "boss", "dungeon", "raid", "quest", "mission", "survive", "hunt")
+        contribution_words = ("heal", "cleanse", "support", "protect", "tank", "guard", "scout", "map", "track", "investigate", "negotiate", "trade", "lead", "command", "coordinate", "summon", "companion", "appraise", "escort")
         modest_words = ("rest", "sleep", "wait", "eat", "talk", "ask", "walk", "travel")
         daily_rates = {"light": 6, "normal": 10, "intense": 15, "extreme": 20}
         total, reasons = 0, []
@@ -977,6 +991,10 @@ Return ONLY valid JSON."""
                 reason = f"{round(effective_days, 2)} effective days of sustained practice"
             elif any(word in lowered for word in danger_words):
                 earned, reason = 12, "meaningful combat, mission, or dangerous objective"
+            elif any(word in lowered for word in contribution_words):
+                effective_days = max(.05, minutes_each / 1440.0)
+                earned = max(10, round(effective_days * daily_rates.get(str(intensity).lower(), 10)))
+                reason = "meaningful support, defense, scouting, social, command, or companion contribution"
             elif any(word in lowered for word in modest_words):
                 earned, reason = 3, "minor but relevant character activity"
             else:
@@ -1162,10 +1180,61 @@ Return ONLY valid JSON."""
             position_msg = f"New position: {a.get('position')}"
             msgs.append(position_msg)
         out = []
+        world_system = "satisfy" if a.get("world") == "Overgeared" else "tower" if a.get("world") == "Solo Max-Level Newbie" else "world"
+        system_heading = "SATISFY SYSTEM" if world_system == "satisfy" else "SYSTEM MESSAGE" if world_system == "tower" else "SYSTEM"
+
+        def _canon_system_notice(message):
+            """Render mechanical deltas in the native language of each LitRPG world."""
+            if world_system not in {"satisfy", "tower"}:
+                return message
+            xp_match = re.match(r"XP\s+([+-]?\d+)\s+→\s+(\d+)/(\d+)", message, re.I)
+            level_match = re.match(r"LEVEL UP!\s+(\d+)\s+→\s+(\d+)", message, re.I)
+            stat_match = re.match(r"LEVEL STATS:\s*(.+)", message, re.I)
+            skill_match = re.match(r"NEW SKILL:\s*([^—]+?)(?:\s+—\s+(.+))?$", message, re.I)
+            refined_match = re.match(r"SKILL REFINED:\s*([^—]+?)(?:\s+—\s+(.+))?$", message, re.I)
+            title_match = re.match(r"TITLE ACQUIRED:\s*(.+)", message, re.I)
+            achievement_match = re.match(r"ACHIEVEMENT UNLOCKED:\s*(.+)", message, re.I)
+            quest_match = re.match(r"QUEST UPDATED:\s*(.+)", message, re.I)
+            if xp_match:
+                gained, current, needed = xp_match.groups()
+                amount = abs(int(gained))
+                if world_system == "satisfy":
+                    return f"You have acquired {amount} experience.\nExperience: {current} / {needed}"
+                return f"[Experience acquired: {amount}]\nCurrent EXP: {current} / {needed}"
+            if level_match:
+                old, new = level_match.groups()
+                if world_system == "satisfy":
+                    return f"Your level has risen.\nLevel: {old} → {new}"
+                return f"[LEVEL UP]\nYour level has increased from {old} to {new}."
+            if stat_match:
+                gains = stat_match.group(1)
+                if world_system == "satisfy":
+                    return f"Your stats have increased with your new level.\n{gains}"
+                return f"[Stat increase applied]\n{gains}"
+            if skill_match:
+                name, detail = skill_match.groups()
+                lead = f"You have learned the skill [{name.strip()}]." if world_system == "satisfy" else f"[New skill acquired: {name.strip()}]"
+                return lead + (f"\n{detail.strip()}" if detail else "")
+            if refined_match:
+                name, detail = refined_match.groups()
+                lead = f"The skill [{name.strip()}] has developed." if world_system == "satisfy" else f"[Skill proficiency increased: {name.strip()}]"
+                return lead + (f"\n{detail.strip()}" if detail else "")
+            if title_match:
+                name = title_match.group(1).strip()
+                return f"You have acquired the title [{name}]." if world_system == "satisfy" else f"[New title acquired: {name}]"
+            if achievement_match:
+                name = achievement_match.group(1).strip()
+                return f"You have achieved [{name}]." if world_system == "satisfy" else f"[Achievement unlocked: {name}]"
+            if quest_match:
+                name = quest_match.group(1).strip()
+                return f"The quest [{name}] has been registered or updated." if world_system == "satisfy" else f"[Quest information updated: {name}]"
+            return message
+
         for m in msgs:
+            presented = _canon_system_notice(m)
             tag = "danger" if "death" in m.lower() else "meta"
-            self.append("[SYSTEM]\n" + m, tag)
-            self.log(m)
+            self.append(f"[{system_heading}]\n" + presented, tag)
+            self.log(presented)
             ml = m.lower()
             ctype = None
             if m == position_msg:
@@ -1182,7 +1251,8 @@ Return ONLY valid JSON."""
                 ctype = "damage"
             elif "death" in ml or "injury" in ml:
                 ctype = "danger"
-            out.append({"message": m, "tag": tag, "cinematic": ctype})
+            out.append({"message": m, "display_message": presented, "tag": tag,
+                        "cinematic": ctype, "world_system": world_system})
         return out
 
     def rewind_death(self):

@@ -29,6 +29,8 @@ from support import repair_campaign_state, build_diagnostic_bundle
 from friend_accounts import FriendAccountStore, FriendGameRegistry, persistent_secret
 from multiplayer import (MultiplayerStore, character_from_state, player_view,
                          apply_character_update, split_player_results)
+from ai_client import AI
+from overgeared_classes import class_encyclopedia
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else BACKEND_DIR.parent
@@ -638,7 +640,8 @@ def api_campaign_opening():
 @app.route("/api/state")
 def api_state():
     return jsonify({"state": request_public_state(), "busy": game.busy, "campaign_active": game.campaign_active,
-                     "ai_ready": game.ai_ready(), "local_mode": game.local_mode()})
+                     "ai_ready": game.ai_ready(), "ai_connection_status": game.settings.get("ai_connection_status", "untested"),
+                     "local_mode": game.local_mode()})
 
 
 @app.route("/api/action/submit", methods=["POST"])
@@ -1033,6 +1036,7 @@ def api_panels():
         "skills": visible_skills(s),
         "special": s.get("special", {}),
         "overgeared_system": s.get("overgeared_system", {}),
+        "class_encyclopedia": class_encyclopedia() if world == "Overgeared" else {},
         "solo_system": s.get("solo_system", {}),
         "class_profile": visible_class_profile(s),
         "combat": s.get("combat", {}),
@@ -1335,8 +1339,38 @@ def api_settings_post():
         "onboarding_seen", "simulation_mode", "canon_foreknowledge"
     ] if k in d}
     settings_game = getattr(g, "worldwalker_personal_game", None) or game
+    if any(key in patch for key in ("provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model")):
+        patch.update(ai_connection_status="untested", ai_validated_model="", ai_validated_provider="")
     settings_game.update_settings(patch)
     return jsonify({"ok": True})
+
+
+@app.route("/api/settings/test_ai", methods=["POST"])
+def api_test_ai():
+    d = request.get_json(force=True)
+    settings_game = getattr(g, "worldwalker_personal_game", None) or game
+    current = settings_game.settings
+    provider = str(d.get("provider") or current.get("provider") or "local")
+    model = str(d.get("model") or current.get("model") or "").strip()
+    key = str(d.get("api_key") or current.get("api_key") or "").strip()
+    base_url = str(d.get("base_url") or current.get("local_base_url") or "http://localhost:1234/v1").strip()
+    token = str(d.get("token") or current.get("local_token") or "").strip()
+    if not model:
+        return jsonify({"error": "Choose a Main GM model before testing."}), 400
+    if provider == "cloud" and not key:
+        return jsonify({"error": "Enter an OpenAI API key before testing cloud AI."}), 400
+    try:
+        client = AI(key=key, model=model, provider=provider, base_url=base_url, local_token=token)
+        models = client.list_models(timeout=10)
+        if model not in models:
+            raise RuntimeError(f"Connected, but {model} is not available to this account/server.")
+        settings_game.update_settings({"ai_connection_status": "valid", "ai_validated_model": model,
+                                       "ai_validated_provider": provider})
+        return jsonify({"ok": True, "model": model, "provider": provider, "models_found": len(models)})
+    except Exception as exc:
+        settings_game.update_settings({"ai_connection_status": "invalid", "ai_validated_model": "",
+                                       "ai_validated_provider": provider})
+        return jsonify({"error": f"AI connection failed: {exc}"}), 400
 
 
 @app.route("/api/settings/detect_models", methods=["POST"])

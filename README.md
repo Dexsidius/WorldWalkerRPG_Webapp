@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.19.0** (schema 16).
+Current app/save version: **3.20.0** (schema 16).
+
+Version 3.20 makes Satisfy classes complete starting playstyles instead of
+labels. Every creation archetype has real starting skills, a class quest,
+mechanical action bonuses, role-specific leads, advancement paths, and equal
+credit for combat and non-combat contributions. Summoned partners are now
+persistent contracts, level/XP is prominent in both LitRPG worlds, progression
+arrives through canon-styled Satisfy or Tower notices, and accidental combat
+starts from tense or figurative language are rejected.
 
 Version 3.19 turns Overgeared into the full world of Satisfy instead of a
 mostly crafting-focused route. Character creation now offers martial, magical,

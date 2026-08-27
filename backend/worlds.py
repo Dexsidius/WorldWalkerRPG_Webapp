@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.19.0"
+APP_VERSION = "3.20.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -263,7 +263,7 @@ WORLD_DATA = {
         "tagline": "A living Satisfy: limitless classes, raids, magic, companions, guilds, kingdoms, professions, and hidden paths.",
         "resource": "Mana",
         "progression": ["Level","XP","Class","Stats","Skills","Class Advancement","Affinity","Guild","Reputation","Titles","Optional Professions"],
-        "rules": "Use the full Overgeared/Satisfy VRMMO framework. Satisfy supports ordinary, rare, epic, unique, legendary, growth-type and stranger classes across combat, weapons, magic, faith/support, command/social, companions, exploration, production and hybrids. Hidden classes arise from meaningful conditions and may be original when they match Satisfy's logic. Raids, quests, guilds, kingdoms, NPC relationships, player competition, equipment and professions all matter. Crafting is one optional route, not the assumed route. NPCs are persistent people with memories and interests.",
+        "rules": "Use the full Overgeared/Satisfy VRMMO framework. Satisfy supports ordinary, rare, epic, unique, legendary, growth-type and stranger classes across combat, weapons, magic, faith/support, command/social, companions, exploration, production and hybrids. Hidden classes arise from meaningful conditions and may be original when they match Satisfy's logic. Raids, quests, guilds, kingdoms, NPC relationships, player competition, equipment and professions all matter. Crafting is one optional route, not the assumed route. NPCs are persistent people with memories and interests. Grid and his canon arc continue elsewhere unless this player deliberately intersects them; never make an unrelated original character repeat Grid's debts, Pagma route, crafting identity, companions, or personal story beats.",
         "start": "Winston",
         "factions": {"Players":0,"Local Lords":0,"Church":0,"Guilds":0,"Kingdom":0},
         "map": [

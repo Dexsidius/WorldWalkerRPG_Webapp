@@ -49,6 +49,9 @@ DEFAULT_SETTINGS = {
     "canon_foreknowledge": False,
     "developer_mode": False,
     "onboarding_seen": False,
+    "ai_connection_status": "untested",
+    "ai_validated_model": "",
+    "ai_validated_provider": "",
 }
 
 
@@ -231,11 +234,23 @@ class CoreMixin:
         return self.settings.get("provider", "local") != "cloud"
 
     def ai_ready(self):
+        configured = bool(self.settings.get("model", "")) and (self.local_mode() or bool(self.settings.get("api_key", "")))
+        # Tests, extensions, and embedded hosts may inject a working client
+        # object directly rather than configure a provider connection.
+        if configured and not isinstance(self.ai, AI):
+            return True
+        if self.settings.get("ai_connection_status") != "valid":
+            return False
         if self.local_mode():
             return bool(self.settings.get("model", ""))
         return bool(self.settings.get("api_key", "") and self.settings.get("model", ""))
 
     def ai_bg_ready(self):
+        configured = bool(self.settings.get("secondary_model", "") or self.settings.get("model", ""))
+        if configured and not isinstance(self.ai_bg, AI):
+            return True
+        if self.settings.get("ai_connection_status") != "valid":
+            return False
         if self.local_mode():
             return bool(self.settings.get("secondary_model", "") or self.settings.get("model", ""))
         return bool(self.settings.get("api_key", "") and (self.settings.get("secondary_model", "") or self.settings.get("model", "")))
@@ -420,10 +435,17 @@ class CoreMixin:
             return True
         return bool(self._COMBAT_SIGNAL_RE.search(str(action_hint or "")))
 
+    # Starting structured combat requires a concrete target. Bare words such
+    # as "fight", "strike", "hit", "attack", and "shoot" caused idioms
+    # (strike a deal, fight an illness, hit the road, shoot a message) to
+    # manufacture enemies. Keep the trigger deliberately narrower than the
+    # broad vocabulary used merely to recognize a combat-adjacent scene.
     _FIGHT_START_RE = re.compile(
-        r"\b(attack|fight|strike|stab|slash|shoot|fire at|punch|kick|hit|tackle|grapple|choke|"
-        r"charge at|lunge at|swing at|blast|ambush|kill|duel|spar|throw .{0,35} at|"
-        r"cast .{0,35} at|unleash .{0,35} (?:at|on)|use .{0,35} to (?:attack|hit|hurt|kill|blast|burn|cut))\b", re.I)
+        r"\b(?:attack|fight|strike|stab|slash|shoot|punch|kick|hit|tackle|grapple|choke|ambush|kill|duel|spar)\s+"
+        r"(?:with\s+)?(?:the\s+|a\s+|an\s+|that\s+|this\s+|him\b|her\b|them\b|you\b|(?-i:[A-Z])[A-Za-z'’-]+)|"
+        r"\b(?:fire|charge|lunge|swing|blast)\s+(?:my\s+[^.]{0,24}\s+)?(?:at|on|into)\s+(?:the\s+|a\s+|an\s+|him\b|her\b|them\b|you\b|(?-i:[A-Z])[A-Za-z'’-]+)|"
+        r"\b(?:throw|cast|unleash)\s+.{1,35}\s+(?:at|on)\s+(?:the\s+|a\s+|an\s+|him\b|her\b|them\b|you\b|(?-i:[A-Z])[A-Za-z'’-]+)|"
+        r"\buse\s+.{1,35}\s+to\s+(?:attack|hit|hurt|kill|blast|burn|cut)\s+(?:the\s+|a\s+|an\s+|him\b|her\b|them\b|you\b|(?-i:[A-Z])[A-Za-z'’-]+)", re.I)
     _FIGHT_NEGATION_RE = re.compile(
         r"\b(avoid|prevent|stop|refuse|decline|de[- ]?escalate|negotiate|talk down|do not|don't|without)\b.{0,28}"
         r"\b(attack|fight|violence|combat|strike|shoot|kill)\b", re.I)
@@ -433,8 +455,11 @@ class CoreMixin:
         r"swings? .{0,30} at you|fires? .{0,30} at you|blasts? you|tackles? you|grapples? you|"
         r"wounds? you|cuts? you|drives? .{0,25} (?:at|into) you|launches? .{0,30} at you|"
         r"(?:blade|sword|weapon|projectile|jutsu|spell|attack) .{0,35} (?:toward|at) you|"
-        r"combat (?:begins|erupts|starts)|violence (?:begins|erupts|starts)|"
+        r"(?:the )?(?:fight|battle|combat) (?:continues|rages|is (?:already )?underway)|"
         r"no (?:time|room|chance|opportunity) (?:left )?(?:to|for) negotiat(?:e|ion|ing)?)\b", re.I)
+    _FIGURATIVE_FIGHT_RE = re.compile(
+        r"\b(?:strike (?:a |the )?deal|hit the (?:road|books|gym)|fight (?:(?:an?|the) )?(?:illness|disease|urge|feeling|fear)|"
+        r"attack (?:the |a )?(?:problem|issue|question|goal)|shoot (?:a |the )?(?:message|photo|picture)|kick off)\b", re.I)
 
     _DANGER_SCENE_RE = re.compile(
         r"\b(danger|confront|fight|battle|combat|attack|ambush|duel|raid|siege|hostile|enemy|"
@@ -504,10 +529,12 @@ class CoreMixin:
         patch = data.setdefault("state_patch", {}) if isinstance(data.get("state_patch", {}), dict) else {}
         data["state_patch"] = patch
         authored = patch.get("combat")
-        if (isinstance(current, dict) and current.get("active")) or (isinstance(authored, dict) and authored.get("active")):
+        if isinstance(current, dict) and current.get("active"):
             return False
         action_text = " ".join(str(x) for x in (actions or []) if str(x).strip())
-        initiated = bool(self._FIGHT_START_RE.search(action_text)) and not bool(self._FIGHT_NEGATION_RE.search(action_text))
+        initiated = (bool(self._FIGHT_START_RE.search(action_text))
+                     and not bool(self._FIGHT_NEGATION_RE.search(action_text))
+                     and not bool(self._FIGURATIVE_FIGHT_RE.search(action_text)))
         if re.search(r"\b(?:until|till|through)\b.{0,45}\b(?:attack|fight|battle|combat)\b.{0,20}\b(?:over|ends?|ended|finished|resolved)\b", action_text, re.I):
             initiated = False
         narrative = str(data.get("narrative") or "") + " " + " ".join(
@@ -530,6 +557,14 @@ class CoreMixin:
         unavoidable = bool(self._UNAVOIDABLE_ATTACK_RE.search(narrative))
         if initiated and not unavoidable and re.search(r"\b(training dumm(?:y|ies)|practice targets?|door|wall|rock|tree)\b", action_text, re.I):
             initiated = False
+        # The model may author combat even when neither side committed a
+        # hostile act. Reject that patch instead of trusting a tense scene,
+        # warning, argument, training description, or metaphor to be a fight.
+        if isinstance(authored, dict) and authored.get("active"):
+            if not (initiated or unavoidable):
+                patch.pop("combat", None)
+                data["combat_start_rejected"] = "No concrete hostile act or unavoidable attack established combat."
+            return False
         if not (initiated or unavoidable):
             return False
 

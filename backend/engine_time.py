@@ -651,6 +651,13 @@ class TimeSkipMixin:
         results = []
         for check_index, chk in enumerate(checks):
             normalized = copy.deepcopy(chk)
+            try:
+                action_index = int(chk.get("action_index", check_index))
+            except (TypeError, ValueError):
+                action_index = check_index
+            action_index = max(0, min(action_index, max(0, len(orders) - 1)))
+            action_label = orders[action_index] if orders else chk.get("reason", "Time-skip milestone")
+            normalized["action"] = action_label
             time_modifier = int(chk.get("time_difficulty_modifier", 0) or 0)
             if not time_modifier:
                 time_modifier = int(chk.get("time_dc_modifier", assessment.get("time_budget", {}).get("time_dc_modifier", 0)) or 0) * 3
@@ -658,12 +665,6 @@ class TimeSkipMixin:
             if normalized.get("difficulty_max") is not None: normalized["difficulty_max"] = int(normalized["difficulty_max"]) + time_modifier
             check_id = str(chk.get("id") or chk.get("reason") or "major")
             res = self.roll(normalized, manual_rolls.get(check_id) if check_id in manual_rolls else None)
-            try:
-                action_index = int(chk.get("action_index", check_index))
-            except (TypeError, ValueError):
-                action_index = check_index
-            action_index = max(0, min(action_index, max(0, len(orders) - 1)))
-            action_label = orders[action_index] if orders else chk.get("reason", "Time-skip milestone")
             res.update({"id": chk.get("id"), "reason": chk.get("reason"), "action_index": action_index,
                         "action": action_label, "major_event": bool(chk.get("major_event")),
                         "time_difficulty_modifier": time_modifier, "challenge_mode": challenge_modes.get(check_id, "")})

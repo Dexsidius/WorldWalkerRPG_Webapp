@@ -12,7 +12,7 @@ import copy
 import re
 
 from worlds import tower_floor_theme
-from overgeared_classes import infer_class_type
+from overgeared_classes import infer_class_type, starter_kit_for
 
 
 ITEM_RATING_ORDER = {
@@ -263,7 +263,10 @@ def _class_action_aligned(class_type, action_text):
         "Combat": re.compile(r"\b(?:fight|attack|defend|duel|raid|hunt|block|strike|shoot|stab|train|practice)\b", re.I),
     }
     matched = any(regex.search(text) for label, regex in patterns.items() if label in str(class_type))
-    return matched or bool(ADVENTURE_RE.search(text))
+    # A flexible/unclassified adventurer can develop through broad activity;
+    # a named role only advances its class track through that role's actual
+    # contribution. Ordinary XP remains available for every meaningful act.
+    return matched or ("Flexible" in str(class_type) and bool(ADVENTURE_RE.search(text)))
 
 
 def _seed_overgeared(state):
@@ -275,6 +278,12 @@ def _seed_overgeared(state):
     class_type = str(profile.get("class_type") or class_profile.get("class_type") or infer_class_type(
         class_name, special.get("Archetype"), class_profile.get("description"), class_profile.get("effect")
     ))
+    starter = starter_kit_for(special.get("Archetype") or class_name)
+    if not class_profile:
+        class_type = starter.get("class_type", class_type)
+        skill_map = state.setdefault("skills", {})
+        for skill_name, detail in starter.get("skills", {}).items():
+            skill_map.setdefault(skill_name, copy.deepcopy(detail))
     profile["class_type"] = class_type
     production_relevant = _production_relevant(profile, special, class_profile)
     starting_path = _production_path_for_text(" ".join([
@@ -293,18 +302,25 @@ def _seed_overgeared(state):
         "rarity": str(profile.get("class_rarity") or class_profile.get("rank") or "Normal"),
         "stage": "Foundation", "stage_progress": 0,
         "next_unlock": str(class_profile.get("growth_path") or "Use the class successfully and complete a defining class quest."),
-        "unlocked_features": [str(class_profile.get("signature_skill"))] if class_profile.get("signature_skill") else [],
+        "unlocked_features": ([str(class_profile.get("signature_skill"))] if class_profile.get("signature_skill")
+                              else list(starter.get("features", []))),
     })
     system["class_progression"]["class"] = class_name
     system["class_progression"]["class_type"] = class_type
-    system.setdefault("role_development", {"aligned_actions": 0, "major_achievements": [], "recent_growth": []})
+    system.setdefault("role_development", {"aligned_actions": 0, "contribution_actions": 0, "major_achievements": [], "recent_growth": []})
+    system.setdefault("companion_contracts", {})
+    system.setdefault("system_notifications", [])
     system.setdefault("class_questlines", [])
     if class_name and not system["class_questlines"]:
+        starter_quest = starter.get("quest", {}) if not class_profile else {}
         system["class_questlines"].append({
-            "name": f"The Path of {class_name}", "class": class_name, "stage": "Foundation",
-            "progress": 0, "goal": str(class_profile.get("growth_path") or "Prove the class through meaningful use."),
-            "next_unlock": "A new class feature or specialization lead", "status": "Active",
+            "name": str(starter_quest.get("name") or f"The Path of {class_name}"), "class": class_name, "stage": "Foundation",
+            "progress": 0, "goal": str(starter_quest.get("goal") or class_profile.get("growth_path") or "Prove the class through meaningful use."),
+            "next_unlock": str(starter_quest.get("reward") or "A new class feature or specialization lead"), "status": "Active",
         })
+    profile["class_features"] = list(dict.fromkeys(profile.get("class_features", []) + system["class_progression"].get("unlocked_features", [])))
+    if not profile.get("advancement") or profile.get("advancement") == "Develop the class through meaningful class-aligned actions and quests.":
+        profile["advancement"] = class_profile.get("growth_path") or starter.get("growth_path")
     system.setdefault("npc_affinity", {})
     system.setdefault("guild", {"name": str(profile.get("guild") or special.get("Guild") or "None"), "rank": "Unaffiliated", "resources": 0, "projects": [], "pressure": []})
     system.setdefault("territory", {"controlled": [], "population": 0, "morale": 50, "projects": [], "rival_pressure": []})
@@ -410,13 +426,13 @@ def _overgeared_turn(before, state, action_text, narrative, elapsed_minutes):
             "elapsed_days": round(days, 2), "mastery_gain": gain,
             "summary": "The Chronicle contains the actual materials, method, failures, and finished result.",
         })
-        notes.append(f"PRODUCTION — {track_name} mastery +{gain} → {track['mastery']} ({track['rank']}). Materials and routine components remain in the Chronicle.")
+        notes.append(f"[PRODUCTION]\n{track_name} proficiency increased: Mastery +{gain} → {track['mastery']} ({track['rank']}). Materials and routine components remain in the Chronicle.")
         for order in system["crafting_orders"]:
             if str(order.get("status")) == "Active":
                 order["progress"] = min(100, _number(order.get("progress"), 0) + max(5, round(days * 18)))
                 if order["progress"] >= 100:
                     order["status"] = "Ready for delivery"
-                    notes.append(f"ORDER READY — {order.get('name', 'Crafting commission')} can now be delivered through the story.")
+                    notes.append(f"[Commission complete]\n[{order.get('name', 'Crafting commission')}] can now be delivered through the story.")
 
     if re.search(r"\b(?:accept|take|begin|start)\b.{0,35}\b(?:commission|crafting order|production order)\b", action_text, re.I):
         if not any(str(x.get("status")) == "Active" for x in system["crafting_orders"] if isinstance(x, dict)):
@@ -425,7 +441,7 @@ def _overgeared_turn(before, state, action_text, narrative, elapsed_minutes):
                 "requirements": action_text[:300], "deadline": "As established in the scene",
                 "reward": "As negotiated in the Chronicle", "progress": 0, "status": "Active",
             })
-            notes.append("CRAFTING ORDER ACCEPTED — its materials, specifications, deadline, and payment remain governed by the Chronicle.")
+            notes.append("[New commission registered]\nIts materials, specifications, deadline, and payment remain governed by the Chronicle.")
 
     class_type = str(profile.get("class_type") or system["class_progression"].get("class_type") or "Adventuring / Flexible")
     if CLASS_RE.search(action_text) or _class_action_aligned(class_type, action_text):
@@ -434,15 +450,53 @@ def _overgeared_turn(before, state, action_text, narrative, elapsed_minutes):
         cp["stage_progress"] = min(100, _number(cp.get("stage_progress"), 0) + gain)
         role = system["role_development"]
         role["aligned_actions"] = _number(role.get("aligned_actions"), 0) + 1
+        role["contribution_actions"] = _number(role.get("contribution_actions"), 0) + 1
         role.setdefault("recent_growth", []).append({"turn": _number(state.get("turn"), 0) + 1, "class_type": class_type, "progress": gain, "action": str(action_text)[:180]})
         role["recent_growth"] = role["recent_growth"][-20:]
-        for quest in system["class_questlines"]:
+        for quest in list(system["class_questlines"]):
             if quest.get("status") == "Active":
                 quest["progress"] = min(100, _number(quest.get("progress"), 0) + gain)
                 if quest["progress"] >= 100:
                     quest["status"] = "Milestone reached"
-                    cp["stage"] = "Specialization"
-                    notes.append(f"CLASS MILESTONE — {quest['name']} reached its next story unlock. The exact feature must be revealed in play.")
+                    old_stage = str(cp.get("stage") or "Foundation")
+                    cp["stage"] = "Specialization" if old_stage == "Foundation" else "Evolution Candidate"
+                    starter = starter_kit_for(special.get("Archetype") or cp.get("class"))
+                    advancements = starter.get("advancements", [])
+                    if cp["stage"] == "Specialization" and advancements:
+                        specialization = advancements[0]
+                        if specialization not in profile.setdefault("specializations", []):
+                            profile["specializations"].append(specialization)
+                        cp.setdefault("unlocked_features", []).append(specialization)
+                    elif cp["stage"] == "Evolution Candidate" and len(advancements) > 1:
+                        evolved = advancements[1]
+                        cp.update({"class": evolved, "stage": "Evolved", "stage_progress": 0,
+                                   "next_unlock": "Develop the evolved class through high-level achievements and unique conditions."})
+                        profile["primary_class"] = evolved
+                        special["Class"] = evolved
+                    role.setdefault("major_achievements", []).append(quest["name"])
+                    next_name = f"{cp['class']} Specialization Trial" if cp["stage"] == "Specialization" else f"{cp['class']} Evolution Trial"
+                    system["class_questlines"].append({"name": next_name, "class": cp["class"], "stage": cp["stage"],
+                        "progress": 0, "goal": "Complete a defining class-aligned achievement that changes how the role is played.",
+                        "next_unlock": "An earned specialization or class evolution", "status": "Active"})
+                    notice = f"[Class quest complete]\n[{quest['name']}] has been completed. A new class quest, [{next_name}], is now available."
+                    notes.append(notice)
+                    system["system_notifications"].append({"turn": _number(state.get("turn"), 0) + 1, "type": "class", "message": notice})
+
+    # Contracted companions are persistent actors, not flavor attached to the
+    # Summoner label. Coordinated work improves the bond and their own level.
+    for name, contract in system.get("companion_contracts", {}).items():
+        if name.lower() in action_text.lower() or re.search(r"\b(?:companion|summon|contract|beast|pet)\b", action_text, re.I):
+            gain = max(1, min(8, round(days * 2)))
+            contract["loyalty"] = min(100, _number(contract.get("loyalty"), 40) + gain)
+            contract["shared_actions"] = _number(contract.get("shared_actions"), 0) + 1
+            if contract["shared_actions"] % 5 == 0:
+                contract["level"] = _number(contract.get("level"), 1) + 1
+                notice = f"[Contracted companion level up]\n[{name}] has reached level {contract['level']} through shared field experience."
+                notes.append(notice)
+                system["system_notifications"].append({"turn": _number(state.get("turn"), 0) + 1, "type": "companion", "message": notice})
+            for companion in state.get("companions", []):
+                if isinstance(companion, dict) and companion.get("name") == name:
+                    companion.update(copy.deepcopy(contract))
 
     # Mirror player-facing affinity from already-authoritative relationship facts.
     relationships = state.get("relationships") if isinstance(state.get("relationships"), dict) else {}
@@ -488,6 +542,7 @@ def _overgeared_turn(before, state, action_text, narrative, elapsed_minutes):
         "territory_revenue": _number(system["economy"].get("territory_revenue"), 0),
     }
     system["crafting_history"] = system["crafting_history"][-100:]
+    system["system_notifications"] = system["system_notifications"][-80:]
     return notes
 
 
@@ -504,19 +559,19 @@ def _solo_turn(before, state, action_text, narrative, elapsed_minutes):
         if clue:
             clue["discovered"] = True
             system["foreknowledge"]["suspected_hidden_conditions"].append({"floor": floor_state["floor"], "clue": clue["clue"], "status": "Suspected"})
-            notes.append(f"HIDDEN-CONDITION CLUE — {clue['clue']}")
+            notes.append(f"[HIDDEN-CONDITION CLUE]\n{clue['clue']}")
 
     if re.search(r"\b(?:remember|recall|compare|game knowledge|foreknowledge)\b", action_text, re.I):
         entry = {"floor": floor_state["floor"], "fact": action_text[:300], "status": "Remembered; not yet confirmed"}
         if entry["fact"] not in {x.get("fact") for x in system["foreknowledge"]["remembered"] if isinstance(x, dict)}:
             system["foreknowledge"]["remembered"].append(entry)
-            notes.append("FOREKNOWLEDGE LOGGED — the remembered route remains provisional until observed in lethal reality.")
+        notes.append("[Foreknowledge recorded]\nThe remembered route remains provisional until observed in the Tower's lethal reality.")
 
     if SOLO_COPY_RE.search(action_text):
         attempt = {"target": "Ability described in the current scene", "condition": "Unknown", "progress": 10,
                    "evidence": action_text[:300], "status": "Investigating"}
         system["copy_attempts"].append(attempt)
-        notes.append("ABILITY COPY — an attempt is being tracked, but the actual System condition still has to be discovered and fulfilled.")
+        notes.append("[Ability-copy condition detected]\nThe attempt is being tracked, but the System's exact condition still has to be discovered and fulfilled.")
 
     old_floor = max(1, _number((before or {}).get("tower_floor"), floor_state["floor"]))
     new_floor = max(1, _number(state.get("tower_floor"), floor_state["floor"]))
@@ -555,7 +610,7 @@ def _solo_turn(before, state, action_text, narrative, elapsed_minutes):
         system["floor_state"] = build_floor_state(new_floor)
         system["floor_state"]["started_turn"] = _number(state.get("turn"), 0) + 1
         floor_state = system["floor_state"]
-        notes.append(f"FLOOR {old_floor} COMPLETE — advanced to Floor {new_floor}; {len(report['hidden_completed'])} hidden condition(s) completed and {len(report['hidden_missed'])} missed or undiscovered.")
+        notes.append(f"[Floor {old_floor} cleared]\nAccess to Floor {new_floor} has opened. Hidden conditions completed: {len(report['hidden_completed'])}. Missed or undiscovered: {len(report['hidden_missed'])}.")
 
     # Rival groups move without requiring another model call, but never jump
     # beyond the player during a short routine turn.
@@ -615,7 +670,7 @@ def process_lit_turn(before, state, actions=None, narrative="", elapsed_minutes=
     else:
         notes = []
     if inventory_result["removed_materials"]:
-        notes.append("MATERIALS — routine ingredients and components were handled narratively and kept out of the Bag.")
+        notes.append("[MATERIALS]\nRoutine ingredients and components were handled narratively and kept out of the Bag.")
     if inventory_result["memorable_items"]:
-        notes.append("BAG UPDATED — " + ", ".join(inventory_result["memorable_items"][:6]))
+        notes.append("[Bag updated]\n" + ", ".join(inventory_result["memorable_items"][:6]))
     return notes

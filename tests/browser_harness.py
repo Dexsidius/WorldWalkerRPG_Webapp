@@ -20,6 +20,7 @@ class BrowserNarrator:
         state = payload.get("state") or payload.get("state_before") or {}
         world = state.get("world", "the world")
         name = state.get("name", "the traveler")
+        archetype = str((state.get("special") or {}).get("Archetype") or "")
         if task == "advisor_question":
             return {
                 "summary": f"Your strongest immediate option in {world} is to follow the established lead while preserving enough resources for the next canon pressure point.",
@@ -42,8 +43,12 @@ class BrowserNarrator:
                     ["Ask about the division assignments", "Practice Hado #4 with the instructor", "Speak to a seated officer about squad life"],
                 ),
                 "Overgeared": (
-                    f"Hammer blows ring through Winston's smithy district as {name} studies a commission Khan cannot finish alone. The client needs a durable blade before dusk, and the design leaves room for one meaningful improvement.",
-                    ["Study the commission requirements", "Ask Khan which failure ruined the last attempt", "Forge a careful prototype"],
+                    (f"A contract sigil glows in Winston's adventurers' hall as {name} and Lumen Wisp face their first live formation test. A scout needs a summoned partner to trace a monster route without alarming the market district."
+                     if archetype == "Summoner" else
+                     f"A new notice appears in Winston's adventurers' hall as {name} finds an opportunity suited to the {archetype or 'adventurer'} class. The request rewards the class's actual contribution rather than forcing a production route."),
+                    (["Train a moving formation with Lumen Wisp", "Ask the scout what spoor the summon must follow", "Accept the tracking contract"]
+                     if archetype == "Summoner" else
+                     ["Study the class-suited request", "Ask the client what went wrong before", "Prepare the class's strongest approach"]),
                 ),
                 "Solo Max-Level Newbie": (
                     f"The Tower's first-floor gate ignites above Seoul as {name} recognizes a hidden-condition marker no ordinary climber notices. A frightened beginner group gathers nearby while the public countdown continues.",
@@ -106,15 +111,26 @@ class BrowserNarrator:
                          "locations": [state.get("location", "Shin'o Academy")], "risks": ["A poor demonstration narrows choices"]}
                 suggestions = ["Demonstrate Kido control", "Interview a division representative", "Ask an instructor for a recommendation"]
             elif world == "Overgeared":
-                quest = {"name": "Khan's Precision Commission", "status": "Active", "category": "main",
-                         "explanation": "A paying client needs a reusable, high-quality blade produced before dusk.",
-                         "giver": "Khan", "first_step": "Inspect the design and select a forging method",
-                         "current_knowledge": ["The previous attempt cracked during quenching"],
-                         "clear_conditions": ["Forge a qualifying blade", "Deliver it before the deadline"],
-                         "objectives": [{"id": "forge", "text": "Forge the blade", "status": "active", "progress": 20}],
-                         "branch_state": {"current": "production", "available": ["Safe method", "Experimental method"], "locked": []},
-                         "locations": [state.get("location", "Winston")], "risks": ["Material loss"]}
-                suggestions = ["Forge the commission carefully", "Test the quenching temperature", "Ask Khan to inspect the prototype"]
+                if archetype == "Summoner":
+                    quest = {"name": "The Market-Route Trace", "status": "Active", "category": "main",
+                             "explanation": "A scout needs Lumen Wisp to trace a monster route without panicking Winston's crowded market.",
+                             "giver": "Winston scout", "first_step": "Establish a controlled search formation with Lumen Wisp",
+                             "current_knowledge": ["The spoor crosses a crowded route and requires a calm contracted creature"],
+                             "clear_conditions": ["Trace the monster route", "Keep Lumen Wisp under safe field control"],
+                             "objectives": [{"id": "trace", "text": "Trace the route with Lumen Wisp", "status": "active", "progress": 20}],
+                             "branch_state": {"current": "contract", "available": ["Wide search", "Close formation"], "locked": []},
+                             "locations": [state.get("location", "Winston")], "risks": ["Crowds can disrupt the contract link"]}
+                    suggestions = ["Run a close formation with Lumen Wisp", "Ask the scout to mark the last confirmed spoor", "Use Contract Command to search without alarming civilians"]
+                else:
+                    quest = {"name": f"A {archetype or 'Class'} Opportunity", "status": "Active", "category": "main",
+                             "explanation": f"A Winston client has posted work suited to a {archetype or 'new adventurer'} rather than a production specialist.",
+                             "giver": "Winston adventurers' hall", "first_step": "Review the request and choose a class-suited approach",
+                             "current_knowledge": ["The request recognizes non-production contributions"],
+                             "clear_conditions": ["Complete the request through the chosen class role"],
+                             "objectives": [{"id": "role", "text": "Contribute through the selected class", "status": "active", "progress": 20}],
+                             "branch_state": {"current": "role", "available": ["Direct approach", "Prepared approach"], "locked": []},
+                             "locations": [state.get("location", "Winston")], "risks": ["A rival party is interested"]}
+                    suggestions = ["Use a class feature on the request", "Ask the client for the missing detail", "Coordinate with a suitable party member"]
             elif world == "Solo Max-Level Newbie":
                 quest = {"name": "Clear the First-Floor Trial", "status": "Active", "category": "main",
                          "explanation": "The Tower countdown has begun, and the first trial contains a discoverable hidden condition.",
@@ -138,7 +154,8 @@ class BrowserNarrator:
                 suggestions = ["Inspect the courier boat before the tide changes", "Ask the navigator to chart the attack route", "Question harbor witnesses about the rival vessel"]
             earned_events = []
             if world == "Overgeared":
-                earned_events = [{"type": "title", "title": "Patient Artisan", "message": "Title acquired: Patient Artisan"}]
+                title = "Contract Formation Novice" if archetype == "Summoner" else f"Recognized {archetype or 'Adventurer'}"
+                earned_events = [{"type": "title", "title": title, "message": f"Title acquired: {title}"}]
             elif world == "Solo Max-Level Newbie":
                 earned_events = [{"type": "title", "title": "Hidden-Route Analyst", "message": "Title acquired: Hidden-Route Analyst"}]
             return {"narrative": "The ordered plan produces several distinct developments and ends at a clear decision point.",

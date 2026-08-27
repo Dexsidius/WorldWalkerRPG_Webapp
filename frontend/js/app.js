@@ -321,10 +321,10 @@ function clearTransientFeedback() {
   $("#toast-stack").replaceChildren();
 }
 
-function showCinematic(type, message) {
+function showCinematic(type, message, worldSystem = "world") {
   const banner = $("#cinematic-banner");
   const icon = CINEMATIC_ICON[type] || "★";
-  banner.innerHTML = `<div class="banner-card ${type === "danger" || type === "damage" ? "danger" : type === "achievement" ? "achievement" : type === "canon_event" ? "canon-event" : ""}"><span class="banner-icon">${icon}</span><span>${escapeHtml(message)}</span></div>`;
+  banner.innerHTML = `<div class="banner-card ${type === "danger" || type === "damage" ? "danger" : type === "achievement" ? "achievement" : type === "canon_event" ? "canon-event" : ""} ${worldSystem === "satisfy" ? "satisfy-system" : worldSystem === "tower" ? "tower-system" : ""}"><span class="banner-icon">${icon}</span><span>${escapeHtml(message)}</span></div>`;
   banner.classList.add("show");
   clearTimeout(banner._t);
   clearTimeout(banner._clearT);
@@ -352,13 +352,14 @@ function shakeApp() {
 
 function handleNotifications(notifications) {
   (notifications || []).forEach((n) => {
+    const shownMessage = n.display_message || n.message;
     // Reserve the large cinematic interruption for genuinely major changes.
     // Routine stat, XP, and quest updates remain readable in the Chronicle.
     const majorCinematics = new Set(["level_up", "position", "danger", "damage", "achievement", "canon_event"]);
     const toastCinematics = new Set([...majorCinematics, "notify"]);
-    if (toastCinematics.has(n.cinematic)) showToast(n.message, n.cinematic || n.tag);
+    if (toastCinematics.has(n.cinematic)) showToast(shownMessage, n.cinematic || n.tag);
     if (majorCinematics.has(n.cinematic)) {
-      showCinematic(n.cinematic, n.message);
+      showCinematic(n.cinematic, shownMessage, n.world_system);
       if (n.cinematic === "level_up") playSfx("level_up");
       else if (n.cinematic === "position") playSfx("level_up");
       else if (n.cinematic === "achievement") playSfx("achievement");
@@ -908,10 +909,10 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
     const hidden = (floor.hidden_conditions || []).map((entry) => `${entry.discovered ? "Known" : "Hidden"}: ${entry.discovered ? entry.name : "Unidentified condition"}${entry.completed ? " · Complete" : ""}`);
     const rivals = (sys.rivals || []).map((r) => `${r.name}: Floor ${r.floor}, Level ${r.level} — ${r.current_goal}`);
     const reports = (sys.floor_history || []).slice(-3).reverse();
-    return `<section class="world-system-grid system-window-grid">${card("CURRENT SCENARIO", floor.name || `Floor ${p.floor ?? special.Floor ?? 1}`, [["Clear condition",floor.clear_condition],["Environment rule",floor.environment_rule],["Recommended power",floor.recommended_power],["Administrator",floor.administrator?.name],["Hidden routes",hidden]], "solo-system")}${card("ABILITY COPY", `${copied.reduce((n,e)=>n+Number(e?.slot_cost || 1),0)} / ${p.copy_capacity || 1} slots`, [["Copied abilities",copyRows],["Tracked attempts",sys.copy_attempts?.length || 0]], "solo-system")}</section><details class="lit-system-section"><summary>Foreknowledge, rivals, artifacts, and party roles</summary><div class="lit-system-body">${card("FOREKNOWLEDGE", `${sys.foreknowledge?.remembered?.length || 0} remembered`, [["Confirmed",sys.foreknowledge?.confirmed?.length || 0],["Changed",sys.foreknowledge?.changed?.length || 0],["Suspected conditions",sys.foreknowledge?.suspected_hidden_conditions?.length || 0],["Spent exploits",sys.foreknowledge?.spent_exploits?.length || 0]], "solo-system")}${card("RIVAL PROGRESS", `${rivals.length} tracked`, [["Current positions",rivals]], "solo-system")}${card("ARTIFACTS", `${sys.artifact_index?.length || 0} indexed`, [["Known artifacts",(sys.artifact_index || []).map(a=>`${a.name} (${a.grade}) — ${textList(a.main_effect).join(", ")}`)]], "solo-system")}${card("PARTY ROLES", `${sys.party_roles?.length || 0} assigned`, [["Contributions",(sys.party_roles || []).map(x=>`${x.name}: ${x.role}`)]], "solo-system")}</div></details>${reports.length ? `<details class="lit-system-section"><summary>Recent floor reports</summary>${namedRows(reports.map(r=>({name:`Floor ${r.floor}`,objective:r.main_objective,hidden_completed:r.hidden_completed,hidden_missed:r.hidden_missed,xp_gained:r.xp_gained,levels_gained:r.levels_gained,items:r.items})))}</details>` : ""}`;
+    return `<section class="world-system-grid system-window-grid">${card("SYSTEM STATUS", `LEVEL ${data.level || 1}`, [["Experience",`${data.xp || 0} / ${data.xp_next || 100} XP`],["Floor",p.floor ?? special.Floor ?? 1],["Unspent points",p.unspent_stat_points || 0]], "solo-system")}${card("CURRENT SCENARIO", floor.name || `Floor ${p.floor ?? special.Floor ?? 1}`, [["Clear condition",floor.clear_condition],["Environment rule",floor.environment_rule],["Recommended power",floor.recommended_power],["Administrator",floor.administrator?.name],["Hidden routes",hidden]], "solo-system")}${card("ABILITY COPY", `${copied.reduce((n,e)=>n+Number(e?.slot_cost || 1),0)} / ${p.copy_capacity || 1} slots`, [["Copied abilities",copyRows],["Tracked attempts",sys.copy_attempts?.length || 0]], "solo-system")}</section><details class="lit-system-section"><summary>Foreknowledge, rivals, artifacts, and party roles</summary><div class="lit-system-body">${card("FOREKNOWLEDGE", `${sys.foreknowledge?.remembered?.length || 0} remembered`, [["Confirmed",sys.foreknowledge?.confirmed?.length || 0],["Changed",sys.foreknowledge?.changed?.length || 0],["Suspected conditions",sys.foreknowledge?.suspected_hidden_conditions?.length || 0],["Spent exploits",sys.foreknowledge?.spent_exploits?.length || 0]], "solo-system")}${card("RIVAL PROGRESS", `${rivals.length} tracked`, [["Current positions",rivals]], "solo-system")}${card("ARTIFACTS", `${sys.artifact_index?.length || 0} indexed`, [["Known artifacts",(sys.artifact_index || []).map(a=>`${a.name} (${a.grade}) — ${textList(a.main_effect).join(", ")}`)]], "solo-system")}${card("PARTY ROLES", `${sys.party_roles?.length || 0} assigned`, [["Contributions",(sys.party_roles || []).map(x=>`${x.name}: ${x.role}`)]], "solo-system")}</div></details>${reports.length ? `<details class="lit-system-section"><summary>Recent floor reports</summary>${namedRows(reports.map(r=>({name:`Floor ${r.floor}`,objective:r.main_objective,hidden_completed:r.hidden_completed,hidden_missed:r.hidden_missed,xp_gained:r.xp_gained,levels_gained:r.levels_gained,items:r.items})))}</details>` : ""}`;
   }
   if (world === "Overgeared") {
-    const p = special["Satisfy Profile"] || {}, sys = data.overgeared_system || {};
+    const p = special["Satisfy Profile"] || {}, sys = data.overgeared_system || {}, encyclopedia = data.class_encyclopedia || {};
     const paths = Object.entries(sys.production_paths || {}).map(([name,row]) => `${name}: ${row.mastery || 0} mastery (${row.rank || "Beginner"})`);
     const affinities = Object.entries(sys.npc_affinity || {}).map(([name,row]) => `${name}: ${row.score ?? 0} (${row.tier || "Unknown"})`);
     const rankings = Object.entries(sys.rankings || {}).map(([name,row]) => `${name}: ${row.band || "Unranked"} · ${row.score || 0}`);
@@ -921,7 +922,10 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
     const hasProduction = paths.length > 0 || Number(p.crafting_mastery || 0) > 0 || orders.length > 0;
     const productionCard = hasProduction ? card("PRODUCTION PATHS", `${p.crafting_mastery ?? 0} peak mastery`, [["Separate disciplines",paths],["Specialties",p.production_specialties],["Known recipes",p.known_recipes]], "overgeared-system") : "";
     const ordersCard = hasProduction ? card("CRAFTING ORDERS", `${orders.length} tracked`, [["Orders",orders],["Reminder","Materials and routine output remain in the Chronicle; only memorable reusable products enter the Bag."]], "overgeared-system") : "";
-    return `<section class="world-system-grid">${card("SATISFY CLASS", p.primary_class || special.Class, [["Type",p.class_type || classProgress.class_type],["Rarity",p.class_rarity],["Secondary class",p.secondary_class],["Class stage",`${classProgress.stage || "Foundation"} · ${classProgress.stage_progress || 0}%`],["Next unlock",classProgress.next_unlock],["Guild",p.guild]], "overgeared-system")}${card("ROLE DEVELOPMENT", `${role.aligned_actions || 0} class-aligned actions`, [["Class features",p.class_features],["Specializations",p.specializations],["Advancement",p.advancement],["Major achievements",role.major_achievements]], "overgeared-system")}${productionCard}</section>${renderClassCard(classProfile)}<details class="lit-system-section"><summary>Relationships, guild, territory, economy, and rankings</summary><div class="lit-system-body">${card("NPC AFFINITY", `${affinities.length} tracked`, [["Relationships",affinities]], "overgeared-system")}${card("GUILD & TERRITORY", sys.guild?.name || "Independent", [["Guild rank",sys.guild?.rank],["Guild resources",sys.guild?.resources],["Controlled territory",sys.territory?.controlled],["Morale",sys.territory?.morale],["Projects",sys.territory?.projects]], "overgeared-system")}${ordersCard}${card("ECONOMY & RANKINGS", `${sys.economy?.personal_gold ?? 0} personal Gold`, [["This turn",`${Number(sys.economy?.change_this_turn || 0) >= 0 ? "+" : ""}${sys.economy?.change_this_turn || 0} Gold`],["Guild funds",sys.economy?.guild_funds],["Territory revenue",sys.economy?.territory_revenue],["Public standings",rankings]], "overgeared-system")}</div></details>`;
+    const contracts = Object.values(sys.companion_contracts || {}).map(c => `${c.name}: Lv.${c.level || 1} · ${c.condition || "Stable"} · loyalty ${c.loyalty ?? 0}`);
+    const families = (encyclopedia.families || []).map(f => `<details class="class-reference-row"><summary>${escapeHtml(f.name)}</summary><p>${escapeHtml(f.description)}</p><small>${escapeHtml((f.examples || []).join(", ") || "Original and hybrid paths")}</small></details>`).join("");
+    const encyclopediaPanel = `<details class="lit-system-section"><summary>Class encyclopedia · ${encyclopedia.canon_name_count || 0} canon precedents</summary><div class="lit-system-body"><p class="hint">${escapeHtml(encyclopedia.note || "Classes develop through play.")}</p>${families}</div></details>`;
+    return `<section class="world-system-grid">${card("SATISFY STATUS", `LEVEL ${data.level || 1}`, [["Experience",`${data.xp || 0} / ${data.xp_next || 100} XP`],["Class",p.primary_class || special.Class],["Class stage",`${classProgress.stage || "Foundation"} · ${classProgress.stage_progress || 0}%`]], "overgeared-system")}${card("SATISFY CLASS", p.primary_class || special.Class, [["Type",p.class_type || classProgress.class_type],["Rarity",p.class_rarity],["Secondary class",p.secondary_class],["Next unlock",classProgress.next_unlock],["Guild",p.guild]], "overgeared-system")}${card("ROLE DEVELOPMENT", `${role.aligned_actions || 0} class-aligned actions`, [["Class features",p.class_features],["Specializations",p.specializations],["Advancement",p.advancement],["Major achievements",role.major_achievements]], "overgeared-system")}${contracts.length ? card("CONTRACTED COMPANIONS", `${contracts.length} active`, [["Contracts",contracts]], "overgeared-system") : ""}${productionCard}</section>${renderClassCard(classProfile)}${encyclopediaPanel}<details class="lit-system-section"><summary>Relationships, guild, territory, economy, and rankings</summary><div class="lit-system-body">${card("NPC AFFINITY", `${affinities.length} tracked`, [["Relationships",affinities]], "overgeared-system")}${card("GUILD & TERRITORY", sys.guild?.name || "Independent", [["Guild rank",sys.guild?.rank],["Guild resources",sys.guild?.resources],["Controlled territory",sys.territory?.controlled],["Morale",sys.territory?.morale],["Projects",sys.territory?.projects]], "overgeared-system")}${ordersCard}${card("ECONOMY & RANKINGS", `${sys.economy?.personal_gold ?? 0} personal Gold`, [["This turn",`${Number(sys.economy?.change_this_turn || 0) >= 0 ? "+" : ""}${sys.economy?.change_this_turn || 0} Gold`],["Guild funds",sys.economy?.guild_funds],["Territory revenue",sys.economy?.territory_revenue],["Public standings",rankings]], "overgeared-system")}</div></details>`;
   }
   if (world === "Reincarnated as a Slime") {
     const p = special["Evolution Profile"] || {};
@@ -4225,6 +4229,22 @@ $("#btn-detect-models").addEventListener("click", async () => {
   } catch (e) { $("#detect-status").textContent = "NOT CONNECTED"; showToast(e.message, "danger"); }
 });
 
+async function testAiConnection(provider) {
+  $("#detect-status").textContent = "Testing the selected AI...";
+  const result = await apiPost("/api/settings/test_ai", {
+    provider,
+    base_url: $("#st-base-url").value.trim(), token: $("#st-token").value.trim(),
+    api_key: $("#st-api-key").value.trim(), model: $("#st-main-model").value.trim(),
+  });
+  $("#detect-status").textContent = `VERIFIED — ${result.model} is available.`;
+  return result;
+}
+
+$("#btn-test-ai").addEventListener("click", async () => {
+  try { await testAiConnection(($$('input[name="provider"]:checked')[0] || {}).value || "local"); }
+  catch (error) { $("#detect-status").textContent = "INVALID CONNECTION"; showToast(error.message, "danger"); }
+});
+
 $("#btn-save-settings").addEventListener("click", async () => {
   const provider = $$('input[name="provider"]:checked')[0].value;
   const patch = {
@@ -4253,6 +4273,14 @@ $("#btn-save-settings").addEventListener("click", async () => {
   };
   if ($("#st-api-key").value.trim()) patch.api_key = $("#st-api-key").value.trim();
   await apiPost("/api/settings", patch);
+  try {
+    await testAiConnection(provider);
+  } catch (error) {
+    $("#detect-status").textContent = "SAVED, BUT AI COULD NOT BE VERIFIED";
+    $("#hdr-ai").textContent = "AI: CONNECTION INVALID";
+    showToast(error.message, "danger");
+    return;
+  }
   APP.soundEnabled = patch.sound_enabled;
   if (!APP.soundEnabled) stopWorldCue();
   APP.musicEnabled = patch.music_enabled;
@@ -4367,7 +4395,13 @@ $("#btn-preset-premium").addEventListener("click", () => applyModelPreset("premi
 
 async function refreshHeaderAiStatus() {
   const st = await apiGet("/api/state");
-  $("#hdr-ai").textContent = st.ai_ready ? "AI: READY" : "AI: MODEL NOT SELECTED";
+  $("#hdr-ai").textContent = aiStatusLabel(st);
+}
+
+function aiStatusLabel(st) {
+  if (st.ai_ready) return "AI: READY";
+  if (st.ai_connection_status === "invalid") return "AI: CONNECTION INVALID";
+  return st.ai_connection_status === "untested" ? "AI: READY TO TEST" : "AI: MODEL NOT SELECTED";
 }
 
 // ---------------------------------------------------------------------------
@@ -4662,7 +4696,7 @@ async function finishGameBoot() {
   APP.animationsEnabled = !!settings.animations_enabled;
   APP.campaignActive = st.campaign_active;
   renderState(st.state);
-  $("#hdr-ai").textContent = st.ai_ready ? "AI: READY" : "AI: READY TO TEST";
+  $("#hdr-ai").textContent = aiStatusLabel(st);
   if (st.campaign_active) {
     $("#story-feed").innerHTML = "";
     const multiplayerState = st.state?._multiplayer;
