@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.22.0"
+APP_VERSION = "3.23.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1495,7 +1495,16 @@ BASE_STATE = {
     # creation; the GM keeps it updated as membership actually changes.
     "faction_rosters":{},
     "jjk_system":{},
-    "known_recipes":[],"training_log":[],"combat":{},"danger_scenario":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"overgeared_system":{},"solo_system":{},"world_depth":{},"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":18,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
+    "known_recipes":[],"training_log":[],"combat":{},"danger_scenario":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"overgeared_system":{},"solo_system":{},"world_depth":{},"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],
+    # A regularly-recurring income or expense (a job, a shop's take, rent,
+    # staff wages, a stipend) the GM has established — see
+    # process_recurring_finances() in engine_time.py, which pays these out
+    # automatically as canon_day advances instead of relying on the AI to
+    # remember and manually re-apply a lump sum every time it recurs.
+    # {label, kind:"income"|"expense", amount (positive), interval_days,
+    #  next_due_day (canon_day), active, notes} — see task_rules() for the
+    # GM-facing schema.
+    "recurring_finances":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":19,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
     # memory_updates is a transient GM suggestion; reliability.py folds it
     # into the app-owned, deduplicated long-term narrative memory.
     "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]},

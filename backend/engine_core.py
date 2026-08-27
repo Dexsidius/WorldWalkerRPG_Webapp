@@ -788,12 +788,27 @@ Return ONLY valid JSON. No markdown fences."""
         """
         purpose = str(purpose or "moment")
         wd = WORLD_DATA[self.state["world"]]
+        ex = expansion_for(self.state["world"])
         difficulty = DIFFICULTIES[self.state["difficulty"]]
         tuning = normalize_tuning(self.state)
         profile = progression_preset_for(self.state.get("world"))
         mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "") + NARRATIVE_CRAFTING_RULE + world_depth_rules(self.state)
         narration = self.settings.get("narration", "Concise")
         agency_rules = self.player_agency_rules()
+        if self.state["world"] == "Bleach":
+            finance_rule = "- Bleach currency remains narrative-only: never write currency, currencies, recurring_finances, or purchase_offer into state_patch."
+        elif not ex.get("tracks_currency", True):
+            finance_rule = "- This world does not track a numeric currency: never write currency, currencies, or recurring_finances into state_patch."
+        else:
+            finance_rule = (
+                "- A REPEATING income or expense the player establishes (a job, a shop's regular take, rent, staff wages, a stipend, tribute, upkeep) "
+                "must be recorded as a state_patch.recurring_finances entry: {label, kind:\"income\"|\"expense\", amount (positive number), "
+                "interval_days (e.g. 7 for weekly, 30 for monthly), next_due_day (integer canon_day it next pays), active:true, notes}. "
+                "The application pays it automatically every interval once registered — do NOT manually re-add or re-subtract the lump sum in "
+                "currency yourself when it recurs, and do not let an established source silently vanish from memory; when circumstances change, "
+                "update its amount/interval or set active:false explicitly. Always include the full current list when updating this field, the same as other list fields. "
+                "A one-off purchase or payment (not repeating) still just changes currency.amount directly, as always."
+            )
         shared = f"""You are the authoritative Game Master for a persistent Worldwalker RPG campaign.
 WORLD: {self.state['world']}
 WORLD RULES: {wd['rules']}
@@ -818,6 +833,7 @@ AUTHORITATIVE CORE
 - Focused training produces noticeable gains proportional to actual time, intensity, teachers, resources, recovery and aptitude. Only a tier leap needs a roll. Use XP/levels only when the supplied state says this world uses them.
 - mechanical_power_profile is the authoritative translation of the player's CURRENT stats. It outranks starting_power_band, old position/rank labels, stock-canon strength for the player character, and arithmetic-average guesses. Compare peak offense, speed, defense and balanced combat separately; never call a heavily trained canon-character player weak merely because their original canon version was weaker.
 - State changes must match prose: wounds change HP, resource use changes the correct pool, purchases change money/inventory, completed objectives change quests, travel changes location, and learned skills include a clear effect, limitation/cost and growth path.
+{finance_rule}
 - Every authored skill must use the shared taxonomy when its function is known: category (offense|defense|healing|support|control|mobility|detection|stealth|summon|transformation|crafting|knowledge|social|utility), combat_usable (boolean), effect_type (damage|heal|buff|debuff|shield|cleanse|control|summon|movement|detect|stealth|transform|utility), target_type (enemy|enemies|self|ally|allies|area|environment), and duration_rounds for lasting effects. Optional status_effect is a short player-facing condition name. Profession, knowledge, navigation and crafting skills are combat_usable=false unless they have a specific combat application.
 - An enemy whose normal hit inflicts a condition may define attack_effect with type control or debuff, a condition name, duration_rounds, and potency_pct; the application enforces it locally.
 - An initiated attack or unavoidable incoming attack begins structured combat immediately. Do not insert an extra negotiation/event-chat gate once violence is committed. A previously accepted danger scenario does not warn again unless the new action itself could kill the player.

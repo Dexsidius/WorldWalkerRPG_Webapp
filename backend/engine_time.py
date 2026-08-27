@@ -1515,9 +1515,62 @@ class TimeSkipMixin:
                 pending_appends.append({"text": "[SCHEDULED EVENT]\n" + detail, "tag": "system", "canon_day": day,
                                          "major": True, "event_title": sched.get("title", "")})
         self.state["canon_events_fired"] = fired
+        pending_appends.extend(self._pay_recurring_finances(after_minutes))
         if any(p["major"] for p in pending_appends):
             self.state["active_canon_event"] = next(p["event_title"] for p in pending_appends if p["major"])
         return pending_appends
+
+    def _pay_recurring_finances(self, after_minutes):
+        """Mechanical backstop for GM-established recurring income/expenses
+        (a job, a shop's take, rent, staff wages, a stipend): pays each one
+        out automatically as canon_day crosses its next_due_day, the same
+        catch-up-safe pattern as the scheduled_events backstop above, so an
+        established source is never silently lost to context drift over a
+        long campaign and never needs the AI to remember to re-apply it."""
+        world = self.state.get("world", "Custom World")
+        if world == "Bleach" or not expansion_for(world).get("tracks_currency", True):
+            return []
+        entries = self.state.get("recurring_finances")
+        if not isinstance(entries, list) or not entries:
+            return []
+        currency = self.state.setdefault("currency", {"name": "Currency", "amount": 0})
+        anchor_day = self.state.get("calendar_anchor_day")
+        appends = []
+        for entry in entries:
+            if not isinstance(entry, dict) or entry.get("active") is False:
+                continue
+            try:
+                interval = max(1, int(entry.get("interval_days", 30)))
+                next_due = int(entry["next_due_day"])
+                amount = abs(float(entry.get("amount", 0)))
+            except (TypeError, ValueError, KeyError):
+                continue
+            if not amount:
+                continue
+            sign = -1 if str(entry.get("kind", "income")).lower() == "expense" else 1
+            paid_cycles = 0
+            total = 0.0
+            # Capped so a save with a stale/misconfigured entry (or a
+            # multi-year time skip) can't spin here indefinitely.
+            while (next_due * 1440 + 480) <= after_minutes and paid_cycles < 240:
+                total += amount
+                next_due += interval
+                paid_cycles += 1
+            if not paid_cycles:
+                continue
+            currency["amount"] = currency.get("amount", 0) + sign * total
+            entry["next_due_day"] = next_due
+            entry["last_paid_day"] = next_due - interval
+            label = str(entry.get("label") or ("Recurring income" if sign > 0 else "Recurring expense"))
+            date_str = format_calendar_date(world, entry["last_paid_day"], self.state.get("calendar_epoch"), anchor_day)
+            verb = "paid out" if sign > 0 else "came due"
+            cycle_note = f" (x{paid_cycles} cycles)" if paid_cycles > 1 else ""
+            detail = f"{date_str} — {label}: {sign * total:+g} {currency.get('name', 'Currency')}{cycle_note}"
+            appends.append({
+                "text": "[FINANCES]\n" + detail, "tag": "system", "canon_day": entry["last_paid_day"],
+                "major": False, "event_title": "",
+            })
+        return appends
 
     def request_continuity_correction(self, new_warnings, narrative):
         """Continuity warnings used to just sit in the Journal for the player

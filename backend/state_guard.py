@@ -189,7 +189,7 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
         if key not in BASE_STATE:
             rejected.append({"field": key, "reason": "unknown state field"})
             continue
-        if before.get("world") == "Bleach" and key in {"currency", "currencies", "purchase_offer"}:
+        if before.get("world") == "Bleach" and key in {"currency", "currencies", "purchase_offer", "recurring_finances"}:
             rejected.append({"field": key, "reason": "Bleach treats currency as narrative context rather than tracked state"})
             continue
         if key in APP_OWNED or (key in TIME_OWNED and not allow_time):
