@@ -804,10 +804,13 @@ Return ONLY valid JSON. No markdown fences."""
                 "- A REPEATING income or expense the player establishes (a job, a shop's regular take, rent, staff wages, a stipend, tribute, upkeep) "
                 "must be recorded as a state_patch.recurring_finances entry: {label, kind:\"income\"|\"expense\", amount (positive number), "
                 "interval_days (e.g. 7 for weekly, 30 for monthly), next_due_day (integer canon_day it next pays), active:true, notes}. "
-                "The application pays it automatically every interval once registered — do NOT manually re-add or re-subtract the lump sum in "
-                "currency yourself when it recurs, and do not let an established source silently vanish from memory; when circumstances change, "
-                "update its amount/interval or set active:false explicitly. Always include the full current list when updating this field, the same as other list fields. "
-                "A one-off purchase or payment (not repeating) still just changes currency.amount directly, as always."
+                "The application pays it automatically every interval once registered and it stays active indefinitely — do NOT manually re-add or "
+                "re-subtract the lump sum in currency yourself when it recurs. It keeps paying until its actual in-fiction source is genuinely gone "
+                "(the job ends, the shop closes, the contract is broken) — never let a real narrative event silently stop a payment without you setting "
+                "active:false that same turn, and never let it drift out of memory on its own. The application preserves each entry by its exact label "
+                "across turns even if you only mention some of them, so you do not need to re-list every unrelated existing entry just to add or touch "
+                "one — but keep using the SAME label for a given source every time you reference it, so it's recognized as the same entry rather than "
+                "a duplicate. A one-off purchase or payment (not repeating) still just changes currency.amount directly, as always."
             )
         shared = f"""You are the authoritative Game Master for a persistent Worldwalker RPG campaign.
 WORLD: {self.state['world']}
@@ -846,6 +849,19 @@ AUTHORITATIVE CORE
 - End with exactly three optional, current, state-grounded suggestions written as concrete verb + specific known target + purpose. Never suggest traveling to the current location, contacting an unknown person, or continuing an encounter that has ended.
 - Return one valid JSON object. Omit empty optional fields and empty arrays/objects instead of echoing the entire schema. Never write application-owned ledgers or diagnostics in state_patch.{self._scale_lock_rule()}
 """
+        faction_trade_rule = (
+            "- faction_clocks and npc_clocks support optional fields — opponent (a rival faction/NPC), ally, power (1-100, rough current strength), "
+            "and contested_location (a real place actually at stake). Once a clock with an opponent reaches its turning point, the application "
+            "resolves a real strength-weighted outcome automatically — territory can change hands, and a side that loses badly enough is genuinely "
+            "destroyed or lost — independent of whether the player is present. Only set these fields when the stake is meant to be real; a conflict "
+            "the player experiences directly belongs in normal narrative/combat instead. This applies to trade disputes and blockades exactly like "
+            "open conflict — a rival power actually contesting a trade route, port, or supply line is a real opponent/contested_location claim.\n"
+            "- Tolls, blockades, secured or cut trade routes, and who actually supplies a settlement have real narrative weight — reflect it "
+            "concretely in prices, scarcity, and the population's day-to-day situation, not as flavor text alone. A settlement that just suffered a "
+            "major disaster, or is currently cut off from resources, should visibly struggle: its government is more likely to act to secure "
+            "supplies (negotiate, pressure whoever is blockading it, seek an alternate source, or crack down), and its people's sentiment/standing "
+            "shifts toward whoever is actually providing for them, not merely whoever claims to."
+        )
         modules = {
             "opening": """
 OPENING JOB
@@ -882,6 +898,12 @@ COMBAT-SUMMARY JOB
 - Apply only direct aftermath such as injuries, loot, XP where canonical, quest consequences, contacts and immediate reactions. Keep the recap concise and provide next actions for the post-combat situation, never for the finished fight.
 """,
         }
+        # Faction/trade guidance only pays for itself on tasks where the
+        # player is actively taking actions or time is moving (moment,
+        # time_skip) — combat_summary and opening stay lean on purpose (see
+        # test_task_prompts_are_smaller_than_the_legacy_everything_prompt).
+        modules["moment"] += "\n" + faction_trade_rule + "\n"
+        modules["time_skip"] += "\n" + faction_trade_rule + "\n"
         return shared + modules.get(purpose, modules["moment"])
 
     def task_context(self, purpose="moment", query=""):

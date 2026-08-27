@@ -220,6 +220,34 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
                 seen.add(label.lower())
                 preserved.append(copy.deepcopy(title))
             value = preserved[-200:]
+        elif key in {"recurring_finances", "scheduled_events"}:
+            # The GM is told to "always include the full current list" when
+            # touching one of these entries -- but a real user report showed
+            # that convention is fragile: mentioning income again for an
+            # unrelated reason and imperfectly recalling every prior entry
+            # silently deleted the omitted ones, causing an established
+            # income to just stop with no in-fiction cause. Match incoming
+            # entries to existing ones by label and merge instead of
+            # replacing wholesale, so an entry the GM's patch doesn't
+            # mention this turn is preserved rather than erased. The only
+            # way an entry actually goes away is the GM explicitly marking
+            # it (active:false / resolved:true) or a player correction.
+            def _label(entry):
+                return str((entry or {}).get("label") or (entry or {}).get("title") or "").strip().lower()
+            existing = before.get(key) if isinstance(before.get(key), list) else []
+            existing_by_label = {_label(e): e for e in existing if isinstance(e, dict) and _label(e)}
+            merged, seen = [], set()
+            for entry in value:
+                if not isinstance(entry, dict):
+                    continue
+                label = _label(entry)
+                if label:
+                    seen.add(label)
+                merged.append(entry)
+            for label, old_entry in existing_by_label.items():
+                if label not in seen:
+                    merged.append(old_entry)
+            value = merged[:500]
         elif isinstance(value, list):
             value = value[:500]
         safe[key] = copy.deepcopy(value)
