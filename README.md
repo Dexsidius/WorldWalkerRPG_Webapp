@@ -1,12 +1,23 @@
 # Worldwalker RPG — Web/Desktop Rebuild
 
 A from-scratch UI rebuild of Worldwalker RPG on top of the original game engine
-logic. Same local-AI-driven, freeform text RPG across eight settings (One Piece,
-Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Slime, Bleach, Custom World) —
+logic. Same local-AI-driven, freeform text RPG across nine settings (One Piece,
+Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Slime, Bleach, Jujutsu Kaisen, Custom World) —
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.21.1** (schema 17).
+Current app/save version: **3.22.0** (schema 18).
+
+Version 3.22 adds a complete Jujutsu Kaisen world with Tokyo and Kyoto school
+starts for all three years, independent curse users, great-clan members,
+sentient cursed spirits, four eras, and playable Yuji, Gojo, Yuta, Megumi, and
+Maki starts. Original characters receive exactly one generated birth slot—an
+Innate Cursed Technique or Heavenly Restriction—with an optional strong-power
+guarantee, technique-derived applications, curse grades and feeding growth,
+and a Black Flash screen effect. It also adds bespoke JJK scenes, a world map,
+theme styling, portrait direction, lore sources, and progression rules. Bleach
+saves with an achieved release now recover a missing Zanpakutō name from their
+release profile or learned Shikai skill.
 
 Version 3.21.1 lets original Bleach characters preview and reroll a complete,
 coherent Zanpakutō concept before confirming the campaign. Previewing dormant

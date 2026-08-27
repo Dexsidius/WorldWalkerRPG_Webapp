@@ -23,6 +23,8 @@ from world_depth import normalize_world_depth
 from lit_systems import initialize_lit_systems
 from skill_system import infer_skill_metadata
 from overgeared_classes import canon_class_prompt_reference, infer_class_type, starter_kit_for
+from jjk_system import (apply_birth_slot, generate_birth_slot, generate_curse_identity,
+                        initialize_jjk_state, is_curse_origin, normalized_grade)
 
 
 DEFAULT_SETTINGS = {
@@ -54,6 +56,7 @@ WORLD_STARTER_GEAR = {
     "Overgeared": "Beginner equipment appropriate to the chosen Satisfy class",
     "Reincarnated as a Slime": "Species-appropriate natural weapon or focus",
     "Bleach": "Unnamed Asauchi, academy uniform, soul pager and basic field kit",
+    "Jujutsu Kaisen": "School uniform or practical street clothes, protective talismans and an origin-appropriate cursed tool",
     "Custom World": "Setting-appropriate weapon and travel kit",
 }
 
@@ -62,6 +65,7 @@ WORLD_STARTER_SKILL = {
     "Naruto": "Academy Fundamentals", "Solo Max-Level Newbie": "System Adaptation",
     "Overgeared": "Class Fundamentals", "Reincarnated as a Slime": "Intrinsic Species Trait",
     "Bleach": "Shinigami Fundamentals", "Custom World": "Background Expertise",
+    "Jujutsu Kaisen": "Jujutsu Fundamentals",
 }
 
 STARTER_SKILL_DESCRIPTIONS = {
@@ -193,6 +197,7 @@ POOL_STATS = {
     "Overgeared": (("Constitution", "Strength"), ("Intelligence", "Wisdom")),
     "Reincarnated as a Slime": (("Instinct", "Willpower"), ("Magicule Control", "Skill Mastery")),
     "Bleach": (("Hakuda", "Willpower"), ("Reiatsu Control", "Willpower")),
+    "Jujutsu Kaisen": (("Physical Ability", "Soul Stability"), ("Cursed Energy Reserves", "Cursed Energy Control")),
     "Custom World": (("Constitution", "Strength"), ("Wisdom", "Intelligence")),
 }
 
@@ -435,6 +440,7 @@ WORLD_PUBLIC_CONTACTS = {
     "Overgeared": {"Players", "Local Lords", "Church", "Guilds", "Kingdom"},
     "Reincarnated as a Slime": {"Jura Forest Monsters", "Free Guild"},
     "Bleach": {"Gotei 13", "Kido Corps", "Noble Houses"},
+    "Jujutsu Kaisen": {"Tokyo Jujutsu High", "Kyoto Jujutsu High", "Jujutsu Headquarters"},
     "Custom World": {"Local Faction"},
 }
 
@@ -1152,6 +1158,35 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         else:
             learning_rate, aptitude = 1.0, "Typical local potential"
 
+        if world == "Jujutsu Kaisen" and is_curse_origin(origin):
+            identity = generate_curse_identity(raw, seed=origin)
+            supplied = raw.rstrip().rstrip(".") + "." if raw else "A self-aware cursed spirit has developed beyond the instinct that created it."
+            motivation = ("It must decide whether to obey, reinterpret, or reject the emotional instinct that produced it, "
+                          "while sorcerers and rival curses respond to what it actually does.")
+            complication = ("Its intelligence does not make it safe or accepted: discovery can bring an official grade, "
+                            "exorcism orders, manipulation by other curses, or a chance to negotiate an unprecedented place in the world.")
+            expanded = (f"{supplied} It was born from {identity['source']}. Its manifested form is {identity['manifestation']}, "
+                        f"and its originating instinct {identity['instinct']}. {identity['temperament']} {motivation} {complication}")
+            return {
+                "expanded_background": expanded,
+                "background_details": {
+                    "upbringing": f"Manifested from {identity['source']}; it has no invented human childhood.",
+                    "training_history": "Its control comes from instinct, observation and whatever experience the background explicitly establishes.",
+                    "key_connection": "No mentor or relationship is invented unless the background establishes one.",
+                    "formative_event": f"The accumulated {identity['source']} became self-aware.",
+                    "motivation": motivation, "starting_complication": complication,
+                },
+                "growth_profile": {
+                    "aptitude": aptitude, "learning_rate": learning_rate,
+                    "starting_strengths": list(primary_stats[:3]),
+                    "accelerators": ["Focused cursed-energy practice", "Surviving stronger opponents", "Feeding on humans, with exponentially greater growth from cursed-energy-rich victims"],
+                    "constraints": ["Current mastery", "Cursed-energy reserves and output", "Sorcerer attention and rival curses"],
+                    "explanation": "Growth follows its technique, combat experience, deliberate practice and curse-feeding rules.",
+                    "combat_style": "Cursed spirit physiology and its birth-slot technique",
+                    "style_rule": "Resolve action through the curse's manifested body, instincts, learned tactics and established technique applications.",
+                },
+            }
+
         if any(k in lowered for k in ("protect", "save", "help", "family")):
             motivation = "They want enough skill and influence to protect the people they choose to call their own."
         elif any(k in lowered for k in ("revenge", "avenge", "vengeance")):
@@ -1375,7 +1410,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             "non_canon_allowed": True,
         }
 
-    def infer_starting_profile(self, world, origin, archetype, background, stats, start_location="", allow_starting_specials=True):
+    def infer_starting_profile(self, world, origin, archetype, background, stats, start_location="", allow_starting_specials=True,
+                               jjk_guarantee_strong=False, jjk_curse_grade=""):
         text = f"{origin} {archetype} {background}".lower()
         # Explicit descriptive language in the player's own background wins.
         # Dropdown role labels remain a smaller fallback so selecting a canon
@@ -1449,7 +1485,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         # Bleach progression is expressed through the Zanpakuto relationship,
         # releases and Kido—not a generic hidden-class card.
         class_declined = self.hidden_class_declined(background)
-        class_awarded = world != "Bleach" and (
+        class_awarded = world not in {"Bleach", "Jujutsu Kaisen"} and (
             class_requested or (
                 allow_starting_specials and not class_declined and random.random() < RANDOM_HIDDEN_CLASS_CHANCE
             )
@@ -1470,7 +1506,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             )
         ability_requested = allow_starting_specials and self.background_ability_requested(background)
         ability_declined = self.background_ability_declined(background)
-        ability_awarded = (
+        ability_awarded = world != "Jujutsu Kaisen" and (
             ability_requested or (
                 allow_starting_specials and not ability_declined and random.random() < RANDOM_STARTING_ABILITY_CHANCE
             )
@@ -1513,11 +1549,39 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                         "combat_usable": True, "effect_type": "transform", "category": "transformation", "target_type": "self", "duration_rounds": 5, "release_stage": "Bankai",
                     }
             bleach_tracks = zanpakuto_tracks(has_shikai=has_shikai, has_bankai=has_bankai)
+        jjk_birth_slot = None
+        jjk_curse_identity = None
+        if world == "Jujutsu Kaisen" and allow_starting_specials:
+            jjk_birth_slot = generate_birth_slot(background, bool(jjk_guarantee_strong), seed=f"{origin}|{start_location}|{random.random()}")
+            if self.ai_bg_ready():
+                schema = {key: "concise JJK-native value" for key in (
+                    "name", "governing_rule", "activation", "targets", "limitations", "weaknesses", "growth_path", "domain_potential")}
+                try:
+                    authored = self.ai_bg.request(
+                        "Design one original Jujutsu Kaisen innate technique for this character. Respect the exclusive birth slot. Use the background and requested power guarantee. Match canon techniques in depth, uniqueness, complexity and possible power. If the background clearly establishes Heavenly Restriction, keep the fallback restriction instead. Do not invent a fake weakness when the power genuinely has none. Return JSON only.",
+                        {"background":background, "origin":origin, "guarantee_strong":bool(jjk_guarantee_strong), "fallback":jjk_birth_slot, "schema":schema},
+                        max_output_tokens=650,
+                    )
+                    if isinstance(authored, dict) and jjk_birth_slot.get("slot_type") == "Innate Cursed Technique":
+                        for key in schema:
+                            if str(authored.get(key) or "").strip():
+                                jjk_birth_slot[key] = str(authored[key]).strip()
+                except Exception as exc:
+                    self._last_special_generation_error = str(exc)[:240]
+            if is_curse_origin(origin):
+                jjk_curse_identity = generate_curse_identity(background, seed=start_location)
+            staged = apply_birth_slot({"stats":adjusted, "skills":skills}, jjk_birth_slot,
+                                      normalized_grade(jjk_curse_grade) if is_curse_origin(origin) else "")
+            adjusted, skills = staged["stats"], staged["skills"]
         specific_gear = WORLD_ARCHETYPE_GEAR.get(world, {}).get(archetype)
-        equipment = {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])}
+        equipment = ({"Natural Weapon":"Manifested cursed body"}
+                     if world == "Jujutsu Kaisen" and is_curse_origin(origin)
+                     else {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])})
         hp_max, resource_max = self.derive_pools(world, adjusted)
+        if world == "Jujutsu Kaisen" and (jjk_guarantee_strong or is_curse_origin(origin)):
+            band = power_profile_for(world, adjusted, archetype).get("overall", {}).get("name", band)
         notice = ""
-        if boost >= 20 or background_adjustments:
+        if boost >= 20 or background_adjustments or jjk_guarantee_strong or (is_curse_origin(origin) and normalized_grade(jjk_curse_grade) in {"Grade 1", "Special Grade"}):
             article = "an" if str(band).lower()[:1] in "aeiou" else "a"
             notice = (f"This background creates {article} {band.lower()} character whose starting mechanics reflect the stated background. "
                       "The campaign allows it; rivals, factions and consequences will respond at the same scale.")
@@ -1532,6 +1596,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "bleach_release_profile": bleach_release_profile, "prerequisite_tracks": bleach_tracks,
                 "naruto_lineage_profile": naruto_lineage_profile,
                 "standard_class_profile": standard_class_profile,
+                "jjk_birth_slot": jjk_birth_slot, "jjk_curse_identity": jjk_curse_identity,
+                "jjk_curse_grade": normalized_grade(jjk_curse_grade) if world == "Jujutsu Kaisen" and is_curse_origin(origin) else "",
                 "background_stat_adjustments": background_adjustments,
                 "_background_supplied": bool(str(background or "").strip()),
                 **background_profile}
@@ -1570,6 +1636,15 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 package.setdefault("position", rank)
                 package["title"] = self.naruto_identity_title(origin, start_location)
                 merge(package.setdefault("special_patch", {}), {"Home Village": village})
+        if world == "Jujutsu Kaisen":
+            year_floor = 24 if "First Year" in origin else 34 if "Second Year" in origin else 45 if "Third Year" in origin else 30
+            if origin == "Independent Curse User": year_floor = 42
+            if origin == "Great Clan Member": year_floor = 38
+            package.setdefault("stat_minimums", {name:year_floor for name in ("Physical Ability","Speed & Reflexes","Cursed Energy Reserves","Cursed Energy Output","Cursed Energy Control","Jujutsu Insight","Soul Stability")})
+            if origin == "Sentient Cursed Spirit":
+                package["equipment"] = {"Natural Weapon":"Manifested cursed body"}
+            else:
+                package.setdefault("equipment", {"Field Gear":"Protective talismans and school-issued field supplies"})
         # Every selectable origin receives a saved mechanical identity even
         # when it does not have a bespoke high-status package above.  This is
         # intentionally local and deterministic: ordinary starts should not
@@ -1602,6 +1677,18 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         elif world == "Reincarnated as a Slime":
             special.setdefault("Species", "Human" if any(token in origin for token in ("Human", "Hero", "Noble")) else "Unknown")
             special.setdefault("Evolution Stage", "New Arrival" if "Otherworld" in origin or "Isekai" in origin else "Unnamed")
+        elif world == "Jujutsu Kaisen":
+            school = "Tokyo Jujutsu High" if origin.startswith("Tokyo") else "Kyoto Jujutsu High" if origin.startswith("Kyoto") else "Unaffiliated"
+            special.setdefault("School", school)
+            special.setdefault("Grade", "Unassessed")
+            if school != "Unaffiliated":
+                year_match = re.search(r"(First|Second|Third) Year", origin)
+                special.setdefault("School Year", year_match.group(0) if year_match else "First Year")
+                package.setdefault("affiliations", [{"faction":school,"rank":special["School Year"],"status":"active","joined":"Campaign start","notes":"Enrolled jujutsu student."}])
+            elif origin == "Great Clan Member":
+                package.setdefault("affiliations", [{"faction":"Jujutsu Society","rank":"Clan member","status":"active","joined":"Birth","notes":"Exact clan and obligations follow the background."}])
+            elif origin == "Sentient Cursed Spirit":
+                package["position"] = "Unregistered sentient cursed spirit"
         if not package.get("quests"):
             path_names = {
                 "One Piece": "Choose a Course on the Grand Line",
@@ -1610,6 +1697,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "Solo Max-Level Newbie": "Survive the Tower's Opening",
                 "Overgeared": "Establish a Place in Satisfy",
                 "Reincarnated as a Slime": "Find a Place in the New World",
+                "Jujutsu Kaisen": "Choose What Your Power Is For",
             }
             quest_name = path_names.get(world)
             if quest_name:
@@ -1617,7 +1705,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     "name": quest_name, "status": "Active", "category": "main", "giver": "Personal Direction",
                     "locations": [start_location],
                     "explanation": f"Your starting role as {origin} creates opportunities and obligations in {start_location}. Choose a concrete first goal and begin building a lasting place in the world.",
-                    "current_knowledge": [f"You begin in {start_location} with the training and equipment of a {origin}.", f"Your strongest starting approach is {archetype}."],
+                    "current_knowledge": [f"You begin in {start_location} with the training and equipment of a {origin}.", "Your birth slot and learned applications define your immediate jujutsu options." if world == "Jujutsu Kaisen" else f"Your strongest starting approach is {archetype}."],
                     "objectives": ["Choose an immediate personal goal", "Follow a setting-appropriate lead", "Create a relationship, achievement, or discovery that moves that goal forward"],
                     "clear_conditions": [f"Complete a meaningful first objective in {start_location} and choose the next direction"],
                     "next_hint": "Inspect the immediate situation, ask what opportunities are nearby, or state the first result you want to pursue.",
@@ -1631,6 +1719,11 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         for ability, minimum in package.get("stat_minimums", {}).items():
             if ability in stats:
                 stats[ability] = max(int(stats.get(ability, 1) or 1), int(minimum))
+        jjk_slot = profile.get("jjk_birth_slot") if isinstance(profile.get("jjk_birth_slot"), dict) else {}
+        if world == "Jujutsu Kaisen" and jjk_slot.get("slot_type") == "Heavenly Restriction":
+            for ability, modifier in (jjk_slot.get("stat_modifiers") or {}).items():
+                if int(modifier or 0) <= -900 and ability in stats:
+                    stats[ability] = 1
         merge(profile.setdefault("skills", {}), package.get("skills", {}))
         profile["skills"] = {
             name: detail for name, detail in profile["skills"].items()
@@ -1733,10 +1826,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         profile = result.get("starting_profile") if isinstance(result.get("starting_profile"), dict) else {}
         world = result.get("world", "Custom World")
         kind = str(kind or "").lower()
-        if not profile or kind not in {"class", "ability", "backstory", "loadout", "zanpakuto"}:
-            raise ValueError("Choose class, ability, Zanpakuto, backstory, or loadout to reroll.")
+        if not profile or kind not in {"class", "ability", "backstory", "loadout", "zanpakuto", "jjk_special"}:
+            raise ValueError("Choose class, ability, Zanpakuto, JJK birth slot, backstory, or loadout to reroll.")
         if kind == "zanpakuto" and world != "Bleach":
             raise ValueError("Zanpakuto rerolls are available only for original Bleach characters.")
+        if kind == "jjk_special" and world != "Jujutsu Kaisen":
+            raise ValueError("JJK birth-slot rerolls are available only for original Jujutsu Kaisen characters.")
         boost = int(profile.get("_boost", 0) or 0)
         primary = profile.get("primary_stats") or primary_stats_for(world, result.get("archetype", ""))
         if kind == "class":
@@ -1791,15 +1886,25 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     "target_type": "self", "duration_rounds": 4, "release_stage": "Shikai",
                 }
             if has_bankai:
-                profile["skills"][release["bankai_name"]] = {
+                    profile["skills"][release["bankai_name"]] = {
                     "rank": "Bankai", "bonus": 14 + boost // 20,
                     "description": release["bankai_effect"], "effect": release["bankai_effect"],
                     "limitation": release["bankai_cost"],
                     "growth_path": "Extend safe duration, refine control and integrate Bankai without abandoning the Shikai's core identity.",
-                    "combat_usable": True, "effect_type": "transform", "category": "transformation",
-                    "target_type": "self", "duration_rounds": 5, "release_stage": "Bankai",
-                }
-            profile["prerequisite_tracks"] = zanpakuto_tracks(has_shikai=has_shikai, has_bankai=has_bankai)
+                        "combat_usable": True, "effect_type": "transform", "category": "transformation",
+                        "target_type": "self", "duration_rounds": 5, "release_stage": "Bankai",
+                    }
+        elif kind == "jjk_special":
+            old = profile.get("jjk_birth_slot") if isinstance(profile.get("jjk_birth_slot"), dict) else {}
+            for skill_name in list(profile.setdefault("skills", {})):
+                detail = profile["skills"].get(skill_name)
+                if isinstance(detail, dict) and (detail.get("parent_technique") == old.get("name") or detail.get("category") == "cursed technique"):
+                    profile["skills"].pop(skill_name, None)
+            profile["stats"] = copy.deepcopy(profile.get("_base_stats") or profile.get("stats") or {})
+            slot = generate_birth_slot(background, bool(result.get("jjk_guarantee_strong")), seed=f"reroll|{random.random()}")
+            staged = apply_birth_slot({"stats":profile["stats"], "skills":profile["skills"]}, slot,
+                                      result.get("jjk_curse_grade", "") if is_curse_origin(result.get("origin", "")) else "")
+            profile["stats"], profile["skills"], profile["jjk_birth_slot"] = staged["stats"], staged["skills"], slot
         elif kind == "backstory":
             rebuilt = self.build_background_profile(
                 world, result.get("origin", ""), result.get("archetype", ""), background, boost, primary,
@@ -1890,6 +1995,49 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         normalized["generated_ability"] = None
         normalized["hidden_class"] = None
         normalized["class_profile"] = copy.deepcopy(scenario.get("class_profile")) if isinstance(scenario.get("class_profile"), dict) else {}
+        if world == "Jujutsu Kaisen":
+            established = scenario.get("special_patch") if isinstance(scenario.get("special_patch"), dict) else {}
+            technique = str(established.get("Innate Technique") or "None")
+            restriction = str(established.get("Heavenly Restriction") or "None")
+            if restriction.lower() not in {"", "none", "unknown", "unachieved"}:
+                slot = {
+                    "slot_type":"Heavenly Restriction", "name":restriction,
+                    "governing_rule":"A binding condition present from birth exchanges cursed-energy potential for extraordinary physical capability.",
+                    "activation":"Always active; it is a bodily condition, not an invoked technique.",
+                    "sacrifice":restriction, "enhancement":"Exceptional physical strength, speed, perception and cursed-tool aptitude.",
+                    "limitations":"No innate cursed technique; cursed-energy use is limited by the established restriction.",
+                    "weaknesses":"Injury, exhaustion, superior force and techniques that bypass physical defenses still matter.",
+                    "growth_path":"Condition the body, sharpen perception and master a wider range of cursed tools.",
+                    "applications":[], "power_grade":str(established.get("Grade") or "Canon-established"),
+                }
+            elif technique.lower() not in {"", "none", "none awakened", "unknown", "unachieved"}:
+                applications = [{"name":name, "effect":detail.get("description", "")}
+                                for name, detail in (scenario.get("skills") or {}).items() if isinstance(detail, dict)]
+                slot = {
+                    "slot_type":"Innate Cursed Technique", "name":technique,
+                    "governing_rule":f"The canon-established governing rule of {technique} applies at this point in the timeline.",
+                    "activation":"Uses cursed energy through the technique's established activation and interpretation.",
+                    "targets":"Targets permitted by its currently mastered applications.", "applications":applications,
+                    "limitations":"Only applications established by this starting point are mastered; cursed-energy cost, output, control and counters still apply.",
+                    "weaknesses":"Technique matchups, depleted cursed energy, disrupted activation and the user's current mastery remain relevant.",
+                    "growth_path":"Develop canon-valid extensions and allow player choices to create coherent new applications.",
+                    "domain_potential":"A Domain Expansion becomes available only when this character's established mastery or later play supports it.",
+                    "power_grade":str(established.get("Grade") or "Canon-established"),
+                }
+            else:
+                # Yuji's opening is a deliberate canon exception: Sukuna's
+                # vessel physiology is neither an innate technique nor a
+                # Heavenly Restriction, and the UI should say that plainly.
+                slot = {
+                    "slot_type":"Vessel Physiology", "name":str(established.get("Vessel") or "Exceptional Vessel"),
+                    "governing_rule":"An exceptionally stable soul and body can contain Sukuna without supplying an innate technique of its own.",
+                    "activation":"Passive until Sukuna's finger is consumed; cursed-energy reinforcement must still be learned.",
+                    "applications":[], "limitations":"Provides containment and physical potential, not automatic control of Sukuna or a personal cursed technique.",
+                    "weaknesses":"The incarnated curse remains an intelligent hostile presence with his own motives.",
+                    "growth_path":"Learn cursed-energy control, preserve control of the body and develop Yuji's own fighting method.",
+                    "power_grade":"Exceptional vessel",
+                }
+            normalized["jjk_birth_slot"] = slot
         package = {
             "position": scenario.get("position", ""), "affiliations": copy.deepcopy(scenario.get("affiliations") or []),
             "reputation": copy.deepcopy(scenario.get("reputation") or {}), "special_patch": copy.deepcopy(scenario.get("special_patch") or {}),
@@ -1905,7 +2053,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         normalized["power_notice"] = power.get("interpretation", "") if power.get("lopsided") else ""
         return normalized
 
-    def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id=""):
+    def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id="", jjk_guarantee_strong=False, jjk_curse_grade=""):
         if world not in WORLD_DATA:
             raise ValueError("Unknown world selected.")
         if difficulty not in DIFFICULTIES:
@@ -1926,7 +2074,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             )
         rolled = self.roll_starting_stats(world, archetype, stats or {})
         profile = self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start,
-                                              allow_starting_specials=not bool(scenario))
+                                              allow_starting_specials=not bool(scenario), jjk_guarantee_strong=jjk_guarantee_strong,
+                                              jjk_curse_grade=jjk_curse_grade)
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
         else:
@@ -1953,9 +2102,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             "world_primer": world_primer_for(world, custom_world),
             "starting_era": era, "starting_era_options": starting_eras_for(world),
             "start_warnings": start_warnings,
+            "jjk_guarantee_strong": bool(jjk_guarantee_strong), "jjk_curse_grade": jjk_curse_grade,
         }
 
-    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age=""):
+    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age="", jjk_guarantee_strong=False, jjk_curse_grade=""):
         wd = WORLD_DATA[world]
         scenario = self.canon_character_scenario(world, canon_character_id) if canon_character_id else None
         if scenario:
@@ -1969,7 +2119,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         rolled = copy.deepcopy(preview_stats) if isinstance(preview_stats, dict) else self.roll_starting_stats(world, archetype, stats)
         profile = copy.deepcopy(preview_profile) if isinstance(preview_profile, dict) else self.infer_starting_profile(
             world, origin, archetype, background, rolled, start_location=start,
-            allow_starting_specials=not bool(scenario),
+            allow_starting_specials=not bool(scenario), jjk_guarantee_strong=jjk_guarantee_strong,
+            jjk_curse_grade=jjk_curse_grade,
         )
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
@@ -2142,6 +2293,11 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 self.state["currencies"] = {}
                 self.state["purchase_offer"] = None
                 self.state["purchase_offers"] = []
+            if world == "Jujutsu Kaisen" and isinstance(profile.get("jjk_birth_slot"), dict):
+                initialize_jjk_state(self.state, profile["jjk_birth_slot"], origin,
+                                     profile.get("jjk_curse_grade", jjk_curse_grade), profile.get("jjk_curse_identity"))
+                self.state["currency"] = {"name":"Yen", "amount":0, "tracked":False}
+                self.state["currencies"] = {}
             normalize_world_progression(self.state)
             normalize_world_depth(self.state)
             initialize_lit_systems(self.state)

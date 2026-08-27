@@ -507,6 +507,7 @@ function appendStoryEntries(entries) {
   const feed = $("#story-feed");
   const cleanEntries = (entries || []).filter((entry) => entry && String(entry.text || "").trim());
   if (!cleanEntries.length) return;
+  if (APP.state?.world === "Jujutsu Kaisen" && cleanEntries.some((entry) => /\bblack flash\b/i.test(String(entry.text || "")))) triggerBlackFlash();
   // A multi-day skip returns entries stamped with different canon_day
   // values — split those into separate dated cards (like a history feed)
   // instead of lumping a whole week under one header. Entries without a
@@ -746,6 +747,18 @@ function questView(q, index = 0) {
   };
 }
 
+function triggerBlackFlash() {
+  if (!APP.animationsEnabled) return;
+  let fx = document.querySelector(".black-flash-fx");
+  if (fx) fx.remove();
+  fx = document.createElement("div");
+  fx.className = "black-flash-fx";
+  fx.setAttribute("aria-hidden", "true");
+  fx.innerHTML = '<i></i><i></i><i></i><i></i><i></i><strong>BLACK FLASH</strong>';
+  document.body.appendChild(fx);
+  window.setTimeout(() => fx.remove(), 950);
+}
+
 function questPresentation(world) {
   const presentations = {
     "Overgeared": { literal: true, tab_label: "Quests", rail_label: "Active Quest", empty_label: "No active quest", entry_label: "Quest", archive_label: "Completed / failed quests" },
@@ -866,6 +879,17 @@ function renderBleachReleases(special) {
   return `<section class="bleach-release-grid">${shikaiCard}${bankaiCard}</section>`;
 }
 
+function renderJjkBirthSlot(slot) {
+  if (!slot || typeof slot !== "object") return "";
+  const rows = [
+    ["Rule", slot.governing_rule], ["Activation", slot.activation], ["Targets", slot.targets],
+    [slot.slot_type === "Heavenly Restriction" ? "Sacrifice" : "Limits", slot.sacrifice || slot.limitations],
+    ["Weaknesses", slot.weaknesses], ["Enhancement", slot.enhancement], ["Growth", slot.growth_path],
+    ["Domain potential", slot.domain_potential], ["Power", slot.power_grade],
+  ].filter(([, value]) => compactReadable(value));
+  return `<details class="world-system-card jjk-technique-card expandable-special-card" open><summary><header><small>${escapeHtml(slot.slot_type || "BIRTH SLOT")}</small><h3>${escapeHtml(slot.name || "Unrevealed")}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body">${rows.map(([label, value]) => `<div class="world-system-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(compactReadable(value))}</span></div>`).join("")}</div></details>`;
+}
+
 function worldIdentityLabel(state) {
   const special = state?.special || {}, world = state?.world;
   if (world === "One Piece") return special["Crew Role"] || special.Archetype || "Seafarer";
@@ -878,6 +902,7 @@ function worldIdentityLabel(state) {
   if (world === "Overgeared") return special.Class || "Player";
   if (world === "Reincarnated as a Slime") return special.Species || state.race || "Otherworlder";
   if (world === "Bleach") return special["Shinigami Rank"] || special.Archetype || "Soul Reaper";
+  if (world === "Jujutsu Kaisen") return special.Grade || (special["Official Status"] || "Unassessed Sorcerer");
   return state?.class_profile?.name || special.Archetype || "Adventurer";
 }
 
@@ -904,6 +929,10 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
   if (world === "Naruto") {
     const p = special["Shinobi Profile"] || {};
     return `<section class="world-system-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system")}${card("CHAKRA & TECHNIQUES", p.kekkei_genkai && p.kekkei_genkai !== "None" ? p.kekkei_genkai : "Shinobi Development", [["Nature affinities",p.nature_affinities],["Known jutsu",p.known_jutsu],["Summons",p.summons],["Transformations",p.transformations]], "naruto-system")}</section>`;
+  }
+  if (world === "Jujutsu Kaisen") {
+    const slot = data.jjk_system?.birth_slot || special["Innate Technique Profile"] || special["Heavenly Restriction Profile"] || {};
+    return `<section class="world-system-grid">${renderJjkBirthSlot(slot)}${card("JUJUTSU RECORD", special.Grade || "Unassessed", [["Official status",special["Official Status"]], ["School",special.School], ["Domain",special["Domain Expansion"]], ["Reverse cursed technique",special["Reverse Cursed Technique"]], ["Black Flashes",special["Black Flashes"] ?? 0]], "jjk-system")}</section>`;
   }
   if (world === "Solo Max-Level Newbie") {
     const p = special["System Profile"] || {}, sys = data.solo_system || {}, floor = sys.floor_state || {};
@@ -1050,6 +1079,7 @@ const WORLD_UI_THEMES = {
   "Overgeared": { sheet: "Player Status", attributes: "Character Stats", skills: "Classes & Skills", chronicle: "Adventure Log" },
   "Reincarnated as a Slime": { sheet: "Analysis Record", attributes: "Existence Values", skills: "Unique Skills & Titles", chronicle: "Great Sage Record" },
   "Bleach": { sheet: "Soul Record", attributes: "Spiritual Arts", skills: "Techniques & Releases", chronicle: "Soul Chronicle" },
+  "Jujutsu Kaisen": { sheet: "Sorcerer Record", attributes: "Jujutsu Aptitudes", skills: "Technique & Applications", chronicle: "Curse Chronicle" },
   "Custom World": { sheet: "Character Sheet", attributes: "Attributes", skills: "Skills & Titles", chronicle: "Chronicle" },
 };
 function applyWorldInterfaceTheme(world) {
@@ -2827,7 +2857,7 @@ async function processTimeSkipResolution(result, payload) {
     $("#major-roll-risk").textContent = String(result.check?.difficulty_label || result.check?.risk || "Extreme difficulty").replaceAll("_", " ");
     $("#major-roll-result").textContent = "Ready to roll";
     setPercentileDice(null);
-    const marks = {"Naruto":"忍","Bleach":"魂","One Piece":"海","Hunter x Hunter":"H×H","Solo Max-Level Newbie":"塔","Overgeared":"OG","Reincarnated as a Slime":"◉","Custom World":"WW"};
+    const marks = {"Naruto":"忍","Bleach":"魂","Jujutsu Kaisen":"呪","One Piece":"海","Hunter x Hunter":"H×H","Solo Max-Level Newbie":"塔","Overgeared":"OG","Reincarnated as a Slime":"◉","Custom World":"WW"};
     $("#percentile-world-mark").textContent = marks[APP.state?.world] || "WW";
     $("#d100-orb").classList.remove("rolling", "revealed");
     $("#btn-major-roll").disabled = false;
@@ -3889,6 +3919,10 @@ function refreshCampaignWorldFields() {
   $("#nc-tagline").textContent = wd.tagline || "Begin a new story in this world.";
   fillSelect($("#nc-origin"), origins, origins[0]);
   fillSelect($("#nc-archetype"), archetypes, archetypes[0]);
+  const isJjk = world === "Jujutsu Kaisen";
+  $("#nc-archetype-field").hidden = isJjk;
+  $("#nc-jjk-options").hidden = !isJjk;
+  if (isJjk) $("#nc-archetype").innerHTML = '<option value="Jujutsu Sorcerer">Jujutsu Sorcerer</option>';
   $("#nc-custom-label").style.opacity = world === "Custom World" ? "1" : ".45";
   const abilities = wd.abilities || ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
   $("#nc-stats").innerHTML = abilities.map((k) => `<div><label>${abilityIcon(k)} ${escapeHtml(k)}</label><input type="number" min="-20" max="200" value="0" data-stat="${escapeHtml(k)}" title="Adjustment added to the generated world-relative value" /></div>`).join("");
@@ -3924,6 +3958,7 @@ function refreshCampaignWorldFields() {
     ? "Choose an original character or take full control of a canon character at a major timeline moment. Canon will guide, never override, your choices."
     : "Create an original character shortly before the main storyline.";
   refreshEraRow();
+  refreshJjkCreationOptions();
 }
 
 function refreshEraRow() {
@@ -3947,6 +3982,17 @@ function selectedCanonCharacter() {
   return (wd.playable_characters || []).find((c) => c.id === $("#nc-character-mode").value) || null;
 }
 
+function refreshJjkCreationOptions() {
+  const active = $("#nc-world").value === "Jujutsu Kaisen" && !$("#nc-character-mode").value;
+  $("#nc-jjk-options").hidden = !active;
+  $("#nc-jjk-curse-grade-row").hidden = !(active && $("#nc-origin").value === "Sentient Cursed Spirit");
+  if (active) {
+    const rows = APP.worldsMeta?.worlds?.["Jujutsu Kaisen"]?.start_options || [];
+    const index = rows.findIndex((row) => row.origin === $("#nc-origin").value);
+    if (index >= 0) $("#nc-start").value = String(index);
+  }
+}
+
 function collectCampaignPayload() {
   const stats = {};
   $$("#nc-stats input").forEach((inp) => { stats[inp.getAttribute("data-stat")] = parseInt(inp.value || "0", 10); });
@@ -3957,11 +4003,13 @@ function collectCampaignPayload() {
     name: $("#nc-name").value.trim() || "Traveler", world: $("#nc-world").value,
     difficulty: $("#nc-difficulty").value, background: $("#nc-background").value,
     appearance: $("#nc-appearance").value, custom_world: $("#nc-custom").value,
-    origin: $("#nc-origin").value, archetype: $("#nc-archetype").value, stats,
+    origin: $("#nc-origin").value, archetype: $("#nc-world").value === "Jujutsu Kaisen" ? "Jujutsu Sorcerer" : $("#nc-archetype").value, stats,
     age: $("#nc-age").value.trim(),
     start_location: chosenStart ? chosenStart.location : "", start_note: chosenStart ? chosenStart.note : "",
     canon_character_id: $("#nc-character-mode").value,
     starting_era_id: $("#nc-era-row").hidden ? "" : ($("#nc-starting-era").value || ""),
+    jjk_guarantee_strong: !!$("#nc-jjk-strong").checked,
+    jjk_curse_grade: $("#nc-origin").value === "Sentient Cursed Spirit" ? $("#nc-jjk-curse-grade").value : "",
   };
 }
 
@@ -3985,6 +4033,7 @@ async function openNewCampaignModal() {
   closeModal("modal-welcome");
 }
 $("#nc-world").addEventListener("change", refreshCampaignWorldFields);
+$("#nc-origin").addEventListener("change", refreshJjkCreationOptions);
 $("#nc-difficulty").addEventListener("change", () => { $("#nc-diff-desc").textContent = APP.worldsMeta.difficulties[$("#nc-difficulty").value].description; });
 $("#nc-character-mode").addEventListener("change", () => {
   refreshEraRow();
@@ -4034,7 +4083,7 @@ function renderCampaignPreview(p, payload) {
     const startingTechniques = startingAbility && Array.isArray(startingAbility.additional_skills) ? startingAbility.additional_skills : [];
     const growth = profile.growth_profile || {};
     const abilityCard = p.world !== "Bleach" && startingAbility ? `<section class="generated-ability"><b>STARTING ABILITY — ${escapeHtml(startingAbility.name)}</b>${ability.kind ? `<span><strong>Type:</strong> ${escapeHtml(ability.kind)}</span>` : ""}<span>${escapeHtml(ability.effect || ability.description || "")}</span>${startingTechniques.length ? `<span><strong>Starting techniques:</strong> ${startingTechniques.map((row) => escapeHtml(row.name || "")).filter(Boolean).join(" · ")}</span>` : ""}<span><strong>In-world origin:</strong> ${escapeHtml(ability.origin || "A rare talent that has begun to surface.")}</span><span><strong>Limit:</strong> ${escapeHtml(ability.limitation || "Must be developed through play.")}</span><span><strong>Growth:</strong> ${escapeHtml(ability.growth_path || "Practice and suitable guidance.")}</span>${ability.canon_balance ? `<span><strong>World-scale balance:</strong> ${escapeHtml(ability.canon_balance)}</span>` : ""}</section>` : "";
-    const classCard = p.world !== "Bleach" && (profile.class_profile || profile.hidden_class) ? renderClassCard(profile.class_profile || profile.hidden_class) : "";
+    const classCard = p.world === "Jujutsu Kaisen" ? renderJjkBirthSlot(profile.jjk_birth_slot) : (p.world !== "Bleach" && (profile.class_profile || profile.hidden_class) ? renderClassCard(profile.class_profile || profile.hidden_class) : "");
     const bleachReleaseCard = p.world === "Bleach" ? renderBleachReleases(profile.bleach_release_profile ? {
       "Zanpakuto Profile": profile.bleach_release_profile,
       Shikai: ["Shikai", "Bankai"].includes(profile.bleach_release_profile.stage) ? `Achieved — ${profile.bleach_release_profile.shikai_name || profile.bleach_release_profile.name}` : "Unachieved",
@@ -4056,7 +4105,8 @@ function renderCampaignPreview(p, payload) {
         "Custom World": "Hidden potential",
     };
     const classLabel = classLabels[p.world] || "Hidden potential";
-    const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div>${p.world === "Bleach" ? `<button type="button" data-preview-reroll="zanpakuto">Zanpakutō abilities</button>` : `<button type="button" data-preview-reroll="class">${escapeHtml(classLabel)}</button><button type="button" data-preview-reroll="ability">Starting ability</button>`}<button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
+    const specialReroll = p.world === "Bleach" ? `<button type="button" data-preview-reroll="zanpakuto">Zanpakutō abilities</button>` : p.world === "Jujutsu Kaisen" ? `<button type="button" data-preview-reroll="jjk_special">Innate technique / restriction</button>` : `<button type="button" data-preview-reroll="class">${escapeHtml(classLabel)}</button><button type="button" data-preview-reroll="ability">Starting ability</button>`;
+    const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div>${specialReroll}<button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
     const learningRate = Number(growth.learning_rate || 1);
     const ordinaryGrowth = Math.abs(learningRate - 1) < 0.005 && String(growth.aptitude || "").toLowerCase().includes("typical");
     const growthLabel = !ordinaryGrowth && String(growth.aptitude || "").toLowerCase().includes("typical") ? "Modified learning potential" : (growth.aptitude || "Unusual potential");

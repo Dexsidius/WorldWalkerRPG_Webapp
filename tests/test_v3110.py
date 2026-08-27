@@ -32,8 +32,8 @@ class WorldwalkerV3110LitRPGTests(unittest.TestCase):
         return game
 
     def test_release_schema_and_owned_system_records(self):
-        self.assertEqual(APP_VERSION, "3.21.1")
-        self.assertEqual(BASE_STATE["schema_version"], 17)
+        self.assertEqual(APP_VERSION, "3.22.0")
+        self.assertEqual(BASE_STATE["schema_version"], 18)
         self.assertIn("overgeared_system", BASE_STATE)
         self.assertIn("solo_system", BASE_STATE)
 

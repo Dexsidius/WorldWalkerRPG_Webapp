@@ -55,17 +55,22 @@ class WorldwalkerV3100Tests(unittest.TestCase):
             "One Piece":"Haki Profile", "Hunter x Hunter":"Nen Profile", "Naruto":"Shinobi Profile",
             "Solo Max-Level Newbie":"System Profile", "Overgeared":"Satisfy Profile",
             "Reincarnated as a Slime":"Evolution Profile", "Bleach":"Zanpakuto Profile",
+            "Jujutsu Kaisen":"Innate Technique Profile",
         }
         for world, ex in WORLD_EXPANSIONS.items():
             if world == "Custom World":
                 continue
             for origin in ex["origins"]:
                 game = GameSession()
-                state = game.new_campaign("Tester", world, "Adventurer", "", "", "", origin, ex["archetypes"][0], {})
+                archetype = ex["archetypes"][0] if ex["archetypes"] else "Jujutsu Sorcerer"
+                state = game.new_campaign("Tester", world, "Adventurer", "", "", "", origin, archetype, {})
                 self.assertTrue(state["position"], f"{world}: {origin}")
                 self.assertTrue(state["equipment"], f"{world}: {origin}")
                 self.assertTrue(state["quests"], f"{world}: {origin}")
-                self.assertIn(profile_keys[world], state["special"], f"{world}: {origin}")
+                if world == "Jujutsu Kaisen":
+                    self.assertTrue(any(key in state["special"] for key in ("Innate Technique Profile", "Heavenly Restriction Profile")), f"{world}: {origin}")
+                else:
+                    self.assertIn(profile_keys[world], state["special"], f"{world}: {origin}")
 
     def test_canon_start_stats_are_complete_exact_and_deterministic(self):
         for world in self.MAP_COUNTS:

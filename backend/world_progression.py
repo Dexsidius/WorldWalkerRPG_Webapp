@@ -31,6 +31,7 @@ WORLD_PROGRESSION_LABELS = {
     "Overgeared": "Satisfy Class & Adventure",
     "Reincarnated as a Slime": "Evolution & Skills",
     "Bleach": "Zanpakuto Releases",
+    "Jujutsu Kaisen": "Innate Technique or Heavenly Restriction",
 }
 
 
@@ -58,6 +59,9 @@ WORLD-SYSTEM RECORD: Keep special['Satisfy Profile'] with primary_class, seconda
 """,
     "Reincarnated as a Slime": """
 WORLD-SYSTEM RECORD: Keep special['Evolution Profile'] with species, stage, named_status, magicule_capacity, resistances, intrinsic_skills, extra_skills, unique_skills, ultimate_skills and evolution_requirements. Original Skills are allowed but must follow the setting's hierarchy, record effect, magicule cost, limitations, resistances/counters, acquisition cause and synthesis/evolution route. Naming, species evolution and Demon Lord awakening require their real triggers and remain distinct from ordinary training.
+""",
+    "Jujutsu Kaisen": """
+WORLD-SYSTEM RECORD: Every original character has exactly one exclusive Birth Slot: an Innate Cursed Technique OR a Heavenly Restriction. Never grant both. Keep special['Innate Technique Profile'] or special['Heavenly Restriction Profile'] structured with its governing rule, activation, targets, applications, limitations, weaknesses, costs, counters, growth and evidence. Applications such as named extensions, lapse/reversal combinations or maximum techniques are normal skills linked to the parent technique. Original powers should equal canon powers in depth, uniqueness, complexity and possible scale when the narrative supports it. If a technique is overwhelmingly powerful, say so. If it genuinely has no special weakness, say so instead of inventing one; general energy, output, control and activation constraints remain unless explicitly absent. Maintain grade separately from raw power. Cursed spirits may grow from killing humans; victims with more cursed energy grant exponentially greater growth. Binding vows must exchange something real. Black Flash cannot be guaranteed by intent alone.
 """,
 }
 
@@ -310,6 +314,31 @@ def normalize_world_progression(state, before=None):
     elif world == "Bleach":
         profile = _profile(special.get("Zanpakuto Profile"))
         profile.setdefault("name", special.get("Zanpakuto", "Unnamed Asauchi"))
+        release_owned = str(special.get("Shikai", "")).lower() not in {"", "none", "unknown", "unachieved"} or str(special.get("Bankai", "")).lower() not in {"", "none", "unknown", "unachieved"}
+        recorded_name = str(profile.get("name") or "").strip()
+        if release_owned and recorded_name.lower() in {"", "unknown", "unnamed", "unnamed asauchi"}:
+            shikai_name = str(profile.get("shikai_name") or "").strip()
+            if not shikai_name:
+                shikai_text = str(special.get("Shikai") or "")
+                shikai_name = re.sub(r"^(?:achieved\s*[—:-]?\s*|shikai\s*[—:-]?\s*)", "", shikai_text, flags=re.I).strip()
+            if not shikai_name or shikai_name.lower() in {"achieved", "unachieved", "unknown", "none"}:
+                # Older saves often retained the release's real name only on
+                # the learned skill after the loose profile was overwritten.
+                for skill_name, detail in (state.get("skills") or {}).items():
+                    rank = str(detail.get("rank", "")) if isinstance(detail, dict) else ""
+                    stage = str(detail.get("release_stage", "")) if isinstance(detail, dict) else ""
+                    if "shikai" not in f"{rank} {stage} {skill_name}".lower():
+                        continue
+                    candidate = re.sub(r"^shikai\s*[—:-]?\s*", "", str(skill_name), flags=re.I).strip()
+                    if candidate and candidate.lower() not in {"achieved", "unachieved", "unknown", "none"}:
+                        shikai_name = candidate
+                        break
+            if shikai_name and shikai_name.lower() not in {"achieved", "unachieved", "unknown", "none"}:
+                profile["name"] = shikai_name
+                special["Zanpakuto"] = shikai_name
+                if str((state.get("equipment") or {}).get("Weapon", "")).lower().startswith("unnamed asauchi"):
+                    state.setdefault("equipment", {})["Weapon"] = shikai_name
+                repairs.append("Recovered the Zanpakuto name from its achieved release")
         profile.setdefault("spirit", "Not yet understood")
         profile.setdefault("inner_world", "Not yet reached")
         profile.setdefault("relationship", "Distant" if str(special.get("Shikai", "Unachieved")).lower() in {"unachieved", "none", "unknown", ""} else "Recognized")
@@ -325,6 +354,26 @@ def normalize_world_progression(state, before=None):
             "mentors": [], "patrol_record": [], "division_relationships": {},
         })
         repairs.append("Synchronized Soul Reaper progression profile")
+
+    elif world == "Jujutsu Kaisen":
+        system = state.setdefault("jjk_system", {})
+        slot = _profile(system.get("birth_slot"))
+        if not slot:
+            slot = _profile(special.get("Innate Technique Profile") or special.get("Heavenly Restriction Profile"))
+        system["birth_slot"] = slot
+        system.setdefault("grade", special.get("Grade", "Unassessed"))
+        system.setdefault("official_status", special.get("Official Status", "Unregistered"))
+        system.setdefault("humans_killed", 0)
+        system.setdefault("feeding_growth", 0)
+        system.setdefault("black_flash_count", _safe_int(special.get("Black Flashes", 0)))
+        system.setdefault("binding_vows", [])
+        system.setdefault("barrier_mastery", "Foundational")
+        system.setdefault("domain_status", special.get("Domain Expansion", "Unachieved"))
+        system.setdefault("reverse_cursed_technique", special.get("Reverse Cursed Technique", "Unachieved"))
+        special["Grade"] = system["grade"]
+        special["Official Status"] = system["official_status"]
+        special["Black Flashes"] = system["black_flash_count"]
+        repairs.append("Synchronized jujutsu birth-slot and grade profile")
 
     return repairs
 
@@ -348,4 +397,6 @@ def identity_label(state):
         return special.get("Species") or state.get("race") or "Otherworlder"
     if world == "Bleach":
         return special.get("Shinigami Rank") or special.get("Archetype") or "Soul Reaper"
+    if world == "Jujutsu Kaisen":
+        return special.get("Grade") or "Unassessed Sorcerer"
     return (state.get("class_profile") or {}).get("name") or special.get("Archetype") or "Adventurer"

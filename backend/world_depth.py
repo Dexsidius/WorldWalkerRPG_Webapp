@@ -140,6 +140,26 @@ WORLD_DEPTH_PROFILES = {
         "faction_doctrine": "Divisions follow distinct duties and captains; Central 46 protects law and authority; Hollows, Arrancar and Quincy act through their own hierarchies and needs.",
         "signature_nouns": ["Zanpakuto Release", "Kido", "Technique", "Reiatsu Art"],
     },
+    "Jujutsu Kaisen": {
+        "laws": [
+            "Every person has one birth slot: one innate cursed technique or one Heavenly Restriction. Learned applications extend that single rule rather than becoming extra innate techniques.",
+            "Cursed energy, output, control, reinforcement, information and technique matchups matter. Grades describe expected assignment risk but do not replace an actual power assessment.",
+            "Binding vows exchange real freedom, safety, time, information or capability. Black Flash is possible during exceptional impact timing but cannot be guaranteed on command.",
+            "Original techniques may be overwhelmingly strong and need not have a contrived weakness, but their actual rule, activation and capabilities remain consistent once established.",
+        ],
+        "paths": [
+            ("reinforcement", "Cursed-Energy Reinforcement", "Improve physical reinforcement, efficiency, output timing and the defense of body and soul.", ["cursed-energy access or a physical restriction path"], []),
+            ("applications", "Technique Applications", "Invent named uses of the one innate technique by applying its governing rule to new tactical purposes.", ["an innate technique and a coherent derived use"], []),
+            ("restriction", "Heavenly-Restriction Mastery", "Condition the enhanced body, sharpen senses and master cursed tools without pretending a restriction also grants a technique.", ["a Heavenly Restriction"], []),
+            ("barriers", "Barriers, Simple Domains & Domains", "Learn curtains and anti-domain methods, then develop a complete domain only when barrier skill, output and self-understanding support it.", ["instruction, insight or a story-valid breakthrough"], []),
+            ("healing", "Reverse Cursed Technique", "Learn to create positive energy through an exceptionally difficult control breakthrough; output and healing others remain separate accomplishments.", ["extreme control, insight and a valid breakthrough"], []),
+        ],
+        "downtime": {"train":"Practice reinforcement, output timing or a named technique application", "study":"Analyze barriers, souls, curse ecology, vows or technique matchups", "network":"Build school, clan, headquarters or curse-user relationships", "patrol":"Investigate manifestations and protect civilians through narrative assignments", "craft":"Acquire, maintain or commission memorable cursed tools narratively"},
+        "elite": ["A readable cursed-technique rule and information battle", "A barrier, vow or terrain interaction", "A reason the curse or curse user fights beyond random hostility", "A domain or maximum expression that evolves the established technique"],
+        "opportunities": ["Investigate a local manifestation with a specific human cause", "Develop a named application of the birth slot", "Choose how to respond to a school, clan or headquarters obligation"],
+        "faction_doctrine": "Schools protect and train sorcerers while disagreeing on methods; headquarters protects tradition and risk control; clans protect inherited authority; curses follow the fears, instincts and ideals that formed them.",
+        "signature_nouns": ["Cursed Technique", "Technique Application", "Maximum Technique", "Domain Expansion", "Barrier Art"],
+    },
     "Custom World": {
         "laws": ["Use the player's described metaphysics as binding campaign law and preserve every established exception.", "A new ability needs a source, present effect, cost or limitation, counterplay and a route for growth."],
         "paths": [("personal", "Personal Development", "Develop established powers, relationships, knowledge and position through any plausible route.", ["a world-valid method"], [])],
@@ -176,6 +196,8 @@ def _readiness(state, path):
         "class": ("class",), "equipment": ("equipment", "weapon", "armor"), "social": ("guild", "affinity", "reputation"),
         "skills": ("skill",), "species": ("species", "evolution"), "naming": ("named", "naming"), "nation": ("nation", "leader", "ruler"),
         "zanpakuto": ("zanpakuto",), "shikai": ("shikai",), "bankai": ("bankai",), "squad": ("squad", "division", "academy"),
+        "reinforcement": ("cursed energy", "reinforcement", "heavenly restriction"), "applications": ("cursed technique", "application"),
+        "restriction": ("heavenly restriction",), "barriers": ("barrier", "domain"), "healing": ("reverse cursed technique",),
     }.get(path_id, (label.lower(),))
     if any(token in haystack for token in tokens):
         return "Active or established"

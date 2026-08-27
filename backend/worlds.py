@@ -9,7 +9,7 @@ from bleach_data import BLEACH_GM_RULES
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.21.1"
+APP_VERSION = "3.22.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -321,6 +321,24 @@ WORLD_DATA = {
         ],
         "special": {"Spiritual Nature":"Soul Reaper","Shinigami Rank":"Academy Senior","Zanpakuto":"Unnamed Asauchi","Zanpakuto Profile":{"stage":"Sealed","name":"Unknown","development_evidence":[]},"Shikai":"Unachieved","Bankai":"Unachieved","Squad":"Unassigned","Kido Curriculum":{"Hadō":"#1-99 learnable","Bakudō":"#1-99 learnable","Unshown Numbers":"Generated once when discovered, then permanent"}}
     },
+    "Jujutsu Kaisen": {
+        "tagline": "Curses, sorcerers, binding vows, inherited techniques, and battles decided by insight as much as force.",
+        "resource": "Cursed Energy",
+        "progression": ["Attributes", "Cursed Energy", "Innate Technique or Heavenly Restriction", "Technique Applications", "Barrier Arts", "Grade", "Reputation", "Titles"],
+        "rules": "Honor Jujutsu Kaisen world logic. Negative human emotion creates cursed energy and curses. Sorcerers reinforce their bodies, control cursed energy, use innate techniques and barriers, and may trade genuine conditions through binding vows. Every original character receives exactly one exclusive birth slot: either one Innate Cursed Technique or one Heavenly Restriction, never both. Technique applications are separate learned skills derived from the innate rule. Original techniques are welcome and should match canon techniques in depth, uniqueness, complexity and possible power while keeping their stated mechanics coherent. A technique may plainly be overwhelmingly powerful and may genuinely have no special weakness; do not invent a fake weakness, but ordinary requirements such as cursed energy, activation, range and the user's ability still apply unless the technique explicitly removes them. Heavenly Restriction replaces the technique slot and mechanically trades cursed-energy potential or another real capacity for extraordinary physical or sensory ability. Grades are assessments, not level locks. Black Flash is an exceptional timing phenomenon, not a button the character can guarantee. Domains, reverse cursed technique and maximum techniques require plausible development unless the background explicitly establishes them. Canon may diverge permanently through player action.",
+        "start": "Tokyo Jujutsu High",
+        "factions": {"Tokyo Jujutsu High":0, "Kyoto Jujutsu High":0, "Jujutsu Headquarters":0, "Gojo Clan":0, "Zenin Clan":0, "Kamo Clan":0, "Independent Curse Users":0, "Cursed Spirits":0},
+        "map": [
+            ("Tokyo Jujutsu High",55,55,"academy",4), ("Kyoto Jujutsu High",27,48,"academy",4),
+            ("Shibuya",56,42,"city",6), ("Sendai",70,27,"city",5), ("Saitama Detention Center",60,50,"danger",5),
+            ("Sugisawa High School",74,32,"school",2), ("Eishu Juvenile Detention Center",64,47,"danger",6),
+            ("Star Religious Group Headquarters",49,52,"hq",7), ("Zenin Estate",35,44,"estate",8),
+            ("Kamo Estate",25,54,"estate",7), ("Gojo Estate",46,46,"estate",9),
+            ("Tombs of the Star Corridor",53,58,"barrier",10), ("Cursed Warehouse",52,54,"vault",7),
+            ("Colonies",78,61,"barrier",12)
+        ],
+        "special": {"Grade":"Unassessed", "Official Status":"Unregistered", "Birth Slot":"Pending generation", "Innate Technique":"Pending generation", "Heavenly Restriction":"None", "Domain Expansion":"Unachieved", "Reverse Cursed Technique":"Unachieved", "Black Flashes":0}
+    },
     "Custom World": {
         "tagline": "A freeform world defined by you.",
         "resource": "Energy",
@@ -583,6 +601,19 @@ CANON_TIMELINES = {
         {"day": 990, "title": "The Soul King crisis", "location": "Soul King Palace", "scope": "wide", "summary": "The war reaches the lynchpin holding the worlds together, threatening the balance of every realm.", "spoiler": True, "banner":"soul_king_crisis", "requires":["The second Wandenreich invasion"]},
         {"day": 1005, "title": "Wahrwelt final battle", "location": "Wahrwelt", "scope": "wide", "summary": "The remaining forces converge on Yhwach's transformed stronghold for the final struggle over the worlds' future.", "spoiler": True, "banner":"wahrwelt_final_battle", "requires":["The Soul King crisis"]},
     ]},
+    "Jujutsu Kaisen": {"start_day": -7, "anchor": "One week before Yuji Itadori consumes Sukuna's finger", "events": [
+        {"major": True, "historical_only": True, "day": -4018, "title": "Hidden Inventory mission", "location": "Tokyo Jujutsu High", "scope": "wide", "summary": "Satoru Gojo and Suguru Geto are assigned to protect the Star Plasma Vessel, a mission that changes both sorcerers and the modern jujutsu world.", "spoiler": True},
+        {"major": True, "historical_only": True, "day": -281, "title": "Yuta Okkotsu enrolls", "location": "Tokyo Jujutsu High", "scope": "personal", "summary": "Yuta Okkotsu enters Tokyo Jujutsu High while bound to the extraordinarily powerful cursed spirit Rika.", "spoiler": True},
+        {"major": True, "historical_only": True, "day": -81, "title": "Night Parade of a Hundred Demons", "location": "Tokyo", "scope": "wide", "summary": "Suguru Geto releases curses across Tokyo and Kyoto while pursuing Yuta and Rika.", "spoiler": True},
+        {"day": 0, "title": "Yuji Itadori consumes Sukuna's finger", "location": "Sugisawa High School", "scope": "wide", "summary": "A cursed object draws curses to Yuji's school; to save others, Yuji swallows a finger of Ryomen Sukuna and survives as his vessel.", "banner":"sukuna_finger"},
+        {"day": 3, "title": "The detention-center special grade", "location": "Eishu Juvenile Detention Center", "scope": "wide", "summary": "First-year students are sent into a detention center transformed by a special-grade cursed womb.", "spoiler": True, "requires":["Yuji Itadori consumes Sukuna's finger"]},
+        {"day": 24, "title": "Mahito's transfigured humans", "location": "Tokyo", "scope": "wide", "summary": "Investigations expose a curse capable of reshaping souls and a human student drawn into its influence.", "spoiler": True, "requires":["The detention-center special grade"]},
+        {"day": 60, "title": "Kyoto Sister-School Goodwill Event", "location": "Tokyo Jujutsu High", "scope": "wide", "summary": "Tokyo and Kyoto students meet for competition while factions inside jujutsu society pursue conflicting orders.", "spoiler": True, "requires":["Mahito's transfigured humans"]},
+        {"day": 120, "title": "Death Painting investigation", "location": "Saitama", "scope": "wide", "summary": "A bridge curse and incarnated Death Paintings draw the students into a linked series of lethal confrontations.", "spoiler": True, "requires":["Kyoto Sister-School Goodwill Event"]},
+        {"day": 183, "title": "The Shibuya Incident begins", "location": "Shibuya", "scope": "wide", "summary": "A curtain traps civilians in Shibuya and coordinated curse users move to seal Satoru Gojo.", "spoiler": True, "banner":"shibuya_incident", "requires":["Death Painting investigation"]},
+        {"day": 184, "title": "Shibuya's balance collapses", "location": "Shibuya", "scope": "wide", "summary": "Multiple battles, domain clashes and mass casualties permanently alter the balance of the jujutsu world.", "spoiler": True, "requires":["The Shibuya Incident begins"]},
+        {"day": 205, "title": "The Culling Game is declared", "location": "Japan", "scope": "wide", "summary": "Barrier colonies and compulsory rules turn much of Japan into a lethal ritual involving awakened and incarnated sorcerers.", "spoiler": True, "requires":["Shibuya's balance collapses"]},
+    ]},
     "Custom World": {"start_day": -7, "anchor": "Seven days before the world's opening incident", "events": [
         {"day": 0, "title": "Opening incident", "location": "Starting Region", "summary": "The custom world's first major story pressure begins; adapt this event to the player's setting."},
     ]},
@@ -674,6 +705,12 @@ WORLD_STARTING_ERAS = {
         {"id": "turn_back_pendulum", "label": "Turn Back the Pendulum — 110 years earlier", "start_day": -40157,
          "anchor": "One week before the disappearances that will become the Turn Back the Pendulum crisis. The player is an academy senior or recent graduate in the Gotei 13 of that era; future knowledge remains hidden unless the player enables full canon foreknowledge."},
     ],
+    "Jujutsu Kaisen": [
+        {"id":"week_before_yuji", "label":"One week before Yuji becomes Sukuna's vessel (default)", "start_day":-7, "anchor":"One week before Yuji Itadori consumes Sukuna's finger."},
+        {"id":"year_before_yuji", "label":"One year before Yuji becomes Sukuna's vessel", "start_day":-365, "anchor":"One year before Yuji Itadori consumes Sukuna's finger; Yuta Okkotsu's generation is entering the modern story."},
+        {"id":"hidden_inventory", "label":"Hidden Inventory era", "start_day":-4025, "anchor":"One week before Gojo and Geto receive the Star Plasma Vessel mission."},
+        {"id":"jjk_zero", "label":"Jujutsu Kaisen 0 era", "start_day":-288, "anchor":"One week before Yuta Okkotsu enrolls at Tokyo Jujutsu High."},
+    ],
 }
 
 
@@ -724,6 +761,7 @@ WORLD_CALENDARS = {
     "Overgeared": _REAL_MONTHS,
     "Reincarnated as a Slime": _REAL_MONTHS,
     "Bleach": _REAL_MONTHS,
+    "Jujutsu Kaisen": _REAL_MONTHS,
 }
 _CAL_DAYS_PER_MONTH = 30
 _CAL_MONTHS_PER_YEAR = 12
@@ -852,6 +890,14 @@ WORLD_PRIMERS = {
         "factions": ["The Gotei 13 — Soul Society's thirteen Shinigami divisions, each led by a Captain", "Central 46 — Soul Society's judicial authority, nominally acting for the unseen Soul King", "The Onmitsukido (Stealth Force) and Kido Corps — Soul Society's covert-ops and spellcasting bodies"],
         "locations": ["Karakura Town — an ordinary Japanese town with unusually high spiritual activity", "Seireitei — the walled inner city housing the Gotei 13 and Central 46, surrounded by the sprawling Rukongai districts", "Hueco Mundo — the Hollows' harsh home dimension, and whatever lies within its fortress, Las Noches"],
         "starting_note": "Original campaigns begin as a Shin'o Academy senior or recent graduate before squad placement. The player helps choose a division through play; Shikai and Bankai are earned later unless explicitly established in the background.",
+    },
+    "Jujutsu Kaisen": {
+        "premise": "Most people cannot see the curses born from fear, resentment and grief. Jujutsu sorcerers stand between those curses and ordinary society, while old clans and conservative authorities decide which lives and powers are acceptable.",
+        "tone": "Modern occult action: inventive rule-based fights, institutional pressure, sharp humor, sudden brutality and personal ideals tested by loss.",
+        "power_system": "Cursed energy reinforces the body and fuels barriers and one innate cursed technique. A Heavenly Restriction may occupy that birth slot instead, sacrificing one capacity for extreme physical or sensory potential. Learned applications, binding vows, reverse cursed technique, maximum techniques and domains grow from those foundations.",
+        "factions": ["Tokyo and Kyoto Jujutsu High", "Jujutsu Headquarters and the three great clans", "Independent curse users and intelligent cursed spirits"],
+        "locations": ["Tokyo Jujutsu High", "Kyoto Jujutsu High", "Modern Japanese cities concealed behind curtains and barriers"],
+        "starting_note": "Original characters begin as a student, independent curse user, great-clan member or sentient cursed spirit. Each receives one generated innate technique or Heavenly Restriction shaped by the background.",
     },
 }
 
@@ -1175,6 +1221,13 @@ MAJOR_CHARACTER_STARTS = {
              {"name":"Karin Kurosaki","attitude":"Sharp-tongued younger sister","goal":"Plays soccer and, unlike Yuzu, has her own latent ability to see spirits.","is_companion":False,"last_known_location":"Kurosaki Clinic"},
          ]}
     ],
+    "Jujutsu Kaisen": [
+        {"id":"yuji_finger","name":"Yuji Itadori","label":"Yuji — the night he consumes Sukuna's finger","start_day":0,"location":"Sugisawa High School","age":15,"origin":"Tokyo Jujutsu High — First Year","archetype":"Jujutsu Sorcerer","appearance":"An athletic teenage boy with short pink hair, a dark school uniform and a red hood.","background":"The cursed finger has drawn curses to Sugisawa High. Yuji is seconds from the choice that makes him Sukuna's vessel.","title":"Sukuna's Vessel","position":"Newly recruited Tokyo first-year","stat_minimums":{"Physical Ability":95,"Speed & Reflexes":82,"Cursed Energy Reserves":70,"Cursed Energy Output":62,"Cursed Energy Control":25,"Jujutsu Insight":22,"Soul Stability":105},"equipment":{"Weapon":"None","Cursed Object":"Sukuna's finger"},"special_patch":{"Grade":"Unassessed","Birth Slot":"Vessel Physiology","Innate Technique":"None awakened","Heavenly Restriction":"None","Vessel":"Ryomen Sukuna"},"skills":{"Superhuman Physique":{"rank":"Innate","bonus":12,"description":"Exceptional natural strength, speed and durability even before cursed-energy training."},"Divergent Fist":{"rank":"Unlearned potential","bonus":0,"description":"A future application caused by cursed energy lagging behind a physical strike."}},"starting_quests":[{"name":"Save the Occult Club","status":"Active","giver":"Immediate Crisis","objectives":["Reach Sasaki and Iguchi","Survive the curses drawn to the finger","Decide whether to consume Sukuna's finger"],"next_hint":"Megumi is fighting above while the seal fails; act before the curse reaches Yuji's friends."}]},
+        {"id":"gojo_inventory","name":"Satoru Gojo","label":"Gojo — Hidden Inventory mission","start_day":-4018,"location":"Tokyo Jujutsu High","age":17,"origin":"Great Clan Member","archetype":"Jujutsu Sorcerer","appearance":"A tall white-haired student wearing a dark uniform and small round sunglasses.","background":"Gojo and Geto have just received the Star Plasma Vessel protection assignment.","title":"The Strongest Student","position":"Tokyo second-year and Gojo clan heir","stat_minimums":{"Physical Ability":150,"Speed & Reflexes":210,"Cursed Energy Reserves":190,"Cursed Energy Output":210,"Cursed Energy Control":320,"Jujutsu Insight":190,"Soul Stability":160},"equipment":{"Eyewear":"Six Eyes sunglasses","Weapon":"None"},"special_patch":{"Grade":"Special Grade","Birth Slot":"Innate Cursed Technique","Innate Technique":"Limitless","Heavenly Restriction":"None","Dōjutsu":"Six Eyes"},"skills":{"Infinity":{"rank":"Mastered Application","bonus":18,"description":"Applies Limitless to divide approaching space so attacks slow before contact."},"Cursed Technique Lapse: Blue":{"rank":"Advanced Application","bonus":17,"description":"Creates an attractive spatial effect through amplified negative cursed energy."}},"starting_quests":[{"name":"Protect the Star Plasma Vessel","status":"Active","giver":"Master Tengen's Assignment","objectives":["Meet Riko Amanai","Keep her alive through the bounty period","Escort her to Tengen"],"next_hint":"Coordinate with Geto and collect the mission details before the bounty network moves."}]},
+        {"id":"yuta_enrolls","name":"Yuta Okkotsu","label":"Yuta — enrolling at Tokyo Jujutsu High","start_day":-281,"location":"Tokyo Jujutsu High","age":16,"origin":"Tokyo Jujutsu High — First Year","archetype":"Jujutsu Sorcerer","appearance":"A slim, tired-looking teenage boy with dark hair, a white uniform and a sword case.","background":"Yuta enters Jujutsu High while Rika's overwhelming manifestation threatens anyone who harms him.","title":"Special Grade Cursed Human","position":"New Tokyo first-year","stat_minimums":{"Physical Ability":55,"Speed & Reflexes":48,"Cursed Energy Reserves":310,"Cursed Energy Output":120,"Cursed Energy Control":28,"Jujutsu Insight":38,"Soul Stability":80},"equipment":{"Weapon":"Training katana"},"special_patch":{"Grade":"Special Grade","Birth Slot":"Innate Cursed Technique","Innate Technique":"Copy — not yet understood","Heavenly Restriction":"None","Bound Spirit":"Rika"},"skills":{"Rika's Protection":{"rank":"Uncontrolled","bonus":18,"description":"Rika manifests automatically and violently when Yuta is threatened; Yuta cannot yet direct her safely."}},"starting_quests":[{"name":"Break Rika's Curse Without Hurting Anyone","status":"Active","giver":"Yuta's Decision to Live","objectives":["Meet the second-year students","Learn to channel cursed energy through the katana","Understand the bond with Rika"],"next_hint":"Gojo is introducing Yuta to Maki, Toge and Panda; decide how honestly to explain Rika."}]},
+        {"id":"megumi_finger","name":"Megumi Fushiguro","label":"Megumi — sent to retrieve Sukuna's finger","start_day":0,"location":"Sugisawa High School","age":15,"origin":"Tokyo Jujutsu High — First Year","archetype":"Jujutsu Sorcerer","appearance":"A lean black-haired teenager in a dark high-collared uniform.","background":"Megumi arrives in Sendai searching for a missing special-grade cursed object.","title":"Ten Shadows Sorcerer","position":"Tokyo first-year","stat_minimums":{"Physical Ability":60,"Speed & Reflexes":67,"Cursed Energy Reserves":82,"Cursed Energy Output":70,"Cursed Energy Control":76,"Jujutsu Insight":88,"Soul Stability":72},"equipment":{"Weapon":"None","Supplies":"Protective talismans and mission uniform"},"special_patch":{"Grade":"Grade 2","Birth Slot":"Innate Cursed Technique","Innate Technique":"Ten Shadows Technique","Heavenly Restriction":"None"},"skills":{"Divine Dogs":{"rank":"Shikigami Application","bonus":10,"description":"Summons paired tracking and combat shikigami through shadow hand signs."},"Nue":{"rank":"Shikigami Application","bonus":9,"description":"Summons a winged shikigami capable of flight and electrical attacks."}},"starting_quests":[{"name":"Recover Sukuna's Finger","status":"Active","giver":"Satoru Gojo","objectives":["Locate the finger's current holder","Protect nearby civilians","Retrieve or contain the special-grade object"],"next_hint":"The cursed presence leads toward Sugisawa High and an unusually athletic student has information."}]},
+        {"id":"maki_second_year","name":"Maki Zenin","label":"Maki — Tokyo second-year","start_day":-281,"location":"Tokyo Jujutsu High","age":16,"origin":"Great Clan Member","archetype":"Jujutsu Sorcerer","appearance":"An athletic teenage girl with dark green hair, glasses and a dark school uniform carrying a polearm.","background":"Maki begins another year determined to earn rank and disprove the Zenin clan that rejected her.","title":"Cursed Tool Specialist","position":"Tokyo second-year","stat_minimums":{"Physical Ability":105,"Speed & Reflexes":92,"Cursed Energy Reserves":3,"Cursed Energy Output":2,"Cursed Energy Control":8,"Jujutsu Insight":72,"Soul Stability":90},"equipment":{"Weapon":"Cursed naginata","Eyewear":"Glasses that reveal curses"},"special_patch":{"Grade":"Grade 4","Birth Slot":"Heavenly Restriction","Innate Technique":"None","Heavenly Restriction":"Low cursed energy exchanged for extraordinary physical potential"},"skills":{"Cursed Tool Mastery":{"rank":"Expert","bonus":13,"description":"Uses diverse cursed weapons with exceptional reach, timing and tactical adaptation."}},"starting_quests":[{"name":"Force Jujutsu Headquarters to Recognize Maki","status":"Active","giver":"Maki's Own Ambition","objectives":["Complete missions above the expectations of Grade 4","Refine cursed-tool mastery","Build a record the Zenin clan cannot erase"],"next_hint":"A new special-grade student is arriving; decide whether training him can also sharpen Maki's own case for promotion."}]},
+    ],
 }
 
 
@@ -1348,6 +1401,17 @@ WORLD_START_OPTIONS = {
         {"label": "Seireitei (Kidō Corps candidate)", "location": "Seireitei", "note": "A recent Soul Reaper graduate invited to interview with the Kidō Corps while retaining a narrative say in final placement."},
         {"label": "Seireitei (Onmitsukidō candidate)", "location": "Seireitei", "note": "A recent Soul Reaper graduate under consideration for covert service while retaining a narrative say in final placement."},
     ],
+    "Jujutsu Kaisen": [
+        {"label":"Tokyo Jujutsu High — First Year","location":"Tokyo Jujutsu High","origin":"Tokyo Jujutsu High — First Year","note":"A first-year Tokyo student learning field survival, cursed-energy control and the practical rules of their birth slot."},
+        {"label":"Tokyo Jujutsu High — Second Year","location":"Tokyo Jujutsu High","origin":"Tokyo Jujutsu High — Second Year","note":"A second-year Tokyo student with completed missions, established relationships and a developing technique application set."},
+        {"label":"Tokyo Jujutsu High — Third Year","location":"Tokyo Jujutsu High","origin":"Tokyo Jujutsu High — Third Year","note":"A senior Tokyo student with meaningful field history and approaching professional assessment."},
+        {"label":"Kyoto Jujutsu High — First Year","location":"Kyoto Jujutsu High","origin":"Kyoto Jujutsu High — First Year","note":"A first-year Kyoto student entering a more traditional jujutsu institution."},
+        {"label":"Kyoto Jujutsu High — Second Year","location":"Kyoto Jujutsu High","origin":"Kyoto Jujutsu High — Second Year","note":"A second-year Kyoto student with field experience and school responsibilities."},
+        {"label":"Kyoto Jujutsu High — Third Year","location":"Kyoto Jujutsu High","origin":"Kyoto Jujutsu High — Third Year","note":"A senior Kyoto student preparing for professional sorcerer work."},
+        {"label":"Independent Curse User","location":"Tokyo","origin":"Independent Curse User","note":"An unaffiliated curse user operating beyond school authority; contacts, legality and motive come from the background."},
+        {"label":"Great Clan Member","location":"Tokyo","origin":"Great Clan Member","note":"A member of the Gojo, Zenin, Kamo or a generated lesser clan, with access and obligations shaped by the background."},
+        {"label":"Sentient Cursed Spirit","location":"Tokyo","origin":"Sentient Cursed Spirit","note":"A self-aware curse whose source, form, temperament and technique are generated from the background when unspecified."},
+    ],
     "Solo Max-Level Newbie": [
         {"label":"Earth — Tower Entrance (manifestation)","location":"Earth — Tower Entrance","note":"Starting outside the newly manifested Tower before the first clear routes are established."},
         {"label":"Floor 1 (opening scenario)","location":"Floor 1","note":"Starting inside the first live Tower scenario as a registered player."},
@@ -1430,7 +1494,8 @@ BASE_STATE = {
     # real established roster (see MAJOR_CHARACTER_STARTS) seed this at
     # creation; the GM keeps it updated as membership actually changes.
     "faction_rosters":{},
-    "known_recipes":[],"training_log":[],"combat":{},"danger_scenario":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"overgeared_system":{},"solo_system":{},"world_depth":{},"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":17,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
+    "jjk_system":{},
+    "known_recipes":[],"training_log":[],"combat":{},"danger_scenario":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"overgeared_system":{},"solo_system":{},"world_depth":{},"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":18,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
     # memory_updates is a transient GM suggestion; reliability.py folds it
     # into the app-owned, deduplicated long-term narrative memory.
     "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]},
@@ -1508,6 +1573,17 @@ WORLD_EXPANSIONS = {
         "encounters":["Hollow incursion","Unquiet Plus","Academy rival","Division patrol","Training accident","Rare Menos-class emergency"],
         "systems":["Reiryoku","Reiatsu","Zanpakuto","Shikai","Bankai","Squad Rank","Soul Society Standing"]
     },
+    "Jujutsu Kaisen": {
+        "currency":"Yen", "currency_baseline":12000, "tracks_currency":False,
+        "economy_notes":"Money exists normally but is not a progression system. Handle routine expenses narratively; track only a purchase, debt or resource when the scene makes it matter.",
+        "origins":["Tokyo Jujutsu High — First Year","Tokyo Jujutsu High — Second Year","Tokyo Jujutsu High — Third Year","Kyoto Jujutsu High — First Year","Kyoto Jujutsu High — Second Year","Kyoto Jujutsu High — Third Year","Independent Curse User","Great Clan Member","Sentient Cursed Spirit"],
+        "archetypes":[],
+        "training":["Cursed Energy Control","Body Reinforcement","Technique Application","Barrier Fundamentals","Binding Vow Study","Cursed Tool Practice","Reverse Cursed Technique Theory","Domain Theory"],
+        "shop_types":["Jujutsu High Storehouse","Cursed Tool Broker","Clan Armory","Independent Curse-User Contact"],
+        "loot":["Cursed Tool","Cursed Object","Protective Talisman","Mission Intelligence","Technique Record"],
+        "encounters":["Cursed spirit manifestation","Curse-user ambush","Barrier anomaly","School mission","Clan pressure","Special-grade emergency"],
+        "systems":["Cursed Energy","Innate Technique","Heavenly Restriction","Technique Applications","Binding Vows","Barrier Arts","Domain Expansion","Sorcerer Grade"]
+    },
     "Custom World": {
         "currency":"Currency", "currency_baseline":250,
         "origins":["Local","Traveler","Soldier","Scholar","Outcast","Artisan"],
@@ -1550,6 +1626,7 @@ WORLD_ABILITIES = {
     "Custom World": ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"],
     "Reincarnated as a Slime": ["Magicule Control", "Skill Mastery", "Instinct", "Insight", "Willpower", "Presence"],
     "Bleach": ["Zanjutsu", "Hakuda", "Hoho", "Kido", "Reiatsu Control", "Willpower"],
+    "Jujutsu Kaisen": ["Physical Ability", "Speed & Reflexes", "Cursed Energy Reserves", "Cursed Energy Output", "Cursed Energy Control", "Jujutsu Insight", "Soul Stability"],
 }
 
 # "full_sheet" worlds are status-window/LitRPG genres where the classic
@@ -1564,6 +1641,7 @@ WORLD_STAT_STYLE = {
     "Custom World": "full_sheet",
     "Reincarnated as a Slime": "narrative",
     "Bleach": "narrative",
+    "Jujutsu Kaisen": "narrative",
 }
 
 # Numbered XP/levels remain available only where the source world presents
@@ -1589,6 +1667,7 @@ WORLD_GEAR_STYLE = {
     "Custom World": "full",
     "Reincarnated as a Slime": "weapon_only",
     "Bleach": "weapon_only",
+    "Jujutsu Kaisen": "weapon_only",
 }
 
 
@@ -1692,11 +1771,13 @@ WORLD_SPEED_STAT = {
     "One Piece": "Agility", "Hunter x Hunter": "Agility", "Naruto": "Taijutsu",
     "Solo Max-Level Newbie": "Dexterity", "Overgeared": "Dexterity",
     "Reincarnated as a Slime": "Instinct", "Custom World": "Dexterity", "Bleach": "Hoho",
+    "Jujutsu Kaisen": "Speed & Reflexes",
 }
 WORLD_DEFENSE_STAT = {
     "One Piece": "Endurance", "Hunter x Hunter": "Willpower", "Naruto": "Willpower",
     "Solo Max-Level Newbie": "Constitution", "Overgeared": "Constitution",
     "Reincarnated as a Slime": "Willpower", "Custom World": "Constitution", "Bleach": "Willpower",
+    "Jujutsu Kaisen": "Physical Ability",
 }
 
 

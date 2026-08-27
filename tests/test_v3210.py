@@ -24,8 +24,8 @@ class WorldwalkerV3210WorldDepthTests(unittest.TestCase):
 
     def test_release_and_schema(self):
         from worlds import APP_VERSION
-        self.assertEqual(APP_VERSION, "3.21.1")
-        self.assertEqual(BASE_STATE["schema_version"], 17)
+        self.assertEqual(APP_VERSION, "3.22.0")
+        self.assertEqual(BASE_STATE["schema_version"], 18)
 
     def test_every_world_has_laws_flexible_paths_downtime_elites_and_leads(self):
         for world in WORLD_DATA:

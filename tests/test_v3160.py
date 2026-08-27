@@ -25,13 +25,13 @@ class WorldwalkerV3160Tests(unittest.TestCase):
         return state
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.21.1")
+        self.assertEqual(APP_VERSION, "3.22.0")
 
     def test_every_bundled_world_passes_the_shared_depth_gate(self):
         report = audit_all_worlds()
-        self.assertEqual(report["summary"]["worlds"], 8)
+        self.assertEqual(report["summary"]["worlds"], 9)
         self.assertEqual(report["summary"]["critical"], 0, report["issues"])
-        self.assertEqual(report["summary"]["release_ready"], 8, report["issues"])
+        self.assertEqual(report["summary"]["release_ready"], 9, report["issues"])
 
     def test_sublocation_beats_broad_landmark_and_old_combat_language(self):
         state = self.fresh()

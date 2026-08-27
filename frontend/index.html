@@ -436,11 +436,22 @@
           <label>Origin</label>
           <select id="nc-origin"></select>
         </div>
-        <div>
+        <div id="nc-archetype-field">
           <label>Starting Archetype</label>
           <select id="nc-archetype"></select>
         </div>
       </div>
+
+      <section id="nc-jjk-options" class="creation-world-options" hidden>
+        <label class="creation-toggle"><input id="nc-jjk-strong" type="checkbox" /> <span><b>Guarantee exceptional birth potential</b><small>Creates either a strong innate cursed technique or a strong Heavenly Restriction. Your background decides when it clearly favors one; otherwise the result is random.</small></span></label>
+        <div id="nc-jjk-curse-grade-row" hidden>
+          <label>Sentient Curse Starting Grade</label>
+          <select id="nc-jjk-curse-grade">
+            <option>Grade 4</option><option selected>Grade 3</option><option>Grade 2</option><option>Grade 1</option><option>Special Grade</option>
+          </select>
+          <p class="hint">This sets the curse's starting stat floor. A curse becomes publicly assessed only when discovered or infamous enough.</p>
+        </div>
+      </section>
 
       <div id="nc-start-wrap" style="display:none">
         <label>Starting Location</label>

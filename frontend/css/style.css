@@ -1043,6 +1043,7 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 @keyframes percentileB{0%{transform:translate(0) rotate(9deg)}14%{transform:translate(72px,-47px) rotate(128deg)}31%{transform:translate(-62px,-69px) rotate(276deg)}49%{transform:translate(48px,-29px) rotate(431deg)}68%{transform:translate(-29px,-12px) rotate(566deg)}84%{transform:translate(10px,-3px) rotate(664deg)}100%{transform:translate(0) rotate(729deg)}}
 @keyframes trayHit{0%,68%,100%{transform:translate(0)}74%{transform:translate(-1px,1px)}80%{transform:translate(1px,0)}86%{transform:translate(0,1px)}} @keyframes dieSettle{from{filter:drop-shadow(0 9px 7px rgba(0,0,0,.42))}to{filter:drop-shadow(0 18px 13px rgba(0,0,0,.5))}}
 body[data-world="Bleach"] .major-roll-modal{ --die-a:#e8eceb;--die-b:#232d31;--die-ink:#f4f8f7; } body[data-world="One Piece"] .major-roll-modal{ --die-a:#1f6083;--die-b:#d5a344; } body[data-world="Overgeared"] .major-roll-modal{ --die-a:#4d5050;--die-b:#a8874f; } body[data-world="Naruto"] .major-roll-modal{ --die-a:#8e3d2d;--die-b:#d89a62; }
+body[data-world="Jujutsu Kaisen"] .major-roll-modal{ --die-a:#09070e;--die-b:#8f51d6;--die-ink:#fff; }
 @media(max-width:560px){.percentile-topline{grid-template-columns:1fr;padding:18px 18px 0}.roll-risk{justify-self:start}.percentile-tray{height:260px;margin:15px 10px}.percentile-dice{transform:translate(-50%,-50%) scale(.78)}.percentile-details{grid-template-columns:1fr;padding:0 18px 18px}.percentile-details button{width:100%}}
 @media(prefers-reduced-motion:reduce){.percentile-roll.rolling .percentile-die,.percentile-roll.rolling .percentile-tray,.percentile-roll.revealed .percentile-die{animation:none!important}}
 .full{ width:100%; }
@@ -1643,6 +1644,38 @@ body[data-world="Bleach"] .panel{ border-left:3px solid rgba(232,238,242,.72); }
 body[data-world="Bleach"] .panel-head{ text-transform:uppercase; letter-spacing:.1em; background:linear-gradient(90deg,rgba(232,238,242,.1),transparent); }
 body[data-world="Bleach"] .story-feed{ background-image:linear-gradient(rgba(99,185,213,.025) 1px,transparent 1px); background-size:100% 26px; }
 body[data-world="Bleach"] .quick-nav button:hover, body[data-world="Bleach"] .btn-primary:hover{ box-shadow:inset 4px 0 0 var(--accent2); transform:translateX(2px); }
+
+/* Jujutsu Kaisen — ink-black structure, paper-white type, bruised violet cursed energy. */
+body[data-world="Jujutsu Kaisen"]{
+  --accent:#ad82ff; --accent2:#ff4f72; --panel:#101015; --panel2:#17151d;
+  --border:#3a304a; --text:#f2eff6; --muted:#aaa2b5;
+  background:radial-gradient(circle at 70% 0,rgba(91,44,135,.2),transparent 38%),#09090c;
+}
+body[data-world="Jujutsu Kaisen"] .panel{ border-color:#3a304a; box-shadow:inset 0 1px rgba(255,255,255,.025); }
+body[data-world="Jujutsu Kaisen"] .panel-head{ text-transform:uppercase; letter-spacing:.12em; background:linear-gradient(90deg,rgba(173,130,255,.12),transparent); }
+body[data-world="Jujutsu Kaisen"] .story-beat{ border-left:3px solid rgba(173,130,255,.42); }
+body[data-world="Jujutsu Kaisen"] .scene-viewport{ border-bottom:2px solid #ad82ff; }
+body[data-world="Jujutsu Kaisen"] .brand::after{ content:"呪"; }
+.jjk-technique-card{ border-color:rgba(173,130,255,.62)!important; background:linear-gradient(145deg,rgba(173,130,255,.1),rgba(8,8,12,.94))!important; }
+.jjk-technique-card summary h3{ color:#f1e9ff; }
+.creation-world-options{ margin:14px 0; padding:14px; border:1px solid var(--border); border-radius:10px; background:rgba(173,130,255,.06); }
+.creation-toggle{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
+.creation-toggle input{ margin-top:4px; accent-color:var(--accent); }
+.creation-toggle span{ display:grid; gap:4px; }
+.creation-toggle small{ color:var(--muted); line-height:1.4; }
+#nc-jjk-curse-grade-row{ margin-top:12px; }
+
+.black-flash-fx{ position:fixed; inset:0; z-index:100000; pointer-events:none; overflow:hidden; animation:black-flash-screen .9s ease-out both; }
+.black-flash-fx::before{ content:""; position:absolute; inset:0; background:#fff; animation:black-flash-white .9s steps(1) both; }
+.black-flash-fx::after{ content:""; position:absolute; inset:0; background:radial-gradient(circle,#3f0a54 0,rgba(10,0,15,.94) 36%,transparent 70%); mix-blend-mode:screen; }
+.black-flash-fx i{ position:absolute; left:50%; top:50%; width:4px; height:78vmax; background:#030006; border-radius:50%; box-shadow:0 0 5px #fff,0 0 14px #9c22d7,0 0 34px #ff245e; transform-origin:50% 0; clip-path:polygon(35% 0,100% 11%,40% 23%,92% 38%,28% 52%,80% 68%,22% 81%,65% 100%,0 82%,48% 68%,4% 51%,56% 37%,8% 21%,55% 11%); animation:black-flash-bolt .72s cubic-bezier(.16,.84,.28,1) both; }
+.black-flash-fx i:nth-child(1){ transform:rotate(18deg); }.black-flash-fx i:nth-child(2){ transform:rotate(92deg); animation-delay:.035s}.black-flash-fx i:nth-child(3){ transform:rotate(161deg); animation-delay:.07s}.black-flash-fx i:nth-child(4){ transform:rotate(232deg); animation-delay:.02s}.black-flash-fx i:nth-child(5){ transform:rotate(307deg); animation-delay:.09s}
+.black-flash-fx strong{ position:absolute; left:50%; top:50%; transform:translate(-50%,-50%) skew(-8deg); font:900 clamp(2.2rem,9vw,8rem)/1 system-ui,sans-serif; letter-spacing:.08em; color:#050107; -webkit-text-stroke:2px #e6c8ff; text-shadow:0 0 9px #fff,0 0 28px #c12cff,7px 6px 0 #7b103d; animation:black-flash-title .9s ease-out both; white-space:nowrap; }
+@keyframes black-flash-white{0%,8%{opacity:1}9%,18%{opacity:0}19%,24%{opacity:.72}25%,100%{opacity:0}}
+@keyframes black-flash-screen{0%{background:#fff}12%{background:#09000d}100%{background:transparent}}
+@keyframes black-flash-bolt{0%{opacity:0;scale:.1 0}12%{opacity:1;scale:1 1}58%{opacity:.92}100%{opacity:0;scale:1.3 1.2}}
+@keyframes black-flash-title{0%,12%{opacity:0;scale:.65}20%{opacity:1;scale:1.06}55%{opacity:1}100%{opacity:0;scale:1.18}}
+@media (prefers-reduced-motion:reduce){.black-flash-fx{display:none}}
 
 /* Each world supplies its own visual-effect ink and a restrained frame
    language. The still art remains the focus; these details make the same

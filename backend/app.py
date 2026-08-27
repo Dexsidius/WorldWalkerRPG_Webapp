@@ -587,6 +587,8 @@ def api_campaign_new():
             canon_character_id=d.get("canon_character_id", ""),
             starting_era_id=d.get("starting_era_id", ""),
             age=d.get("age", ""),
+            jjk_guarantee_strong=bool(d.get("jjk_guarantee_strong", False)),
+            jjk_curse_grade=d.get("jjk_curse_grade", ""),
         )
         return jsonify({"state": state, "story": game._flush_story()})
     except Exception as e:
@@ -603,6 +605,7 @@ def api_campaign_preview():
             d.get("origin", ""), d.get("archetype", ""), d.get("stats", {}),
             d.get("start_location", ""), d.get("start_note", ""),
             d.get("canon_character_id", ""), d.get("starting_era_id", ""),
+            bool(d.get("jjk_guarantee_strong", False)), d.get("jjk_curse_grade", ""),
         )
         return jsonify({"preview": preview})
     except Exception as e:
@@ -1038,6 +1041,7 @@ def api_panels():
         "overgeared_system": s.get("overgeared_system", {}),
         "class_encyclopedia": class_encyclopedia() if world == "Overgeared" else {},
         "solo_system": s.get("solo_system", {}),
+        "jjk_system": s.get("jjk_system", {}),
         "world_depth": s.get("world_depth", {}),
         "class_profile": visible_class_profile(s),
         "combat": s.get("combat", {}),

@@ -65,7 +65,7 @@ APP_OWNED = {
     "information_packets", "npc_schedules", "canon_event_states",
     "simulation_validation",
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
-    "overgeared_system", "solo_system", "world_depth",
+    "overgeared_system", "solo_system", "jjk_system", "world_depth",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -74,7 +74,7 @@ NESTED_DICT_FIELDS = {
     "stats", "hidden_stats", "skills", "class_profile", "equipment", "relationships",
     "reputation", "special", "contacts", "chat_threads", "combat", "portrait_identity",
     "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
-    "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "world_depth",
+    "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "polity_state",
 }
 NESTED_LIST_FIELDS = {

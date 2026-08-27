@@ -84,7 +84,7 @@ def audit_world(world):
     ability_names = abilities_for(world)
     systems = expansion.get("systems", [])
     training = expansion.get("training", [])
-    checks.append(_check("abilities", len(ability_names) == 6 and len(training) >= 6,
+    checks.append(_check("abilities", len(ability_names) >= 6 and len(training) >= 6,
                          f"{len(ability_names)} world-relative stats and {len(training)} named training paths.", "critical"))
     checks.append(_check("progression", len(data.get("progression", [])) >= 5 and len(systems) >= 4 and bool(_text(data.get("rules"))),
                          f"{len(data.get('progression', []))} progression tracks, {len(systems)} setting systems, and explicit GM rules.", "critical"))

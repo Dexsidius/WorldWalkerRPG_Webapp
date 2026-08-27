@@ -33,6 +33,7 @@ WORLD_PROGRESSION_PRESETS = {
     "Overgeared": {"label": "Satisfy XP, class advancement, quests, affinity, and optional professions", "training_rate": .95, "breakthrough_rate": 1.08, "xp_rate": 1.10, "travel_scale": .90},
     "Reincarnated as a Slime": {"label": "Skills, magicules, naming, and evolution", "training_rate": 1.04, "breakthrough_rate": .92, "xp_rate": 0.0, "travel_scale": 1.05},
     "Bleach": {"label": "Zanjutsu drills, Kido study, and a bond with one's Zanpakuto", "training_rate": .96, "breakthrough_rate": .90, "xp_rate": 0.0, "travel_scale": 1.05},
+    "Jujutsu Kaisen": {"label":"Cursed-energy control, physical reinforcement, technique applications and barrier study", "training_rate":1.02, "breakthrough_rate":.92, "xp_rate":0.0, "travel_scale":1.0},
     "Custom World": {"label": "Setting-defined growth", "training_rate": 1.00, "breakthrough_rate": 1.00, "xp_rate": 1.00, "travel_scale": 1.00},
 }
 

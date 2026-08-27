@@ -27,8 +27,8 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.game.settings["autosave"] = False
 
     def test_v310_schema_declares_owned_memory_and_progression_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.21.1")
-        self.assertEqual(BASE_STATE["schema_version"], 17)
+        self.assertEqual(APP_VERSION, "3.22.0")
+        self.assertEqual(BASE_STATE["schema_version"], 18)
         self.assertIn("narrative_memory", BASE_STATE)
         self.assertIn("progression_ledger", BASE_STATE)
 
@@ -170,7 +170,7 @@ class WorldwalkerV310Tests(unittest.TestCase):
                 game.settings["autosave"] = False
                 stats = {name: 30 for name in abilities_for(world)}
                 ex_origin = next(iter(__import__("worlds").expansion_for(world)["origins"]))
-                ex_arch = next(iter(__import__("worlds").expansion_for(world)["archetypes"]))
+                ex_arch = next(iter(__import__("worlds").expansion_for(world)["archetypes"]), "Jujutsu Sorcerer")
                 game.new_campaign("Tester", world, "Adventurer", "A determined local explorer.", "", "", ex_origin, ex_arch, stats)
                 for turn in range(3):
                     current_skills = copy.deepcopy(game.state.get("skills", {}))

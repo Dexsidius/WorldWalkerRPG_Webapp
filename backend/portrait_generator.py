@@ -76,6 +76,10 @@ WORLD_PORTRAIT_STYLES = {
         "silhouette, spare confident black ink, sharp expressive eyes, flowing black-and-white cloth, restrained "
         "cel color and cool spiritual highlights; never copy a named canon character"
     ),
+    "Jujutsu Kaisen": (
+        "an original modern occult action-manga aesthetic: bold economical ink, sharp expressive anatomy, practical contemporary clothing, "
+        "high-contrast cel shadows, unnerving curse motifs and restrained violet-black cursed-energy accents; never copy a canon character"
+    ),
     "Custom World": (
         "cinematic anime-inspired RPG concept illustration; elegant ink contours; painterly cel "
         "shading; detailed materials; distinctive original silhouette"
@@ -90,11 +94,12 @@ WORLD_BACKDROPS = {
     "Overgeared": "medieval forge workshop with amber furnace glow",
     "Reincarnated as a Slime": "great forest settlement with warm wooden roofs and magical motes",
     "Bleach": "white-walled spirit-city roofs beneath a dark sky with pale blue spiritual motes",
+    "Jujutsu Kaisen": "a dim modern Japanese street or old jujutsu school courtyard with subtle violet-black cursed-energy traces",
     "Custom World": "misty crossroads where forest, city, mountains, and stars blend softly",
 }
 
 VISUAL_SPECIAL_KEYS = re.compile(
-    r"species|race|form|transformation|evolution|clan|bloodline|devil fruit|body|eyes|hair|mark|curse|mutation|zanpakuto|shikai|bankai|spiritual nature",
+    r"species|race|form|transformation|evolution|clan|bloodline|devil fruit|body|eyes|hair|mark|curse|mutation|zanpakuto|shikai|bankai|spiritual nature|innate technique|heavenly restriction|cursed spirit",
     re.I,
 )
 VISIBLE_EQUIPMENT_KEYS = re.compile(

@@ -108,6 +108,7 @@ WORLD_THEMES = {
     "Naruto": {"bg": "#1B1210", "panel": "#2B1A15", "accent": "#C96D3F", "accent2": "#D5A45A", "text": "#F3E6D6", "sub": "#C3AE9A", "kind": "scroll"},
     "Solo Max-Level Newbie": {"bg": "#090C18", "panel": "#13192A", "accent": "#63E0F5", "accent2": "#9A7AFF", "text": "#EEF6FF", "sub": "#ABB6CF", "kind": "tower"},
     "Overgeared": {"bg": "#17100B", "panel": "#261B13", "accent": "#C7924B", "accent2": "#7999B4", "text": "#F2E4CF", "sub": "#B7A58E", "kind": "forge"},
+    "Jujutsu Kaisen": {"bg":"#09090C","panel":"#15131B","accent":"#AD82FF","accent2":"#FF4F72","text":"#F2EFF6","sub":"#AAA2B5","kind":"cursed_ink"},
     "Custom World": {"bg": "#0C1622", "panel": "#162233", "accent": "#C7A15C", "accent2": "#75B6C8", "text": "#F2E7D1", "sub": "#A9B7C2", "kind": "mountains"},
 }
 
@@ -188,6 +189,11 @@ LANDMARK_SCENES = {
         (("hueco mundo", "las noches", "forest of menos", "garganta"), "bleach_hueco_mundo"),
         (("soul king palace", "royal guard", "wahrwelt", "silbern"), "bleach_royal_realm"),
     ),
+    "Jujutsu Kaisen": (
+        (("tokyo jujutsu high", "tombs of the star corridor", "cursed warehouse"), "jjk_tokyo_high"),
+        (("kyoto jujutsu high", "kamo estate"), "jjk_kyoto_high"),
+        (("shibuya", "tokyo", "colony"), "jjk_shibuya_night"),
+    ),
 }
 
 
@@ -257,6 +263,7 @@ def _category_from_place(text):
 WORLD_NEUTRAL_SCENES = {
     "Overgeared": "kingdom", "One Piece": "harbor_port", "Hunter x Hunter": "forest_path",
     "Naruto": "town_square", "Solo Max-Level Newbie": "tower_hub", "Bleach": "bleach_seireitei",
+    "Jujutsu Kaisen": "jjk_tokyo_high",
     "Reincarnated as a Slime": "forest_path", "Custom World": "starry_sky",
 }
 
