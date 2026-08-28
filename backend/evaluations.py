@@ -8,6 +8,9 @@ from datetime import datetime
 from pathlib import Path
 
 from lore import format_lore_context
+from worlds import BASE_STATE, WORLD_DATA, abilities_for
+from simulation_core import (refresh_simulation_core, record_resolution_transaction,
+                             companion_support_for_combat)
 from util import DATA_DIR
 
 
@@ -93,6 +96,49 @@ def list_evaluations():
         except Exception:
             continue
     return {"scenarios": [{k: v for k, v in row.items() if k not in {"state"}} for row in EVALUATION_SCENARIOS], "history": history}
+
+
+def run_local_simulation_evaluation():
+    """Exercise core contracts in every world without an API/model call."""
+    results = []
+    for world in WORLD_DATA:
+        state = copy.deepcopy(BASE_STATE)
+        state["world"] = world
+        state["stats"] = {name: 45 + index * 3 for index, name in enumerate(abilities_for(world))}
+        state["resource_name"] = WORLD_DATA[world].get("resource", "Energy")
+        state["skills"] = {"Signature Test Art": {
+            "description": "A controlled world-valid technique used to test the simulation contract.",
+            "effect": "Applies a precise controlled effect.", "limitation": "Consumes the world's normal resource.",
+            "growth_path": "Refine precision and efficiency.", "combat_usable": True, "effect_type": "control",
+        }}
+        state["companions"] = [{"name": "Test Ally", "role": "Support", "combat_support": True}]
+        state["npc_memories"] = {
+            "Test Ally": {"goal": "Keep the player alive", "recurring": True, "last_known_location": "Starting Region"},
+            "Test Nemesis": {"goal": "Complete a long-running scheme", "recurring": True, "nemesis": True},
+        }
+        state["location"] = "Starting Region"
+        state["quests"] = [{"name": "Test Thread", "status": "Active", "next_hint": "Follow the established lead"}]
+        refresh_simulation_core(state, ["Train the Signature Test Art through focused daily drills"], 43200)
+        checks = {
+            "capability": bool((state.get("capability_profile") or {}).get("power")),
+            "ability_contract": bool(((state.get("ability_registry") or {}).get("Signature Test Art") or {}).get("mechanics", {}).get("counterplay")),
+            "progression": (state.get("progression_calibration") or {}).get("expected_primary_gain", {}).get("typical", 0) > 0,
+            "npc_continuity": bool((state.get("npc_continuity") or {}).get("Test Nemesis", {}).get("nemesis")),
+            "companion_support": bool(companion_support_for_combat(state)),
+            "story_thread": bool(state.get("story_threads")),
+            "encounter_phase": (state.get("encounter_state") or {}).get("phase") == "idle",
+        }
+        before = copy.deepcopy(state)
+        state["stats"][next(iter(state["stats"]))] += 2
+        tx = record_resolution_transaction(state, before, ["Train the Signature Test Art"], 60, "Training produces a visible gain.", [])
+        checks["resolution_pipeline"] = bool(tx.get("phases", {}).get("mechanics", {}).get("stat_changes"))
+        results.append({"world": world, "passed": sum(bool(v) for v in checks.values()),
+                        "total": len(checks), "checks": checks})
+    passed = sum(row["passed"] for row in results)
+    total = sum(row["total"] for row in results)
+    return {"kind": "local_simulation_core", "created_at": datetime.now().isoformat(timespec="seconds"),
+            "score": round(100 * passed / max(1, total)), "passed": passed, "total": total,
+            "worlds": results, "ai_calls": 0, "estimated_cost_usd": 0.0, "campaign_mutated": False}
 
 
 def _text_blob(value):

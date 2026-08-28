@@ -3617,7 +3617,7 @@ async function openJournal(tab) {
   } else if (tab === "evaluations") {
     const scenarios = data.evaluations?.scenarios || [];
     const history = data.evaluations?.history || [];
-    panel.innerHTML = `<div class="system-summary"><b>LIVE NARRATOR EVALUATIONS</b><span>These isolated scenarios call AI models but never change the campaign. Each model/scenario pair uses one AI call and may incur its normal cost.</span></div><div class="evaluation-actions"><button type="button" class="btn-primary" data-eval-run="all">RUN ALL ${scenarios.length}</button><label class="evaluation-compare"><span>Compare models on the same scenarios</span><input id="evaluation-models" placeholder="gpt-5-mini, gpt-5.4-mini" value="${escapeHtml((data.evaluation_models || []).join(", "))}"><small>Two to five model IDs. This can make several paid calls.</small></label><button type="button" class="btn-ghost" data-eval-compare>COMPARE ON ALL SCENARIOS</button></div><div class="evaluation-grid">${scenarios.map((row) => `<article class="evaluation-card"><header><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.world)}</span></header><p>${escapeHtml(row.action)}</p><button type="button" class="btn-ghost" data-eval-run="${escapeHtml(row.id)}">RUN THIS SCENARIO</button></article>`).join("")}</div><h3>Recent reports</h3><div id="evaluation-result">${history.length ? history.map((row) => `<div class="jrow"><b>${escapeHtml(row.score)}/100 · ${escapeHtml(row.model || "Unknown model")}</b><br>${escapeHtml(row.scenario_count)} scenario(s) · ${escapeHtml(row.created_at || "")}</div>`).join("") : '<div class="jrow hint">No live model evaluation has been run yet.</div>'}</div>`;
+    panel.innerHTML = `<div class="system-summary"><b>SIMULATION CORE CHECK</b><span>Runs deterministic checks in every world. It makes no AI calls, costs nothing, and never changes a campaign.</span><button type="button" class="btn-primary" data-eval-local>RUN FREE CORE CHECK</button></div><div class="system-summary"><b>LIVE NARRATOR EVALUATIONS</b><span>These isolated scenarios call AI models but never change the campaign. Each model/scenario pair uses one AI call and may incur its normal cost.</span></div><div class="evaluation-actions"><button type="button" class="btn-primary" data-eval-run="all">RUN ALL ${scenarios.length}</button><label class="evaluation-compare"><span>Compare models on the same scenarios</span><input id="evaluation-models" placeholder="gpt-5-mini, gpt-5.4-mini" value="${escapeHtml((data.evaluation_models || []).join(", "))}"><small>Two to five model IDs. This can make several paid calls.</small></label><button type="button" class="btn-ghost" data-eval-compare>COMPARE ON ALL SCENARIOS</button></div><div class="evaluation-grid">${scenarios.map((row) => `<article class="evaluation-card"><header><b>${escapeHtml(row.name)}</b><span>${escapeHtml(row.world)}</span></header><p>${escapeHtml(row.action)}</p><button type="button" class="btn-ghost" data-eval-run="${escapeHtml(row.id)}">RUN THIS SCENARIO</button></article>`).join("")}</div><h3>Recent reports</h3><div id="evaluation-result">${history.length ? history.map((row) => `<div class="jrow"><b>${escapeHtml(row.score)}/100 · ${escapeHtml(row.model || "Unknown model")}</b><br>${escapeHtml(row.scenario_count)} scenario(s) · ${escapeHtml(row.created_at || "")}</div>`).join("") : '<div class="jrow hint">No live model evaluation has been run yet.</div>'}</div>`;
   } else if (tab === "combat") {
     const c = data.combat || {};
     if (!c || !c.active) {
@@ -3868,6 +3868,19 @@ $("#journal-panel").addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-support-bundle]")) {
     downloadEndpoint("/api/diagnostics/bundle");
+    return;
+  }
+  const localEvalButton = event.target.closest("[data-eval-local]");
+  if (localEvalButton) {
+    localEvalButton.disabled = true;
+    localEvalButton.textContent = "CHECKING EVERY WORLD";
+    try {
+      const report = await apiPost("/api/evaluations/local", {});
+      const target = $("#evaluation-result");
+      if (target) target.innerHTML = `<div class="evaluation-score"><strong>${escapeHtml(report.score)}/100</strong><div><b>Free simulation-core check</b><span>${escapeHtml(report.passed)}/${escapeHtml(report.total)} checks · 0 AI calls · $0.00</span></div></div>` + (report.worlds || []).map((row) => `<details class="evaluation-result"><summary><b>${escapeHtml(row.world)}</b><span>${escapeHtml(row.passed)}/${escapeHtml(row.total)}</span></summary>${Object.entries(row.checks || {}).map(([name, passed]) => `<div><b>${passed ? "PASS" : "FAIL"} — ${escapeHtml(name.replaceAll("_", " "))}</b></div>`).join("")}</details>`).join("");
+      showToast(`Free simulation check finished at ${report.score}/100.`, report.score === 100 ? "notify" : "danger");
+    } catch (error) { showToast(error.message, "danger"); }
+    finally { localEvalButton.disabled = false; localEvalButton.textContent = "RUN FREE CORE CHECK"; }
     return;
   }
   const evalButton = event.target.closest("[data-eval-run]");

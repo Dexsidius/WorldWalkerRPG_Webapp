@@ -302,6 +302,8 @@ def refresh_npc_intentions(state):
         row["relationship"] = copy.deepcopy(relationships.get(name) or memory.get("attitude") or row.get("relationship") or "Unknown")
         row["knowledge"] = copy.deepcopy(memory.get("knowledge") or row.get("knowledge") or {})
         row["location"] = _text(memory.get("last_known_location") or row.get("location") or "Unknown")
+        row["nemesis"] = bool(memory.get("nemesis") or row.get("nemesis"))
+        row["recurring"] = bool(memory.get("recurring") or row.get("recurring") or row["nemesis"])
         row["status"] = row.get("status") or "active"
     # Do not delete old intentions: defeated, missing, or absent NPCs are
     # historical state.  They simply stop advancing unless marked active.
@@ -388,7 +390,9 @@ def advance_npc_intentions(state, elapsed_minutes, mode="balanced"):
         previous = float(row.get("progress", 0) or 0)
         # Nearby actors move in fine increments; off-screen actors move in a
         # coarser but bounded step.  Neither receives a separate AI call.
-        rate = 2.0 if name in detailed else 1.2
+        # Nemeses remain slow-burn threats, but their flag is carried into
+        # this newer intention system rather than only the legacy clock.
+        rate = (0.65 if row.get("nemesis") else 2.0) if name in detailed else (0.4 if row.get("nemesis") else 1.2)
         step = max(0.25 if elapsed_minutes else 0, min(18.0, days * rate))
         current = min(100.0, previous + step)
         row["progress"] = round(current, 1)
@@ -398,11 +402,11 @@ def advance_npc_intentions(state, elapsed_minutes, mode="balanced"):
         old_milestone = int(row.get("milestone", 0) or 0)
         if milestone > old_milestone:
             row["milestone"] = milestone
-            events.append({"type": "world", "message": f"{name} advances a personal plan: {row.get('goal')}",
+            events.append({"type": "world", "nemesis": bool(row.get("nemesis")), "message": f"{name} advances a {'scheme' if row.get('nemesis') else 'personal plan'}: {row.get('goal')}",
                            "importance": 55 if name in detailed else 35})
         if current >= 100:
             row["status"] = "turning_point"
-            events.append({"type": "world", "message": f"{name}'s plan reaches a turning point: {row.get('goal')}", "importance": 80})
+            events.append({"type": "world", "nemesis": bool(row.get("nemesis")), "message": f"{name}'s {'scheme' if row.get('nemesis') else 'plan'} reaches a turning point: {row.get('goal')}", "importance": 90 if row.get("nemesis") else 80})
     record_simulation_events(state, events, "npc_intentions")
     return events
 

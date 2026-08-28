@@ -1659,7 +1659,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         ability_declined = self.background_ability_declined(background)
         ability_awarded = world != "Jujutsu Kaisen" and (
             ability_requested or (
-                allow_starting_specials and not ability_declined and random.random() < RANDOM_STARTING_ABILITY_CHANCE
+                allow_starting_specials and not ability_declined and not jinchuriki_profile
+                and random.random() < RANDOM_STARTING_ABILITY_CHANCE
             )
         )
         if ability_awarded:

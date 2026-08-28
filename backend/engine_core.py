@@ -24,6 +24,7 @@ from simulation import (compile_context_snapshot, normalize_simulation_mode,
 from simulation_integrity import canon_dependency_graph
 from overgeared_classes import canon_class_prompt_reference
 from ability_archive import GeneratedAbilityArchive
+from simulation_core import refresh_simulation_core
 
 
 DEFAULT_SETTINGS = {
@@ -762,11 +763,29 @@ Return ONLY valid JSON. No markdown fences."""
         only fields that can affect that task, avoiding tens of thousands of
         repeated tokens without deleting anything from the real save.
         """
+        refresh_simulation_core(self.state)
         snapshot = self.trimmed_state_for_ai(query)
         snapshot["mechanical_power_profile"] = power_profile_for(
             self.state.get("world", "Custom World"), self.state.get("stats", {}),
             self.state.get("special", {}).get("Archetype", ""),
         )
+        capability = self.state.get("capability_profile", {})
+        snapshot["capability_summary"] = {
+            "tier": capability.get("tier", {}), "power": capability.get("power", {}),
+            "world_traits": capability.get("world_traits", {}),
+            "combat_abilities": capability.get("combat_abilities", [])[:24],
+            "limitations": capability.get("limitations", [])[:12],
+        }
+        continuity = self.state.get("npc_continuity", {})
+        snapshot["npc_role_flags"] = [{
+            "name": row.get("name"), "companion": row.get("companion"), "nemesis": row.get("nemesis"),
+            "combat_support": row.get("combat_support"), "support_bonus": row.get("support_bonus"),
+            "goal": row.get("goal"), "status": row.get("status"),
+        } for row in continuity.values() if row.get("nemesis") or row.get("companion")]
+        snapshot["active_story_threads"] = [
+            {k: row.get(k) for k in ("id", "title", "kind", "status", "detail")}
+            for row in self.state.get("story_threads", {}).values() if row.get("status") in {"active", "turning_point", "blocked"}
+        ][:24]
         purpose = str(purpose or "moment")
         if purpose in {"moment", "time_skip", "major_event", "event"}:
             return snapshot
@@ -779,6 +798,7 @@ Return ONLY valid JSON. No markdown fences."""
             "canon_divergences", "campaign_direction", "active_action_goals", "prerequisite_tracks",
             "authoritative_player_corrections", "simulation_scale", "combat", "danger_scenario",
             "mechanical_power_profile", "standing_intents",
+            "capability_summary", "npc_role_flags", "active_story_threads",
         }
         if purpose == "opening":
             opening = common | {"starting_power_band", "starting_power_notice", "appearance_desc", "portrait_traits"}

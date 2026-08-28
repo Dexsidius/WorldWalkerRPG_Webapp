@@ -32,6 +32,7 @@ from lit_systems import process_lit_turn
 from jjk_system import advance_jjk_state
 from standing_intents import (advance_standing_intents, player_training_directives,
                               register_standing_intents, standing_intent_context)
+from simulation_core import refresh_simulation_core, record_resolution_transaction
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -1888,6 +1889,11 @@ class TimeSkipMixin:
             if self.settings.get("developer_mode"):
                 self.append(f"[AI ROUTE]\n{self.state['last_ai_route']['role']}: {self.state['last_ai_route']['model']}", "meta")
             update_narrative_memory(before, self.state, action_summary, data.get("narrative", ""))
+            refresh_simulation_core(self.state, context.get("actions", []), elapsed_minutes, action_summary)
+            record_resolution_transaction(
+                self.state, before, context.get("actions", []), elapsed_minutes,
+                data.get("narrative", ""), context.get("rolls", []),
+            )
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, action_summary, data.get("narrative", ""))
             for note in self.state.pop("_pending_chronicle_notes", []):

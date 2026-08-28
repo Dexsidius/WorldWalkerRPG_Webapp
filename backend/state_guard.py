@@ -19,6 +19,7 @@ from skill_system import normalize_skill_map
 from ability_mechanics import compile_ability_mechanics
 from power_benchmarks import benchmark_tier
 from politics import normalize_political_state
+from simulation_core import refresh_simulation_core
 
 def _compile_skill_mechanics(state):
     skills = normalize_skill_map(state.get("skills", {}))
@@ -79,6 +80,8 @@ APP_OWNED = {
     "simulation_validation",
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
     "overgeared_system", "solo_system", "jjk_system", "world_depth",
+    "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
+    "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -377,6 +380,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     repairs.extend(normalize_world_depth(state, before))
     repairs.extend(initialize_lit_systems(state))
     repairs.extend(normalize_political_state(state, before))
+    refresh_simulation_core(state)
     knowledge_changes = normalize_npc_knowledge(state, before, source)
     if knowledge_changes:
         repairs.extend(f"Downgraded unsupported secret knowledge for {row['npc']} to a suspicion" for row in knowledge_changes)
@@ -423,6 +427,7 @@ def migrate_state(state, from_version="unknown"):
     repairs.extend(normalize_world_depth(migrated))
     repairs.extend(initialize_lit_systems(migrated))
     repairs.extend(normalize_political_state(migrated))
+    refresh_simulation_core(migrated)
     migrated.setdefault("diagnostics", {})["migration"] = {
         "from_version": from_version, "repairs": repairs,
         "time": datetime.now().isoformat(timespec="seconds"),

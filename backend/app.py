@@ -25,7 +25,7 @@ from causality import causality_snapshot
 from simulation_integrity import (integrity_snapshot, campaign_search,
                                   apply_player_correction, build_travel_graph,
                                   travel_route, canon_dependency_graph)
-from evaluations import list_evaluations, run_model_comparison, run_model_evaluation
+from evaluations import list_evaluations, run_model_comparison, run_model_evaluation, run_local_simulation_evaluation
 from support import repair_campaign_state, build_diagnostic_bundle
 from friend_accounts import FriendAccountStore, FriendGameRegistry, persistent_secret
 from multiplayer import (MultiplayerStore, character_from_state, player_view,
@@ -1647,6 +1647,11 @@ def api_actions_move():
 @app.route("/api/evaluations")
 def api_evaluations():
     return jsonify(list_evaluations())
+
+
+@app.route("/api/evaluations/local", methods=["POST"])
+def api_evaluations_local():
+    return jsonify(run_local_simulation_evaluation())
 
 
 @app.route("/api/evaluations/run", methods=["POST"])

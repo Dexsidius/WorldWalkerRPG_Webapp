@@ -6,7 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.29.0** (schema 19).
+Current app/save version: **3.30.0** (schema 19).
+
+Version 3.30.0 unifies character capability, abilities, progression, NPC
+continuity, encounter phases, and living story threads behind every turn. It
+also makes existing nemesis and companion combat-support flags mechanically
+visible to the GM, and adds a free nine-world simulation evaluator.
 
 Version 3.29.0 adds persistent narrative intentions: ongoing care, delegated
 training, protection, policies, routines, and projects continue between turns

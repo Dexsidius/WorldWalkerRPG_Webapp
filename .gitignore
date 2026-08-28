@@ -29,7 +29,7 @@ __pycache__/
 venv/
 
 # Runtime state written by the test suite (autosaves, etc.) — not source
-tests/.runtime/
+tests/.runtime*/
 
 # OS cruft
 .DS_Store

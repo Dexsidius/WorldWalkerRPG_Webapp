@@ -32,6 +32,7 @@ from util import clamp
 from systems import normalize_tuning
 from skill_system import infer_skill_metadata, normalize_skill_map
 from ai_client import AI
+from simulation_core import companion_support_for_combat, normalize_encounter_state
 
 BASE_HIT_PCT = 0.13         # a bare-minimum successful hit does ~13% of the target's max HP
 MARGIN_HIT_PCT = 0.09       # up to another 9% for a big margin over the difficulty
@@ -151,6 +152,13 @@ class CombatMixin:
         combat.setdefault("outcome", None)
         combat.setdefault("cooldowns", {})
         combat.setdefault("ally_support", 0)
+        supporters = companion_support_for_combat(self.state)
+        if supporters:
+            # Preserve an explicitly stronger narrator-authored group bonus,
+            # while making existing companion combat-support flags functional.
+            flagged_bonus = min(30, sum(int(row.get("bonus", 0) or 0) for row in supporters))
+            combat["ally_support"] = max(int(combat.get("ally_support", 0) or 0), flagged_bonus)
+            combat["supporting_companions"] = supporters
         combat.setdefault("enemy_debuffs", [])
         combat.setdefault("player_buffs", [])
         combat.setdefault("player_debuffs", [])
@@ -166,6 +174,7 @@ class CombatMixin:
         # Lose this fight and the enemy still kills you; this is mercy you
         # extend, not a safety net you get.
         combat.setdefault("spare_enemy", False)
+        normalize_encounter_state(self.state)
 
     def combat_active(self):
         combat = self.state.get("combat")
@@ -744,6 +753,7 @@ class CombatMixin:
         combat = self.state.get("combat") or {}
         combat["active"] = False
         combat["outcome"] = outcome
+        normalize_encounter_state(self.state)
         # The round-by-round fight is the dangerous scenario.  Once it has a
         # mechanical outcome, later unrelated hard actions must be allowed to
         # receive their own warning instead of inheriting stale consent.

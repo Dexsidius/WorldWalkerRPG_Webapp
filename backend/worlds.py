@@ -10,7 +10,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.29.0"
+APP_VERSION = "3.30.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1509,7 +1509,10 @@ BASE_STATE = {
     # memory_updates is a transient GM suggestion; reliability.py folds it
     # into the app-owned, deduplicated long-term narrative memory.
     "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]},
-    "campaign_direction":{},"relationship_opportunities":[],"last_cause_effect":[],"last_training_summary":{},"last_ai_route":{}
+    "campaign_direction":{},"relationship_opportunities":[],"last_cause_effect":[],"last_training_summary":{},"last_ai_route":{},
+    "capability_profile":{},"ability_registry":{},"progression_calibration":{},"npc_continuity":{},
+    "encounter_state":{"version":1,"phase":"idle","negotiation_possible":True,"violence_committed":False},
+    "story_threads":{},"resolution_ledger":[],"simulation_core_version":1
 }
 
 WORLD_EXPANSIONS = {

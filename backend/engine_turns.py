@@ -26,6 +26,7 @@ from simulation_integrity import (register_action_goals, reconcile_action_goals,
 from lit_systems import initialize_lit_systems, process_lit_turn
 from overgeared_classes import starter_kit_for, class_action_bonus
 from jjk_system import advance_jjk_state
+from simulation_core import refresh_simulation_core, record_resolution_transaction
 
 
 DEFAULT_SETTINGS = {
@@ -707,6 +708,17 @@ Return ONLY valid JSON."""
             if new_warnings:
                 self.request_continuity_correction(new_warnings, data.get("narrative", ""))
             self.archive_finished_quests()
+            refresh_simulation_core(
+                self.state, turn_actions,
+                0 if is_opening else int(context.get("elapsed_minutes", 5) or 5),
+                pending_action or "",
+            )
+            if not is_opening:
+                record_resolution_transaction(
+                    self.state, before, turn_actions,
+                    int(context.get("elapsed_minutes", 5) or 5),
+                    data.get("narrative", ""), context.get("rolls", []),
+                )
             notifications = self.notify(before, self.state, data.get("events", []))
             if not is_opening:
                 self.history.append({"turn": self.state["turn"], "action": pending_action, "time": datetime.now().isoformat(timespec="seconds")})
