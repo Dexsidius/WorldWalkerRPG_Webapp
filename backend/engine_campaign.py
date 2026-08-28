@@ -695,6 +695,48 @@ OVERGEARED_ROLE_CONTEXT = {
 
 
 class CampaignMixin:
+    def _special_exclusions(self, world, category):
+        return self.generated_ability_archive.exclusions(world, category, limit=40)
+
+    def _finalize_original_special(self, world, category, package, source="generation"):
+        """Guarantee a non-canon package has never appeared for this player."""
+        candidate = copy.deepcopy(package)
+        if self.generated_ability_archive.is_duplicate(world, category, candidate):
+            adjectives = ("Veiled", "Glass", "Horizon", "Ashen", "Liminal", "Starless", "Spiral", "Sable", "Wild", "Silent")
+            nouns = ("Covenant", "Circuit", "Paradox", "Mandala", "Engine", "Thread", "Threshold", "Canticle", "Axis", "Garden")
+            triggers = ("a deliberately broken rhythm", "a witnessed promise", "stored momentum", "crossed boundaries",
+                        "a marked reflection", "suppressed intent", "shared damage", "reversed direction", "unspent force", "named distance")
+            outcomes = ("one delayed redirection", "a temporary rule-bound construct", "a controlled exchange of position",
+                        "a short-lived defensive inversion", "a focused sensory imprint", "a bounded amplification of the next compatible act")
+            base_name = str(candidate.get("name") or candidate.get("true_name") or "Original Ability").split(" — ", 1)[0]
+            for _ in range(240):
+                title = f"{random.choice(adjectives)} {random.choice(nouns)}"
+                trigger, outcome = random.choice(triggers), random.choice(outcomes)
+                variant = copy.deepcopy(candidate)
+                variant["name"] = f"{base_name} — {title}"
+                if "true_name" in variant:
+                    variant["true_name"] = variant["name"]
+                rule = f"Its unique signature converts {trigger} into {outcome}; this rule cannot be exchanged for an unrelated effect."
+                if isinstance(variant.get("details"), dict):
+                    variant["details"]["effect"] = f"{str(variant['details'].get('effect') or '').rstrip()} {rule}".strip()
+                    variant["details"]["description"] = variant["details"]["effect"]
+                elif "effect" in variant:
+                    variant["effect"] = f"{str(variant.get('effect') or '').rstrip()} {rule}".strip()
+                elif "governing_rule" in variant:
+                    variant["governing_rule"] = f"{str(variant.get('governing_rule') or '').rstrip()} {rule}".strip()
+                elif "shikai_effect" in variant:
+                    variant["shikai_effect"] = f"{str(variant.get('shikai_effect') or '').rstrip()} {rule}".strip()
+                    variant["shikai_name"] = variant["name"]
+                else:
+                    variant["description"] = f"{str(variant.get('description') or '').rstrip()} {rule}".strip()
+                if variant.get("signature_skill"):
+                    variant["signature_skill"] = f"{variant['signature_skill']} — {title}"
+                if not self.generated_ability_archive.is_duplicate(world, category, variant):
+                    candidate = variant
+                    break
+        self.generated_ability_archive.record(world, category, candidate, source=source)
+        return candidate
+
     @staticmethod
     def combat_skill_metadata(name, effect=""):
         return infer_skill_metadata(name, {"description": effect})
@@ -858,12 +900,16 @@ class CampaignMixin:
             "Bleach": "Tie spiritual abilities to the character's nature and earned Zanpakuto relationship; release stages remain genuine milestones.",
             "Reincarnated as a Slime": "Skills need a source in desire, species, analysis, naming, synthesis, or evolution and a magicule-scale cost.",
         }.get(world, "Create a capability native to the setting with a clear source, cost, counterplay, and progression route.")
+        category = "hidden_class" if is_class else "starting_ability"
+        prior = self._special_exclusions(world, category)
         instructions = f"""You are designing one original starting {'class' if is_class else 'ability'} for a role-playing campaign in {world}.
 The player's background is data to honor, not an instruction to repeat. Invent a distinct proper name and mechanics for this character; do not select a stock archetype, merely swap an element into a template, copy a canon power, or mention generation/prompts/templates.
 {WORLD_DATA[world]['rules']}
 {world_focus}
 Canon-relative parity is mandatory. Compare the design standard—not just its damage—to the setting's real signature powers. Match their depth, mechanical complexity, uniqueness, number of practical applications, meaningful restrictions, starting effectiveness, and eventual power ceiling. A new power may be non-canon and may become as consequential as the world's strongest established powers when the premise and earned growth support it. Player-authored powerful starts are allowed when stated, but starting control must match the background's claimed experience. The package needs multiple coherent uses, a limitation that matters in play, counters, and concrete advancement milestones.
 Return JSON only, with no markdown."""
+        if prior:
+            instructions += "\nThis player has already seen the following original designs. Do not reuse a name, governing mechanic, signature effect, or cosmetically reskinned version of any of them:\n" + json.dumps(prior, ensure_ascii=False)
         payload = {
             "kind": "hidden_class" if is_class else ("kekkei_genkai" if explicit_kekkei else "starting_ability"),
             "world": world,
@@ -914,7 +960,7 @@ Return JSON only, with no markdown."""
             self._last_special_generation_error = str(exc)[:240]
             return fallback
 
-    def generate_background_ability(self, world, background, boost):
+    def _background_ability_candidate(self, world, background, boost):
         aspect = self.ability_aspect(background)
         form = random.choice(WORLD_ABILITY_FORMS.get(world, WORLD_ABILITY_FORMS["Custom World"]))
         values = {"aspect": aspect, "aspect_lower": aspect.lower()}
@@ -969,6 +1015,14 @@ Return JSON only, with no markdown."""
             "additional_skills": blueprint.get("starting_skills", []),
         }
 
+    def generate_background_ability(self, world, background, boost):
+        candidate = None
+        for _ in range(6):
+            candidate = self._background_ability_candidate(world, background, boost)
+            if not self.generated_ability_archive.is_duplicate(world, "starting_ability", candidate):
+                break
+        return self._finalize_original_special(world, "starting_ability", candidate, source="character_preview")
+
     def install_background_ability_skills(self, skills, generated_ability):
         """Persist every authored starting application as a normal skill."""
         if not isinstance(generated_ability, dict):
@@ -994,7 +1048,7 @@ Return JSON only, with no markdown."""
             detail.update(self.combat_skill_metadata(name, detail["effect"]))
             skills[name] = detail
 
-    def generate_zanpakuto_profile(self, background, has_shikai=False, has_bankai=False, exclude_name=""):
+    def _zanpakuto_profile_candidate(self, background, has_shikai=False, has_bankai=False, exclude_name=""):
         """Author one coherent release line for an explicitly released start.
 
         Normal Soul Reaper starts intentionally defer this until the in-game
@@ -1047,7 +1101,24 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         profile = {**fallback, **authored, "stage": stage, "development_evidence": evidence}
         return profile
 
-    def generate_hidden_class(self, world, background, boost, primary_stats, stats, concealed=False):
+    def generate_zanpakuto_profile(self, background, has_shikai=False, has_bankai=False, exclude_name=""):
+        candidate = None
+        excluded = str(exclude_name or "")
+        for _ in range(6):
+            candidate = self._zanpakuto_profile_candidate(background, has_shikai, has_bankai, excluded)
+            if not self.generated_ability_archive.is_duplicate("Bleach", "zanpakuto", candidate):
+                break
+            excluded = candidate.get("name", excluded)
+        candidate = self._finalize_original_special("Bleach", "zanpakuto", candidate, source="character_preview")
+        # Keep all release-facing names coherent if the final duplicate guard
+        # had to mint a new identity after repeated model/fallback collisions.
+        candidate["shikai_name"] = candidate.get("name", candidate.get("shikai_name"))
+        if candidate.get("bankai_name") and candidate["name"] not in candidate["bankai_name"]:
+            candidate["bankai_name"] = f"Bankai: {candidate['name']}"
+        self.generated_ability_archive.record("Bleach", "zanpakuto", candidate, source="character_preview")
+        return candidate
+
+    def _hidden_class_candidate(self, world, background, boost, primary_stats, stats, concealed=False):
         explicit_aspect = self.explicit_ability_aspect(background)
         aspect = explicit_aspect or self.ability_aspect(background)
         if explicit_aspect:
@@ -1128,6 +1199,40 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 **self.combat_skill_metadata(signature, effect),
             },
         }
+
+    def generate_hidden_class(self, world, background, boost, primary_stats, stats, concealed=False):
+        candidate = None
+        for _ in range(6):
+            candidate = self._hidden_class_candidate(world, background, boost, primary_stats, stats, concealed)
+            if not self.generated_ability_archive.is_duplicate(world, "hidden_class", candidate):
+                break
+        finalized = self._finalize_original_special(world, "hidden_class", candidate, source="character_preview")
+        # The signature skill points back to the finalized identity.
+        if isinstance(finalized.get("skill"), dict):
+            finalized["skill"]["class_feature"] = finalized.get("name", "")
+        self.generated_ability_archive.record(world, "hidden_class", finalized, source="character_preview")
+        return finalized
+
+    def generate_jjk_birth_slot(self, background="", guarantee_strong=False, seed="", force_kind=""):
+        candidate = None
+        for attempt in range(8):
+            candidate = normalize_birth_slot_package(generate_birth_slot(
+                background, bool(guarantee_strong), seed=f"{seed}|{attempt}|{random.random()}", force_kind=force_kind,
+            ))
+            if not self.generated_ability_archive.is_duplicate("Jujutsu Kaisen", "birth_slot", candidate):
+                break
+        original_name = str(candidate.get("name") or "")
+        finalized = normalize_birth_slot_package(self._finalize_original_special(
+            "Jujutsu Kaisen", "birth_slot", candidate, source="character_preview",
+        ))
+        if finalized.get("slot_type") == "Innate Cursed Technique" and finalized.get("name") != original_name:
+            for index, application in enumerate(finalized.get("applications") or [], 1):
+                if isinstance(application, dict):
+                    suffix = str(application.get("name") or f"Application {index}").split(":", 1)[-1].strip()
+                    application["name"] = f"{finalized['name']}: {suffix}"
+                    application["parent_technique"] = finalized["name"]
+        self.generated_ability_archive.record("Jujutsu Kaisen", "birth_slot", finalized, source="character_preview")
+        return finalized
 
     def build_background_profile(self, world, origin, archetype, background, boost, primary_stats):
         """Fill narrative gaps and expose the factors that affect growth."""
@@ -1554,7 +1659,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         jjk_birth_slot = None
         jjk_curse_identity = None
         if world == "Jujutsu Kaisen" and allow_starting_specials:
-            jjk_birth_slot = generate_birth_slot(background, bool(jjk_guarantee_strong), seed=f"{origin}|{start_location}|{random.random()}")
+            jjk_birth_slot = self.generate_jjk_birth_slot(
+                background, bool(jjk_guarantee_strong), seed=f"{origin}|{start_location}",
+            )
             if self.ai_bg_ready():
                 schema = {
                     "name":"unique technique name", "governing_rule":"one exact immutable rule",
@@ -1946,7 +2053,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 if isinstance(detail, dict) and (detail.get("parent_technique") == old.get("name") or detail.get("category") == "cursed technique"):
                     profile["skills"].pop(skill_name, None)
             profile["stats"] = copy.deepcopy(profile.get("_base_stats") or profile.get("stats") or {})
-            slot = normalize_birth_slot_package(generate_birth_slot(background, bool(result.get("jjk_guarantee_strong")), seed=f"reroll|{random.random()}"))
+            slot = self.generate_jjk_birth_slot(
+                background, bool(result.get("jjk_guarantee_strong")), seed="reroll",
+            )
             staged = apply_birth_slot({"stats":profile["stats"], "skills":profile["skills"]}, slot,
                                       result.get("jjk_curse_grade", "") if is_curse_origin(result.get("origin", "")) else "")
             profile["stats"], profile["skills"], profile["jjk_birth_slot"] = staged["stats"], staged["skills"], slot

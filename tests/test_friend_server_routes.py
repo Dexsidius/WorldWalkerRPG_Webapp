@@ -35,6 +35,18 @@ class FriendServerRouteTests(unittest.TestCase):
             assert registered_two.status_code == 201, registered_two.data
             csrf_one = registered_one.get_json()["csrf_token"]
             csrf_two = registered_two.get_json()["csrf_token"]
+            mobile_token = registered_one.get_json()["auth_token"]
+
+            # Privacy-heavy mobile browsers and installed PWAs may discard the
+            # Flask cookie after login. The signed fallback must preserve the
+            # exact same private account and CSRF boundary without cookies.
+            mobile = app.test_client(use_cookies=False)
+            bearer = {"Authorization":f"Bearer {mobile_token}", "X-Worldwalker-CSRF":csrf_one}
+            mobile_session = mobile.get("/api/auth/session", headers=bearer).get_json()
+            assert mobile_session["authenticated"] and mobile_session["user"]["username"] == "friend_one"
+            mobile_settings = mobile.post("/api/settings", json={"narration":"Cinematic"}, headers=bearer)
+            assert mobile_settings.status_code == 200, mobile_settings.data
+            assert mobile.get("/api/settings", headers=bearer).get_json()["narration"] == "Cinematic"
 
             created_one = first.post("/api/campaign/new", json={
                 "name":"Friend One Hero", "world":"Naruto", "difficulty":"Adventurer", "background":"A traveling shinobi."

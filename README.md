@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.27.0** (schema 19).
+Current app/save version: **3.27.1** (schema 19).
+
+Version 3.27.1 adds a mobile-safe signed login fallback for browsers and
+installed PWAs that discard the normal secure session cookie. It also records
+every non-canon generated ability, hidden class, Zanpakuto, and JJK birth-slot
+design in a per-account Codex archive and prevents rerolls from repeating any
+name or mechanical package the player has already seen.
 
 Version 3.27 deepens Jujutsu Kaisen play with coherent generated technique
 packages, persistent mastery tracks, binding vows, technique intelligence,

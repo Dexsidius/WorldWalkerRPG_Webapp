@@ -29,7 +29,7 @@ class WorldwalkerV370Tests(unittest.TestCase):
         return game
 
     def test_version_and_manual_portrait_default(self):
-        self.assertEqual(APP_VERSION, "3.27.0")
+        self.assertEqual(APP_VERSION, "3.27.1")
         self.assertFalse(DEFAULT_SETTINGS["portrait_auto_generate"])
 
     def test_completed_combat_never_overrides_the_current_environment_art(self):

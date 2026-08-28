@@ -3,6 +3,19 @@
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const AUTH_TOKEN_STORAGE_KEY = "worldwalker_friend_auth_token";
+
+function storedAuthToken() {
+  try { return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || ""; }
+  catch (_) { return ""; }
+}
+
+function persistAuthToken(value) {
+  try {
+    if (value) window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, value);
+    else window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  } catch (_) { /* A normal session cookie can still carry the login. */ }
+}
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -38,6 +51,7 @@ async function api(path, opts = {}) {
   const requestOptions = { ...opts };
   const headers = new Headers(opts.headers || {});
   const method = String(opts.method || "GET").toUpperCase();
+  if (APP?.authToken) headers.set("Authorization", `Bearer ${APP.authToken}`);
   if (APP?.csrfToken && !["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("X-Worldwalker-CSRF", APP.csrfToken);
   requestOptions.headers = headers;
   const res = await fetch(path, requestOptions);
@@ -91,6 +105,7 @@ const APP = {
   accountsEnabled: false,
   account: null,
   csrfToken: "",
+  authToken: storedAuthToken(),
   worldsMeta: null,
   state: null,
   campaignActive: false,
@@ -3492,7 +3507,14 @@ async function openJournal(tab) {
     panel.innerHTML = `<h3>Your Story</h3>${personalRows}<h3>The Wider World</h3><p class="hint">Things happening on their own, whether or not you were there for them.</p>${backgroundRows}`;
   } else if (tab === "codex") {
     const codex = data.codex || [];
-    panel.innerHTML = codex.length ? codex.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Entry")}</b> <i>${escapeHtml(c.type || "")}</i><br/>${escapeHtml(c.notes || "")}</div>`).join("") : `<div class="jrow">No codex entries yet.</div>`;
+    const generated = await apiGet("/api/ability-archive");
+    const archivedRows = (generated.entries || []).slice().reverse().map((row) => {
+      const ability = row.package || {};
+      const effect = ability.effect || ability.description || ability.governing_rule || ability.shikai_effect || ability.enhancement || ability.details?.effect || "Original mechanics recorded for later reference.";
+      return `<details class="ability-archive-row"><summary><b>${escapeHtml(row.name || "Original ability")}</b><span>${escapeHtml(row.world)} · ${escapeHtml(humanLabel(row.category || "ability"))}</span></summary><p>${escapeHtml(effect)}</p><small>${escapeHtml(row.created_at || "")}</small></details>`;
+    }).join("") || `<div class="jrow hint">No original abilities have been generated for this account yet.</div>`;
+    const codexRows = codex.length ? codex.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Entry")}</b> <i>${escapeHtml(c.type || "")}</i><br/>${escapeHtml(c.notes || "")}</div>`).join("") : `<div class="jrow">No campaign codex entries yet.</div>`;
+    panel.innerHTML = `${codexRows}<h3>Original Ability Archive</h3><p class="hint">Every non-canon ability, hidden class, Zanpakutō, and JJK birth-slot design this account has seen is saved here. Rerolls exclude the entire archive.</p>${archivedRows}`;
   } else if (tab === "inventory") {
     const inv = data.inventory || [];
     const eq = data.equipment || {};
@@ -4627,6 +4649,10 @@ function applyAccountSession(auth) {
   APP.accountsEnabled = !!auth.accounts_enabled;
   APP.account = auth.user || null;
   APP.csrfToken = auth.csrf_token || APP.csrfToken || "";
+  if (auth.auth_token) {
+    APP.authToken = auth.auth_token;
+    persistAuthToken(APP.authToken);
+  }
   const accountButton = $("#btn-account");
   accountButton.hidden = !APP.account;
   $("#btn-welcome-signout").hidden = !APP.account;
@@ -4833,6 +4859,8 @@ $("#form-register").addEventListener("submit", async (event) => {
 
 async function signOutAccount() {
   try { await apiPost("/api/auth/logout", {}); } catch (_) { /* reload still clears stale UI state */ }
+  APP.authToken = "";
+  persistAuthToken("");
   window.location.reload();
 }
 $("#btn-account").addEventListener("click", signOutAccount);

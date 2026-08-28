@@ -23,6 +23,7 @@ from simulation import (compile_context_snapshot, normalize_simulation_mode,
                         simulation_profile, output_budget)
 from simulation_integrity import canon_dependency_graph
 from overgeared_classes import canon_class_prompt_reference
+from ability_archive import GeneratedAbilityArchive
 
 
 DEFAULT_SETTINGS = {
@@ -188,6 +189,9 @@ class CoreMixin:
         self.account_id = str(account_id or "")
         (self.save_dir or SAVE_DIR).mkdir(parents=True, exist_ok=True)
         self.settings_path.parent.mkdir(parents=True, exist_ok=True)
+        self.generated_ability_archive = GeneratedAbilityArchive(
+            self.settings_path.with_name("generated_abilities.json")
+        )
         self.settings = self.load_settings()
         self.ai = self.make_client(self.settings.get("model", ""))
         self.ai_bg = self.make_client(self.settings.get("secondary_model", "") or self.settings.get("model", ""))

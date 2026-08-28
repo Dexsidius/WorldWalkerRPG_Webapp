@@ -5,6 +5,7 @@ from datetime import timedelta
 from urllib.parse import quote
 from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory, send_file, g, session
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.local import LocalProxy
 
 from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for, power_profile_for
@@ -97,7 +98,8 @@ def bind_friend_account():
     # bound to an authenticated friend.
     public_api = {"/api/version", "/api/auth/session", "/api/auth/login", "/api/auth/register"}
     needs_account = request.path.startswith("/api/") or request.path.startswith("/portrait-cache/")
-    user_id = str(session.get("user_id") or "")
+    bearer = _bearer_identity()
+    user_id = str(session.get("user_id") or (bearer or {}).get("user_id") or "")
     user = _account_store.public_user(user_id) if user_id else None
     if not user:
         session.pop("user_id", None)
@@ -105,6 +107,7 @@ def bind_friend_account():
             return jsonify({"error": "Sign in to play.", "authentication_required": True}), 401
         return None
     g.worldwalker_user = user
+    g.worldwalker_bearer_csrf = str((bearer or {}).get("csrf_token") or "") if not session.get("user_id") else ""
     g.worldwalker_personal_game = _game_registry.get(user["id"])
     room = _multiplayer_store.active_room(user["id"]) if _multiplayer_store else None
     if room:
@@ -115,7 +118,8 @@ def bind_friend_account():
         g.worldwalker_game = g.worldwalker_personal_game
     if request.method not in {"GET", "HEAD", "OPTIONS"} and request.path not in {"/api/auth/login", "/api/auth/register"}:
         provided = request.headers.get("X-Worldwalker-CSRF", "")
-        if not secrets.compare_digest(provided, _csrf_token()):
+        expected = g.worldwalker_bearer_csrf or _csrf_token()
+        if not expected or not secrets.compare_digest(provided, expected):
             return jsonify({"error": "Your login session needs to be refreshed."}), 403
     return None
 
@@ -137,6 +141,40 @@ _evaluation_lock = threading.Lock()
 _portrait_lock = threading.Lock()
 _lore_refresh_lock = threading.Lock()
 _lore_refresh_started = False
+
+AUTH_TOKEN_MAX_AGE_SECONDS = 30 * 24 * 60 * 60
+
+
+def _auth_serializer():
+    """Sign a mobile-safe fallback token with the server's session secret."""
+    return URLSafeTimedSerializer(app.secret_key, salt="worldwalker-friend-auth-v1")
+
+
+def _issue_auth_token(user_id, csrf_token):
+    return _auth_serializer().dumps({"user_id": str(user_id), "csrf_token": str(csrf_token)})
+
+
+def _bearer_identity():
+    """Recover an account when a phone browser refuses the session cookie.
+
+    The normal first-party, HttpOnly cookie remains the preferred path.  A
+    signed bearer token is returned only after a successful login/register
+    and gives installed PWAs and privacy-heavy mobile browsers an equivalent
+    30-day session without weakening account isolation.
+    """
+    header = str(request.headers.get("Authorization") or "")
+    if not header.lower().startswith("bearer "):
+        return None
+    token = header.split(" ", 1)[1].strip()
+    if not token:
+        return None
+    try:
+        payload = _auth_serializer().loads(token, max_age=AUTH_TOKEN_MAX_AGE_SECONDS)
+    except (BadSignature, SignatureExpired):
+        return None
+    if not isinstance(payload, dict) or not payload.get("user_id"):
+        return None
+    return {"user_id": str(payload["user_id"]), "csrf_token": str(payload.get("csrf_token") or "")}
 
 
 def _start_due_lore_refresh_once():
@@ -382,11 +420,12 @@ def portrait_cache(filename):
 @app.route("/api/auth/session")
 def api_auth_session():
     user = getattr(g, "worldwalker_user", None)
+    bearer_csrf = str(getattr(g, "worldwalker_bearer_csrf", "") or "")
     return jsonify({
         "accounts_enabled": ACCOUNTS_ENABLED,
         "authenticated": bool(user),
         "user": user,
-        "csrf_token": _csrf_token() if ACCOUNTS_ENABLED else "",
+        "csrf_token": (bearer_csrf or _csrf_token()) if ACCOUNTS_ENABLED else "",
         "invite_required": bool(os.getenv("WORLDWALKER_INVITE_CODE", "").strip()) if ACCOUNTS_ENABLED else False,
     })
 
@@ -402,7 +441,8 @@ def api_auth_register():
         session.permanent = True
         session["user_id"] = user["id"]
         token = _csrf_token()
-        return jsonify({"ok": True, "user": user, "csrf_token": token}), 201
+        return jsonify({"ok": True, "user": user, "csrf_token": token,
+                        "auth_token": _issue_auth_token(user["id"], token)}), 201
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
@@ -418,7 +458,8 @@ def api_auth_login():
         session.permanent = True
         session["user_id"] = user["id"]
         token = _csrf_token()
-        return jsonify({"ok": True, "user": user, "csrf_token": token})
+        return jsonify({"ok": True, "user": user, "csrf_token": token,
+                        "auth_token": _issue_auth_token(user["id"], token)})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 401
 
@@ -437,6 +478,15 @@ def api_auth_logout():
     if _game_registry and user_id:
         _game_registry.remove(user_id)
     return jsonify({"ok": True})
+
+
+@app.route("/api/ability-archive")
+def api_ability_archive():
+    """Return this account's non-canon creation history for later reuse."""
+    world = str(request.args.get("world") or "").strip()
+    category = str(request.args.get("category") or "").strip()
+    entries = game.generated_ability_archive.entries(world=world, category=category)
+    return jsonify({"count": len(entries), "entries": entries})
 
 
 # ---------- private two-player rooms ----------
