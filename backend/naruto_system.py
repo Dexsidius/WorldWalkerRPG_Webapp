@@ -318,6 +318,23 @@ def _mastery_from_text(text):
     return "Unmastered", 8
 
 
+def _jinchuriki_stat_boosts(control, pending=False):
+    """Return the exact persistent stat increases granted at creation.
+
+    Transformation-only combat modifiers are intentionally not included here:
+    this is the durable increase that ``apply_jinchuriki_start`` writes into
+    the save, so the progression panel can never advertise a fictional bonus.
+    """
+    if pending:
+        return {}
+    control = max(0, int(control or 0))
+    boosts = {"Willpower": 6 + control // 12}
+    chakra_control = 12 if control >= 100 else 5 if control >= 70 else 0
+    if chakra_control:
+        boosts["Chakra Control"] = chakra_control
+    return boosts
+
+
 def build_jinchuriki_profile(background, seed="", legacy=""):
     text = " ".join(str(x or "") for x in (background, legacy)).strip()
     tails = _tails_from_text(text, seed)
@@ -343,6 +360,7 @@ def build_jinchuriki_profile(background, seed="", legacy=""):
     reserve_multiplier = 1.0 if pending else 1.65 if tails >= 8 else 1.45 if tails >= 4 else 1.35
     if mastered:
         reserve_multiplier += .25
+    stat_boosts = _jinchuriki_stat_boosts(control, pending)
     return {
         "name": f"{beast['name']} Jinchuriki",
         "beast": beast["name"], "title": beast["title"], "tails": tails,
@@ -358,6 +376,8 @@ def build_jinchuriki_profile(background, seed="", legacy=""):
         "drawbacks": drawbacks,
         "mastered_drawbacks_removed": list(UNMASTERED_DRAWBACKS) if mastered else [],
         "reserve_multiplier": round(reserve_multiplier, 2),
+        "chakra_reserve_bonus_percent": round((reserve_multiplier - 1.0) * 100),
+        "stat_boosts": stat_boosts,
         "bond_progress": 100 if mastered else 70 if cooperative else 20 if mastery == "Developing" else 0,
         "transformation_stage": "Full Tailed Beast Mode" if mastered else "Version 2 / partial transformation" if cooperative else "Version 1 cloak" if mastery == "Developing" else "Uncontrolled chakra leakage" if not pending else "Unavailable",
         "progression": ["Communicate with the tailed beast as an independent person", "Improve seal knowledge and chakra control", "Survive controlled cloak practice", "Build trust or establish legitimate control", "Achieve coordinated full transformation and Tailed Beast Ball mastery"],
@@ -379,7 +399,8 @@ def normalize_jinchuriki_profile(profile=None, legacy="", background="", seed=""
     beast_text = f"{current.get('beast', '')} {current.get('title', '')} {current.get('tails', '')} {current.get('mastery', '')} {current.get('relationship', '')} {text}"
     base = build_jinchuriki_profile(beast_text, seed=seed, legacy=legacy)
     derived = {"canonical_abilities", "available_abilities", "locked_by_mastery", "drawbacks",
-               "mastered_drawbacks_removed", "reserve_multiplier", "transformation_stage"}
+               "mastered_drawbacks_removed", "reserve_multiplier", "chakra_reserve_bonus_percent",
+               "stat_boosts", "transformation_stage"}
     for key, value in current.items():
         if key not in derived and value not in (None, "", [], {}):
             base[key] = copy.deepcopy(value)
@@ -399,11 +420,8 @@ def apply_jinchuriki_start(stats, profile):
     stats = copy.deepcopy(stats)
     if not isinstance(profile, dict) or profile.get("mastery") == "Seal Pending":
         return stats
-    control = int(profile.get("control", 0) or 0)
-    if "Willpower" in stats:
-        stats["Willpower"] = max(1, int(stats["Willpower"]) + 6 + control // 12)
-    if "Chakra Control" in stats:
-        # Perfect hosts gain usable control; an unmastered seal creates power
-        # without disguising it as technical precision.
-        stats["Chakra Control"] = max(1, int(stats["Chakra Control"]) + (12 if control >= 100 else 5 if control >= 70 else 0))
+    boosts = profile.get("stat_boosts") if isinstance(profile.get("stat_boosts"), dict) else _jinchuriki_stat_boosts(profile.get("control", 0))
+    for stat, amount in boosts.items():
+        if stat in stats and isinstance(amount, (int, float)):
+            stats[stat] = max(1, int(stats[stat]) + int(amount))
     return stats

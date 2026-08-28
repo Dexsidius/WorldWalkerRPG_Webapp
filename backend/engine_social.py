@@ -179,14 +179,11 @@ class SocialMixin:
             with self.lock:
                 self.state["advisor_thread"].append(entry)
             return {"entry": entry, "state": self.public_state()}
-        # A one-word "thanks" or a quick "how strong am I?" doesn't deserve
-        # the same 4-8 point structured briefing as a real strategy question
-        # — mirrors Pax Historia's own Advisor, which detects a short player
-        # message and short-circuits to a one-sentence reply instead of its
-        # full analysis format. Word count, not character count: this is a
-        # conversational question, not a chat acknowledgment, so a 10-char
-        # cutoff would almost never fire on an actual short question.
-        concise = len(str(question).split()) <= 6
+        # Brevity is about intent, not word count. "What happened to Konan?"
+        # is short but may require the whole campaign record; only genuine
+        # acknowledgements receive the one-sentence/low-token path.
+        concise = bool(re.fullmatch(r"\s*(thanks|thank you|okay|ok|got it|understood|cool|never mind|nevermind)[.!?\s]*",
+                                    str(question), re.I))
         wants_chart = bool(re.search(r"\b(graph|chart|plot|visuali[sz]e|bar\s*chart)\b", str(question), re.I))
         payload = {
             "task": "advisor_question", "question": question, "state": self.task_state_for_ai("advisor", question),
@@ -197,7 +194,10 @@ class SocialMixin:
                 "relative_language": "Do not say much weaker/stronger without a same-scale opponent estimate and an axis-by-axis explanation.",
                 "unknown_opponents": "Estimate untracked canon opponents on the supplied balanced-score ladder and label the estimate.",
             },
-            "thread_history": self.state.get("advisor_thread", [])[-8:],
+            # The current question was appended above and is already present
+            # in payload.question. Excluding it here prevents the model from
+            # treating the same message as two separate conversational turns.
+            "thread_history": self.state.get("advisor_thread", [])[:-1][-10:],
             "schema": {
                 "summary": ("ONE direct sentence answering the question — nothing more" if concise else
                             "2-4 direct sentences answering the question with a bottom line and important context"),
@@ -213,6 +213,10 @@ class SocialMixin:
         }
         rules = f"""You are "The Advisor" for {self.state.get('world','the world')} — a Dungeon Master the player can lean over and ask a question any time play pauses. You are NOT an in-fiction character and not bound by "NPCs only know what they'd plausibly know" — you know everything tracked plus this world's full canon.
 Voice: talk TO the player, like a DM answering a question at the table — direct, plain, second person ("you're", "they've"), a real opinion when asked for one. Not a report, not a wiki article. This applies to every kind of question, not just rules questions — a strategy or world-state answer should still sound like a person talking, just with more to say.
+ANSWER THE QUESTION FIRST: the opening sentence must directly answer the player's actual question. Do not substitute a nearby topic, repeat a generic campaign briefing, or lead with a disclaimer. Use prior thread messages only to resolve references such as "that," "he," or "why"; the newest payload.question always controls what you answer.
+EVIDENCE ORDER: authoritative player corrections and current state override recent campaign records; recent records override chapter summaries; recorded divergences override stock canon. question_evidence contains local search matches from the full campaign, not guesses. Before answering, silently check the proposed answer against current stats/status/location, campaign_canon, continuity_facts, NPC/faction chains, and relevant question_evidence. If two records genuinely conflict, state the conflict instead of choosing whichever is convenient.
+TIME DISCIPLINE: distinguish what is true now from what used to be true. Never describe a completed, prevented, or diverged event as pending. Never erase something merely because it falls outside the recent-turn tail; use question_evidence and chapter summaries for older events.
+AMBIGUITY: if the question cannot be resolved because two tracked people/events share the reference, ask one precise clarifying question. Do not invent a target or answer a different question.
 You may freely:
 - Assess relative power levels of the player, companions, rivals, factions and known threats, using terms appropriate to this world (bounty/Haki tier, Nen category/rank, jutsu/village rank, class/level, etc.) by default.
 - For the player, state.mechanical_power_profile and the current raw state.stats are mechanically authoritative. Never substitute the canon version of a player-controlled character, their starting rank, their old title, or an earlier Advisor estimate. An extreme peak stat means extreme output in that discipline; it does not erase the separately listed speed, defense, or overall foundation.
@@ -224,7 +228,7 @@ You may freely:
 - Summarize the current state of the world: active threats, opportunities, unresolved plot threads, faction tensions, quest status.
 - When asked why an NPC feels a certain way or why a faction's standing is what it is, answer from that NPC's npc_memories[name].chain or the faction's faction_chain[name] entries in state if present — they're the real recorded reasons, not something to re-guess from scratch. Only fall back to reasoning from campaign_canon/narrative history when no chain entry exists yet (an older campaign predating this feature, or a relationship that's never had a real turning point).
 - Give honest strategic advice, including risks and trade-offs. Never decide for the player — lay out the options.
-- Every world-state or planning answer must reference the supplied next_canon_event countdown and explain whether current plans can fit before it.
+- Reference next_canon_event when the player asks about timing, planning, readiness, future events, or what to do next. Do not force an unrelated canon countdown into factual, relationship, rules, or retrospective answers.
 - ASKED ABOUT SOMETHING NOT IN THE TRACKED STATE (an off-screen character, faction, or event the player hasn't personally touched): don't deflect to "I don't know" or "that's not tracked." Answer it — reason from this world's canon AT THE CURRENT POINT IN THE TIMELINE (the tracked world_time/canon day, never spoiling events still ahead of it), the same way a DM who knows the source material would. First check canon_divergences: if a recorded divergence changed that person/place/event, the divergence is the truth and overrides stock canon — say so plainly ("in this campaign, X happened instead, because..."). BAD: "That's not something I have tracked information on." GOOD: "He's not someone you've crossed paths with, but canonically he'd still be running the western trade routes at this point in the story — reasoning from that, here's what he's probably doing..." Only hedge when canon genuinely never reveals the answer even in principle — and even then, give your best-reasoned read before admitting the limit, don't lead with the disclaimer.
 - When the question is really a rules/mechanics clarifying question (how something works, what's allowed, what would happen if...), walk through it directly with an example if that helps — never a dry analytical report.
 - When the player explicitly asks for a graph/chart/visual comparison, or the honest best answer to their question is fundamentally "here's how N things stack up numerically," fill in the chart field per the schema instead of (or alongside) explaining it in prose — don't just describe numbers in a sentence when they asked to see them.
@@ -232,12 +236,13 @@ You may freely:
 {"THE PLAYER'S MESSAGE WAS SHORT/LOW-EFFORT — MIRROR THAT. Answer in exactly one direct sentence. Leave points and follow_ups empty. Do not pad a quick question into a full structured briefing, even if you could say more — the only exception is if the question is truly impossible to answer in one sentence, in which case answer as briefly as the question actually allows." if concise else "Give a real briefing: enough to support a decision, organized and concrete, but still sounds like someone talking to you, not a form being filled out."}
 {"THE PLAYER'S WORDING SUGGESTS THEY WANT A VISUAL (graph/chart/plot) — populate the chart field; don't just describe the numbers in prose instead." if wants_chart else ""}
 You never alter game state; this is a conversation only. Return ONLY valid JSON, no markdown fences."""
-        # Tests and integrations may deliberately inject a lightweight primary
-        # client without rebuilding the background client. Respect that
-        # explicit client; normal configured AI instances always expose model.
+        # The Advisor is a high-context reasoning role. Falling back to the
+        # cheap background/event model made it noticeably less coherent. An
+        # explicit Advisor override still wins; otherwise use the same main
+        # model as the GM. Advisor calls are player-triggered, so this does not
+        # increase normal per-turn call count.
         routed = bool(self.settings.get("advisor_model") or self.settings.get("advisor_provider") in {"local", "cloud"})
-        advisor_client = (self.ai_advisor if routed else (self.ai_bg if getattr(self, "ai_bg", None)
-                          and self.settings.get("secondary_model") and getattr(self.ai, "model", None) else self.ai))
+        advisor_client = self.ai_advisor if routed else self.ai
         data = advisor_client.request(rules, payload, max_output_tokens=200 if concise else 1000)
         entry = {
             "role": "advisor",
@@ -275,7 +280,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                 title = countdown.get("title") or countdown.get("event") or "the next major event"
                 remaining = countdown.get("label") or countdown.get("time_until") or countdown.get("days_until") or "an unknown interval"
                 summary, points = f"{title} is {remaining} away on the current campaign timeline.", []
-        elif re.search(r"\b(quest|agenda|objective|what should i do next)\b", text):
+        elif re.fullmatch(r"\s*(what should i do next|what(?:'s| is) my (?:current )?(?:quest|agenda|objective)|show me my (?:current )?(?:quest|agenda|objective))[?!.\s]*", text):
             quests = [q for q in self.state.get("quests", []) if isinstance(q, dict) and str(q.get("status", "active")).lower() == "active"]
             if not quests: return None
             quest = quests[0]; title = quest.get("title") or quest.get("name") or "Current objective"

@@ -469,7 +469,14 @@ def apply_player_correction(state, correction_type, target, value, explanation="
 
 def campaign_search(state, query, limit=30):
     """Fast local full-text search over the campaign's durable records."""
-    terms = [x for x in re.findall(r"[a-z0-9'-]+", ai_text(query).lower()) if len(x) > 1]
+    stop = {"a", "an", "and", "are", "about", "did", "do", "does", "for", "from", "happen", "happened",
+            "has", "have", "how", "i", "in", "is", "it", "me", "my", "of", "on", "please", "that", "the",
+            "this", "to", "was", "were", "what", "when", "where", "which", "who", "why", "with", "you", "your"}
+    terms = [x for x in re.findall(r"[a-z0-9'-]+", ai_text(query).lower()) if len(x) > 1 and x not in stop]
+    # A question made only of stop words is still searchable rather than
+    # becoming an empty request; the Advisor will mainly rely on recent state.
+    if not terms:
+        terms = [x for x in re.findall(r"[a-z0-9'-]+", ai_text(query).lower()) if len(x) > 1]
     if not terms: return []
     rows = []
     def add(kind, title, text, turn=None, canon_day=None, payload=None):

@@ -9,7 +9,7 @@ from pathlib import Path
 from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for
 from ai_client import AI
 from lore import format_lore_context
-from portrait_generator import portrait_view
+from portrait_generator import portrait_view, sync_active_portrait_form
 from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
 from reliability import update_narrative_memory, record_progression_ledger, advance_hidden_class_discovery
@@ -629,6 +629,7 @@ Return ONLY valid JSON."""
                 self.reconcile_title_events(data.get("events", []))
                 for note in self.apply_jjk_turn_effects(before, turn_actions, data.get("narrative", ""), data.get("events", []), context.get("elapsed_minutes", 5)):
                     self.append(f"[JUJUTSU RECORD]\n{note}", "system")
+                sync_active_portrait_form(self.state, turn_actions, data.get("narrative", ""), data.get("events", []))
             self.sync_derived_pools(before)
             if is_opening:
                 initialize_lit_systems(self.state)

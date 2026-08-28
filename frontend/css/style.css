@@ -283,6 +283,10 @@ input,select,textarea{ font-family:inherit; }
 .portrait-frame:not(:has(.portrait-image.loaded)) .portrait-ambient{ z-index:1; }
 .portrait-image{ position:absolute; inset:0; z-index:1; width:100%; height:100%; object-fit:cover; object-position:center 28%; display:block; opacity:0; transition:opacity .55s ease; }
 .portrait-image.loaded{ opacity:1; }
+.portrait-frame.special-form-active::after{
+  content:""; position:absolute; inset:0; z-index:4; pointer-events:none;
+  box-shadow:inset 0 0 0 2px rgba(var(--accent2-rgb),.7),inset 0 0 34px rgba(var(--accent-rgb),.24);
+}
 .portrait-ambient{ position:absolute; inset:0; z-index:2; opacity:.62; mix-blend-mode:screen; }
 .portrait-shade{ position:absolute; inset:0; z-index:3; pointer-events:none; background:linear-gradient(180deg, rgba(0,0,0,.03) 48%, rgba(0,0,0,.88) 100%); }
 .portrait-caption{ position:absolute; z-index:4; left:14px; bottom:12px; right:14px; }
@@ -1563,21 +1567,101 @@ body[data-world="Naruto"] .story-feed{
   border-top:6px solid transparent;
   border-image:repeating-linear-gradient(90deg,#4a3a26 0 4px,#3a2d1c 4px 8px) 6;
 }
+body[data-world="Naruto"] .naruto-affinity-system{
+  border-left:3px solid var(--nrt-leaf-bright);
+  background:linear-gradient(145deg,rgba(92,122,74,.18),rgba(20,14,11,.45));
+}
+body[data-world="Naruto"] .naruto-progression-grid{ gap:12px; }
+body[data-world="Naruto"] .naruto-progression-grid>.world-system-card{
+  border-radius:4px 14px 4px 14px;
+}
+body[data-world="Naruto"] .naruto-progression-grid>.world-system-card>summary{
+  min-height:68px;
+  justify-content:flex-start;
+}
+body[data-world="Naruto"] .naruto-progression-grid>.world-system-card>summary>header{
+  flex:1; min-width:0; background:transparent;
+}
+body[data-world="Naruto"] .naruto-progression-grid>.world-system-card>summary>header p{
+  margin:4px 0 0; color:var(--sub); font-size:10.5px;
+}
+body[data-world="Naruto"] .naruto-system-mark{
+  flex:0 0 38px; height:38px; display:grid; place-items:center; margin-left:13px;
+  border:1px solid rgba(243,230,214,.22); border-radius:3px 10px 3px 10px;
+  background:rgba(14,8,6,.42); color:var(--gold); font:700 21px 'Yuji Syuku',serif;
+}
+body[data-world="Naruto"] .naruto-progression-grid .expand-label{ margin:0 13px 0 auto; }
+body[data-world="Naruto"] .naruto-lineage-system{
+  grid-column:1/-1;
+  border-color:rgba(178,60,60,.72);
+  background:linear-gradient(145deg,rgba(121,35,35,.2),rgba(20,12,10,.58));
+  box-shadow:inset 4px 0 0 var(--nrt-seal);
+}
+body[data-world="Naruto"] .naruto-lineage-system>summary>header small{ color:#dc8f82; }
+.lineage-records{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; padding:12px; }
+.lineage-record{ overflow:hidden; border:1px solid rgba(var(--accent-rgb),.18); border-radius:4px 11px 4px 11px; background:rgba(0,0,0,.17); }
+.lineage-record>header{ padding:12px 14px 9px; border-bottom:1px solid rgba(var(--accent-rgb),.13); }
+.lineage-record>header small{ display:block; color:var(--accent2); font:800 9px var(--font-label); letter-spacing:.1em; text-transform:uppercase; }
+.lineage-record>header h4{ margin:3px 0 0; color:var(--text); font:700 17px var(--font-display); }
+.lineage-empty{ display:flex; flex-direction:column; gap:5px; padding:14px; }
+.lineage-empty b{ color:var(--text); }.lineage-empty span{ color:var(--sub); line-height:1.45; }
 body[data-world="Naruto"] .naruto-jinchuriki-system{
   grid-column:1/-1;
   border-color:#b45132;
   background:
-    radial-gradient(circle at 86% 15%,rgba(255,170,77,.22),transparent 30%),
-    linear-gradient(145deg,rgba(150,45,27,.25),rgba(28,12,9,.78));
+    radial-gradient(circle at 86% 15%,rgba(255,170,77,.18),transparent 28%),
+    linear-gradient(145deg,rgba(150,45,27,.22),rgba(28,12,9,.78));
   box-shadow:inset 4px 0 0 #d97a3c,0 8px 24px rgba(44,8,3,.25);
 }
-body[data-world="Naruto"] .naruto-jinchuriki-system>summary>header{
-  background:linear-gradient(90deg,rgba(217,92,48,.22),rgba(255,176,70,.04));
-}
 body[data-world="Naruto"] .naruto-jinchuriki-system>summary>header small{ color:#ffb052; }
-body[data-world="Naruto"] .naruto-affinity-system{
-  border-left:3px solid var(--nrt-leaf-bright);
-  background:linear-gradient(145deg,rgba(92,122,74,.18),rgba(20,14,11,.45));
+.jinchuriki-expanded{ display:grid; grid-template-columns:210px minmax(0,1fr); gap:16px; padding:16px; }
+.jinchuriki-beast-figure{ margin:0; align-self:start; }
+.jinchuriki-beast-art{
+  width:100%; aspect-ratio:4/5; border:1px solid rgba(255,176,82,.5); border-radius:4px 14px 4px 14px;
+  background-image:url('/assets/reference/naruto_tailed_beasts_sprite.png');
+  background-repeat:no-repeat; background-size:500% 200%; background-color:#27130e;
+  box-shadow:inset 0 0 30px rgba(0,0,0,.24),0 10px 24px rgba(15,5,3,.34);
+}
+.jinchuriki-beast-art[data-tails="1"]{ background-position:0 0; }
+.jinchuriki-beast-art[data-tails="2"]{ background-position:25% 0; }
+.jinchuriki-beast-art[data-tails="3"]{ background-position:50% 0; }
+.jinchuriki-beast-art[data-tails="4"]{ background-position:75% 0; }
+.jinchuriki-beast-art[data-tails="5"]{ background-position:100% 0; }
+.jinchuriki-beast-art[data-tails="6"]{ background-position:0 100%; }
+.jinchuriki-beast-art[data-tails="7"]{ background-position:25% 100%; }
+.jinchuriki-beast-art[data-tails="8"]{ background-position:50% 100%; }
+.jinchuriki-beast-art[data-tails="9"]{ background-position:75% 100%; }
+.jinchuriki-beast-art[data-tails="10"]{ background-position:100% 100%; }
+.jinchuriki-beast-figure figcaption{ padding:8px 3px 0; color:#dcb991; font-size:10.5px; line-height:1.4; }
+.jinchuriki-dossier{ min-width:0; display:flex; flex-direction:column; gap:12px; }
+.jinchuriki-status-strip{ display:grid; grid-template-columns:1fr 1.35fr .55fr; gap:1px; overflow:hidden; border:1px solid rgba(255,176,82,.2); border-radius:4px 11px 4px 11px; background:rgba(255,176,82,.12); }
+.jinchuriki-status-strip>div{ min-width:0; padding:10px 12px; background:rgba(20,9,7,.74); }
+.jinchuriki-status-strip small{ display:block; color:#d49062; font:800 8.5px var(--font-label); letter-spacing:.08em; }
+.jinchuriki-status-strip b{ display:block; margin-top:3px; color:var(--text); font-size:11px; overflow-wrap:anywhere; }
+.jinchuriki-boosts,.jinchuriki-ability-section{ padding:12px 13px; border-left:2px solid #d97a3c; background:rgba(255,255,255,.025); }
+.jinchuriki-boosts>header,.jinchuriki-ability-section>header{ display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:9px; }
+.jinchuriki-boosts>header b,.jinchuriki-ability-section>header b{ color:#f1c28a; }
+.jinchuriki-boosts>header span,.jinchuriki-ability-section>header span{ color:var(--sub); font-size:9.5px; text-align:right; }
+.jinchuriki-boost-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:7px; }
+.jinchuriki-boost-grid>span{ display:flex; flex-direction:column; gap:2px; padding:9px 10px; border:1px solid rgba(255,176,82,.18); border-radius:4px 9px 4px 9px; background:rgba(12,6,5,.34); color:var(--sub); font-size:10px; }
+.jinchuriki-boost-grid>span>b{ color:#ffb052; font:800 18px var(--font-display); }
+.jinchuriki-ability-section ul,.jinchuriki-nested ul{ margin:0; padding-left:18px; columns:2; column-gap:26px; color:var(--text); line-height:1.45; }
+.jinchuriki-ability-section li,.jinchuriki-nested li{ break-inside:avoid; margin:0 0 7px; }
+.jinchuriki-nested{ border:1px solid rgba(255,176,82,.16); border-radius:4px 10px 4px 10px; background:rgba(0,0,0,.14); }
+.jinchuriki-nested>summary{ display:flex; justify-content:space-between; gap:12px; padding:10px 12px; cursor:pointer; color:var(--sub); font-weight:700; }
+.jinchuriki-nested>summary b{ color:#ffb052; }.jinchuriki-nested ul{ padding:3px 30px 12px; }
+.jinchuriki-nested.danger{ border-color:rgba(202,81,72,.34); }.jinchuriki-nested.danger>summary b{ color:#e99084; }
+.jinchuriki-detail-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.jinchuriki-detail-grid>div{ padding:9px 10px; background:rgba(0,0,0,.15); border-radius:3px 9px 3px 9px; }
+.jinchuriki-detail-grid b,.jinchuriki-detail-grid span{ display:block; }
+.jinchuriki-detail-grid b{ color:#d49062; font-size:9px; text-transform:uppercase; letter-spacing:.05em; }
+.jinchuriki-detail-grid span{ margin-top:4px; color:var(--sub); font-size:10.5px; line-height:1.42; }
+@media(max-width:720px){
+  .jinchuriki-expanded{ grid-template-columns:1fr; padding:12px; }
+  .jinchuriki-beast-figure{ width:min(100%,260px); margin-inline:auto; }
+  .jinchuriki-status-strip,.jinchuriki-detail-grid{ grid-template-columns:1fr; }
+  .jinchuriki-ability-section ul,.jinchuriki-nested ul{ columns:1; }
+  .lineage-records{ grid-template-columns:1fr; padding:10px; }
 }
 
 /* Hunter x Hunter — license / modern adventurer */

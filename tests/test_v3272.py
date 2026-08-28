@@ -84,9 +84,11 @@ class WorldwalkerV3272JinchurikiTests(unittest.TestCase):
     def test_frontend_renders_dedicated_expandable_host_card(self):
         source = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn('special["Jinchūriki Profile"]', source)
-        self.assertIn('card("JINCHŪRIKI"', source)
-        self.assertIn("Drawbacks & dangers", source)
-        self.assertIn("Locked by mastery", source)
+        self.assertIn("renderNarutoJinchurikiPanel", source)
+        self.assertIn("JINCHŪRIKI", source)
+        self.assertIn("Risks and drawbacks", source)
+        self.assertIn("Abilities still locked", source)
+        self.assertIn("chakra_reserve_bonus_percent", source)
 
     def test_started_campaign_persists_host_and_codex_entry(self):
         game = GameSession()

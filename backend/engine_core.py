@@ -21,7 +21,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
 from knowledge import npc_knowledge_boundaries, concealed_player_facts
 from simulation import (compile_context_snapshot, normalize_simulation_mode,
                         simulation_profile, output_budget)
-from simulation_integrity import canon_dependency_graph
+from simulation_integrity import canon_dependency_graph, campaign_search
 from overgeared_classes import canon_class_prompt_reference
 from ability_archive import GeneratedAbilityArchive
 from simulation_core import refresh_simulation_core
@@ -815,10 +815,37 @@ Return ONLY valid JSON. No markdown fences."""
         if purpose == "advisor":
             advisor_keys = common | {"factions", "faction_clocks", "npc_clocks", "world_events", "background_world_feed", "chapter_summaries", "campaign_canon"}
             result = {key: copy.deepcopy(value) for key, value in snapshot.items() if key in advisor_keys and value not in (None, "", [], {})}
-            result["campaign_canon"] = copy.deepcopy((snapshot.get("campaign_canon") or [])[-8:])
-            result["background_world_feed"] = copy.deepcopy((snapshot.get("background_world_feed") or [])[-8:])
-            result["world_events"] = copy.deepcopy((snapshot.get("world_events") or [])[-8:])
-            return result
+            # The Advisor answers retrospective and cross-system questions,
+            # so its evidence cannot be limited to the same small relevance
+            # bubble used by the next-turn narrator. Keep bounded raw tails
+            # from the real save and add local full-record search matches for
+            # the exact question. This costs no extra AI call.
+            result.update({
+                "turn": self.state.get("turn", 0),
+                "level": self.state.get("level"), "xp": self.state.get("xp"), "xp_next": self.state.get("xp_next"),
+                "current_activity": copy.deepcopy(self.state.get("current_activity")),
+                "conditions": copy.deepcopy(self.state.get("conditions", [])),
+                "status": copy.deepcopy(self.state.get("status", [])),
+                "faction_chain": copy.deepcopy(self.state.get("faction_chain", {})),
+                "npc_relationships": copy.deepcopy(self.state.get("npc_relationships", {})),
+                "faction_rosters": copy.deepcopy(self.state.get("faction_rosters", {})),
+                "political_regions": copy.deepcopy(self.state.get("political_regions", [])),
+                "standing_orders": copy.deepcopy(self.state.get("standing_orders", [])),
+                "scheduled_events": copy.deepcopy(self.state.get("scheduled_events", [])),
+                "npc_schedules": copy.deepcopy(self.state.get("npc_schedules", {})),
+                "last_cause_effect": copy.deepcopy(self.state.get("last_cause_effect", {})),
+                "last_training_summary": copy.deepcopy(self.state.get("last_training_summary", {})),
+                "question_evidence": campaign_search(self.state, query, 20),
+                "continuity_facts": copy.deepcopy((self.state.get("continuity_ledger", {}).get("facts") or [])[-40:]),
+                "recent_progression": copy.deepcopy((self.state.get("progression_ledger") or [])[-16:]),
+                "recent_resolutions": copy.deepcopy((self.state.get("resolution_ledger") or [])[-8:]),
+                "recent_corrections": copy.deepcopy((self.state.get("authoritative_corrections") or [])[-30:]),
+            })
+            result["campaign_canon"] = copy.deepcopy((self.state.get("campaign_canon") or [])[-20:])
+            result["chapter_summaries"] = copy.deepcopy((self.state.get("chapter_summaries") or [])[-6:])
+            result["background_world_feed"] = copy.deepcopy((self.state.get("background_world_feed") or [])[-15:])
+            result["world_events"] = copy.deepcopy((self.state.get("world_events") or [])[-15:])
+            return self._prune_ai_context(result)
         return snapshot
 
     def player_agency_rules(self):
@@ -951,8 +978,8 @@ EVENT-SCENE JOB
 """,
             "combat_summary": """
 COMBAT-SUMMARY JOB
-- The mechanical log already happened. Narrate only those hits, misses, costs, escape/victory/defeat and mercy choices; never reroll, add exchanges or change the outcome.
-- Apply only direct aftermath such as injuries, loot, XP where canonical, quest consequences, contacts and immediate reactions. Keep the recap concise and provide next actions for the post-combat situation, never for the finished fight.
+- Narrate only the settled mechanical log. Never reroll, add exchanges, or alter the outcome or mercy choice.
+- Apply direct aftermath only: injuries, plausible loot, canonical XP, quest effects, and immediate reactions. Suggest the aftermath, never the finished fight.
 """,
         }
         # Faction/trade guidance only pays for itself on tasks where the
@@ -1321,7 +1348,7 @@ NON-NEGOTIABLE RULES
 - Set combat.non_lethal = true for a friendly spar, a rank/promotion test, a supervised duel, or any bout both sides understand is not to the death — the application then floors HP at 1 for both combatants instead of 0, so the bout is won or lost on points and neither side can actually die from it. Leave it false (the default) for any fight with real danger — a hostile enemy, a wild beast, a battle where death is a genuine possible outcome. Never route a routine training montage through structured combat at all (non_lethal or otherwise) — training stays narrated prose handled by the normal training/ability-progress mechanics, not a round-by-round fight.
 - If the player starts a real fight or an enemy commits an attack, structured combat is REQUIRED immediately. A lunge, shot, offensive spell, weapon swing, or landed blow means combat—not another negotiation/intervention prompt. Before violence, negotiation or retreat remains possible.
 - Warn once per dangerous confrontation. After acceptance, continue its moment-to-moment checks without more permission prompts; warn again only for a new credible risk of player death.
-- Set hp_max/power/difficulty from the opponent's own CANONICAL strength — their actual established rank, reputation, and capability in this world/source material — never auto-balanced or scaled to whatever would make a "fair" or "interesting" fight against the player's current power level. A canonically weak or ordinary opponent stays weak even against a weak player; a canonically overwhelming one stays overwhelming even against a strong player. Only deviate from canonical strength when the campaign's own story has diverged in a way that plausibly changed this specific opponent (injury, power-up, different history, AU divergence) — and if so, that divergence should already be reflected elsewhere in state/continuity, not invented just for this fight.
+- Set hp_max/power/difficulty from the opponent's own CANONICAL strength — their established rank and capability at this timeline point — never auto-balanced to the player. A random bandit remains ordinary against a Kage-level player and may be defeated instantly; an overwhelming canon enemy remains overwhelming. Change that strength only when a recorded campaign event plausibly changed this opponent.
 - For a GROUP, size hp_max/power by the group's real aggregate canonical threat, never by naively summing individual stats across bodies. A large mob of canonically weak individuals (ordinary civilians, low-level grunts) stays a LOW hp_max/power aggregate no matter how large the mob is — a genuinely powerful character can plausibly clear the whole mob in one or two exchanges, a one-sided beatdown, not a war of attrition. A small but canonically elite or coordinated group (e.g. an equally-ranked strike team) gets a HIGH hp_max/power reflecting a real, difficult fight regardless of the player's own level. The numbers should tell the same story a reader would expect: a hundred ordinary civilians are trivial to a genuinely powerful character; the assembled Akatsuki is a real, dangerous fight for nearly anyone.
 - Once a real fight has begun, structured combat remains active until it ends. The player may still describe a specific combat move in plain prose through the normal Action Chat instead of clicking a combat button; honor that input as the next beat without dismissing it, but do not silently resolve an ongoing battle as a single abstract check or clear state_patch.combat while opponents are still exchanging attacks.
 - Companions/allies fighting alongside the player can grant state_patch.combat.ally_support (an integer 0-30, added to the player's own combat rolls both offense and defense for the fight). Only set this when the scene clearly reads as the player's side acting as a coordinated group against the opposing side — an ambush, a party assault, "jumping" an enemy or enemy group together — never for a one-on-one duel, honor fight, arena match, or any scene where companions are merely present but not actively fighting alongside the player. Omit or leave it 0 by default.

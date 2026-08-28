@@ -27,12 +27,14 @@ honest scope boundary, not a gap.
 import random
 import re
 
-from worlds import DIFFICULTIES, abilities_for, primary_stats_for, ability_resource_type_for, speed_stat_for, defense_stat_for, uses_xp_for, power_profile_for
-from util import clamp
+from worlds import DIFFICULTIES, abilities_for, primary_stats_for, ability_resource_type_for, speed_stat_for, defense_stat_for, uses_xp_for
+from power_benchmarks import benchmark_context
+from util import clamp, ai_text
 from systems import normalize_tuning
 from skill_system import infer_skill_metadata, normalize_skill_map
 from ai_client import AI
 from simulation_core import companion_support_for_combat, normalize_encounter_state
+from portrait_generator import set_active_portrait_form, clear_active_portrait_form
 
 BASE_HIT_PCT = 0.13         # a bare-minimum successful hit does ~13% of the target's max HP
 MARGIN_HIT_PCT = 0.09       # up to another 9% for a big margin over the difficulty
@@ -69,6 +71,54 @@ MASSIVE_DAMAGE_MULTIPLIER = 2.5
 OVERWHELM_DIFFICULTY_PADDING = 25
 
 
+def _fallback_enemy_power(world, enemy):
+    """Estimate an underspecified opponent from its own role, never the player.
+
+    The narrator normally supplies canonical power. This only protects local
+    combat when a smaller model omits the field; elastic player-level scaling
+    would turn every random bandit into a Kage peer.
+    """
+    enemy = enemy if isinstance(enemy, dict) else {}
+    text = " ".join(str(enemy.get(key) or "") for key in
+                    ("name", "rank", "title", "role", "type", "description")).lower()
+    # World-native tier names provide strong role anchors (Jonin, Captain,
+    # Special Grade, Demon Lord, Admiral, and so on).
+    ignored = {"class", "candidate", "typical", "ordinary", "combatant", "threat", "scale", "power", "player"}
+    tiers = benchmark_context(world).get("tiers", [])
+    exact = next((tier for tier in reversed(tiers)
+                  if str(tier.get("name", "")).lower() in text), None)
+    if exact:
+        base = int(exact.get("threshold", 50) or 50)
+    else:
+        base = None
+    for tier in reversed(tiers) if base is None else []:
+        words = [word for word in re.findall(r"[a-z0-9'-]+", str(tier.get("name", "")).lower())
+                 if len(word) >= 4 and word not in ignored]
+        if words and any(word in text for word in words):
+            base = int(tier.get("threshold", 50) or 50)
+            break
+    else:
+        if base is not None:
+            pass
+        elif re.search(r"\b(civilian|bystander|merchant|farmer|child)\b", text):
+            base = 15
+        elif re.search(r"\b(bandit|thug|robber|mugger|street gang|common criminal|rookie)\b", text):
+            base = 30
+        elif re.search(r"\b(guard|soldier|enforcer|patrol|mercenary|trained fighter)\b", text):
+            base = 50
+        elif re.search(r"\b(veteran|elite|champion|assassin|commander|boss)\b", text):
+            base = 90
+        else:
+            # Unknown does not mean "equal to the player." It means a stable
+            # competent local baseline until the GM supplies better lore.
+            base = 50
+    try:
+        group_size = max(1, int(enemy.get("group_size") or (2 if enemy.get("is_group") else 1)))
+    except (TypeError, ValueError):
+        group_size = 1
+    return clamp(base + min(40, max(0, group_size - 1) * 5), 5, 2000)
+
+
 class CombatMixin:
     # ---------- setup / backfill ----------
     def ensure_combat_numbers(self):
@@ -77,15 +127,12 @@ class CombatMixin:
         gm_rules). The AI is asked to give that entity numeric
         difficulty_min/max, attack_min/max and power; if it ever
         under-specifies one (a smaller model skipping a field is common),
-        fill it in from the player's own current stats so combat is always
-        locally resolvable — never blocked on a malformed patch."""
+        fill it from the opponent's own stated role and world benchmark so
+        combat stays resolvable without ever level-scaling to the player."""
         combat = self.state.get("combat")
         if not isinstance(combat, dict) or not combat.get("active"):
             return
         world = self.state.get("world", "Custom World")
-        stats = self.state.get("stats", {}) or {}
-        avg_stat = int(sum(stats.values()) / max(1, len(stats))) if stats else 30
-        balanced_combat = int((power_profile_for(world, stats, (self.state.get("special") or {}).get("Archetype", "")).get("combat") or {}).get("score", avg_stat) or avg_stat)
         combat.setdefault("round", 1)
         combat.setdefault("player_defense_ability", (primary_stats_for(world, self.state.get("special", {}).get("Archetype", "")) or abilities_for(world))[0])
 
@@ -100,7 +147,7 @@ class CombatMixin:
                     "is_group": len(legacy) > 1, "group_size": len(legacy) if len(legacy) > 1 else None,
                     "hp": sum(int(e.get("hp", 0) or 0) for e in legacy),
                     "hp_max": sum(int(e.get("hp_max", 0) or 0) for e in legacy),
-                    "power": int(sum(int(e.get("power", avg_stat) or avg_stat) for e in legacy) / len(legacy)),
+                    "power": int(sum(int(e.get("power") or _fallback_enemy_power(world, e)) for e in legacy) / len(legacy)) + min(40, (len(legacy) - 1) * 5),
                     "difficulty_min": min(int(e.get("difficulty_min", 30) or 30) for e in legacy),
                     "difficulty_max": max(int(e.get("difficulty_max", 50) or 50) for e in legacy),
                     "attack_min": min(int(e.get("attack_min", 25) or 25) for e in legacy),
@@ -114,13 +161,16 @@ class CombatMixin:
             enemy = {"name": "Enemy"}
             combat["enemy"] = enemy
         enemy.setdefault("alive", enemy.get("hp", 1) > 0)
-        hp_max = int(enemy.get("hp_max") or enemy.get("hp") or max(20, avg_stat * 2))
-        enemy["hp_max"] = hp_max
-        enemy["hp"] = int(enemy.get("hp", hp_max))
         power = enemy.get("power")
         if power is None:
-            power = clamp(balanced_combat + random.randint(-8, 8), 10, 2000)
+            power = _fallback_enemy_power(world, enemy)
+            enemy["power_source"] = "world_role_fallback"
+        else:
+            enemy.setdefault("power_source", "narrator_or_canon")
         enemy["power"] = int(power)
+        hp_max = int(enemy.get("hp_max") or enemy.get("hp") or max(20, int(enemy["power"]) * 2))
+        enemy["hp_max"] = hp_max
+        enemy["hp"] = int(enemy.get("hp", hp_max))
         if enemy.get("difficulty_min") is None or enemy.get("difficulty_max") is None:
             center = clamp(int(enemy["power"] * 1.0), 15, 90)
             enemy["difficulty_min"], enemy["difficulty_max"] = clamp(center - 10, 1, 100), clamp(center + 10, 1, 100)
@@ -505,7 +555,12 @@ class CombatMixin:
                 combat.setdefault("player_buffs", []).append({
                     "name": status_name or effect_type.title(), "rounds_left": duration,
                     "power_pct": power_pct, "defense_pct": defense_pct, "speed_pct": speed_pct,
+                    "effect_type": effect_type,
                 })
+                if effect_type == "transform":
+                    details = ai_text((self.state.get("skills", {}).get(swing_skill, {}) or {}).get("description")) if swing_skill else ""
+                    set_active_portrait_form(self.state, swing_skill or status_name or "Combat Transformation",
+                                             status_name or "Transformation", details, source="combat")
             event.update({"action": effect_type, "status": status_name or effect_type.title(), "applied": applied, **check})
         elif effect_type == "utility":
             # A combat-tagged utility creates a modest tactical opening.  It
@@ -738,6 +793,11 @@ class CombatMixin:
         combat.pop("bonus_turn_reason", None)
         combat.pop("bonus_turn_first_action", None)
         self._tick_effects(combat)
+        active_form = (self.state.get("portrait_identity") or {}).get("active_form", {})
+        if isinstance(active_form, dict) and active_form.get("source") == "combat" and not any(
+            row.get("effect_type") == "transform" for row in combat.get("player_buffs", [])
+        ):
+            clear_active_portrait_form(self.state)
 
         combat["round"] += 1
         self.autosave()
@@ -751,6 +811,22 @@ class CombatMixin:
 
     def end_combat(self, outcome, log_start=None):
         combat = self.state.get("combat") or {}
+        enemy = combat.get("enemy") if isinstance(combat.get("enemy"), dict) else {}
+        mercy_shown = bool(combat.get("non_lethal") or combat.get("spare_enemy"))
+        death_prevented = bool(enemy.get("death_prevented") or enemy.get("immortal") or enemy.get("cannot_die"))
+        enemy_died = outcome in {"victory", "overwhelmed"} and not mercy_shown and not death_prevented
+        if outcome in {"victory", "overwhelmed"}:
+            if enemy_died:
+                enemy["hp"] = 0
+                enemy["alive"] = False
+                name = str(enemy.get("name") or "").strip()
+                if name and isinstance(self.state.get("npc_memories", {}).get(name), dict):
+                    self.state["npc_memories"][name]["status"] = "deceased"
+            else:
+                enemy["hp"] = max(1, int(enemy.get("hp", 1) or 1))
+                enemy["alive"] = True
+        combat["enemy_died"] = enemy_died
+        combat["death_prevented"] = death_prevented
         combat["active"] = False
         combat["outcome"] = outcome
         normalize_encounter_state(self.state)
@@ -789,7 +865,7 @@ class CombatMixin:
         mercy_shown = bool(combat.get("non_lethal") or combat.get("spare_enemy"))
         payload = {
             "task": "narrate_combat", "state": self.task_state_for_ai("combat_summary"), "combat_outcome": combat.get("outcome"),
-            "mercy_shown": mercy_shown, "mechanical_log": pending,
+            "mercy_shown": mercy_shown, "enemy_died": bool(combat.get("enemy_died")), "mechanical_log": pending,
             "schema": {"narrative": "2-6 sentences turning the mechanical log into a real combat scene — do not re-roll or contradict any result",
                        "state_patch": "loot, injuries, XP, quest/codex/companion consequences of this fight",
                        "events": "system notifications", "timeline_event": "major event or empty",
@@ -806,6 +882,11 @@ class CombatMixin:
                 "If combat_outcome is 'yielded', the PLAYER is the one who was brought to the floor and conceded "
                 "the bout, not defeated at risk of real harm — narrate it as the player yielding a spar/test, "
                 "not a life-threatening loss."
+            )
+        elif combat.get("enemy_died"):
+            rules += (
+                " enemy_died is true: this was a lethal fight and the defeated enemy died. State that plainly in the scene. "
+                "Do not soften the result into subdued, unconscious, merely defeated, captured, or escaped."
             )
         narrator = self.ai_bg if getattr(self, "ai_bg", None) and self.settings.get("secondary_model") else self.ai
         data = narrator.request(rules, payload, max_output_tokens=650)
@@ -837,7 +918,8 @@ class CombatMixin:
             elif action in {"heal", "shield", "buff", "debuff", "control", "summon", "cleanse", "movement", "detect", "stealth", "transform", "utility"}:
                 phrases.append(f"{row.get('ability') or row.get('status') or action.title()} took effect." if row.get("success", row.get("applied", True)) else f"{row.get('ability') or action.title()} failed to take hold.")
         outcome = str(combat.get("outcome") or "ongoing")
-        endings = {"victory": f"{enemy} was defeated.", "overwhelmed": f"{enemy} was decisively overwhelmed.",
+        lethal_ending = f"{enemy} was killed." if combat.get("enemy_died") else f"{enemy} was defeated but survived."
+        endings = {"victory": lethal_ending, "overwhelmed": lethal_ending,
                    "fled": "You escaped the fight.", "defeat": "You were defeated.", "yielded": "You yielded the nonlethal bout."}
         if outcome in endings:
             phrases.append(endings[outcome])

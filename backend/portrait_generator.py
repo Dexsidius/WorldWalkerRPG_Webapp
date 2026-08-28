@@ -5,6 +5,7 @@ Ordinary turns do not spend another image request; appearance, form, clothing,
 equipment, age, or other major visual changes do.
 """
 import base64
+import copy
 import hashlib
 import json
 import os
@@ -106,6 +107,22 @@ VISIBLE_EQUIPMENT_KEYS = re.compile(
     r"weapon|sword|blade|bow|gun|armor|armour|outfit|clothing|robe|cloak|coat|shirt|pants|dress|uniform|head|hat|mask|glove|boot|shoe|shield|accessor|ring|neck|ear|waist|belt",
     re.I,
 )
+FORM_ACTIVATION_RE = re.compile(
+    r"\b(?:activate|awaken|open|enter|invoke|manifest|unleash|release|assume|transform(?:ing)?\s+into|use)\b",
+    re.I,
+)
+FORM_NAME_RE = re.compile(
+    r"\b(?:tailed beast mode|bijuu mode|baryon mode|version [12](?: cloak)?|chakra cloak|"
+    r"sharingan|mangeky[ōo] sharingan|eternal mangeky[ōo] sharingan|byakugan|rinnegan|d[ōo]jutsu|"
+    r"shikai|bankai|domain expansion|heavenly restriction|released form|awakening|transformation)\b",
+    re.I,
+)
+FORM_STOP_RE = re.compile(
+    r"\b(?:return|revert|change)\s+(?:back\s+)?to\s+(?:normal|base form)|"
+    r"\b(?:deactivate|dismiss|end|cancel|drop|close|suppress)\b.{0,35}\b(?:form|transformation|cloak|"
+    r"d[ōo]jutsu|sharingan|byakugan|rinnegan|shikai|bankai|domain)\b",
+    re.I,
+)
 
 
 def campaign_portrait_id(state):
@@ -152,6 +169,77 @@ def visible_equipment_for(state):
     return visible
 
 
+def _known_visual_forms(state):
+    """Return authored form names and descriptions that can affect a portrait."""
+    special = state.get("special", {}) if isinstance(state.get("special"), dict) else {}
+    forms = []
+    host = special.get("Jinchūriki Profile") if isinstance(special.get("Jinchūriki Profile"), dict) else {}
+    if host.get("beast"):
+        for label in ("Chakra Cloak", "Version 1", "Version 2", "Partial Transformation", "Tailed Beast Mode", "Baryon Mode"):
+            forms.append((label, "Jinchūriki transformation", f"{label} powered by {host.get('beast')}; show the established chakra mantle, tails, markings, eyes, and beast traits appropriate to this exact stage."))
+    for key in ("Dōjutsu Profile", "Kekkei Genkai Profile"):
+        profile = special.get(key) if isinstance(special.get(key), dict) else {}
+        if profile.get("name"):
+            forms.append((str(profile["name"]), str(profile.get("category") or key.replace(" Profile", "")), f"{profile['name']} is visibly active. Reflect its established physical or ocular appearance and current stage ({profile.get('stage', 'established')}) without adding a new ability."))
+    zanpakuto = special.get("Zanpakuto Profile") if isinstance(special.get("Zanpakuto Profile"), dict) else {}
+    for stage, name_key, detail_key in (("Shikai", "shikai_name", "shikai_form"), ("Bankai", "bankai_name", "bankai_manifestation")):
+        name = str(zanpakuto.get(name_key) or special.get(stage) or "").strip()
+        if name and not re.match(r"^(?:none|unknown|unachieved)$", name, re.I):
+            details = ai_text(zanpakuto.get(detail_key)) or ai_text(zanpakuto.get(f"{stage.lower()}_effect"))
+            forms.append((name, stage, f"{stage} is actively released as {name}. {details}".strip()))
+            forms.append((stage, stage, f"{stage} is actively released as {name}. {details}".strip()))
+    for skill_name, detail in (state.get("skills", {}) or {}).items():
+        if not isinstance(detail, dict):
+            continue
+        effect = str(detail.get("effect_type") or "").lower()
+        category = str(detail.get("category") or "").lower()
+        if effect == "transform" or category == "transformation" or re.search(r"domain expansion", str(skill_name), re.I):
+            forms.append((str(skill_name), "Domain Expansion" if re.search(r"domain expansion", str(skill_name), re.I) else "Transformation", ai_text(detail.get("description") or detail.get("effect") or detail.get("mechanics"))))
+    return forms
+
+
+def set_active_portrait_form(state, name, kind="Transformation", details="", source="story"):
+    identity = state.setdefault("portrait_identity", {})
+    incoming = {"name": str(name or kind).strip()[:160], "kind": str(kind or "Transformation").strip()[:80],
+                "details": str(details or "").strip()[:700], "source": str(source or "story")[:40]}
+    changed = identity.get("active_form") != incoming
+    identity["active_form"] = incoming
+    return changed
+
+
+def clear_active_portrait_form(state):
+    identity = state.setdefault("portrait_identity", {})
+    changed = bool(identity.get("active_form"))
+    identity["active_form"] = {}
+    return changed
+
+
+def sync_active_portrait_form(state, actions, narrative="", events=None):
+    """Track visible special states without relying on the narrator to patch art.
+
+    A form persists across turns until the player or story explicitly ends it.
+    Returning to base form therefore reuses the cached original portrait at no
+    image cost, while the first use of a new form creates one distinct cache key.
+    """
+    action_text = " ".join(str(x) for x in (actions if isinstance(actions, list) else [actions]) if str(x).strip())
+    combined = f"{action_text}\n{narrative}".strip()
+    if not combined:
+        return False
+    if FORM_STOP_RE.search(action_text) or re.search(r"\b(?:form|cloak|release|domain|d[ōo]jutsu)\b.{0,28}\b(?:fades?|ends?|deactivates?|drops?|closes?|reverts?)\b", narrative, re.I):
+        return clear_active_portrait_form(state)
+    failed = bool(re.search(r"\b(?:fails?|failed|cannot|could not|does not activate|did not activate)\b", narrative, re.I))
+    if failed or not (FORM_ACTIVATION_RE.search(action_text) and (FORM_NAME_RE.search(action_text) or any(name.lower() in action_text.lower() for name, _, _ in _known_visual_forms(state)))):
+        return False
+    candidates = sorted(_known_visual_forms(state), key=lambda row: len(row[0]), reverse=True)
+    matched = next((row for row in candidates if row[0].lower() in action_text.lower()), None)
+    if matched:
+        return set_active_portrait_form(state, *matched, source="story")
+    raw = FORM_NAME_RE.search(action_text)
+    name = raw.group(0).title() if raw else "Active Transformation"
+    kind = "Domain Expansion" if "domain" in name.lower() else "Dōjutsu" if re.search(r"eye|d[ōo]jutsu|sharingan|byakugan|rinnegan", name, re.I) else name
+    return set_active_portrait_form(state, name, kind, f"{name} is visibly active and should alter the portrait according to its established campaign description.", source="story")
+
+
 def visual_state(state):
     special = state.get("special", {}) if isinstance(state.get("special"), dict) else {}
     visual_special = {k: v for k, v in special.items() if VISUAL_SPECIAL_KEYS.search(str(k))}
@@ -182,6 +270,7 @@ def visual_state(state):
         "visual_special": visual_special,
         "canonical_identity": identity.get("canonical_description", ""),
         "temporary_traits": identity.get("temporary_traits", []),
+        "active_form": identity.get("active_form", {}),
     }
 
 
@@ -219,6 +308,8 @@ def portrait_prompt(state, preserve_identity=False):
     identity = state.get("portrait_identity", {}) if isinstance(state.get("portrait_identity"), dict) else {}
     canonical = identity.get("canonical_description") or derived_appearance(state)
     temporary = "; ".join(str(x) for x in identity.get("temporary_traits", [])) or "none"
+    active_form = identity.get("active_form") if isinstance(identity.get("active_form"), dict) else {}
+    active_form_text = json.dumps(active_form, ensure_ascii=False, default=str) if active_form else "none; render the normal base appearance"
     identity_rule = (
         "Use the supplied previous portrait as the same person. Preserve facial identity, apparent age, body type, "
         "skin tone, and all unchanged features; edit only what the current description requires."
@@ -231,6 +322,7 @@ CHARACTER: {state.get('name') or 'Traveler'}
 CANONICAL IDENTITY / APPEARANCE: {canonical}
 ADDITIONAL VISIBLE TRAITS: {traits}
 TEMPORARY VISIBLE CHANGES: {temporary}
+ACTIVE SPECIAL FORM: {active_form_text}
 CURRENT CLOTHING / EQUIPMENT: {equipment_text}
 AFFILIATIONS / FACTIONS: {affiliations_text}
 VISIBLE WORLD-SYSTEM TRAITS: {json.dumps(special, ensure_ascii=False, default=str)}
@@ -241,7 +333,7 @@ STYLE: Render fully and unmistakably in {style}. Commit completely to it — lin
 AFFILIATION MARKERS: If AFFILIATIONS / FACTIONS lists an active membership in a known in-world faction/order/village, dress the character with that group's ordinary everyday visual identifiers, fitting their actual rank/role — e.g. a shinobi affiliated with a hidden village wears a forehead-protector-style headband, an Akatsuki-type organization's member wears its signature dark cloak, a knight order's member wears its house colors or sigil-bearing surcoat. Render these as generic in-fiction garments/props appropriate to the affiliation (a plain metal-plate headband, a cloud-patterned cloak) rather than reproducing any franchise's exact official logo or insignia design.
 COMPOSITION: one character only, waist-up, centered three-quarter view, face unobstructed, safe margins, made for a compact game portrait card.
 BACKDROP: {backdrop}; atmospheric and subdued so the character dominates.
-CONSTRAINTS: no text, captions, logo, watermark, border, UI, split panel, extra person, canon character likeness, or franchise emblem. Reflect every major physical, clothing, equipment, and transformation detail that is currently recorded."""
+CONSTRAINTS: no text, captions, logo, watermark, border, UI, split panel, extra person, canon character likeness, or franchise emblem. Reflect every major physical, clothing, equipment, and transformation detail that is currently recorded. Show a Dōjutsu, tailed-beast cloak/form, Shikai, Bankai, Domain Expansion, release, or transformation ONLY when ACTIVE SPECIAL FORM names it. When ACTIVE SPECIAL FORM is none, show the character's normal base appearance even if their profile records powers they can activate."""
 
 
 def fallback_url(state):
@@ -299,6 +391,7 @@ def portrait_view(state, settings):
         "_portrait_generated": bool(cached),
         "_portrait_reference": bool(reference and not cached),
         "_portrait_previous": bool(previous),
+        "_portrait_active_form": copy.deepcopy((state.get("portrait_identity") or {}).get("active_form", {})) if isinstance(state.get("portrait_identity"), dict) else {},
         "_portrait_generation_enabled": bool(settings.get("portrait_generation_enabled", True)),
         "_portrait_auto_generate": bool(settings.get("portrait_auto_generate", False)),
         "_portrait_generation_ready": portrait_ready(settings),

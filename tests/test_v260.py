@@ -1729,12 +1729,17 @@ class WorldwalkerV260Tests(unittest.TestCase):
         game.settings["model"] = "test-model"
         game.ai = RecordingAdvisorAI()
 
-        game.ask_advisor("how strong am I?")
+        game.ask_advisor("thanks")
         short_call = game.ai.calls[-1]
         self.assertIn("SHORT/LOW-EFFORT", short_call["rules"])
         self.assertEqual(short_call["max_output_tokens"], 200)
         self.assertEqual(short_call["schema"]["points"], [])
         self.assertEqual(short_call["schema"]["follow_ups"], [])
+
+        game.ask_advisor("What happened to Konan?")
+        substantive_short_call = game.ai.calls[-1]
+        self.assertNotIn("SHORT/LOW-EFFORT", substantive_short_call["rules"])
+        self.assertEqual(substantive_short_call["max_output_tokens"], 1000)
 
         game.ask_advisor("What should I actually do about the Akatsuki threat and my standing with the Hokage?")
         long_call = game.ai.calls[-1]

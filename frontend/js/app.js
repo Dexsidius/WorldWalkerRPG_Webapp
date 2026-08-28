@@ -922,6 +922,45 @@ function worldIdentityLabel(state) {
   return state?.class_profile?.name || special.Archetype || "Adventurer";
 }
 
+function renderNarutoLineagePanel(special = {}) {
+  const profiles = [special["Kekkei Genkai Profile"], special["Dōjutsu Profile"]]
+    .filter((profile) => profile && typeof profile === "object" && profile.name);
+  const legacy = [
+    ["Kekkei Genkai", special["Kekkei Genkai"]],
+    ["Dōjutsu", special["Dōjutsu"]],
+  ].filter(([, value]) => value && !/^(?:none|unknown|unawakened)$/i.test(String(value)));
+  const knownNames = new Set(profiles.map((profile) => String(profile.name).toLowerCase()));
+  legacy.forEach(([category, name]) => {
+    if (!knownNames.has(String(name).toLowerCase())) profiles.push({ name, category, stage: "Established" });
+  });
+  const title = profiles.length ? profiles.map((profile) => profile.name).join(" + ") : "No special lineage awakened";
+  const body = profiles.length ? profiles.map((profile) => {
+    const rows = [
+      ["Stage", profile.stage], ["Origin", profile.origin], ["Applications", profile.abilities],
+      ["Limits", profile.limitations], ["Counters", profile.counters],
+      ["Development", profile.growth_path], ["Canon parity", profile.canon_balance],
+    ].filter(([, value]) => compactReadable(value));
+    return `<section class="lineage-record"><header><small>${escapeHtml(profile.category || "Kekkei Genkai")}</small><h4>${escapeHtml(profile.name)}</h4></header>${rows.map(([label, value]) => `<div class="world-system-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(compactReadable(value))}</span></div>`).join("")}</section>`;
+  }).join("") : `<div class="lineage-empty"><b>Ordinary shinobi development</b><span>This character currently relies on trained stats, learned jutsu, and chakra affinity rather than an inherited or original bloodline power.</span></div>`;
+  return `<details class="world-system-card expandable-special-card naruto-lineage-system"><summary><span class="naruto-system-mark" aria-hidden="true">血</span><header><small>KEKKEI GENKAI & DŌJUTSU</small><h3>${escapeHtml(title)}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body lineage-records">${body}</div></details>`;
+}
+
+function renderNarutoJinchurikiPanel(host = {}) {
+  if (!host?.beast) return "";
+  const tails = Math.max(1, Math.min(10, Number(host.tails || 9)));
+  const boosts = host.stat_boosts && typeof host.stat_boosts === "object" ? host.stat_boosts : {};
+  const boostChips = Object.entries(boosts).map(([name, amount]) => `<span><b>+${escapeHtml(amount)}</b>${escapeHtml(name)}</span>`).join("");
+  const reserve = Number(host.chakra_reserve_bonus_percent ?? Math.round((Number(host.reserve_multiplier || 1) - 1) * 100));
+  const abilityList = (host.available_abilities || []).length
+    ? host.available_abilities.map((ability) => `<li>${escapeHtml(compactReadable(ability))}</li>`).join("")
+    : `<li>No deliberate access is available yet.</li>`;
+  const locked = (host.locked_by_mastery || []).length
+    ? `<details class="jinchuriki-nested"><summary>Abilities still locked <b>${escapeHtml(host.locked_by_mastery.length)}</b></summary><ul>${host.locked_by_mastery.map((ability) => `<li>${escapeHtml(compactReadable(ability))}</li>`).join("")}</ul></details>` : "";
+  const drawbacks = (host.drawbacks || []).length
+    ? `<details class="jinchuriki-nested danger"><summary>Risks and drawbacks <b>${escapeHtml(host.drawbacks.length)}</b></summary><ul>${host.drawbacks.map((row) => `<li>${escapeHtml(compactReadable(row))}</li>`).join("")}</ul></details>` : "";
+  return `<details class="world-system-card expandable-special-card naruto-jinchuriki-system"><summary><span class="naruto-system-mark" aria-hidden="true">尾</span><header><small>JINCHŪRIKI</small><h3>${escapeHtml(host.beast)}</h3><p>${escapeHtml(host.mastery || "Unmastered")} · ${escapeHtml(Number(host.control || 0))}% control</p></header><span class="expand-label"></span></summary><div class="expandable-special-body jinchuriki-expanded"><figure class="jinchuriki-beast-figure"><div class="jinchuriki-beast-art" data-tails="${tails}" role="img" aria-label="Illustration of ${escapeHtml(host.beast)}"></div><figcaption>${escapeHtml(host.title || `${tails}-Tails`)} · ${escapeHtml(host.relationship || "Undeveloped bond")}</figcaption></figure><div class="jinchuriki-dossier"><section class="jinchuriki-status-strip"><div><small>SEAL</small><b>${escapeHtml(host.status || "Sealed host")}</b></div><div><small>CURRENT FORM</small><b>${escapeHtml(host.transformation_stage || "Base form")}</b></div><div><small>BOND</small><b>${escapeHtml(Number(host.bond_progress || 0))}%</b></div></section><section class="jinchuriki-boosts"><header><b>Host bonuses</b><span>Permanent mechanical gains from the sealed beast</span></header><div class="jinchuriki-boost-grid">${reserve ? `<span class="reserve-boost"><b>+${escapeHtml(reserve)}%</b>Chakra maximum</span>` : ""}${boostChips || `<span><b>0</b>Direct stat boosts while sealing is pending</span>`}</div></section><section class="jinchuriki-ability-section"><header><b>Abilities available now</b><span>${escapeHtml((host.available_abilities || []).length)} unlocked</span></header><ul>${abilityList}</ul></section>${locked}${drawbacks}<div class="jinchuriki-detail-grid"><div><b>Seal condition</b><span>${escapeHtml(compactReadable(host.seal) || "Not recorded")}</span></div><div><b>Beast natures</b><span>${escapeHtml(compactReadable(host.nature_transformations) || "Not recorded")}</span></div><div><b>Beast traits</b><span>${escapeHtml(compactReadable(host.beast_traits) || "Not recorded")}</span></div><div><b>Development path</b><span>${escapeHtml(compactReadable(host.progression) || "Build control and trust through play")}</span></div></div></div></div></details>`;
+}
+
 function renderWorldProgression(world, special, classProfile, data = {}) {
   const value = (raw, fallback = "Not established") => compactReadable(raw) || fallback;
   const card = (eyebrow, title, rows, tone = "") => `<details class="world-system-card expandable-special-card ${tone}"><summary><header><small>${escapeHtml(eyebrow)}</small><h3>${escapeHtml(value(title))}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body">${rows.filter(([,v]) => v !== undefined && v !== null && value(v, "") !== "").map(([label,v]) => `<div class="world-system-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value(v))}</span></div>`).join("")}</div></details>`;
@@ -946,17 +985,11 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
     const p = special["Shinobi Profile"] || {};
     const affinity = special["Chakra Affinity Profile"] || p.chakra_affinity || {};
     const host = special["Jinchūriki Profile"] || p.jinchuriki || {};
-    const hostCard = host?.beast ? card("JINCHŪRIKI", `${host.beast} · ${host.title || "Tailed Beast"}`, [
-      ["Status",host.status], ["Seal",host.seal], ["Mastery",`${host.mastery || "Unmastered"} · ${Number(host.control || 0)}% control`],
-      ["Relationship",`${host.relationship || "Undeveloped"} · ${Number(host.bond_progress || 0)}% bond`], ["Current stage",host.transformation_stage],
-      ["Nature transformations",host.nature_transformations], ["Beast traits",host.beast_traits],
-      ["Available now",host.available_abilities], ["Locked by mastery",host.locked_by_mastery],
-      ["Drawbacks & dangers",host.drawbacks], ["Development",host.progression],
-    ], "naruto-jinchuriki-system") : "";
+    const hostCard = renderNarutoJinchurikiPanel(host);
     const rates = affinity.learning_rates || {};
     const rateSummary = Object.entries(rates).map(([nature, rate]) => `${nature.replace(" Release", "")}: ${Number(rate).toFixed(2)}×`).join(" · ");
     const affinityCard = card("CHAKRA AFFINITY", affinity.primary || special["Nature Affinity"] || "Untested", [["Discovery",affinity.discovery_status],["Natural affinities",affinity.natural_affinities],["Learned proficiencies",affinity.proficiencies],["Mastered natures",affinity.mastered_natures],["Special mastery source",affinity.special_mastery_source],["Learning pace",rateSummary],["Native advantage",affinity.native_rule],["Off-affinity training",affinity.off_affinity_rule],["Combined natures",affinity.combined_nature_rule],["External access",affinity.external_natures]], "naruto-affinity-system");
-    return `<section class="world-system-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system")}${affinityCard}${card("CHAKRA & TECHNIQUES", p.kekkei_genkai && p.kekkei_genkai !== "None" ? p.kekkei_genkai : "Shinobi Development", [["Known jutsu",p.known_jutsu],["Summons",p.summons],["Transformations",p.transformations]], "naruto-system")}${hostCard}</section>`;
+    return `<section class="world-system-grid naruto-progression-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system naruto-service-system")}${affinityCard}${renderNarutoLineagePanel(special)}${hostCard}</section>`;
   }
   if (world === "Jujutsu Kaisen") {
     const sys = data.jjk_system || {}, slot = sys.birth_slot || special["Innate Technique Profile"] || special["Heavenly Restriction Profile"] || {};
@@ -1023,6 +1056,9 @@ function loadPortraitImage(url) {
 
 function renderAiPortrait(s) {
   const img = $("#portrait-img");
+  const activeForm = s._portrait_active_form && typeof s._portrait_active_form === "object" ? s._portrait_active_form : {};
+  const formName = String(activeForm.name || "").trim();
+  img.closest(".portrait-frame")?.classList.toggle("special-form-active", !!formName);
   const hasDisplayPortrait = !!s._portrait_image;
   if (hasDisplayPortrait) {
     loadPortraitImage(s._portrait_image);
@@ -1036,14 +1072,14 @@ function renderAiPortrait(s) {
   }
   const status = $("#portrait-status");
   status.classList.toggle("generated", !!s._portrait_generated);
-  if (s._portrait_generated) status.textContent = "AI PORTRAIT · CACHED";
+  if (s._portrait_generated) status.textContent = formName ? `${formName.toUpperCase()} · ACTIVE PORTRAIT` : "AI PORTRAIT · CACHED";
   else if (s._portrait_previous) status.textContent = "UPDATING · PREVIOUS PORTRAIT SHOWN";
   else if (s._portrait_reference) status.textContent = "REFERENCE PORTRAIT";
   else if (!s._portrait_generation_enabled) status.textContent = "PORTRAITS OFF";
   else if (!s._portrait_generation_ready) status.textContent = "SET UP IMAGE AI FOR ART";
   else status.textContent = s._portrait_auto_generate ? "AI PORTRAIT QUEUED" : "AI PORTRAIT · GENERATE WHEN READY";
   $("#btn-portrait-regenerate").disabled = APP.portraitInFlight || !APP.campaignActive;
-  if (!APP.deferPortraitGeneration && s._portrait_auto_generate) ensureAiPortrait(s);
+  if (!APP.deferPortraitGeneration && (s._portrait_auto_generate || formName)) ensureAiPortrait(s);
 }
 
 async function ensureAiPortrait(s, force = false) {
@@ -2270,7 +2306,7 @@ function renderCombatPanel(s) {
   const enemyBox = $("#combat-enemy");
   enemyBox.classList.toggle("dead", dead);
   const groupNote = e.is_group ? `<div class="combat-enemy-sub">Fighting as a group${e.group_size ? ` — roughly ${escapeHtml(e.group_size)} strong` : ""}</div>` : "";
-  const defeatedLabel = (combat.non_lethal || combat.spare_enemy) ? "SUBDUED" : "DEFEATED";
+  const defeatedLabel = combat.enemy_died ? "KILLED" : (combat.non_lethal || combat.spare_enemy || combat.death_prevented) ? "SUBDUED" : "DEFEATED";
   enemyBox.innerHTML = `<div class="combat-enemy-head"><b>${escapeHtml(e.name || "Enemy")}</b><span>${dead ? defeatedLabel : `${escapeHtml(e.hp)} / ${escapeHtml(e.hp_max)}`}</span></div>${groupNote}<div class="bar-track"><div class="bar-fill" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>`;
   const resourceRow = $("#combat-resource-row");
   if (s.resource_max) resourceRow.innerHTML = `<span>${escapeHtml(s.resource_name || "Energy")}</span><b>${escapeHtml(s.resource ?? 0)} / ${escapeHtml(s.resource_max)}</b>`;

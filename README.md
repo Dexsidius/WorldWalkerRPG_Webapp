@@ -6,7 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.30.0** (schema 19).
+Current app/save version: **3.30.1** (schema 19).
+
+Version 3.30.1 restores a fully grounded Advisor, removes the last local combat
+fallback that could scale an underspecified enemy to the player, makes ordinary
+combat victories lethal unless mercy is chosen, and adds full Naruto lineage,
+Jinchūriki, and active-form portrait presentation.
 
 Version 3.30.0 unifies character capability, abilities, progression, NPC
 continuity, encounter phases, and living story threads behind every turn. It
@@ -203,7 +208,8 @@ of rigorous Naruto combat training can now establish jōnin-level capability
 without falsely granting an official village rank. Nightmare remains strict.
 
 Version 3.7.0 reduces AI cost and improves simulation consistency. It sends
-task-specific context to each model, uses the secondary model for Advisor and
+task-specific context to each model, uses the main model for Advisor unless a
+separate Advisor model is explicitly selected, uses the secondary model for
 combat narration when configured, reports cached-token savings, keeps only
 useful autosave history, and disables automatic portrait generation by default.
 It also improves standing plans, roll/action labeling, training and quest
