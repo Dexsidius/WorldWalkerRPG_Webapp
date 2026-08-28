@@ -8,6 +8,7 @@ from pathlib import Path
 
 from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, power_tier_reference, power_profile_for
 from ai_client import AI
+from standing_intents import active_standing_intents
 from lore import format_lore_context
 from portrait_generator import portrait_view
 from state_guard import apply_guarded_patch, migrate_state
@@ -280,6 +281,13 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             quest = quests[0]; title = quest.get("title") or quest.get("name") or "Current objective"
             summary = f"Your clearest active lead is {title}: {quest.get('description') or quest.get('objective') or 'follow its current lead'}."
             points = [str(quest.get("first_step") or quest.get("next_step") or "Review the known clues and choose the next concrete step.")]
+        elif re.search(r"\b(standing (?:order|instruction|intent)|ongoing (?:order|instruction|duty|routine)|what (?:is|are) still being done)\b", text):
+            intents = active_standing_intents(self.state)
+            if not intents:
+                summary, points = "You have no continuing instructions recorded right now.", []
+            else:
+                summary = f"{len(intents)} continuing instruction{'s are' if len(intents) != 1 else ' is'} still in force."
+                points = [f"{row.get('directive')}" + (f" — paused: {row.get('blocked_reason')}" if row.get("status") == "temporarily_blocked" else "") for row in intents[:8]]
         elif fourth_wall and re.search(r"\b(ai cost|token|cost|calls?)\b", text):
             clients = {id(client): client for client in (self.ai, self.ai_bg, self.ai_major)}.values()
             calls = sum(client.usage.get("calls", 0) for client in clients); cost = sum(client.usage.get("cost_usd", 0) for client in clients)

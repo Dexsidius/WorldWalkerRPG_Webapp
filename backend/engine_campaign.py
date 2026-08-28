@@ -1600,7 +1600,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         naruto_affinity_profile = None
         if world == "Naruto":
             naruto_affinity_profile = build_chakra_affinity_profile(
-                background, seed=f"{origin}|{archetype}|{start_location}"
+                background, seed=f"{origin}|{archetype}|{start_location}",
+                kekkei_genkai=bool(re.search(r"\b(kekkei genkai|bloodline|combined release|kekkei t[ōo]ta)\b", str(background), re.I)),
             )
         if world == "Naruto" and allow_starting_specials and jinchuriki_requested(background):
             jinchuriki_profile = build_jinchuriki_profile(
@@ -1638,6 +1639,14 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 f"The {hidden_class['name']} class opens specialized practice routes"
             )
         ability_requested = allow_starting_specials and self.background_ability_requested(background)
+        if world == "Naruto" and ability_requested:
+            affinity_only = bool(re.search(r"\b(?:chakra\s+)?(?:nature|affinit(?:y|ies))\b", str(background), re.I))
+            separate_power = bool(re.search(
+                r"\b(kekkei genkai|bloodline|lineage|d[ōo]jutsu|special eyes?|ability|power|gift|"
+                r"named jutsu|unique technique|combined release|kekkei t[ōo]ta)\b", str(background), re.I,
+            ))
+            if affinity_only and not separate_power and not (naruto_affinity_profile or {}).get("requires_kekkei_genkai"):
+                ability_requested = False
         if jinchuriki_profile:
             # Being a host is its own Naruto system.  Do not turn the same
             # sentence into an unrelated generic Starting Ability as well;
@@ -1658,8 +1667,15 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             skills[generated_ability["name"]] = copy.deepcopy(generated_ability["details"])
             self.install_background_ability_skills(skills, generated_ability)
         naruto_lineage_profile = None
-        if world == "Naruto" and generated_ability and re.search(r"\b(kekkei genkai|bloodline|lineage|d[ōo]jutsu|eye technique|special eyes?|ocular)\b", str(background), re.I):
+        if world == "Naruto" and generated_ability and (
+            re.search(r"\b(kekkei genkai|bloodline|lineage|d[ōo]jutsu|eye technique|special eyes?|ocular)\b", str(background), re.I)
+            or bool((naruto_affinity_profile or {}).get("requires_kekkei_genkai"))
+        ):
             naruto_lineage_profile = self.generate_naruto_lineage_profile(background, generated_ability)
+            if (naruto_affinity_profile or {}).get("requires_kekkei_genkai"):
+                naruto_lineage_profile["nature_components"] = copy.deepcopy(naruto_affinity_profile.get("combined_nature_components", []))
+                naruto_lineage_profile["origin"] = "An inherited elemental combination established by the character's multiple natural affinities."
+                naruto_affinity_profile["kekkei_genkai"] = naruto_lineage_profile.get("name")
         bleach_release_profile = None
         bleach_tracks = []
         if world == "Bleach":
@@ -2205,6 +2221,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             normalized["naruto_affinity_profile"] = normalize_chakra_affinity_profile(
                 None, legacy=known_natures or established.get("Nature Affinity", ""),
                 background=scenario.get("background", ""), seed=scenario.get("id", ""),
+                canon_character_id=scenario.get("id", ""),
             )
             if scenario.get("id") in {"naruto_birth", "naruto_graduation"}:
                 normalized["naruto_affinity_profile"]["discovery_status"] = "Latent / not yet tested"

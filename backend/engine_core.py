@@ -778,7 +778,7 @@ Return ONLY valid JSON. No markdown fences."""
             "quests", "relationships", "affiliations", "companions", "contacts", "npc_memories",
             "canon_divergences", "campaign_direction", "active_action_goals", "prerequisite_tracks",
             "authoritative_player_corrections", "simulation_scale", "combat", "danger_scenario",
-            "mechanical_power_profile",
+            "mechanical_power_profile", "standing_intents",
         }
         if purpose == "opening":
             opening = common | {"starting_power_band", "starting_power_notice", "appearance_desc", "portrait_traits"}
@@ -1172,10 +1172,10 @@ COMBAT-SUMMARY JOB
             espionage_rule = (
                 "\n- ESPIONAGE: when the player assigns someone — themself, a companion, a subordinate, a hired agent — to "
                 "infiltrate, surveil, or spread disinformation against a faction, track that assignment exactly like any "
-                "other delegated task: a named npc_memories entry (or the player's own standing_orders, if they're doing it "
+                "other delegated task: a named npc_memories entry plus the matching app-owned standing_intent "
                 "personally) with a concrete goal and recurring=true. This is a standing commitment, not a one-time action — "
                 "once set, keep advancing and reporting on it across time skips without the player having to re-issue the "
-                "order every single time, exactly like standing_orders already work, until it's completed, blown, or the "
+                "order every single time, until it's completed, blown, made impossible, or the "
                 "player changes it. What actually happens each skip must follow from the player's real orders, the agent's "
                 "actual position and capability, and the current state of the world — never invent progress with nothing "
                 "behind it, and never let it succeed just because it would be convenient. A skip can and should surface "

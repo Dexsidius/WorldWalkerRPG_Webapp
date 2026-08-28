@@ -206,6 +206,8 @@ def normalize_world_progression(state, before=None):
         affinity_profile = normalize_chakra_affinity_profile(
             special.get("Chakra Affinity Profile"), legacy=affinities,
             background=state.get("background", ""), seed=state.get("campaign_id", ""),
+            canon_character_id=(state.get("player_identity") or {}).get("canon_character_id", ""),
+            kekkei_genkai=bool(_profile(special.get("Kekkei Genkai Profile")) or str(special.get("Kekkei Genkai", "None")).lower() not in {"", "none", "unknown"}),
         )
         kekkei_profile = _profile(special.get("Kekkei Genkai Profile"))
         dojutsu_profile = _profile(special.get("Dōjutsu Profile"))
@@ -256,9 +258,15 @@ def normalize_world_progression(state, before=None):
             if nature.lower() in learned_text.lower() and nature not in affinity_profile["mastered_natures"]:
                 affinity_profile["mastered_natures"].append(nature)
                 affinity_profile.setdefault("training_evidence", []).append(f"Established a learned {nature} technique")
+            if (nature in affinity_profile["mastered_natures"] and
+                    nature not in affinity_profile.get("natural_affinities", []) and
+                    nature not in affinity_profile.setdefault("proficiencies", [])):
+                affinity_profile["proficiencies"].append(nature)
+                affinity_profile.setdefault("learning_rates", {})[nature] = 1.0
         special["Chakra Affinity Profile"] = affinity_profile
         special["Nature Affinity"] = affinity_profile["primary"]
-        profile["nature_affinities"] = copy.deepcopy(affinity_profile["mastered_natures"])
+        profile["nature_affinities"] = copy.deepcopy(affinity_profile.get("natural_affinities", []))
+        profile["nature_proficiencies"] = copy.deepcopy(affinity_profile.get("proficiencies", []))
         profile["chakra_affinity"] = copy.deepcopy(affinity_profile)
         profile.setdefault("mission_record", {})
         profile.setdefault("team", [])

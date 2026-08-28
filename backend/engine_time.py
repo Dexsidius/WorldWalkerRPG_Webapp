@@ -30,6 +30,8 @@ from simulation_integrity import (parse_action_goals, register_action_goals,
                                   transmit_information, canon_dependency_graph)
 from lit_systems import process_lit_turn
 from jjk_system import advance_jjk_state
+from standing_intents import (advance_standing_intents, player_training_directives,
+                              register_standing_intents, standing_intent_context)
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -639,6 +641,9 @@ class TimeSkipMixin:
                 return {"status": "manual_roll_required", "check": chk, "check_id": check_id,
                         "theme": self.state.get("world", "Custom World")}
         active_goals = register_action_goals(self.state, orders)
+        intent_registration = register_standing_intents(self.state, orders)
+        projected_intent_minutes = self.duration_minutes(simulation_amount, simulation_unit)
+        persistent_intents = standing_intent_context(self.state, projected_intent_minutes)
         # A "moment" is exactly one action (see assess_time_skip's truncation)
         # — this is the live path every single normal turn actually resolves
         # through, so the action's own Chronicle line belongs here, with any
@@ -699,6 +704,7 @@ class TimeSkipMixin:
             "state_before": self.task_state_for_ai("time_skip", " ".join(str(x) for x in orders or [])),
             "simulation_profile": self.simulation_profile(),
             "structured_action_goals": active_goals,
+            "persistent_intents": persistent_intents,
             "authoritative_travel_plans": assessment.get("travel_plans", []),
             "moment_mode": {"enabled": moment_mode, "max_elapsed_minutes": 1440, "instruction": "Resolve only the next immediate meaningful beat"},
             "live_event_scene": bool(moment_mode and self.state.get("active_canon_event")),
@@ -741,6 +747,10 @@ class TimeSkipMixin:
                 "Return no more than simulation_profile.max_updates update cards. Keep every major reaction distinct, but combine routine distant movement into one concise wider-world update instead of repeating the same development through quests, leads, clocks, advisor language, and world feed.",
                 "Generate meaningful world movement on EVERY Advance, including turns with no new player action or turns that merely continue standing orders. Significant personal story beats and major world events are hard stop points. If one reaches the player's actual position or reasonably requires their decision, stop there and return a concrete, in-character intervention_prompt for the normal Chronicle/Action Chat.",
                 "Prior player actions and promises continue affecting outcomes.",
+                "persistent_intents are durable background outcomes, duties, policies and routines already ordered by the player. Treat them as continuously in force without making the player repeat them. Preserve the intended outcome rather than mechanically repeating the original sentence. Reflect routine maintenance silently; mention it only when it causes a meaningful result, milestone, obstacle, interruption or consequence.",
+                "A delegated persistent intent does not consume the player's whole turn. Its responsible NPCs or organization continue it off-screen when able. A personal routine uses a believable share of the player's schedule alongside other actions.",
+                "If a persistent intent becomes temporarily impossible, completed, cancelled by circumstances, or permanently impossible, return a standing_intent_updates entry. Temporary obstacles pause rather than erase the instruction; resume it when circumstances allow.",
+                "Care and protection intents preserve ordinary food, shelter, supervision, healing and safety arrangements when available. Training/education intents accumulate across the full elapsed period; use teacher quality, talent, age, resources, health and interruptions, and only narrate meaningful development rather than a repetitive daily report.",
                 "If power_goal_progress.order is present and power_goal_progress.mechanical_success is true, conclude with the character genuinely gaining that power/ability. This may be an agency-assured result rather than a roll. Give a concrete lore-consistent cause grounded in accumulated training, set goal_status.achieved=true, and persist the capability. If it is false, award substantial foundation/proficiency; mention a failed roll only when roll_based is true, otherwise explain that the elapsed time has not yet reached the supplied route's next concrete milestone.",
                 "If an interruption is important enough that the player would reasonably stop and choose what to do, end the skip EARLY and return interrupted=true with the amount of time actually elapsed.",
                 "Treat action wording such as 'until', 'master', 'learn', 'find', 'reach', 'finish', 'complete', or another clear result as a goal condition. If that goal is achieved before the requested duration ends, stop immediately on the day/minute of completion, set goal_status.achieved=true, and return only the actual elapsed time.",
@@ -774,6 +784,7 @@ class TimeSkipMixin:
                 ,"information_events": [{"fact":"what was learned", "source":"who or what supplied it", "channel":"witness|conversation|letter|rumor|broadcast|ability|research", "recipients":["named recipients"], "delay_minutes":"nonnegative integer", "confidence":"0-100"}]
                 ,"completed_actions": "ordered actions completed or meaningfully attempted",
                 "deferred_actions": "unfinished/unstarted actions retained for the next Advance",
+                "standing_intent_updates": [{"id":"exact persistent_intents id", "status":"active|temporarily_blocked|completed|cancelled|failed|impossible", "reason":"short in-world reason; omit unchanged intents"}],
                 "suggested_actions": ["exactly 3 concrete optional actions written as verb + target + purpose: strongest lead, growth/preparation, alternate hook. Each must name a SPECIFIC person, place, faction, item, or thread that actually exists in this campaign right now — never generic filler like 'look for rumors' or 'train' with no real target. Vary the scale honestly: one can be a single moment, another can openly span several days or a longer project ('spend the next few days...', 'seek out ... over the coming weeks') when that's genuinely what the lead calls for — don't force everything into an instant."]
             }
         }
@@ -1088,10 +1099,14 @@ class TimeSkipMixin:
         # Training gains use the validator-approved duration, so a narrator
         # cannot accidentally turn a requested month into a few hours of
         # growth (or award a month for a goal completed on day thirteen).
-        self.enforce_training_progress(data, results, training_amount, training_unit, orders, intensity)
+        persistent_training = player_training_directives(self.state)
+        progression_actions = list(dict.fromkeys([*orders, *persistent_training]))
+        self.enforce_training_progress(data, results, training_amount, training_unit, progression_actions, intensity)
         ensure_productive_failures(data, results)
         return self.apply_time_skip(data, amount, unit, progression_context={
             "actions": orders, "rolls": results,
+            "progression_actions": progression_actions,
+            "standing_intent_directives": intent_registration.get("consumed_directives", []),
             "elapsed_minutes": self.duration_minutes(training_amount, training_unit),
             "intensity": intensity, "model_used": getattr(narrator_client, "model", ""),
         })
@@ -1799,7 +1814,12 @@ class TimeSkipMixin:
             ) if part.strip()))
             completed_quests = normalize_quest_state_machine(self.state)
             elapsed_minutes = self.duration_minutes(elapsed_amount, elapsed_unit)
-            self.append_training_summary(before, context.get("actions", []), elapsed_minutes, context.get("rolls", []))
+            advance_standing_intents(self.state, elapsed_minutes, data.get("standing_intent_updates"))
+            adopted_directives = {ai_text(row).lower() for row in context.get("standing_intent_directives", []) if ai_text(row)}
+            if adopted_directives:
+                self.state["standing_orders"] = [row for row in self.state.get("standing_orders", [])
+                                                   if ai_text(row).lower() not in adopted_directives]
+            self.append_training_summary(before, context.get("progression_actions", context.get("actions", [])), elapsed_minutes, context.get("rolls", []))
             integrity_report = data.get("integrity_report") if isinstance(data.get("integrity_report"), dict) else {}
             if integrity_report:
                 self.state.setdefault("simulation_validation", []).append(copy.deepcopy(integrity_report))
@@ -1852,14 +1872,15 @@ class TimeSkipMixin:
             self.state["suggested_actions"] = self.guided_suggestions(data.get("suggested_actions"))
             action_summary = "Advance: " + "; ".join(context.get("actions", []) or self.state.get("standing_orders", []))
             advance_hidden_class_discovery(self.state, action_summary)
-            record_progression_ledger(before, self.state, action_summary, elapsed_minutes, context.get("rolls", []))
+            progression_summary = "Advance: " + "; ".join(context.get("progression_actions", context.get("actions", [])) or self.state.get("standing_orders", []))
+            record_progression_ledger(before, self.state, progression_summary, elapsed_minutes, context.get("rolls", []))
             relationship_offer = maybe_offer_relationship_scene(self.state, updates)
             if relationship_offer:
                 self.state["suggested_actions"] = self.guided_suggestions([relationship_offer["prompt"], *self.state.get("suggested_actions", [])])
                 self.append(f"[OPTIONAL CHARACTER MOMENT — {relationship_offer['npc']}]\n{relationship_offer['reason']} This is optional; time will not move until you choose and Advance.", "meta")
             update_campaign_direction(self.state, context.get("actions", []), updates + local_world_events, elapsed_minutes)
             normalize_world_depth(self.state, before)
-            record_downtime(self.state, context.get("actions", []), elapsed_minutes)
+            record_downtime(self.state, context.get("progression_actions", context.get("actions", [])), elapsed_minutes)
             record_canon_ripples(self.state, updates + local_world_events)
             cause_effect = build_cause_effect(before, self.state, context.get("actions", []), context.get("rolls", []))
             self.state["last_ai_route"] = {"role": "Major Event GM" if context.get("model_used") and context.get("model_used") == self.settings.get("major_event_model") else "Main GM",

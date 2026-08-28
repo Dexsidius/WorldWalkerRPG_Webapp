@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.28.0** (schema 19).
+Current app/save version: **3.29.0** (schema 19).
+
+Version 3.29.0 adds persistent narrative intentions: ongoing care, delegated
+training, protection, policies, routines, and projects continue between turns
+without repeated player commands, while milestones and interruptions remain
+part of the normal Chronicle. Naruto chakra affinities now distinguish one
+natural affinity from learned nature proficiencies and mastery, preserve
+canon-correct start profiles, and require a bloodline or other established
+mechanism for multiple innate elemental affinities.
 
 Version 3.28.0 adds world-native power benchmarks, simultaneous local two-player combat,
 compiled mechanics and semantic uniqueness for generated abilities, polygon territory control,

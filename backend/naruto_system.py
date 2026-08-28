@@ -104,15 +104,64 @@ _NATURE_ALIASES = {
     "water": "Water Release", "suiton": "Water Release",
 }
 
+# Natural affinity and learned nature transformation are deliberately separate.
+# Canon frequently shows experienced shinobi using more than one element; that
+# does not retroactively give them several natural affinities.  Multiple innate
+# elemental affinities are reserved for an established bloodline/combined
+# nature, while special systems such as the Rinnegan are recorded as an explicit
+# external mastery source rather than mislabeled as a Kekkei Genkai.
+CANON_CHAKRA_PROFILES = {
+    "naruto_birth": {
+        "primary": "Wind Release", "natural_affinities": ["Wind Release"],
+        "proficiencies": [], "mastered_natures": [],
+        "discovery_status": "Latent / not yet tested",
+        "affinity_source": "Canon: Naruto's natural transformation affinity is Wind Release.",
+    },
+    "naruto_graduation": {
+        "primary": "Wind Release", "natural_affinities": ["Wind Release"],
+        "proficiencies": [], "mastered_natures": [],
+        "discovery_status": "Latent / not yet tested",
+        "affinity_source": "Canon: the Wind affinity exists, but Naruto has not discovered or trained it at graduation.",
+    },
+    "yahiko_akatsuki": {
+        "primary": "Water Release", "natural_affinities": ["Water Release"],
+        "proficiencies": [], "mastered_natures": ["Water Release"],
+        "discovery_status": "Known and trained",
+        "affinity_source": "Canon-established Water Release user.",
+    },
+    "pain_birth": {
+        "primary": "Unconfirmed", "natural_affinities": [],
+        "proficiencies": list(CHAKRA_NATURES), "mastered_natures": list(CHAKRA_NATURES),
+        "discovery_status": "Natural affinity unconfirmed; all five basic transformations mastered",
+        "affinity_source": "Nagato's Rinnegan-enabled mastery and training; not five separate natural affinities.",
+        "special_mastery_source": "Rinnegan",
+    },
+}
+
 
 def _stated_natures(text):
     lowered = str(text or "").lower().replace("ū", "u").replace("ō", "o")
     found = []
+    # Support natural-language lists such as "dual natural Fire and Wind
+    # affinities" or "my affinities are Earth and Water".  Keep the capture
+    # local to the affinity claim so a later goal like "I want to learn
+    # Lightning" is not mistaken for another innate nature.
+    listed_claims = []
+    for pattern in (
+        r"\b(?:dual|multiple|two|three|several)\s+(?:natural\s+)?(.{1,70}?)\s+(?:chakra\s+)?(?:affinities|natures)\b",
+        r"\b(?:natural\s+)?(?:chakra\s+)?(?:affinities|natures)\s+(?:are|include|includes)\s+(.{1,70}?)(?:[.;]|$)",
+    ):
+        listed_claims.extend(match.group(1) for match in re.finditer(pattern, lowered))
+    for claim in listed_claims:
+        for token, nature in _NATURE_ALIASES.items():
+            if re.search(rf"\b{re.escape(token)}\b", claim) and nature not in found:
+                found.append(nature)
     for token, nature in _NATURE_ALIASES.items():
         patterns = (
             rf"\b{token}\s+(?:chakra\s+)?(?:nature|affinity|release)\b",
             rf"\b(?:nature|chakra)\s+affinity\s+(?:for|to|with)\s+{token}\b",
             rf"\b(?:natural|innate|primary|secondary)\s+{token}\b",
+            rf"\b(?:affinity|affinities|natures?)\s+(?:is|are|include|includes)?\s*.{{0,30}}\b{token}\b",
         )
         matches = [match for pattern in patterns for match in re.finditer(pattern, lowered)]
         # "I want to learn Water Release" describes a goal, not a natural
@@ -127,45 +176,120 @@ def _stated_natures(text):
     return found
 
 
-def build_chakra_affinity_profile(background="", seed="", established=None):
-    """Create persistent nature-learning rules, not a cosmetic label."""
-    stated = []
-    if isinstance(established, list):
-        stated = [str(row) for row in established if str(row) in CHAKRA_NATURES]
-    elif str(established or "").strip().lower() not in {"", "unknown", "none"}:
-        stated = [nature for nature in CHAKRA_NATURES if nature.lower() in str(established).lower()]
-    stated = stated or _stated_natures(background)
-    if not stated:
-        digest = hashlib.sha256(f"{background}|{seed}|chakra-affinity".encode("utf-8")).digest()
-        stated = [random.Random(int.from_bytes(digest[:8], "big")).choice(CHAKRA_NATURES)]
-    primary = stated[0]
-    secondary = stated[1:]
-    rates = {nature: (1.35 if nature == primary else 1.15 if nature in secondary else 0.6) for nature in CHAKRA_NATURES}
-    return {
+def _learning_rates(primary, natural_affinities, proficiencies, special_source=""):
+    rates = {}
+    for nature in CHAKRA_NATURES:
+        if nature == primary:
+            rates[nature] = 1.35
+        elif nature in natural_affinities:
+            rates[nature] = 1.3
+        elif nature in proficiencies:
+            rates[nature] = 1.0 if not special_source else 1.15
+        else:
+            rates[nature] = 0.6
+    return rates
+
+
+def build_chakra_affinity_profile(background="", seed="", established=None,
+                                  canon_character_id="", kekkei_genkai=False):
+    """Create one natural affinity plus distinct learned proficiencies."""
+    canon = copy.deepcopy(CANON_CHAKRA_PROFILES.get(str(canon_character_id or ""), {}))
+    if canon:
+        primary = canon["primary"]
+        natural = list(canon.get("natural_affinities", []))
+        proficiencies = list(canon.get("proficiencies", []))
+        mastered = list(canon.get("mastered_natures", []))
+        source = canon.get("special_mastery_source", "")
+    else:
+        explicit = _stated_natures(background)
+        established_primary, established_proficiencies, established_mastered = "", [], []
+        if isinstance(established, dict):
+            established_primary = str(established.get("primary") or "")
+            established_proficiencies = [str(row) for row in established.get("proficiencies", []) if str(row) in CHAKRA_NATURES]
+            established_mastered = [str(row) for row in established.get("mastered_natures", []) if str(row) in CHAKRA_NATURES]
+        elif isinstance(established, list):
+            known = [str(row) for row in established if str(row) in CHAKRA_NATURES]
+            established_primary = known[0] if known else ""
+            established_proficiencies = known[1:]
+            established_mastered = known
+        elif str(established or "").strip().lower() not in {"", "unknown", "none", "unconfirmed"}:
+            known = [nature for nature in CHAKRA_NATURES if nature.lower() in str(established).lower()]
+            established_primary = known[0] if known else ""
+        if explicit:
+            primary = explicit[0]
+        elif established_primary in CHAKRA_NATURES:
+            primary = established_primary
+        else:
+            digest = hashlib.sha256(f"{background}|{seed}|chakra-affinity".encode("utf-8")).digest()
+            primary = random.Random(int.from_bytes(digest[:8], "big")).choice(CHAKRA_NATURES)
+        multiple_natural_claim = len(explicit) > 1 and bool(re.search(
+            r"\b(?:dual|multiple|two|three|several)\b.{0,25}\b(?:affinit|nature)|"
+            r"\b(?:affinities|natural natures)\b", str(background), re.I,
+        ))
+        natural = list(dict.fromkeys([primary, *(explicit[1:] if (multiple_natural_claim or kekkei_genkai) else [])]))
+        proficiencies = list(dict.fromkeys([*established_proficiencies,
+                                            *(explicit[1:] if not multiple_natural_claim and not kekkei_genkai else [])]))
+        mastered = list(dict.fromkeys(established_mastered))
+        source = ""
+        canon = {
+            "discovery_status": "Known" if explicit or established_primary else "Latent / not yet tested",
+            "affinity_source": "Character background" if explicit else "Latent nature established at creation",
+        }
+    additional_natural = [row for row in natural if row != primary]
+    requires_kekkei = bool(additional_natural and not canon.get("special_mastery_source"))
+    rates = _learning_rates(primary, natural, proficiencies, source)
+    profile = {
         "primary": primary,
-        "secondary": secondary,
-        "mastered_natures": list(stated),
-        "discovery_status": "Known" if _stated_natures(background) or established not in (None, "", "Unknown") else "Latent / not yet tested",
+        "natural_affinities": natural,
+        # Legacy alias retained for old saves/UI integrations, but it now means
+        # additional *natural* affinities only, never ordinary learned elements.
+        "secondary": additional_natural,
+        "proficiencies": proficiencies,
+        "mastered_natures": mastered,
+        "discovery_status": canon.get("discovery_status", "Known"),
+        "affinity_source": canon.get("affinity_source", ""),
+        "special_mastery_source": source,
         "learning_rates": rates,
-        "native_rule": "Matching elemental jutsu are learned and refined faster, cost less chakra to stabilize, and reach advanced shape transformations more naturally.",
-        "off_affinity_rule": "Other basic natures remain learnable, but normally require substantially more time, control, instruction, and repeated practice.",
-        "combined_nature_rule": "A combined nature needs the required component natures plus a Kekkei Genkai, equivalent special mechanism, or a world-valid original research route.",
+        "native_rule": "The natural affinity is the easiest basic nature to discover, learn, stabilize and refine. It does not automatically grant a mastered jutsu.",
+        "off_affinity_rule": "Other basic natures remain learnable through sufficient control, instruction and practice. They become proficiencies, not additional natural affinities.",
+        "combined_nature_rule": "Using two learned basic natures does not create a combined release. A true elemental combination requires the matching Kekkei Genkai, Kekkei Tōta, or another explicitly established canon-valid mechanism.",
+        "requires_kekkei_genkai": requires_kekkei,
+        "combined_nature_components": additional_natural and natural or [],
         "external_natures": [],
         "training_evidence": [],
     }
+    return profile
 
 
-def normalize_chakra_affinity_profile(profile=None, legacy="", background="", seed=""):
+def normalize_chakra_affinity_profile(profile=None, legacy="", background="", seed="",
+                                      canon_character_id="", kekkei_genkai=False):
     current = copy.deepcopy(profile) if isinstance(profile, dict) else {}
-    base = build_chakra_affinity_profile(background, seed, established=(current.get("mastered_natures") if current else legacy))
+    established = current if current else legacy
+    base = build_chakra_affinity_profile(background, seed, established=established,
+                                         canon_character_id=canon_character_id,
+                                         kekkei_genkai=kekkei_genkai)
     for key, value in current.items():
         if value not in (None, "", [], {}):
             base[key] = copy.deepcopy(value)
-    primary = base.get("primary") if base.get("primary") in CHAKRA_NATURES else build_chakra_affinity_profile(background, seed, legacy)["primary"]
+    canon_unconfirmed = (
+        str(canon_character_id or "") == "pain_birth"
+        or (
+            str(base.get("primary") or "") == "Unconfirmed"
+            and str(base.get("special_mastery_source") or "").lower() == "rinnegan"
+        )
+    )
+    primary = base.get("primary") if base.get("primary") in CHAKRA_NATURES or (canon_unconfirmed and base.get("primary") == "Unconfirmed") else build_chakra_affinity_profile(background, seed, legacy)["primary"]
     base["primary"] = primary
-    base["secondary"] = [row for row in base.get("secondary", []) if row in CHAKRA_NATURES and row != primary]
-    base["mastered_natures"] = list(dict.fromkeys([primary, *base["secondary"], *[row for row in base.get("mastered_natures", []) if row in CHAKRA_NATURES]]))
-    base["learning_rates"] = {nature: float((base.get("learning_rates") or {}).get(nature, 1.35 if nature == primary else 1.15 if nature in base["secondary"] else 0.6)) for nature in CHAKRA_NATURES}
+    natural = [row for row in base.get("natural_affinities", []) if row in CHAKRA_NATURES]
+    if primary in CHAKRA_NATURES and primary not in natural:
+        natural.insert(0, primary)
+    base["natural_affinities"] = list(dict.fromkeys(natural))
+    base["secondary"] = [row for row in base["natural_affinities"] if row != primary]
+    base["proficiencies"] = list(dict.fromkeys(row for row in base.get("proficiencies", []) if row in CHAKRA_NATURES and row not in base["natural_affinities"]))
+    base["mastered_natures"] = list(dict.fromkeys(row for row in base.get("mastered_natures", []) if row in CHAKRA_NATURES))
+    base["learning_rates"] = _learning_rates(primary, base["natural_affinities"], base["proficiencies"], base.get("special_mastery_source", ""))
+    base["requires_kekkei_genkai"] = bool(base["secondary"] and not base.get("special_mastery_source"))
+    base["combined_nature_components"] = base["natural_affinities"] if base["requires_kekkei_genkai"] else []
     return base
 
 

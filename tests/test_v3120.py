@@ -18,7 +18,7 @@ from worlds import APP_VERSION, BASE_STATE
 
 class WorldwalkerV3120NarrativeAgendaTests(unittest.TestCase):
     def test_release_and_world_presentation_profiles(self):
-        self.assertEqual(APP_VERSION, "3.28.0")
+        self.assertEqual(APP_VERSION, "3.29.0")
         self.assertTrue(uses_literal_quests("Overgeared"))
         self.assertTrue(uses_literal_quests("Solo Max-Level Newbie"))
         for world in ("Naruto", "One Piece", "Hunter x Hunter", "Bleach",

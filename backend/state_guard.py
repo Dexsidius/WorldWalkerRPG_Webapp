@@ -67,7 +67,7 @@ APP_OWNED = {
     # Only the player's own rating action (engine_journal.rate_last_turn_good)
     # writes this — never the GM.
     "rated_good_turns", "narrative_memory", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs",
-    "npc_intentions", "simulation_events", "local_background_turn",
+    "npc_intentions", "simulation_events", "local_background_turn", "standing_intents",
     # Acknowledgement of an ongoing dangerous scene is maintained locally.
     # The narrator can conclude a scene through its response flag, but cannot
     # forge or erase the stored warning state through state_patch.
