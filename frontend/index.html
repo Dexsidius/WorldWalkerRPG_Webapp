@@ -893,6 +893,15 @@
 
 <div class="modal-backdrop event-window-backdrop" id="modal-event-window">
   <div class="modal event-window-modal" role="dialog" aria-modal="true" aria-labelledby="event-window-title">
+    <div class="event-cinematic-stage" aria-hidden="true">
+      <img id="event-window-banner" class="event-window-banner" alt="" hidden>
+      <div class="event-cinematic-scrim"></div>
+      <div class="event-cinematic-grain"></div>
+      <div class="event-cinematic-particles" id="event-window-particles"></div>
+      <div class="event-cinematic-frame"></div>
+      <div class="event-cinematic-cut"></div>
+      <div class="event-cinematic-flash"></div>
+    </div>
     <div class="event-window-grip" aria-hidden="true"></div>
     <header class="modal-head">
       <span id="event-window-title">MAJOR EVENT</span>
@@ -900,9 +909,9 @@
     </header>
     <div class="event-window-notice">
       <p class="event-window-kicker" id="event-window-kicker">THE SIMULATION HAS STOPPED HERE</p>
+      <div class="event-window-rule" aria-hidden="true"></div>
       <h3 id="event-window-heading">An important event is happening.</h3>
       <div class="event-window-meta" id="event-window-meta" hidden></div>
-      <img id="event-window-banner" class="event-window-banner" alt="" hidden>
       <p id="event-window-context"></p>
       <dl class="event-window-facts" id="event-window-facts" hidden>
         <dt>Your position</dt><dd id="event-window-player-location">Unknown</dd>
@@ -910,8 +919,11 @@
         <dt>Involvement</dt><dd id="event-window-involvement">The situation is still developing.</dd>
         <dt>Simulation</dt><dd>Paused at a major world event</dd>
       </dl>
-      <button id="btn-event-window-continue" class="btn-primary full" type="button">ACKNOWLEDGE EVENT</button>
-      <p class="event-window-guidance">Your position-aware response prompt is waiting in the Chronicle. No decision is made from this notice.</p>
+      <div class="event-window-actions">
+        <button id="btn-event-window-replay" class="btn-ghost" type="button" hidden>REPLAY SCENE</button>
+        <button id="btn-event-window-continue" class="btn-primary" type="button">ACKNOWLEDGE EVENT</button>
+      </div>
+      <p class="event-window-guidance">Your position-aware response prompt is waiting in the Chronicle. This notice makes no decision for you.</p>
     </div>
   </div>
 </div>

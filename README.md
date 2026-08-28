@@ -6,7 +6,9 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.34.0** (schema 19).
+Current app/save version: **3.35.0** (schema 19).
+
+Version 3.35.0 turns every canon-event interruption into a native full-screen cinematic using the event's real title, date, location, player position, travel context, world theme, and best available cached scene art. It adds replay, mobile composition, reduced-motion support, and keeps the Chronicle as the actual decision surface.
 
 Version 3.34.0 adds a cleaner political atlas, world-authentic percentile dice, compact decision cards, an informational canon-event sheet with position and travel context, and an expandable transformation panel that remains tied to portrait state.
 Existing saves created before age tracking receive a one-time deterministic

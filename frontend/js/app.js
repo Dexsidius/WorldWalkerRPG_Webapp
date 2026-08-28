@@ -2494,14 +2494,21 @@ function openEventNotice(result) {
   const isCanon = result.interruption_kind === "canon_event";
   const isDanger = result.interruption_kind === "danger";
   const notice = result.event_notice || {};
+  const eventBackdrop = $("#modal-event-window");
+  const eventModal = eventBackdrop.querySelector(".event-window-modal");
+  const world = String(result.state?.world || APP.state?.world || "Custom World");
+  const worldSlug = world.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  eventBackdrop.classList.toggle("canon-cinematic", isCanon);
+  eventBackdrop.classList.toggle("danger-event", isDanger);
+  eventModal.dataset.eventWorld = worldSlug;
   mobileVibrate(isDanger || result.state?.combat?.active ? [30, 45, 30] : [15, 35, 15]);
   const title = result.major_event_title || result.state?.active_canon_event ||
     (isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT");
   playSceneTransition(result.state?.combat?.active ? "combat" : "event", result.state || APP.state);
-  $("#event-window-title").textContent = isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT";
+  $("#event-window-title").textContent = isCanon ? "CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT";
   $("#event-window-kicker").textContent = result.state?.combat?.active
     ? "COMBAT HAS BEGUN"
-    : "THE SIMULATION HAS STOPPED HERE";
+    : isCanon ? "THE TIMELINE HAS REACHED THIS MOMENT" : "THE SIMULATION HAS STOPPED HERE";
   $("#event-window-heading").textContent = title;
   $("#event-window-context").textContent = result.interruption_context || result.interruption_reason ||
     "An important event has reached your character's current place in the story.";
@@ -2511,7 +2518,7 @@ function openEventNotice(result) {
     ? formatCalendarDate(result.state?.world || APP.state?.world || "Custom World", eventDay, result.state?.calendar_epoch, result.state?.calendar_anchor_day)
     : "";
   const metaBits = [dateLabel, notice.location, notice.scope ? humanLabel(notice.scope) : ""].filter(Boolean);
-  meta.textContent = metaBits.join("  ·  ");
+  meta.textContent = metaBits.join("  /  ");
   meta.hidden = !metaBits.length;
   const facts = $("#event-window-facts");
   const showFacts = !isDanger && Boolean(notice.player_location || notice.travel_time || notice.involvement);
@@ -2521,12 +2528,37 @@ function openEventNotice(result) {
   $("#event-window-involvement").textContent = notice.involvement || "The situation is still developing.";
   const banner = $("#event-window-banner");
   const bannerUrl = isCanon ? (notice.scene_image || result.state?._scene_image || "") : "";
-  if (bannerUrl && (bannerUrl.includes("/assets/canon_events/") || bannerUrl.includes("/assets/generated_scenes/"))) {
-    banner.src = bannerUrl; banner.hidden = false;
+  if (bannerUrl && bannerUrl.includes("/assets/")) {
+    banner.src = bannerUrl;
+    banner.alt = `${title} scene in ${world}`;
+    banner.hidden = false;
   } else {
-    banner.removeAttribute("src"); banner.hidden = true;
+    banner.removeAttribute("src"); banner.alt = ""; banner.hidden = true;
   }
+  const particles = $("#event-window-particles");
+  particles.replaceChildren();
+  if (isCanon) {
+    for (let index = 0; index < 18; index += 1) {
+      const particle = document.createElement("i");
+      particle.style.setProperty("--particle-x", `${5 + ((index * 47) % 91)}%`);
+      particle.style.setProperty("--particle-size", `${2 + (index % 4)}px`);
+      particle.style.setProperty("--particle-duration", `${4.8 + (index % 5) * .7}s`);
+      particle.style.setProperty("--particle-delay", `${1.2 + (index % 7) * .31}s`);
+      particle.style.setProperty("--particle-drift", `${-36 + (index % 8) * 11}px`);
+      particles.appendChild(particle);
+    }
+  }
+  $("#btn-event-window-replay").hidden = !isCanon;
+  restartCanonCinematic();
   openModal("modal-event-window");
+}
+
+function restartCanonCinematic() {
+  const modal = $("#modal-event-window .event-window-modal");
+  if (!modal || !$("#modal-event-window").classList.contains("canon-cinematic")) return;
+  modal.classList.remove("event-cinematic-playing");
+  void modal.offsetWidth;
+  modal.classList.add("event-cinematic-playing");
 }
 
 function closeEventNotice() {
@@ -2541,6 +2573,7 @@ function closeEventNotice() {
 }
 $("#btn-event-window-leave").addEventListener("click", closeEventNotice);
 $("#btn-event-window-continue").addEventListener("click", closeEventNotice);
+$("#btn-event-window-replay").addEventListener("click", restartCanonCinematic);
 
 // ---------------------------------------------------------------------------
 // Turn submission

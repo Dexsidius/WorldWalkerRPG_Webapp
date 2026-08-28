@@ -745,6 +745,124 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 .event-window-facts dt{ color:var(--accent2); font:800 9.5px var(--font-label); letter-spacing:.08em; text-transform:uppercase; }
 .event-window-facts dd{ margin:0; color:var(--text); }
 .event-window-guidance{ margin:9px 0 0; color:var(--sub); font-size:10.5px; line-height:1.45; text-align:center; }
+.event-cinematic-stage,.event-window-rule{ display:none; }
+.event-window-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:16px; }
+.event-window-actions .btn-primary{ min-width:210px; }
+
+/* Canon events use a full-screen native cinematic. It remains a display-only
+   handoff into the Chronicle and never resolves an action inside the modal. */
+.event-window-backdrop.canon-cinematic{ padding:0; align-items:center; background:#050706; }
+.canon-cinematic .event-window-modal{
+  --event-accent:var(--accent2); --event-accent-soft:var(--gold);
+  width:100vw!important; height:100dvh; max-width:none; max-height:none; overflow:hidden;
+  border:0; border-radius:0; background:#080a09; color:#f2ece4; transform:none;
+}
+.canon-cinematic .event-cinematic-stage{ display:block; position:absolute; inset:0; z-index:0; overflow:hidden; background:linear-gradient(145deg,#101712,#050706 72%); }
+.canon-cinematic .event-window-banner{ display:block; position:absolute; inset:-4%; width:108%; height:108%; max-height:none; margin:0; border:0; border-radius:0; object-fit:cover; opacity:.78; filter:saturate(.78) contrast(1.09) brightness(.72); transform:scale(1.08); }
+.canon-cinematic .event-window-banner[hidden]{ display:none; }
+.canon-cinematic .event-cinematic-scrim{ position:absolute; inset:0; background:linear-gradient(90deg,rgba(3,5,4,.97) 0%,rgba(3,5,4,.76) 34%,rgba(3,5,4,.08) 68%),linear-gradient(0deg,rgba(3,4,3,.98) 0%,transparent 38%,rgba(3,4,3,.22) 100%); }
+.canon-cinematic .event-cinematic-grain{ position:absolute; inset:-55%; opacity:.045; pointer-events:none; background-image:repeating-radial-gradient(circle at 17% 22%,#fff 0 1px,transparent 1px 5px); background-size:8px 8px; }
+.canon-cinematic .event-cinematic-frame{ position:absolute; inset:22px; border:1px solid rgba(255,255,255,.13); opacity:0; }
+.canon-cinematic .event-cinematic-frame::before,.canon-cinematic .event-cinematic-frame::after{ content:""; position:absolute; width:70px; height:4px; background:var(--event-accent); }
+.canon-cinematic .event-cinematic-frame::before{ left:-1px; top:-1px; }
+.canon-cinematic .event-cinematic-frame::after{ right:-1px; bottom:-1px; }
+.canon-cinematic .event-cinematic-cut{ position:absolute; inset:0; z-index:8; background:#050605; clip-path:polygon(0 0,100% 0,100% 100%,0 100%); pointer-events:none; }
+.canon-cinematic .event-cinematic-cut::after{ content:""; position:absolute; left:-12%; top:48%; width:125%; height:4px; background:var(--event-accent-soft); box-shadow:0 0 30px 6px color-mix(in srgb,var(--event-accent) 68%,transparent); transform:rotate(-7deg); }
+.canon-cinematic .event-cinematic-flash{ position:absolute; inset:0; z-index:9; background:color-mix(in srgb,var(--event-accent-soft) 55%,white); opacity:0; pointer-events:none; }
+.canon-cinematic .event-cinematic-particles{ position:absolute; inset:0; z-index:3; overflow:hidden; pointer-events:none; }
+.canon-cinematic .event-cinematic-particles i{ position:absolute; left:var(--particle-x); bottom:-5%; width:var(--particle-size); height:calc(var(--particle-size) * 2.3); border-radius:50%; background:var(--event-accent-soft); box-shadow:0 0 9px var(--event-accent); opacity:0; }
+.canon-cinematic .event-window-grip{ display:none; }
+.canon-cinematic .modal-head{ position:absolute; z-index:12; top:22px; right:24px; left:auto; width:auto; padding:0; border:0; background:transparent; }
+.canon-cinematic .modal-head>span{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0,0,0,0); }
+.canon-cinematic #btn-event-window-leave{ display:grid; place-items:center; width:42px; height:42px; border:1px solid rgba(255,255,255,.34); border-radius:8px; background:rgba(7,8,7,.72); color:#f2ece4; backdrop-filter:blur(8px); }
+.canon-cinematic .event-window-notice{ position:relative; z-index:5; width:100%; height:100%; padding:0; }
+.canon-cinematic .event-window-kicker{ position:absolute; left:clamp(28px,6vw,92px); top:calc(50% - 205px); margin:0; color:var(--event-accent-soft); font-size:clamp(10px,1vw,13px); letter-spacing:.22em; opacity:0; transform:translateX(-28px); }
+.canon-cinematic .event-window-rule{ display:block; position:absolute; left:clamp(28px,6vw,92px); top:calc(50% - 169px); width:84px; height:3px; background:var(--event-accent); transform:scaleX(0); transform-origin:left; }
+.canon-cinematic .event-window-notice h3{ position:absolute; left:clamp(28px,6vw,92px); top:calc(50% - 142px); width:min(720px,58vw); max-width:12ch; margin:0; color:#fff6e9; font:900 clamp(42px,7vw,104px)/.9 var(--font-display); letter-spacing:-.045em; text-transform:uppercase; text-shadow:0 8px 40px rgba(0,0,0,.9); opacity:0; transform:translateY(36px) skewY(2deg); }
+.canon-cinematic .event-window-meta{ position:absolute; left:clamp(28px,6vw,92px); top:calc(50% + 68px); width:min(620px,52vw); margin:0; color:var(--event-accent-soft); font:800 11px var(--font-mono); letter-spacing:.045em; opacity:0; transform:translateY(12px); }
+.canon-cinematic #event-window-context{ position:absolute; left:clamp(28px,6vw,92px); top:calc(50% + 96px); width:min(610px,52vw); max-height:8.5em; overflow:auto; margin:0; color:#e4dbd1; font-size:clamp(13px,1.15vw,17px); line-height:1.52; opacity:0; transform:translateY(16px); }
+.canon-cinematic .event-window-facts{ position:absolute; right:clamp(24px,4vw,62px); bottom:82px; width:min(430px,36vw); display:grid; grid-template-columns:116px minmax(0,1fr); gap:8px 14px; margin:0; padding:17px 18px; border:1px solid color-mix(in srgb,var(--event-accent) 48%,transparent); border-radius:8px; background:rgba(8,9,8,.83); box-shadow:0 22px 65px rgba(0,0,0,.48); backdrop-filter:blur(10px); opacity:0; transform:translateY(22px); }
+.canon-cinematic .event-window-facts[hidden]{ display:none; }
+.canon-cinematic .event-window-facts dt{ color:var(--event-accent-soft); }
+.canon-cinematic .event-window-actions{ position:absolute; z-index:7; left:clamp(28px,6vw,92px); right:clamp(24px,4vw,62px); bottom:24px; display:flex; justify-content:flex-end; gap:10px; margin:0; opacity:0; }
+.canon-cinematic .event-window-actions button{ min-height:44px; border-radius:8px; font-weight:900; letter-spacing:.055em; }
+.canon-cinematic .event-window-actions .btn-primary{ min-width:238px; border-color:var(--event-accent-soft); background:var(--event-accent); color:#090706; }
+.canon-cinematic .event-window-guidance{ position:absolute; left:clamp(28px,6vw,92px); bottom:37px; max-width:48ch; margin:0; text-align:left; color:#bdb2a7; font-size:10.5px; letter-spacing:.025em; opacity:0; }
+.canon-cinematic .event-window-modal[data-event-world="naruto"]{ --event-accent:#e96f33; --event-accent-soft:#ffc07b; }
+.canon-cinematic .event-window-modal[data-event-world="one-piece"]{ --event-accent:#df3e36; --event-accent-soft:#ffd35c; }
+.canon-cinematic .event-window-modal[data-event-world="bleach"]{ --event-accent:#dce7ef; --event-accent-soft:#8ed9ff; }
+.canon-cinematic .event-window-modal[data-event-world="jujutsu-kaisen"]{ --event-accent:#b94f6d; --event-accent-soft:#f0a5bf; }
+.canon-cinematic .event-window-modal[data-event-world="overgeared"]{ --event-accent:#df9b28; --event-accent-soft:#ffe093; }
+.canon-cinematic .event-window-modal[data-event-world="solo-max-level-newbie"]{ --event-accent:#379fea; --event-accent-soft:#9fe9ff; }
+.canon-cinematic .event-window-modal[data-event-world="reincarnated-as-a-slime"]{ --event-accent:#52bde0; --event-accent-soft:#b4f4ff; }
+.canon-cinematic .event-window-modal[data-event-world="hunter-x-hunter"]{ --event-accent:#4ebc70; --event-accent-soft:#d6f278; }
+.canon-cinematic .event-window-modal[data-event-world="bleach"] .event-cinematic-particles i{ height:var(--particle-size); box-shadow:0 0 14px 3px var(--event-accent-soft); }
+.canon-cinematic .event-window-modal[data-event-world="one-piece"] .event-cinematic-particles i{ width:calc(var(--particle-size) * 2.6); height:2px; transform:rotate(-12deg); }
+.canon-cinematic .event-window-modal[data-event-world="overgeared"] .event-cinematic-particles i,.canon-cinematic .event-window-modal[data-event-world="solo-max-level-newbie"] .event-cinematic-particles i{ width:calc(var(--particle-size) * 3); height:1px; border-radius:0; }
+.event-cinematic-playing .event-window-banner{ animation:eventCamera 11s cubic-bezier(.2,.72,.2,1) both; }
+.event-cinematic-playing .event-cinematic-grain{ animation:eventGrain .22s steps(2) infinite; }
+.event-cinematic-playing .event-cinematic-frame{ animation:eventAppear .55s 1.4s both; }
+.event-cinematic-playing .event-cinematic-cut{ animation:eventInkOpen 1.05s .45s cubic-bezier(.75,0,.18,1) both; }
+.event-cinematic-playing .event-cinematic-flash{ animation:eventFlash 7.8s both; }
+.event-cinematic-playing .event-window-kicker{ animation:eventTextIn .65s 1.55s both; }
+.event-cinematic-playing .event-window-rule{ animation:eventRuleIn .65s 1.86s both; }
+.event-cinematic-playing .event-window-notice h3{ animation:eventTitleIn .74s 1.98s cubic-bezier(.2,.8,.18,1) both; }
+.event-cinematic-playing .event-window-meta{ animation:eventAppearUp .55s 2.72s both; }
+.event-cinematic-playing #event-window-context{ animation:eventAppearUp .62s 2.92s both; }
+.event-cinematic-playing .event-window-facts{ animation:eventAppearUp .65s 3.65s both; }
+.event-cinematic-playing .event-window-actions,.event-cinematic-playing .event-window-guidance{ animation:eventAppear .5s 4.35s both; }
+.event-cinematic-playing .event-cinematic-particles i{ animation:eventParticleRise var(--particle-duration) var(--particle-delay) linear infinite; }
+@keyframes eventCamera{ from{ transform:scale(1.08) translate3d(0,0,0); } to{ transform:scale(1.015) translate3d(-1.2%,.3%,0); } }
+@keyframes eventGrain{ 0%{ transform:translate(0,0); } 25%{ transform:translate(2%,-1%); } 50%{ transform:translate(-1%,2%); } 75%{ transform:translate(1%,1%); } }
+@keyframes eventFlash{ 0%,8%,100%{ opacity:0; } 8.6%{ opacity:.55; } 9.5%{ opacity:0; } 46%{ opacity:0; } 46.4%{ opacity:.16; } 47%{ opacity:0; } }
+@keyframes eventInkOpen{ 0%{ clip-path:polygon(0 0,100% 0,100% 100%,0 100%); } 70%{ clip-path:polygon(0 0,100% 0,100% 12%,0 82%); } 100%{ clip-path:polygon(0 0,100% 0,100% 0,0 0); } }
+@keyframes eventTextIn{ to{ opacity:1; transform:translateX(0); } }
+@keyframes eventRuleIn{ to{ transform:scaleX(1); } }
+@keyframes eventTitleIn{ to{ opacity:1; transform:translateY(0) skewY(0); } }
+@keyframes eventAppear{ to{ opacity:1; } }
+@keyframes eventAppearUp{ to{ opacity:1; transform:translateY(0); } }
+@keyframes eventParticleRise{ 0%{ transform:translate3d(0,0,0) rotate(8deg); opacity:0; } 12%{ opacity:.75; } 100%{ transform:translate3d(var(--particle-drift),-108vh,0) rotate(48deg); opacity:0; } }
+body.motion-off .event-cinematic-playing *{ animation:none!important; }
+body.motion-off .canon-cinematic .event-window-kicker,
+body.motion-off .canon-cinematic .event-window-notice h3,
+body.motion-off .canon-cinematic .event-window-meta,
+body.motion-off .canon-cinematic #event-window-context,
+body.motion-off .canon-cinematic .event-window-facts,
+body.motion-off .canon-cinematic .event-window-actions,
+body.motion-off .canon-cinematic .event-window-guidance,
+body.motion-off .canon-cinematic .event-cinematic-frame{ opacity:1; transform:none; }
+body.motion-off .canon-cinematic .event-window-rule{ transform:scaleX(1); }
+body.motion-off .canon-cinematic .event-cinematic-cut,
+body.motion-off .canon-cinematic .event-cinematic-flash,
+body.motion-off .canon-cinematic .event-cinematic-particles{ display:none; }
+
+@media(max-width:720px){
+  .canon-cinematic .event-window-modal{ min-height:100dvh; }
+  .canon-cinematic .event-window-banner{ inset:-2% -12%; width:124%; height:57%; object-position:center 35%; opacity:.73; }
+  .canon-cinematic .event-cinematic-scrim{ background:linear-gradient(0deg,rgba(3,5,4,.99) 0%,rgba(3,5,4,.92) 42%,rgba(3,5,4,.08) 78%),linear-gradient(90deg,rgba(3,5,4,.38),transparent); }
+  .canon-cinematic .event-cinematic-frame{ inset:10px; }
+  .canon-cinematic .modal-head{ top:max(12px,env(safe-area-inset-top)); right:12px; }
+  .canon-cinematic #btn-event-window-leave{ width:40px; height:40px; }
+  .canon-cinematic .event-window-notice{ display:flex; flex-direction:column; height:100dvh; min-height:0; overflow-y:auto; padding:clamp(235px,31dvh,300px) 20px calc(18px + env(safe-area-inset-bottom)); }
+  .canon-cinematic .event-window-kicker{ position:static; margin:0 44px 10px 0; font-size:9px; line-height:1.35; flex:0 0 auto; }
+  .canon-cinematic .event-window-rule{ position:static; width:64px; margin:0 0 13px; flex:0 0 3px; }
+  .canon-cinematic .event-window-notice h3{ position:static; width:auto; max-width:13ch; margin:0; font-size:clamp(31px,9.4vw,45px); line-height:.9; flex:0 0 auto; }
+  .canon-cinematic .event-window-meta{ position:static; width:auto; margin:12px 0 0; font-size:9.5px; flex:0 0 auto; }
+  .canon-cinematic #event-window-context{ position:static; width:auto; max-height:none; overflow:visible; margin:9px 0 0; font-size:12.5px; line-height:1.42; flex:0 0 auto; }
+  .canon-cinematic .event-window-facts{ position:static; width:auto; grid-template-columns:88px minmax(0,1fr); gap:5px 10px; margin:13px 0 0; padding:11px 12px; font-size:10.5px; flex:0 0 auto; }
+  .canon-cinematic .event-window-facts dt{ font-size:8.5px; }
+  .canon-cinematic .event-window-actions{ position:static; width:auto; margin:14px 0 0; flex:0 0 auto; }
+  .canon-cinematic .event-window-actions #btn-event-window-replay{ display:none; }
+  .canon-cinematic .event-window-actions .btn-primary{ width:100%; min-width:0; min-height:48px; }
+  .canon-cinematic .event-window-guidance{ display:none; }
+}
+
+@media(prefers-reduced-motion:reduce){
+  .event-cinematic-playing *{ animation-duration:.01ms!important; animation-delay:0ms!important; animation-iteration-count:1!important; }
+  .canon-cinematic .event-window-kicker,.canon-cinematic .event-window-notice h3,.canon-cinematic .event-window-meta,.canon-cinematic #event-window-context,.canon-cinematic .event-window-facts,.canon-cinematic .event-window-actions,.canon-cinematic .event-window-guidance,.canon-cinematic .event-cinematic-frame{ opacity:1; transform:none; }
+  .canon-cinematic .event-window-rule{ transform:scaleX(1); }
+  .canon-cinematic .event-cinematic-cut,.canon-cinematic .event-cinematic-flash,.canon-cinematic .event-cinematic-particles{ display:none; }
+}
 .combat-enemy.dead{ opacity:.45; filter:grayscale(.72); }
 .combat-enemy.defeat-transition{ animation:enemyDefeat .9s var(--ease-out) both; }
 body[data-world="Bleach"] .combat-enemy.defeat-transition{ animation-name:enemyDefeatSpirit; }

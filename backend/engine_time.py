@@ -423,13 +423,13 @@ class TimeSkipMixin:
 
         combat_active = bool(isinstance(self.state.get("combat"), dict) and self.state.get("combat", {}).get("active"))
         if combat_active:
-            involvement = "Direct — combat has already begun"
+            involvement = "Direct: combat has already begun"
         elif same_place:
-            involvement = "Direct — the event has reached your current area"
+            involvement = "Direct: the event has reached your current area"
         elif data.get("interrupted"):
-            involvement = "Indirect but actionable — your ties, authority, or access give you a meaningful response"
+            involvement = "Indirect but actionable: your ties, authority, or access give you a meaningful response"
         else:
-            involvement = "Indirect — information and access are limited by distance"
+            involvement = "Indirect: information and access are limited by distance"
 
         scene_state = copy.deepcopy(self.state)
         if data.get("active_major_event"):
