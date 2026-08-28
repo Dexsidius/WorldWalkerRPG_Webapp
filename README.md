@@ -6,7 +6,10 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.30.1** (schema 19).
+Current app/save version: **3.30.2** (schema 19).
+
+Version 3.30.2 reconstructs missing Jinchūriki progression from confirmed
+campaign events and restores full AI-powered, charted Advisor comparisons.
 
 Version 3.30.1 restores a fully grounded Advisor, removes the last local combat
 fallback that could scale an underspecified enemy to the player, makes ordinary

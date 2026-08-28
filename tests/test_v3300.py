@@ -10,7 +10,9 @@ from simulation_core import (refresh_simulation_core, companion_support_for_comb
 from evaluations import run_local_simulation_evaluation
 from game import GameSession
 from combat import _fallback_enemy_power
-from naruto_system import build_jinchuriki_profile, apply_jinchuriki_start
+from naruto_system import (apply_jinchuriki_start, build_jinchuriki_profile,
+                           jinchuriki_story_evidence)
+from world_progression import normalize_world_progression
 from portrait_generator import portrait_signature, sync_active_portrait_form
 
 
@@ -19,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class WorldwalkerV3300SimulationCoreTests(unittest.TestCase):
     def test_release_and_owned_core_records(self):
-        self.assertEqual(APP_VERSION, "3.30.1")
+        self.assertEqual(APP_VERSION, "3.30.2")
         for field in ("capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
                       "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version"):
             self.assertIn(field, BASE_STATE)
@@ -123,6 +125,23 @@ class WorldwalkerV3300SimulationCoreTests(unittest.TestCase):
         game.state["quests"] = [{"name": "Rescue Konan", "status": "Active", "description": "Find her."}]
         self.assertIsNone(game._local_advisor_answer("Why did the previous quest fail?"))
 
+    def test_advisor_power_comparison_uses_ai_and_requests_current_chart(self):
+        class RecordingAI:
+            def __init__(self): self.calls = []
+            def request(self, rules, payload, max_output_tokens=0):
+                self.calls.append((rules, payload))
+                return {"summary": "You rank near the upper half.", "points": [], "follow_ups": [],
+                        "chart": {"title": "Current Akatsuki comparison", "unit": "Balanced combat estimate",
+                                  "items": [{"label": "Yahiko", "value": 547}, {"label": "Pain", "value": 620}]}}
+        game = GameSession(); game.settings.update(model="test", ai_connection_status="valid")
+        ai = RecordingAI(); game.ai = ai
+        self.assertIsNone(game._local_advisor_answer("How strong am I compared to other members of the Akatsuki?"))
+        result = game.ask_advisor("How strong am I compared to other members of the Akatsuki?")
+        self.assertFalse(result.get("local_answer", False))
+        self.assertTrue(ai.calls[0][1]["comparison_requested"])
+        self.assertIn("PLAYER'S WORDING SUGGESTS THEY WANT A VISUAL", ai.calls[0][0])
+        self.assertEqual(result["entry"]["chart"]["title"], "Current Akatsuki comparison")
+
     def test_missing_enemy_numbers_use_world_role_not_player_level(self):
         game = GameSession()
         game.state.update(world="Naruto", difficulty="Adventurer",
@@ -160,6 +179,32 @@ class WorldwalkerV3300SimulationCoreTests(unittest.TestCase):
         self.assertIn("Host bonuses", js)
         self.assertIn("naruto_tailed_beasts_sprite.png", css)
         self.assertIn('.jinchuriki-beast-art[data-tails="9"]', css)
+
+    def test_narrative_transfer_recovers_missing_jinchuriki_profile_once(self):
+        state = copy.deepcopy(BASE_STATE)
+        state.update(world="Naruto", name="Yahiko", turn=71, campaign_id="story-host",
+                     stats={"Taijutsu": 100, "Ninjutsu": 150, "Genjutsu": 50,
+                            "Chakra Control": 80, "Willpower": 70, "Intellect": 60},
+                     resource=200, resource_max=200,
+                     campaign_canon=[
+                         {"turn": 64, "action": "Extract the Nine-Tails and seal it into myself.",
+                          "outcome": "Kurama is sealed into Yahiko through an Uzumaki-derived ritual."},
+                         {"turn": 70, "action": "Train with Kurama.",
+                          "outcome": "Yahiko and Kurama establish a practiced combat partnership and shared combat timing."},
+                     ])
+        self.assertTrue(jinchuriki_story_evidence(state))
+        normalize_world_progression(state)
+        host = state["special"]["Jinchūriki Profile"]
+        self.assertEqual(host["beast"], "Kurama")
+        self.assertEqual(host["mastery"], "Cooperative")
+        self.assertEqual(host["acquired_turn"], 64)
+        self.assertEqual(state["stats"]["Willpower"], 82)
+        self.assertEqual(state["stats"]["Chakra Control"], 85)
+        self.assertEqual(state["resource_max"], 330)
+        snapshot = copy.deepcopy(state)
+        normalize_world_progression(state, snapshot)
+        self.assertEqual(state["stats"], snapshot["stats"])
+        self.assertEqual(state["resource_max"], snapshot["resource_max"])
 
     def test_special_form_changes_portrait_signature_then_returns_to_base(self):
         state = copy.deepcopy(BASE_STATE)

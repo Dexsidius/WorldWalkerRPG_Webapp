@@ -298,6 +298,63 @@ def jinchuriki_requested(background):
     return bool(re.search(r"\bjinch[uū]riki\b|\b(?:host|vessel|sealed within me|sealed inside me)\b.{0,35}\b(?:tailed beast|tails?|kurama|shukaku|matatabi|isobu|gy[uū]ki|ch[oō]mei|saiken|koku[oō]|son goku|juubi|j[uū]bi)\b", text))
 
 
+def jinchuriki_story_evidence(state):
+    """Recover a player host transformation that prose established without a patch.
+
+    Older narrators could correctly describe a mid-campaign transfer while
+    failing to write ``special['Jinchūriki Profile']``.  This deliberately
+    requires language that makes the *player* the recipient; a normal mention
+    of Naruto, a tailed-beast attack, or another host cannot trigger it.
+    """
+    if not isinstance(state, dict) or state.get("world") != "Naruto":
+        return {}
+    player = str(state.get("name") or "").strip()
+    recipient = r"(?:you|your body|me|myself|the player)"
+    if player:
+        recipient = rf"(?:{recipient}|{re.escape(player)})"
+    beast = (r"(?:kurama|shukaku|matatabi|isobu|gy[uū]ki|ch[oō]mei|saiken|koku[oō]|son goku|"
+             r"juubi|j[uū]bi|(?:one|two|three|four|five|six|seven|eight|nine|ten)[ -]?tails?|tailed beast)")
+    host_patterns = (
+        re.compile(rf"{beast}.{{0,90}}(?:sealed|transferred|placed).{{0,35}}(?:into|inside|within).{{0,25}}{recipient}", re.I | re.S),
+        re.compile(rf"(?:seal|transfer|extract).{{0,100}}{beast}.{{0,90}}(?:into|inside|within).{{0,25}}{recipient}", re.I | re.S),
+        re.compile(rf"{recipient}.{{0,80}}(?:became|becomes|remain(?:s)?|is|as).{{0,30}}(?:the|a)?\s*{beast}.{{0,25}}(?:jinch[uū]riki|host|vessel)", re.I | re.S),
+        re.compile(rf"{recipient}.{{0,90}}(?:jinch[uū]riki|host|vessel).{{0,45}}{beast}", re.I | re.S),
+    )
+    rows = state.get("campaign_canon") if isinstance(state.get("campaign_canon"), list) else []
+    acquisition = None
+    acquisition_turn = None
+    evidence_source = "campaign_canon"
+    evidence = []
+    for index, row in enumerate(rows):
+        if not isinstance(row, dict):
+            continue
+        text = " ".join(str(row.get(key) or "") for key in ("action", "outcome", "summary", "text"))
+        if acquisition is None and any(pattern.search(text) for pattern in host_patterns):
+            acquisition = index
+            acquisition_turn = int(row.get("turn", state.get("turn", 0)) or 0)
+        if acquisition is not None and index >= acquisition and re.search(beast + r"|jinch[uū]riki|inner (?:seal|cage)|chakra cloak", text, re.I):
+            evidence.append(text)
+    if acquisition is None:
+        # Compacted campaigns may preserve the decisive transfer only in a
+        # chapter summary. Apply the same recipient-bound rule there.
+        for row in state.get("chapter_summaries", []) or []:
+            text = str(row.get("summary") or "") if isinstance(row, dict) else str(row or "")
+            if any(pattern.search(text) for pattern in host_patterns):
+                evidence.append(text)
+                acquisition = -1
+                turns = row.get("turns", []) if isinstance(row, dict) else []
+                acquisition_turn = int((turns[0] if turns else state.get("turn", 0)) or 0)
+                evidence_source = "chapter_summaries"
+                break
+    if acquisition is None:
+        return {}
+    return {
+        "text": " ".join(evidence)[-24000:],
+        "turn": int(acquisition_turn if acquisition_turn is not None else state.get("turn", 0) or 0),
+        "source": evidence_source,
+    }
+
+
 def _tails_from_text(text, seed=""):
     lowered = str(text or "").lower().replace("-", " ")
     for token, tails in sorted(NAME_TO_TAILS.items(), key=lambda row: len(row[0]), reverse=True):
@@ -311,7 +368,7 @@ def _mastery_from_text(text):
     lowered = str(text or "").lower()
     if re.search(r"\b(perfect jinch[uū]riki|fully mastered|complete mastery|full cooperation|befriended|perfect sync|total control)\b", lowered):
         return "Perfect Jinchuriki", 100
-    if re.search(r"\b(cooperative|friends? with|partnered with|synchronized|controlled transformation|bijuu mode|tailed beast mode)\b", lowered):
+    if re.search(r"\b(cooperative|friends? with|partnered with|partnership|synchronized|shared combat timing|chakra sharing|controlled transformation|bijuu mode|tailed beast mode)\b", lowered):
         return "Cooperative", 72
     if re.search(r"\b(partial control|training with|can use.{0,35}cloak|first tail|one tail cloak|developing(?: control)?)\b", lowered):
         return "Developing", 38

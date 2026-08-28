@@ -8,7 +8,10 @@ import copy
 import re
 
 from overgeared_classes import COMPACT_CLASS_GENERATION_RULE, infer_class_type
-from naruto_system import CHAKRA_NATURES, normalize_chakra_affinity_profile, normalize_jinchuriki_profile
+from naruto_system import (CHAKRA_NATURES, apply_jinchuriki_start,
+                           jinchuriki_story_evidence,
+                           normalize_chakra_affinity_profile,
+                           normalize_jinchuriki_profile)
 
 
 def _safe_int(value, default=0):
@@ -235,11 +238,30 @@ def normalize_world_progression(state, before=None):
             special["Dōjutsu Profile"] = dojutsu_profile
         profile["kekkei_genkai"] = copy.deepcopy(kekkei_profile or legacy_kekkei)
         profile["dojutsu"] = copy.deepcopy(dojutsu_profile or legacy_dojutsu)
+        had_jinchuriki = bool(_profile(special.get("Jinchūriki Profile")) or str(special.get("Jinchuriki", "")).strip())
+        story_host = jinchuriki_story_evidence(state) if not had_jinchuriki else {}
+        host_background = " ".join(filter(None, [state.get("background", ""), story_host.get("text", "")]))
         jinchuriki = normalize_jinchuriki_profile(
             special.get("Jinchūriki Profile"), legacy=special.get("Jinchuriki", ""),
-            background=state.get("background", ""), seed=state.get("campaign_id", ""),
+            background=host_background, seed=state.get("campaign_id", ""),
         )
         if jinchuriki:
+            if story_host and not had_jinchuriki and not jinchuriki.get("mechanics_applied"):
+                before_stats = copy.deepcopy(state.get("stats", {}))
+                state["stats"] = apply_jinchuriki_start(before_stats, jinchuriki)
+                old_max = max(1, _safe_int(state.get("resource_max"), 100))
+                old_current = max(0, _safe_int(state.get("resource"), old_max))
+                ratio = min(1.0, old_current / old_max)
+                new_max = max(old_max, int(round(old_max * float(jinchuriki.get("reserve_multiplier", 1.0) or 1.0))))
+                state["resource_max"] = new_max
+                state["resource"] = max(0, min(new_max, int(round(new_max * ratio))))
+                jinchuriki["acquired_turn"] = story_host.get("turn", state.get("turn", 0))
+                jinchuriki["mechanics_applied"] = {
+                    "source": story_host.get("source", "campaign_canon"),
+                    "stat_boosts": copy.deepcopy(jinchuriki.get("stat_boosts", {})),
+                    "resource_max_before": old_max, "resource_max_after": new_max,
+                }
+                repairs.append(f"Recovered {jinchuriki.get('beast', 'tailed beast')} host mechanics from established campaign canon")
             special["Jinchūriki Profile"] = jinchuriki
             special["Jinchuriki"] = f"{jinchuriki.get('beast', 'Tailed Beast')} — {jinchuriki.get('mastery', 'Unmastered')}"
             profile["jinchuriki"] = copy.deepcopy(jinchuriki)

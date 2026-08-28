@@ -184,11 +184,15 @@ class SocialMixin:
         # acknowledgements receive the one-sentence/low-token path.
         concise = bool(re.fullmatch(r"\s*(thanks|thank you|okay|ok|got it|understood|cool|never mind|nevermind)[.!?\s]*",
                                     str(question), re.I))
-        wants_chart = bool(re.search(r"\b(graph|chart|plot|visuali[sz]e|bar\s*chart)\b", str(question), re.I))
+        comparison_requested = bool(re.search(
+            r"\b(compare[ds]?|comparison|versus|vs\.?|against|relative to|stack up|other members?|"
+            r"stronger than|weaker than|where do i rank|among the)\b", str(question), re.I))
+        wants_chart = bool(re.search(r"\b(graph|chart|plot|visuali[sz]e|bar\s*chart)\b", str(question), re.I)) or comparison_requested
         payload = {
             "task": "advisor_question", "question": question, "state": self.task_state_for_ai("advisor", question),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
             "canon_divergences": self.state.get("canon_divergences", []),
+            "comparison_requested": comparison_requested,
             "power_comparison_guardrail": {
                 "rule": "Use the player's mechanical_power_profile. Never compare against their stock-canon self or a stale starting label.",
                 "relative_language": "Do not say much weaker/stronger without a same-scale opponent estimate and an axis-by-axis explanation.",
@@ -264,7 +268,10 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         turn = self.state.get("turn", 0)
         profile = power_profile_for(self.state.get("world", "Custom World"), self.state.get("stats", {}),
                                     (self.state.get("special") or {}).get("Archetype", ""))
-        if re.search(r"\b(how strong|power level|power tier|my strength|my stats)\b", text):
+        comparison_requested = bool(re.search(
+            r"\b(compare[ds]?|comparison|versus|vs\.?|against|relative to|stack up|other members?|"
+            r"stronger than|weaker than|where do i rank|among the)\b", text))
+        if re.search(r"\b(how strong|power level|power tier|my strength|my stats)\b", text) and not comparison_requested:
             combat = profile.get("world_combat") or profile.get("combat", {})
             peak = profile.get("peak", {})
             axes = profile.get("axes", {})

@@ -34,7 +34,7 @@ class WorldwalkerV390BleachTests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.30.1")
+        self.assertEqual(APP_VERSION, "3.30.2")
 
     def test_bleach_creator_is_soul_reaper_only_with_three_requested_eras(self):
         self.assertEqual(
