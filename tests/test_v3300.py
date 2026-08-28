@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class WorldwalkerV3300SimulationCoreTests(unittest.TestCase):
     def test_release_and_owned_core_records(self):
-        self.assertEqual(APP_VERSION, "3.36.0")
+        self.assertEqual(APP_VERSION, "3.36.1")
         for field in ("capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
                       "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version"):
             self.assertIn(field, BASE_STATE)
@@ -125,7 +125,7 @@ class WorldwalkerV3300SimulationCoreTests(unittest.TestCase):
         game.state["quests"] = [{"name": "Rescue Konan", "status": "Active", "description": "Find her."}]
         self.assertIsNone(game._local_advisor_answer("Why did the previous quest fail?"))
 
-    def test_advisor_power_comparison_uses_ai_and_requests_current_chart(self):
+    def test_advisor_power_comparison_uses_guaranteed_local_chart(self):
         class RecordingAI:
             def __init__(self): self.calls = []
             def request(self, rules, payload, max_output_tokens=0):
@@ -134,13 +134,14 @@ class WorldwalkerV3300SimulationCoreTests(unittest.TestCase):
                         "chart": {"title": "Current Akatsuki comparison", "unit": "Balanced combat estimate",
                                   "items": [{"label": "Yahiko", "value": 547}, {"label": "Pain", "value": 620}]}}
         game = GameSession(); game.settings.update(model="test", ai_connection_status="valid")
+        game.state.update(world="Naruto", name="Yahiko")
         ai = RecordingAI(); game.ai = ai
         self.assertIsNone(game._local_advisor_answer("How strong am I compared to other members of the Akatsuki?"))
         result = game.ask_advisor("How strong am I compared to other members of the Akatsuki?")
-        self.assertFalse(result.get("local_answer", False))
-        self.assertTrue(ai.calls[0][1]["comparison_requested"])
-        self.assertIn("PLAYER'S WORDING SUGGESTS THEY WANT A VISUAL", ai.calls[0][0])
-        self.assertEqual(result["entry"]["chart"]["title"], "Current Akatsuki comparison")
+        self.assertTrue(result.get("local_answer", False))
+        self.assertEqual(ai.calls, [])
+        self.assertEqual(result["entry"]["chart"]["unit"], "Balanced combat estimate")
+        self.assertIn("Pain", {row["label"] for row in result["entry"]["chart"]["items"]})
 
     def test_missing_enemy_numbers_use_world_role_not_player_level(self):
         game = GameSession()

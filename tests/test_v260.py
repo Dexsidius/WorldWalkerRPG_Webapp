@@ -2282,10 +2282,11 @@ class WorldwalkerV260Tests(unittest.TestCase):
         game.settings["model"] = "test-model"
         ai = RecordingAdvisorAI()
         game.ai = ai
-        game.ask_advisor("How strong am I compared to the Akatsuki?")
-        self.assertIn("Mundane", ai.rules)
-        self.assertIn("Reality-Bending", ai.rules)
-        self.assertIn("stay consistent with that placement", ai.rules)
+        result = game.ask_advisor("How strong am I compared to the Akatsuki?")
+        self.assertTrue(result["local_answer"])
+        self.assertFalse(hasattr(ai, "rules"))
+        self.assertEqual(result["entry"]["chart"]["unit"], "Balanced combat estimate")
+        self.assertIn("Pain", {row["label"] for row in result["entry"]["chart"]["items"]})
 
     def test_npc_goal_layers_feed_clocks_and_relationship_view(self):
         # Optional depth beyond the single .goal line every tracked NPC

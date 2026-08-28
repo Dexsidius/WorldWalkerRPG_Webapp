@@ -6,7 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.36.0** (schema 19).
+Current app/save version: **3.36.1** (schema 19).
+
+Version 3.36.1 makes explicit creation-background facts immutable across
+generation and rerolls, synchronizes named Zanpakutō throughout the character
+state, guarantees local Advisor power comparisons, deduplicates title notices,
+and uses world-native power terminology everywhere players can see it.
 
 Version 3.36.0 repairs multiplayer combat states created with older or malformed
 character and enemy records so every combat control remains usable instead of

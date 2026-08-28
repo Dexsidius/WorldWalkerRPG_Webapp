@@ -394,6 +394,7 @@ def normalize_world_progression(state, before=None):
 
     elif world == "Bleach":
         profile = _profile(special.get("Zanpakuto Profile"))
+        previous_blade_name = str(special.get("Zanpakuto") or "").strip()
         profile.setdefault("name", special.get("Zanpakuto", "Unnamed Asauchi"))
         release_owned = str(special.get("Shikai", "")).lower() not in {"", "none", "unknown", "unachieved"} or str(special.get("Bankai", "")).lower() not in {"", "none", "unknown", "unachieved"}
         recorded_name = str(profile.get("name") or "").strip()
@@ -420,6 +421,33 @@ def normalize_world_progression(state, before=None):
                 if str((state.get("equipment") or {}).get("Weapon", "")).lower().startswith("unnamed asauchi"):
                     state.setdefault("equipment", {})["Weapon"] = shikai_name
                 repairs.append("Recovered the Zanpakuto name from its achieved release")
+        # A sword's true name is one identity shared by equipment, releases,
+        # portrait context and narrative memory.  Do this even for a dormant
+        # creation preview; waiting until an old save repair caused the UI to
+        # show a named Shikai beside an "Unnamed Asauchi" weapon.
+        blade_name = str(profile.get("name") or profile.get("shikai_name") or "").strip()
+        blade_is_known = release_owned or bool((state.get("creation_locks") or {}).get("ability_name"))
+        if blade_is_known and blade_name and blade_name.lower() not in {"unknown", "unnamed", "unnamed asauchi", "none"}:
+            profile["name"] = blade_name
+            profile["shikai_name"] = str(profile.get("shikai_name") or blade_name)
+            special["Zanpakuto"] = blade_name
+            equipment = state.setdefault("equipment", {})
+            weapon = str(equipment.get("Weapon") or "Unnamed Asauchi")
+            if (re.search(r"\bunnamed asauchi\b", weapon, re.I)
+                    or (previous_blade_name and previous_blade_name.lower() not in {"unknown", "unnamed", "unnamed asauchi"}
+                        and previous_blade_name.lower() in weapon.lower())):
+                equipment["Weapon"] = re.sub(
+                    re.escape(previous_blade_name) if previous_blade_name.lower() not in {"", "unknown", "unnamed", "unnamed asauchi"} else r"\bUnnamed Asauchi\b",
+                    blade_name, weapon, count=1, flags=re.I,
+                )
+                repairs.append(f"Synchronized Zanpakuto equipment as {blade_name}")
+            portrait = state.setdefault("portrait_identity", {})
+            portrait["zanpakuto_name"] = blade_name
+            facts = state.setdefault("continuity_ledger", {}).setdefault("facts", [])
+            memory = f"The player's Zanpakuto is named {blade_name}."
+            if not any(isinstance(row, dict) and row.get("text") == memory for row in facts):
+                facts.append({"turn": int(state.get("turn", 0) or 0), "type": "identity", "text": memory})
+                state["continuity_ledger"]["facts"] = facts[-200:]
         profile.setdefault("spirit", "Not yet understood")
         profile.setdefault("inner_world", "Not yet reached")
         profile.setdefault("relationship", "Distant" if str(special.get("Shikai", "Unachieved")).lower() in {"unachieved", "none", "unknown", ""} else "Recognized")

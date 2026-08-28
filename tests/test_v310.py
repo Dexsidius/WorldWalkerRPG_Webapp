@@ -27,7 +27,7 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.game.settings["autosave"] = False
 
     def test_v310_schema_declares_owned_memory_and_progression_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.36.0")
+        self.assertEqual(APP_VERSION, "3.36.1")
         self.assertEqual(BASE_STATE["schema_version"], 19)
         self.assertIn("narrative_memory", BASE_STATE)
         self.assertIn("progression_ledger", BASE_STATE)

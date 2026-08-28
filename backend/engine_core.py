@@ -790,7 +790,7 @@ Return ONLY valid JSON. No markdown fences."""
         if purpose in {"moment", "time_skip", "major_event", "event"}:
             return snapshot
         common = {
-            "name", "age", "position", "world", "difficulty", "background", "custom_world", "race",
+            "name", "age", "position", "world", "difficulty", "background", "creation_locks", "custom_world", "race",
             "player_identity", "location", "world_time", "calendar", "canon_day", "canon_anchor",
             "stats", "hidden_stats", "hp", "hp_max", "resource_name", "resource", "resource_max",
             "skills", "titles", "class_profile", "special", "inventory", "equipment", "currency",

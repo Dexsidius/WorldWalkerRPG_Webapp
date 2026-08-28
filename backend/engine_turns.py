@@ -1175,6 +1175,7 @@ Return ONLY valid JSON."""
                 msgs.append(f"SKILL REFINED: {k} — {_skill_change(bs[k], v)}")
         new_titles = set(ai_text(t) for t in a.get("titles", []) if ai_text(t))
         old_titles = set(ai_text(t) for t in b.get("titles", []) if ai_text(t))
+        old_title_keys = {title.strip().lower() for title in old_titles}
         for t in new_titles - old_titles:
             msgs.append("TITLE ACQUIRED: " + t)
         def _achievement_name(entry):
@@ -1193,6 +1194,24 @@ Return ONLY valid JSON."""
             if isinstance(ev, dict) and str(ev.get("type", "")).lower() in {"xp", "level", "level_up"}:
                 continue
             m = ev.get("message", "") if isinstance(ev, dict) else str(ev)
+            # The persistence pass correctly rejects an already-owned title,
+            # but the raw narrator event used to survive and announce it on
+            # every Solo/Tower turn.  Suppress the event at presentation too.
+            if isinstance(ev, dict):
+                event_type = str(ev.get("type") or "").strip().lower()
+                title_label = ai_text(ev.get("title") or ev.get("name") or "").strip()
+                if not title_label and m:
+                    match = re.search(
+                        r"(?:title acquired|title earned|earned the title|unlocked (?:the )?title)\s*[:—-]?\s*[\"']?([^\n\"']+)",
+                        m, re.I,
+                    )
+                    if match:
+                        title_label = match.group(1).strip(" .!—-\")")
+                if title_label and title_label.lower() in old_title_keys and (
+                    event_type in {"title", "title_acquired", "title_earned"}
+                    or re.search(r"title acquired|title earned|earned the title|unlocked (?:the )?title", m, re.I)
+                ):
+                    continue
             if m and not any(m.lower() in x.lower() or x.lower() in m.lower() for x in msgs):
                 msgs.append(m)
         try:

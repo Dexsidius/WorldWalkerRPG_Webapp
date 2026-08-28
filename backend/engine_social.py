@@ -17,6 +17,24 @@ from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_cat
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks)
 from simulation import refresh_npc_intentions, background_ai_due
+from power_benchmarks import benchmark_context
+
+
+LOCAL_CANON_POWER_ESTIMATES = {
+    "Naruto": {
+        "early naruto": 45, "naruto": 65, "kakashi": 210, "average jonin": 140,
+        "typical jonin": 140, "pain": 600, "nagato": 650, "itachi": 420,
+        "kisame": 300, "konan": 175, "sasori": 190, "deidara": 180,
+        "kakuzu": 205, "hidan": 125, "hanzo": 380, "obito": 610,
+    },
+    "One Piece": {"luffy": 210, "zoro": 190, "nami": 75, "shanks": 700, "garp": 650, "average marine": 35, "marine captain": 90},
+    "Hunter x Hunter": {"gon": 90, "killua": 105, "hisoka": 220, "chrollo": 250, "netero": 610, "average hunter": 90},
+    "Bleach": {"ichigo": 130, "rukia": 90, "renji": 135, "byakuya": 360, "aizen": 650, "average lieutenant": 130, "average captain": 350},
+    "Jujutsu Kaisen": {"yuji": 90, "megumi": 95, "maki": 140, "yuta": 600, "gojo": 900, "sukuna": 900, "average grade 1": 140},
+    "Overgeared": {"grid": 210, "kraugel": 220, "average ranker": 90, "top ranker": 200},
+    "Solo Max-Level Newbie": {"kang jinhyeok": 210, "alice": 200, "average player": 50, "high-rank player": 90},
+    "Reincarnated as a Slime": {"rimuru": 350, "veldora": 650, "shion": 200, "benimaru": 210, "average majin": 90},
+}
 
 
 DEFAULT_SETTINGS = {
@@ -168,6 +186,12 @@ class SocialMixin:
         never touches game state (no dice, no state_patch, no turn cost)."""
         with self.lock:
             self.state.setdefault("advisor_thread", []).append({"role": "player", "text": question, "turn": self.state.get("turn", 0)})
+        comparison_entry = self._local_power_comparison(question, fourth_wall)
+        if comparison_entry:
+            with self.lock:
+                self.state["advisor_thread"].append(comparison_entry)
+                self.autosave()
+            return {"entry": comparison_entry, "state": self.public_state(), "local_answer": True}
         local_entry = self._local_advisor_answer(question, fourth_wall) if isinstance(self.ai, AI) else None
         if local_entry:
             with self.lock:
@@ -266,6 +290,96 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             self.state.setdefault("advisor_thread", []).append(entry)
             self.autosave()
         return {"entry": entry, "state": self.public_state()}
+
+    def _local_power_comparison(self, question, fourth_wall=False):
+        """Guarantee a direct, same-scale comparison before AI compliance can
+        become a factor.  Tracked campaign evidence wins; the compact canon
+        table and world-role baseline are transparent estimates, not sheets."""
+        raw = str(question or "").strip()
+        text = raw.lower()
+        comparison_requested = bool(re.search(
+            r"\b(compare[ds]?|comparison|versus|vs\.?|against|relative to|stack up|stronger than|weaker than|"
+            r"how strong am i compared|where do i rank among)\b", text,
+        ))
+        if not comparison_requested:
+            return None
+        world = self.state.get("world", "Custom World")
+        profile = power_profile_for(world, self.state.get("stats", {}), (self.state.get("special") or {}).get("Archetype", ""))
+        player_score = float((profile.get("world_combat") or profile.get("combat") or {}).get("score", 0) or 0)
+        candidates = {}
+        evidence = {}
+
+        for name, memory in (self.state.get("npc_memories") or {}).items():
+            if not name or str(name).lower() not in text or not isinstance(memory, dict):
+                continue
+            score = memory.get("power_score", memory.get("power"))
+            if not isinstance(score, (int, float)) and isinstance(memory.get("stats"), dict):
+                score = (power_profile_for(world, memory["stats"], memory.get("archetype", "")).get("world_combat") or {}).get("score")
+            if isinstance(score, (int, float)):
+                candidates[str(name)] = float(score)
+                evidence[str(name)] = "tracked campaign estimate"
+
+        canon = LOCAL_CANON_POWER_ESTIMATES.get(world, {})
+        for key in sorted(canon, key=len, reverse=True):
+            if key in text and not any(key in existing.lower() for existing in candidates):
+                label = " ".join(part.capitalize() for part in key.split())
+                candidates[label] = float(canon[key])
+                evidence[label] = "canon/role estimate at this story scale"
+
+        if "akatsuki" in text and world == "Naruto":
+            for key in ("pain", "itachi", "kisame", "kakuzu", "sasori", "deidara", "konan", "hidan"):
+                label = key.capitalize()
+                candidates.setdefault(label, float(canon[key])); evidence.setdefault(label, "canon Akatsuki estimate")
+
+        # A request for a fictional/custom scale (for example DBZ power
+        # levels) is a presentation choice rather than a world benchmark.
+        # Let the model translate it unless the question also names concrete
+        # targets that the deterministic comparison engine can identify.
+        if not candidates and re.search(r"\b(?:dbz|dragon ball|custom scale|my own scale)\b", text):
+            return None
+
+        if not candidates:
+            tail = re.search(r"(?:compared (?:to|with)|versus|vs\.?|against|relative to)\s+(.+?)[?.!]*$", raw, re.I)
+            if tail:
+                names = [re.sub(r"^(?:an?|the)\s+", "", item.strip(), flags=re.I)
+                         for item in re.split(r"\s*,\s*|\s+and\s+", tail.group(1))]
+                names = [name for name in names if name and name.lower() not in {"others", "everyone", "them"}]
+                if names:
+                    tiers = benchmark_context(world).get("tiers", [])
+                    baseline = float(tiers[min(4, len(tiers) - 1)]["threshold"] if tiers else 65)
+                    for name in names[:6]:
+                        candidates[name[:60]] = baseline
+                        evidence[name[:60]] = "low-confidence world-role estimate; no tracked feats yet"
+        if not candidates:
+            return None
+
+        tiers = benchmark_context(world).get("tiers", [])
+        def tier_name(score):
+            valid = [row for row in tiers if float(row.get("threshold", 0)) <= score]
+            return (valid[-1]["name"] if valid else (tiers[0]["name"] if tiers else "world-relative"))
+        rows = [(self.state.get("name") or "You", player_score, "current mechanical stats")]
+        rows.extend((name, score, evidence.get(name, "estimate")) for name, score in candidates.items())
+        rows = rows[:9]
+        points = []
+        for name, score, source in rows[1:]:
+            ratio = player_score / max(1.0, score)
+            verdict = ("decisively stronger" if ratio >= 1.75 else "stronger" if ratio >= 1.2 else
+                       "roughly comparable" if ratio >= .84 else "weaker" if ratio >= .57 else "decisively weaker")
+            points.append(f"Against {name}: you are {verdict} on balanced combat ({player_score:.1f} vs {score:.1f}); {name} is estimated as {tier_name(score)} from {source}.")
+        strongest = max(rows[1:], key=lambda row: row[1])
+        weakest = min(rows[1:], key=lambda row: row[1])
+        if len(rows) == 2:
+            bottom_line = points[0].split(";", 1)[0] + "."
+        else:
+            bottom_line = f"On current balanced combat, you range from {('above' if player_score > weakest[1] else 'below')} {weakest[0]} to {('above' if player_score > strongest[1] else 'below')} {strongest[0]}; the exact matchups still depend on speed, defense, experience, and special abilities."
+        return {
+            "role": "advisor", "summary": bottom_line, "points": points,
+            "follow_ups": ["Which matchup is most dangerous for me?", "What stat would improve these matchups most?"],
+            "chart": {"title": f"Current {world} power comparison", "unit": "Balanced combat estimate",
+                      "items": [{"label": name, "value": round(score, 1)} for name, score, _ in sorted(rows, key=lambda row: row[1], reverse=True)]},
+            "fourth_wall": bool(fourth_wall), "canon_countdown": self.canon_countdown(),
+            "turn": self.state.get("turn", 0), "answered_locally": True,
+        }
 
     def _local_advisor_answer(self, question, fourth_wall=False):
         """Answer factual dashboard questions locally instead of paying AI."""

@@ -2,6 +2,7 @@
 WORLD_DATA / WORLD_EXPANSIONS / DIFFICULTIES / BASE_STATE so campaign
 mechanics and AI prompt schemas stay identical."""
 import datetime
+import copy
 import math
 import re
 
@@ -10,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.36.0"
+APP_VERSION = "3.36.1"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1505,7 +1506,7 @@ BASE_STATE = {
     # {label, kind:"income"|"expense", amount (positive), interval_days,
     #  next_due_day (canon_day), active, notes} — see task_rules() for the
     # GM-facing schema.
-    "recurring_finances":[],"long_term_projects":[],"appearance_desc":"","portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"active_form":{},"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":19,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
+    "recurring_finances":[],"long_term_projects":[],"appearance_desc":"","creation_locks":{},"portrait_traits":[],"portrait_identity":{"locked":False,"canonical_description":"","temporary_traits":[],"active_form":{},"history":[],"reference_file":""},"campaign_id":"","campaign_created_version":"","campaign_last_saved_version":"","schema_version":19,"world_pack_id":"builtin","last_autosave":"","opening_complete":False,"suggested_actions":[],"advisor_thread":[],"prerequisite_tracks":[],"continuity_ledger":{"facts":[],"warnings":[],"last_checked_turn":0},"validation_log":[],"diagnostics":{},"weather":"clear","canon_day":-7,"canon_time_minutes":-9600,"canon_anchor":"","canon_events_fired":[],"pending_minor_events":[],"minutes_since_status_window":0,"status_window_due":False,"progression_log":[],"progression_ledger":[],"starting_power_band":"Average","starting_power_notice":"","chapter_summaries":[],"chapter_buffer":[],"npc_clocks":{},"faction_clocks":{},"causality_ledger":[],"knowledge_audit":[],"health_repairs":[],"npc_intentions":{},"simulation_events":[],"local_background_turn":0,"difficulty_controls":{},"progression_preset":{},"planned_route":[],"lore_sources":[],"action_goals":[],"correction_log":[],"authoritative_corrections":[],"information_packets":[],"npc_schedules":{},"canon_event_states":{},"simulation_validation":[],
     # memory_updates is a transient GM suggestion; reliability.py folds it
     # into the app-owned, deduplicated long-term narrative memory.
     "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]},
@@ -1860,6 +1861,16 @@ def power_profile_for(world, stats, archetype=""):
     profile["world_overall"] = benchmark_tier(world, overall_score)
     profile["world_combat"] = benchmark_tier(world, combat_score)
     profile["world_peak"] = benchmark_tier(world, peak_value)
+    # Generic rows remain available for old internal calculations, but the
+    # single player-facing view is explicitly world-native so UI/AI consumers
+    # cannot present "Legendary", "Elite Jonin" and "Kage Candidate" as three
+    # competing answers.
+    profile["player_facing"] = {
+        "balanced": copy.deepcopy(profile["world_combat"]),
+        "foundation": copy.deepcopy(profile["world_overall"]),
+        "peak_specialty": {**copy.deepcopy(profile["world_peak"]), "stat": peak_name, "value": int(peak_value)},
+        "rule": "Show balanced as the primary rating and peak_specialty separately. Do not display generic tier names.",
+    }
     profile["benchmark_reference"] = benchmark_context(world)
     return profile
 

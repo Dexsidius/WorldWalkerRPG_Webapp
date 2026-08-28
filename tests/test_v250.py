@@ -28,7 +28,7 @@ class WorldwalkerV250Tests(unittest.TestCase):
 
     def test_world_shaking_background_warns_but_is_allowed(self):
         preview = self.game.preview_campaign("Nova", "One Piece", "Story", "Already a godlike emperor of the sea", "", "", "Aspiring Pirate", "Brawler", {}, "", "", "")
-        self.assertEqual(preview["starting_profile"]["power_band"], "Cataclysmic")
+        self.assertEqual(preview["starting_profile"]["power_band"], "Emperor Class")
         self.assertTrue(preview["starting_profile"]["power_notice"])
         self.assertGreater(max(preview["abilities"].values()), 100)
 
