@@ -6,7 +6,7 @@ import copy, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
-from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, power_tier_reference
+from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, power_tier_reference, power_profile_for
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -167,6 +167,12 @@ class SocialMixin:
         never touches game state (no dice, no state_patch, no turn cost)."""
         with self.lock:
             self.state.setdefault("advisor_thread", []).append({"role": "player", "text": question, "turn": self.state.get("turn", 0)})
+        local_entry = self._local_advisor_answer(question, fourth_wall) if isinstance(self.ai, AI) else None
+        if local_entry:
+            with self.lock:
+                self.state["advisor_thread"].append(local_entry)
+                self.autosave()
+            return {"entry": local_entry, "state": self.public_state(), "local_answer": True}
         if not self.ai_ready():
             entry = {"role": "advisor", "summary": "The Advisor is unavailable — configure a model in AI & Portrait Setup first.", "points": [], "follow_ups": [], "turn": self.state.get("turn", 0)}
             with self.lock:
@@ -228,9 +234,9 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         # Tests and integrations may deliberately inject a lightweight primary
         # client without rebuilding the background client. Respect that
         # explicit client; normal configured AI instances always expose model.
-        advisor_client = (self.ai_bg if getattr(self, "ai_bg", None)
-                          and self.settings.get("secondary_model")
-                          and getattr(self.ai, "model", None) else self.ai)
+        routed = bool(self.settings.get("advisor_model") or self.settings.get("advisor_provider") in {"local", "cloud"})
+        advisor_client = (self.ai_advisor if routed else (self.ai_bg if getattr(self, "ai_bg", None)
+                          and self.settings.get("secondary_model") and getattr(self.ai, "model", None) else self.ai))
         data = advisor_client.request(rules, payload, max_output_tokens=200 if concise else 1000)
         entry = {
             "role": "advisor",
@@ -245,6 +251,44 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             self.state.setdefault("advisor_thread", []).append(entry)
             self.autosave()
         return {"entry": entry, "state": self.public_state()}
+
+    def _local_advisor_answer(self, question, fourth_wall=False):
+        """Answer factual dashboard questions locally instead of paying AI."""
+        text = str(question or "").strip().lower()
+        turn = self.state.get("turn", 0)
+        profile = power_profile_for(self.state.get("world", "Custom World"), self.state.get("stats", {}),
+                                    (self.state.get("special") or {}).get("Archetype", ""))
+        if re.search(r"\b(how strong|power level|power tier|my strength|my stats)\b", text):
+            combat = profile.get("world_combat") or profile.get("combat", {})
+            peak = profile.get("peak", {})
+            axes = profile.get("axes", {})
+            summary = f"Your balanced combat profile is {combat.get('name')} ({combat.get('score')}); your peak is {peak.get('stat')} {peak.get('value')}, which does not replace your speed and defense values."
+            points = [f"Offense: {axes.get('offense', {}).get('stat')} {axes.get('offense', {}).get('value')}",
+                      f"Speed: {axes.get('speed', {}).get('stat')} {axes.get('speed', {}).get('value')}",
+                      f"Defense: {axes.get('defense', {}).get('stat')} {axes.get('defense', {}).get('value')}"]
+        elif re.search(r"\b(next (?:canon|major) event|how long until|countdown)\b", text):
+            countdown = self.canon_countdown() or {}
+            if not countdown:
+                summary, points = "No known major canon boundary is currently scheduled.", []
+            else:
+                title = countdown.get("title") or countdown.get("event") or "the next major event"
+                remaining = countdown.get("label") or countdown.get("time_until") or countdown.get("days_until") or "an unknown interval"
+                summary, points = f"{title} is {remaining} away on the current campaign timeline.", []
+        elif re.search(r"\b(quest|agenda|objective|what should i do next)\b", text):
+            quests = [q for q in self.state.get("quests", []) if isinstance(q, dict) and str(q.get("status", "active")).lower() == "active"]
+            if not quests: return None
+            quest = quests[0]; title = quest.get("title") or quest.get("name") or "Current objective"
+            summary = f"Your clearest active lead is {title}: {quest.get('description') or quest.get('objective') or 'follow its current lead'}."
+            points = [str(quest.get("first_step") or quest.get("next_step") or "Review the known clues and choose the next concrete step.")]
+        elif fourth_wall and re.search(r"\b(ai cost|token|cost|calls?)\b", text):
+            clients = {id(client): client for client in (self.ai, self.ai_bg, self.ai_major)}.values()
+            calls = sum(client.usage.get("calls", 0) for client in clients); cost = sum(client.usage.get("cost_usd", 0) for client in clients)
+            summary, points = f"This session has used {calls} text-AI calls for an estimated ${cost:.4f}; this answer used none.", []
+        else:
+            return None
+        return {"role": "advisor", "summary": summary, "points": points, "follow_ups": [],
+                "chart": None, "fourth_wall": bool(fourth_wall), "canon_countdown": self.canon_countdown(),
+                "turn": turn, "answered_locally": True}
 
     @staticmethod
     def _sanitize_advisor_chart(raw):
@@ -344,6 +388,8 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             return None
         if self.state.get("turn", 0) % 2 != 0:
             return None
+        if self.settings.get("local_message_gate", True) and not self._incoming_message_candidates():
+            return None
         payload = {
             "task": "incoming_chat_check", "role": "World/NPC Simulator", "state": self.trimmed_state_for_ai(),
             "requirements": [
@@ -378,6 +424,23 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             self.log(f"Incoming message from {sender} in {thread}")
             self.autosave()
         return {"thread": thread, "sender": sender, "message": data.get("message", "")}
+
+    def _incoming_message_candidates(self):
+        """Zero-cost relevance gate before asking a model to compose a message."""
+        turn = int(self.state.get("turn", 0) or 0); candidates = []
+        for name, contact in (self.state.get("contacts") or {}).items():
+            if not isinstance(contact, dict):
+                continue
+            due = contact.get("next_contact_turn")
+            if contact.get("urgent") or contact.get("pending_reply") or contact.get("message_due") or (isinstance(due, (int, float)) and due <= turn):
+                candidates.append(str(name))
+        for companion in self.state.get("companions", []) or []:
+            if isinstance(companion, dict) and companion.get("name") and companion.get("location") and companion.get("location") != self.state.get("location"):
+                candidates.append(str(companion["name"]))
+        recent = " ".join(str(row.get("text") or row.get("summary") or row) for row in (self.state.get("world_events") or [])[-3:] if isinstance(row, (dict, str))).lower()
+        if recent:
+            candidates.extend(str(name) for name in (self.state.get("contacts") or {}) if str(name).lower() in recent)
+        return list(dict.fromkeys(candidates))[:8]
 
     def create_world_event_if_due(self):
         current_day = int(self.state.get("canon_day", 0) or 0)
@@ -442,7 +505,27 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         player's own stats, inventory, currency, or location."""
         hours = self._pending_reentry_hours
         self._pending_reentry_hours = None
-        if not hours or not self.ai_bg_ready() or self.busy:
+        if not hours or self.busy:
+            return None
+        if self.settings.get("local_reentry_recap", True) and isinstance(self.ai_bg, AI):
+            feed = []
+            for row in (self.state.get("background_world_feed") or [])[-3:]:
+                text = (row.get("text") or row.get("summary")) if isinstance(row, dict) else str(row)
+                if text:
+                    feed.append(str(text).strip())
+            active_clocks = []
+            clocks = {**(self.state.get("faction_clocks") or {}), **(self.state.get("npc_clocks") or {})}
+            for name, clock in clocks.items():
+                if isinstance(clock, dict) and clock.get("status", "active") == "active":
+                    active_clocks.append(f"{name} remains focused on {clock.get('goal') or 'its existing plans'}")
+            details = feed[-2:] or active_clocks[:2]
+            recap = ("While you were away, " + " ".join(details)) if details else ""
+            if recap:
+                recap = recap.rstrip(". ") + ". No in-world time passed while the campaign was closed."
+                self.append("[WHILE YOU WERE AWAY]\n" + recap, "narrative")
+                self.autosave()
+            return {"recap": recap, "state": self.public_state(), "story": self._flush_story(), "generated_locally": True}
+        if not self.ai_bg_ready():
             return None
         payload = {
             "task": "reentry_recap", "hours_away": hours, "state": self.trimmed_state_for_ai(),

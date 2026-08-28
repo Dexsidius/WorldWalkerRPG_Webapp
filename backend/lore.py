@@ -12,6 +12,8 @@ import hashlib
 import html
 import ipaddress
 import socket
+import sqlite3
+import threading
 from datetime import datetime, timezone, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
@@ -61,6 +63,49 @@ SOURCE_AUTHORITY = {
 
 _LORE_CACHE = {}
 _LORE_CACHE_STATS = {"hits": 0, "misses": 0, "generation": 0}
+_LORE_FTS_PATH = DATA_DIR / "lore_search.sqlite3"
+_LORE_FTS_LOCK = threading.RLock()
+_LORE_FTS_GENERATION = -1
+
+def _ensure_lore_fts():
+    """Build a local full-text index; return False on SQLite builds without FTS5."""
+    global _LORE_FTS_GENERATION
+    if _LORE_FTS_GENERATION == _LORE_CACHE_STATS["generation"] and _LORE_FTS_PATH.exists():
+        return True
+    with _LORE_FTS_LOCK:
+        db = None
+        try:
+            db = sqlite3.connect(_LORE_FTS_PATH)
+            db.execute("CREATE VIRTUAL TABLE IF NOT EXISTS lore_fts USING fts5(world, title, keys, text, payload UNINDEXED)")
+            db.execute("DELETE FROM lore_fts")
+            for world_name in BUILTIN_LORE:
+                for entry in all_lore_entries(world_name):
+                    db.execute("INSERT INTO lore_fts(world,title,keys,text,payload) VALUES(?,?,?,?,?)",
+                               (world_name, entry.get("title", ""), entry.get("keys", ""), entry.get("text", ""), json.dumps(entry, ensure_ascii=False)))
+            db.commit()
+            _LORE_FTS_GENERATION = _LORE_CACHE_STATS["generation"]
+            return True
+        except (sqlite3.Error, OSError):
+            return False
+        finally:
+            if db is not None:
+                db.close()
+
+def _fts_retrieve(world, terms, current_day, limit):
+    if not terms or not _ensure_lore_fts():
+        return []
+    expression = " OR ".join('"' + term.replace('"', '') + '"' for term in list(terms)[:16])
+    try:
+        db = sqlite3.connect(_LORE_FTS_PATH)
+        try:
+            rows = db.execute("SELECT payload FROM lore_fts WHERE world=? AND lore_fts MATCH ? ORDER BY bm25(lore_fts) LIMIT ?",
+                              (world, expression, max(1, int(limit) * 3))).fetchall()
+        finally:
+            db.close()
+        entries = [json.loads(row[0]) for row in rows]
+        return [entry for entry in entries if int(entry.get("min_canon_day", -10**9) or -10**9) <= current_day][:limit]
+    except (sqlite3.Error, ValueError, TypeError):
+        return []
 
 
 def _automation_data():
@@ -654,6 +699,10 @@ def retrieve_lore(world, query, state=None, limit=5):
                if int(entry.get("min_canon_day", -10**9) or -10**9) <= current_day]
     query_blob = " ".join([str(query or ""), str((state or {}).get("location", "")), " ".join((state or {}).get("skills", {}).keys())]).lower()
     terms = set(re.findall(r"[a-z0-9'-]+", query_blob))
+    fts_selected = _fts_retrieve(world, {term for term in terms if len(term) > 2}, current_day, limit)
+    if fts_selected:
+        _LORE_CACHE[key] = copy.deepcopy(fts_selected)
+        return copy.deepcopy(fts_selected)
     ranked = []
     for index, entry in enumerate(entries):
         hay = f"{entry.get('title','')} {entry.get('keys','')} {entry.get('text','')}".lower()
@@ -693,4 +742,4 @@ def lore_library_status(world=None, query=""):
     conflicts = detect_lore_conflicts(entries)
     return {"authority_scale": SOURCE_AUTHORITY, "conflicts": conflicts,
             "entry_count": len(entries), "highest_authority": max([e.get("authority", 0) for e in entries] or [0]),
-            "cache": {**_LORE_CACHE_STATS, "entries": len(_LORE_CACHE)}}
+            "cache": {**_LORE_CACHE_STATS, "entries": len(_LORE_CACHE), "full_text_index": _ensure_lore_fts()}}

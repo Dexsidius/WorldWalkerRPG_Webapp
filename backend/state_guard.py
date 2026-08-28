@@ -16,7 +16,20 @@ from world_progression import normalize_world_progression
 from world_depth import normalize_world_depth
 from lit_systems import initialize_lit_systems
 from skill_system import normalize_skill_map
+from ability_mechanics import compile_ability_mechanics
+from power_benchmarks import benchmark_tier
 from politics import normalize_political_state
+
+def _compile_skill_mechanics(state):
+    skills = normalize_skill_map(state.get("skills", {}))
+    stats = state.get("stats") if isinstance(state.get("stats"), dict) else {}
+    numeric_stats = [value for value in stats.values() if isinstance(value, (int, float)) and not isinstance(value, bool)]
+    tier = benchmark_tier(state.get("world", "Custom World"), max(numeric_stats, default=30)).get("index", 2)
+    compiled = {}
+    for name, detail in skills.items():
+        package = compile_ability_mechanics(state.get("world", "Custom World"), {"name": name, **detail}, tier)
+        package.pop("name", None); compiled[name] = package
+    state["skills"] = compiled
 
 
 APP_OWNED = {
@@ -357,7 +370,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     before = copy.deepcopy(state)
     safe, accepted, rejected = _normalize_patch(patch, state, allow_time, source)
     merge(state, safe)
-    state["skills"] = normalize_skill_map(state.get("skills", {}))
+    _compile_skill_mechanics(state)
     repairs = _repair(state)
     repairs.extend(_repair_bleach_mechanics(state, before))
     repairs.extend(normalize_world_progression(state, before))
@@ -405,7 +418,7 @@ def migrate_state(state, from_version="unknown"):
     migrated["schema_version"] = BASE_STATE.get("schema_version", 12)
     normalize_npc_knowledge(migrated, {}, "migration")
     repairs = _repair(migrated)
-    migrated["skills"] = normalize_skill_map(migrated.get("skills", {}))
+    _compile_skill_mechanics(migrated)
     repairs.extend(normalize_world_progression(migrated))
     repairs.extend(normalize_world_depth(migrated))
     repairs.extend(initialize_lit_systems(migrated))

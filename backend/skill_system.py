@@ -52,7 +52,7 @@ def _inferred_effect(blob):
         ("stealth", r"\b(stealth|invisib\w*|conceal\w*|camouflage|hide presence|suppress presence)\b"),
         ("detect", r"\b(detect|sense|track|scan|perception|true sight|clairvoy)\b"),
         ("movement", r"\b(dash|teleport|flash step|shunpo|mobility|movement|flight|blink|escape)\b"),
-        ("control", r"\b(stun|bind|paraly|sleep|freeze|immobil|silence|confus|fear|restrain|crowd control|bakud[ōo])\b"),
+        ("control", r"\b(stun\w*|bind\w*|paraly\w*|sleep\w*|freez\w*|immobil\w*|silenc\w*|confus\w*|fear\w*|restrain\w*|crowd control|bakud[ōo])\b"),
         ("debuff", r"\b(debuff|weaken|slow|poison|burn|bleed|blind|curse|mark|drain|reduce)\b"),
         ("buff", r"\b(buff|empower|enhance|strengthen|haste|increas(?:e|es) (?:power|speed|defense)|inspiration|aura)\b"),
         ("damage", r"\b(attack|strike|damage|blast|projectile|slash|cut|pierc|crush|explod|fireball|had[ōo])\b"),

@@ -6,9 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.27.2** (schema 19).
+Current app/save version: **3.28.0** (schema 19).
 
-Version 3.27.2 gives Naruto Jinchūriki a dedicated power system separate from
+Version 3.28.0 adds world-native power benchmarks, simultaneous local two-player combat,
+compiled mechanics and semantic uniqueness for generated abilities, polygon territory control,
+and a broad AI-cost reduction layer with task routing and per-task telemetry.
+
+Version 3.27.2 gave Naruto Jinchūriki a dedicated power system separate from
 ordinary jutsu, Kekkei Genkai, Dōjutsu, and classes. It tracks the sealed
 tailed beast as an independent character, its complete canon potential,
 currently accessible abilities, seal condition, relationship, bond, control,

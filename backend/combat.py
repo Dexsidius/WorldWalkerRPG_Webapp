@@ -27,10 +27,11 @@ honest scope boundary, not a gap.
 import random
 import re
 
-from worlds import DIFFICULTIES, abilities_for, primary_stats_for, ability_resource_type_for, speed_stat_for, defense_stat_for
+from worlds import DIFFICULTIES, abilities_for, primary_stats_for, ability_resource_type_for, speed_stat_for, defense_stat_for, uses_xp_for, power_profile_for
 from util import clamp
 from systems import normalize_tuning
 from skill_system import infer_skill_metadata, normalize_skill_map
+from ai_client import AI
 
 BASE_HIT_PCT = 0.13         # a bare-minimum successful hit does ~13% of the target's max HP
 MARGIN_HIT_PCT = 0.09       # up to another 9% for a big margin over the difficulty
@@ -83,6 +84,7 @@ class CombatMixin:
         world = self.state.get("world", "Custom World")
         stats = self.state.get("stats", {}) or {}
         avg_stat = int(sum(stats.values()) / max(1, len(stats))) if stats else 30
+        balanced_combat = int((power_profile_for(world, stats, (self.state.get("special") or {}).get("Archetype", "")).get("combat") or {}).get("score", avg_stat) or avg_stat)
         combat.setdefault("round", 1)
         combat.setdefault("player_defense_ability", (primary_stats_for(world, self.state.get("special", {}).get("Archetype", "")) or abilities_for(world))[0])
 
@@ -116,7 +118,7 @@ class CombatMixin:
         enemy["hp"] = int(enemy.get("hp", hp_max))
         power = enemy.get("power")
         if power is None:
-            power = clamp(avg_stat + random.randint(-8, 8), 10, 200)
+            power = clamp(balanced_combat + random.randint(-8, 8), 10, 2000)
         enemy["power"] = int(power)
         if enemy.get("difficulty_min") is None or enemy.get("difficulty_max") is None:
             center = clamp(int(enemy["power"] * 1.0), 15, 90)
@@ -772,6 +774,8 @@ class CombatMixin:
         pending = log[start:]
         if not pending:
             return {"narrative": "", "story": self._flush_story()}
+        if self.settings.get("local_combat_recap", True) and isinstance((self.ai_bg if getattr(self, "ai_bg", None) else self.ai), AI):
+            return self._local_combat_recap(combat, pending)
         mercy_shown = bool(combat.get("non_lethal") or combat.get("spare_enemy"))
         payload = {
             "task": "narrate_combat", "state": self.task_state_for_ai("combat_summary"), "combat_outcome": combat.get("outcome"),
@@ -800,3 +804,51 @@ class CombatMixin:
             self.state["combat"] = {}
         result = self.apply_resolution(data, is_opening=False, pending_action=f"[combat] {combat.get('outcome') or 'ongoing'}")
         return result
+
+    def _local_combat_recap(self, combat, pending):
+        """Readable deterministic recap and rewards with zero AI calls."""
+        enemy = (combat.get("enemy") or {}).get("name", "the opponent")
+        phrases = []
+        for row in pending:
+            actor, action = row.get("actor"), row.get("action")
+            if action == "attack":
+                if row.get("success") and row.get("damage"):
+                    subject = self.state.get("name", "You") if actor == "player" else enemy
+                    target = enemy if actor == "player" else self.state.get("name", "you")
+                    phrases.append(f"{subject} struck {target} for {row.get('damage')} damage.")
+                else:
+                    phrases.append(f"{self.state.get('name', 'You') if actor == 'player' else enemy} missed the attack.")
+            elif action == "controlled":
+                phrases.append(f"{row.get('name') or actor} could not act while {row.get('status', 'controlled')}.")
+            elif action == "status damage":
+                phrases.append(f"{row.get('status', 'A lingering effect')} dealt {row.get('damage', 0)} damage.")
+            elif action == "flee":
+                phrases.append("The escape succeeded." if row.get("success") else "The escape attempt was cut off.")
+            elif action in {"heal", "shield", "buff", "debuff", "control", "summon", "cleanse", "movement", "detect", "stealth", "transform", "utility"}:
+                phrases.append(f"{row.get('ability') or row.get('status') or action.title()} took effect." if row.get("success", row.get("applied", True)) else f"{row.get('ability') or action.title()} failed to take hold.")
+        outcome = str(combat.get("outcome") or "ongoing")
+        endings = {"victory": f"{enemy} was defeated.", "overwhelmed": f"{enemy} was decisively overwhelmed.",
+                   "fled": "You escaped the fight.", "defeat": "You were defeated.", "yielded": "You yielded the nonlethal bout."}
+        if outcome in endings:
+            phrases.append(endings[outcome])
+        narrative = " ".join(phrases[-10:]) or f"The fight with {enemy} reached its {outcome} outcome."
+        notifications = []
+        if outcome in {"victory", "overwhelmed"} and uses_xp_for(self.state.get("world")):
+            gained = max(10, min(5000, 12 + int((combat.get("enemy") or {}).get("power", 30) or 30) // 3))
+            self.state["xp"] = int(self.state.get("xp", 0) or 0) + gained
+            levels = 0
+            while self.state["xp"] >= int(self.state.get("xp_next", 100) or 100):
+                self.state["xp"] -= int(self.state.get("xp_next", 100) or 100)
+                self.state["level"] = int(self.state.get("level", 1) or 1) + 1; levels += 1
+                self.state["xp_next"] = max(100, round(int(self.state.get("xp_next", 100) or 100) * 1.18))
+            notification = f"Combat reward: +{gained} XP" + (f" · Level increased by {levels}" if levels else "")
+            notifications.append({"type": "xp", "message": notification})
+            narrative += " " + notification + "."
+        combat["narrated_through"] = len(combat.get("log", []))
+        if not combat.get("active"):
+            self.state["combat"] = {}
+        self.append("[COMBAT RESULT]\n" + narrative, "narrative")
+        self.autosave()
+        return {"status": "resolved", "narrative": narrative, "notifications": notifications,
+                "suggested_actions": ["Check your condition and equipment", "Assess the immediate area", "Continue your current objective"],
+                "state": self.public_state(), "story": self._flush_story(), "generated_locally": True}

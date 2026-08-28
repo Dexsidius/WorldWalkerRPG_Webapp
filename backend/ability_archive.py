@@ -13,6 +13,7 @@ import json
 import re
 import threading
 import uuid
+from difflib import SequenceMatcher
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -52,6 +53,18 @@ def ability_fingerprint(package):
     encoded = json.dumps(semantic, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
+def _semantic_tokens(package):
+    semantic = _semantic_value(package if isinstance(package, dict) else {"value": package})
+    text = json.dumps(semantic, sort_keys=True, ensure_ascii=False)
+    stop = {"the", "and", "that", "with", "from", "into", "this", "when", "user", "ability", "effect", "their"}
+    return {token for token in re.findall(r"[a-z0-9]+", text.lower()) if len(token) > 2 and token not in stop}
+
+def semantic_similarity(left, right):
+    left_tokens, right_tokens = _semantic_tokens(left), _semantic_tokens(right)
+    jaccard = len(left_tokens & right_tokens) / max(1, len(left_tokens | right_tokens))
+    sequence = SequenceMatcher(None, " ".join(sorted(left_tokens)), " ".join(sorted(right_tokens))).ratio()
+    return round(max(jaccard, sequence * .9), 4)
+
 
 class GeneratedAbilityArchive:
     def __init__(self, path: Path):
@@ -90,7 +103,17 @@ class GeneratedAbilityArchive:
                 return True
             if fingerprint and fingerprint == row.get("fingerprint"):
                 return True
+            if semantic_similarity(package, row.get("package") or {}) >= 0.78:
+                return True
         return False
+
+    def closest_match(self, world, category, package):
+        best = None
+        for row in self.entries(world, category):
+            score = semantic_similarity(package, row.get("package") or {})
+            if best is None or score > best["similarity"]:
+                best = {"similarity": score, "name": row.get("name", ""), "id": row.get("id", "")}
+        return best or {"similarity": 0.0, "name": "", "id": ""}
 
     def exclusions(self, world, category, limit=40):
         rows = self.entries(world, category)[-max(1, int(limit)):]

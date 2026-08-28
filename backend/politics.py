@@ -7,6 +7,8 @@ occasional natural-language reports for rulers without exposing management
 scores in the interface.
 """
 import copy
+import hashlib
+import math
 import re
 
 
@@ -129,6 +131,21 @@ def _clean_region(raw, index):
         cleaned["x"] = _number(raw.get("x"), 50.0, 0.0, 100.0)
     if raw.get("y") is not None:
         cleaned["y"] = _number(raw.get("y"), 50.0, 0.0, 100.0)
+    polygon = raw.get("polygon")
+    if isinstance(polygon, list):
+        points = []
+        for point in polygon[:80]:
+            if isinstance(point, (list, tuple)) and len(point) >= 2:
+                points.append([_number(point[0], 50, 0, 100), _number(point[1], 50, 0, 100)])
+            elif isinstance(point, dict):
+                points.append([_number(point.get("x"), 50, 0, 100), _number(point.get("y"), 50, 0, 100)])
+        if len(points) >= 3:
+            cleaned["polygon"] = points
+    contested = raw.get("contested_by")
+    if isinstance(contested, list):
+        cleaned["contested_by"] = [str(value).strip()[:160] for value in contested if str(value).strip()][:8]
+    if raw.get("parent_id"):
+        cleaned["parent_id"] = str(raw.get("parent_id"))[:100]
     for key in ("established_day", "controller_changed_turn"):
         if isinstance(raw.get(key), (int, float)):
             cleaned[key] = raw[key]
@@ -212,9 +229,11 @@ def political_regions_for_map(state, nodes):
         anchor = node_by_name.get(anchor_name) or next((node for key, node in node_by_name.items() if anchor_name and (anchor_name in key or key in anchor_name)), None) or current
         x = _number(raw.get("x"), _number(anchor.get("x"), 50, 0, 100), 0, 100)
         y = _number(raw.get("y"), _number(anchor.get("y"), 50, 0, 100), 0, 100)
+        polygon = raw.get("polygon") if isinstance(raw.get("polygon"), list) and len(raw.get("polygon")) >= 3 else _territory_polygon(x, y, _number(raw.get("size"), 12.5, 4, 42), raw.get("id") or raw.get("name"))
         regions.append({
             "id": raw.get("id"), "name": raw.get("name"), "controller": raw.get("controller"),
             "x": x, "y": y, "size": _number(raw.get("size"), 12.5, 4, 42),
+            "polygon": polygon, "contested_by": list(raw.get("contested_by") or []),
             "recently_changed": bool(raw.get("controller_changed_turn") is not None and int(state.get("turn", 0) or 0) - int(raw.get("controller_changed_turn", 0)) <= 3),
         })
         explicit_anchors.add(anchor_name)
@@ -229,9 +248,36 @@ def political_regions_for_map(state, nodes):
         regions.append({
             "id": f"landmark-{_slug(node.get('name'))}", "name": node.get("name"),
             "controller": controller, "x": node.get("x", 50), "y": node.get("y", 50),
-            "size": size, "recently_changed": bool(node.get("recently_changed")),
+            "size": size, "polygon": _territory_polygon(node.get("x", 50), node.get("y", 50), size, node.get("name")),
+            "contested_by": list(node.get("contested_by") or []), "recently_changed": bool(node.get("recently_changed")),
         })
     return regions
+
+
+def _territory_polygon(x, y, radius, seed):
+    """Stable organic polygon for old/canon holdings that only had an anchor."""
+    digest = hashlib.sha256(str(seed or "territory").encode("utf-8")).digest()
+    points = []
+    for index in range(12):
+        angle = (math.pi * 2 * index / 12) + (digest[index] / 255.0 - .5) * .16
+        wobble = .78 + (digest[index + 12] / 255.0) * .34
+        px = _number(float(x) + math.cos(angle) * float(radius) * wobble, 50, 0, 100)
+        py = _number(float(y) + math.sin(angle) * float(radius) * wobble * .72, 50, 0, 100)
+        points.append([round(px, 2), round(py, 2)])
+    return points
+
+
+def transfer_territory(state, region_id, controller, contested_by=None):
+    """Authoritative local annexation helper used by narrative state patches."""
+    for region in state.get("political_regions", []) or []:
+        if isinstance(region, dict) and str(region.get("id")) == str(region_id):
+            previous = str(region.get("controller") or "Unclaimed")
+            region["controller"] = str(controller)[:160]
+            region["contested_by"] = [str(x)[:160] for x in (contested_by or []) if str(x).strip()][:8]
+            region["controller_changed_turn"] = int(state.get("turn", 0) or 0)
+            _ensure_first_class_faction(state, controller)
+            return {"region": region.get("name"), "from": previous, "to": controller}
+    return None
 
 
 def tick_polity_governance(state, elapsed_minutes=0, canon_controllers=None):

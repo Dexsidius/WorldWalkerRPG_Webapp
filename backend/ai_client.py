@@ -110,7 +110,7 @@ class AI:
         self.last_endpoint = ""
         self.usage = {"input_tokens": 0, "cached_input_tokens": 0, "uncached_input_tokens": 0,
                       "output_tokens": 0, "calls": 0, "cost_usd": 0.0,
-                      "cost_unknown": False, "cost_is_conservative": False}
+                      "cost_unknown": False, "cost_is_conservative": False, "by_task": {}}
 
     def estimate_request_cost(self, instructions, payload, max_output_tokens=700):
         """Conservative preflight estimate; local models always return zero."""
@@ -139,6 +139,11 @@ class AI:
         self.usage["uncached_input_tokens"] += max(0, in_tok - cached_tok)
         self.usage["output_tokens"] += out_tok
         self.usage["calls"] += 1
+        task = str(getattr(self, "_active_task", "general") or "general")
+        task_row = self.usage.setdefault("by_task", {}).setdefault(task, {
+            "calls": 0, "input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0})
+        task_row["calls"] += 1; task_row["input_tokens"] += in_tok
+        task_row["cached_input_tokens"] += cached_tok; task_row["output_tokens"] += out_tok
         if self.provider != "cloud":
             return
         # The local price table intentionally stores only standard input and
@@ -151,6 +156,7 @@ class AI:
             self.usage["cost_unknown"] = True
         else:
             self.usage["cost_usd"] += cost
+            task_row["cost_usd"] += cost
 
     def _headers(self):
         h = {"Content-Type": "application/json"}
@@ -327,6 +333,7 @@ class AI:
         return self._parse_json_payload(str(content))
 
     def request(self, instructions, payload, timeout=240, max_output_tokens=700):
+        self._active_task = str((payload or {}).get("task") or "general") if isinstance(payload, dict) else "general"
         projected = self.estimate_request_cost(instructions, payload, max_output_tokens)
         self.usage["last_projected_cost_usd"] = round(projected, 6) if projected is not None else None
         if self.max_estimated_cost_usd and projected is not None and projected > self.max_estimated_cost_usd:

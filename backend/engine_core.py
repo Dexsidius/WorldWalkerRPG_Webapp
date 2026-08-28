@@ -34,6 +34,10 @@ DEFAULT_SETTINGS = {
     "model": "",
     "secondary_model": "",
     "major_event_model": "",
+    "advisor_model": "",
+    "advisor_provider": "inherit",
+    "creative_model": "",
+    "creative_provider": "inherit",
     "max_ai_cost_per_request_usd": 0.0,
     "session_budget_warning_usd": 5.0,
     "narration": "Concise",
@@ -45,9 +49,14 @@ DEFAULT_SETTINGS = {
     "portrait_generation_enabled": True,
     "portrait_auto_generate": False,
     "image_model": "gpt-image-2",
+    "image_provider": "inherit",
+    "local_image_base_url": "",
     "local_image_model": "",
     "portrait_quality": "low",
     "simulation_mode": "balanced",
+    "local_reentry_recap": True,
+    "local_combat_recap": True,
+    "local_message_gate": True,
     "canon_foreknowledge": False,
     "developer_mode": False,
     "onboarding_seen": False,
@@ -197,6 +206,8 @@ class CoreMixin:
         self.ai_bg = self.make_client(self.settings.get("secondary_model", "") or self.settings.get("model", ""))
         major_model = self.settings.get("major_event_model", "")
         self.ai_major = self.make_client(major_model) if major_model and major_model != self.settings.get("model", "") else self.ai
+        self.ai_advisor = self.make_client(self.settings.get("advisor_model") or self.settings.get("secondary_model") or self.settings.get("model"), self.settings.get("advisor_provider"))
+        self.ai_creative = self.make_client(self.settings.get("creative_model") or self.settings.get("secondary_model") or self.settings.get("model"), self.settings.get("creative_provider"))
         self.state = copy.deepcopy(BASE_STATE)
         self.history = []
         self.checkpoints = []
@@ -224,12 +235,13 @@ class CoreMixin:
         temporary.write_text(json.dumps(self.settings, indent=2), encoding="utf-8")
         temporary.replace(self.settings_path)
 
-    def make_client(self, model):
+    def make_client(self, model, provider=None):
         s = self.settings
+        provider = provider if provider in {"local", "cloud"} else s.get("provider", "local")
         return AI(
             key=s.get("api_key", ""),
             model=model or DEFAULT_MODEL,
-            provider=s.get("provider", "local"),
+            provider=provider,
             base_url=s.get("local_base_url", "http://localhost:1234/v1"),
             local_token=s.get("local_token", ""),
             max_estimated_cost_usd=s.get("max_ai_cost_per_request_usd", 0),
@@ -267,6 +279,8 @@ class CoreMixin:
         self.ai_bg = self.make_client(self.settings.get("secondary_model") or self.settings["model"])
         major_model = self.settings.get("major_event_model", "")
         self.ai_major = self.make_client(major_model) if major_model and major_model != self.settings.get("model", "") else self.ai
+        self.ai_advisor = self.make_client(self.settings.get("advisor_model") or self.settings.get("secondary_model") or self.settings.get("model"), self.settings.get("advisor_provider"))
+        self.ai_creative = self.make_client(self.settings.get("creative_model") or self.settings.get("secondary_model") or self.settings.get("model"), self.settings.get("creative_provider"))
 
     def simulation_mode(self):
         return normalize_simulation_mode(self.settings.get("simulation_mode", "balanced"))
@@ -370,7 +384,7 @@ class CoreMixin:
         canon = self.state.get("campaign_canon") or []
         if not canon:
             snapshot.pop("campaign_canon", None)
-            return compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
+            return self._prune_ai_context(compile_context_snapshot(snapshot, self.state, query, self.simulation_mode()))
         chapters = self.state.get("chapter_summaries") or []
         if chapters:
             try:
@@ -382,7 +396,26 @@ class CoreMixin:
         # recent tail so a fresh campaign's first few requests aren't already
         # carrying unnecessary bulk.
         snapshot["campaign_canon"] = canon[-15:]
-        return compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
+        compiled = compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
+        # Polygon vertices, UI caches and empty defaults are saved locally but
+        # do not help a stateless narrator. Keep only the territorial facts;
+        # the frontend reconstructs/draws exact geometry from the real state.
+        if isinstance(compiled.get("political_regions"), list):
+            compiled["political_regions"] = [{key: copy.deepcopy(region.get(key)) for key in
+                ("id", "name", "controller", "anchor", "scale", "contested_by", "controller_changed_turn")
+                if region.get(key) not in (None, "", [], {})} for region in compiled["political_regions"] if isinstance(region, dict)]
+        compiled["recent_state_delta"] = copy.deepcopy((compiled.get("campaign_canon") or [])[-3:])
+        return self._prune_ai_context(compiled)
+
+    @classmethod
+    def _prune_ai_context(cls, value):
+        """Recursively omit token-heavy empty/default scaffolding."""
+        if isinstance(value, dict):
+            return {str(key): cls._prune_ai_context(item) for key, item in value.items()
+                    if item not in (None, "", [], {})}
+        if isinstance(value, list):
+            return [cls._prune_ai_context(item) for item in value if item not in (None, "", [], {})]
+        return value
 
     def append(self, text, tag=None, canon_day=None, detail=None):
         entry = {"text": text, "tag": tag, "time": datetime.now().isoformat(timespec="seconds"),

@@ -529,6 +529,15 @@
       <input id="st-major-model" type="text" list="model-suggestions" placeholder="Leave blank to use Main GM Model" />
       <p class="hint">Only major canon events, transformations, major confrontations, and Next Major Event use this model. Ordinary turns stay on the Main model.</p>
 
+      <details class="model-routing-details">
+        <summary>Advanced task routing (optional)</summary>
+        <p class="hint">Leave these blank/inherit to use the normal setup. A local model can handle these lanes while the main GM remains cloud-based.</p>
+        <div class="two-col">
+          <div><label>Advisor Model</label><input id="st-advisor-model" type="text" list="model-suggestions" placeholder="Background model by default" /><select id="st-advisor-provider"><option value="inherit">Inherit AI mode</option><option value="local">Local</option><option value="cloud">Cloud</option></select></div>
+          <div><label>Character / Ability Creator</label><input id="st-creative-model" type="text" list="model-suggestions" placeholder="Background model by default" /><select id="st-creative-provider"><option value="inherit">Inherit AI mode</option><option value="local">Local</option><option value="cloud">Cloud</option></select></div>
+        </div>
+      </details>
+
       <label>Cloud Presets — sets Main/Background/Image model and portrait quality together</label>
       <div class="radio-row">
         <button type="button" id="btn-preset-budget" class="btn-accent" title="GPT-5 nano for both jobs; lowest text cost">BUDGET</button>
@@ -581,6 +590,9 @@
         <label><input type="checkbox" id="st-portrait-enabled" checked /> Allow AI portrait generation</label>
         <label><input type="checkbox" id="st-portrait-auto" /> Automatically regenerate after major appearance changes</label>
         <label><input type="checkbox" id="st-canon-foreknowledge" /> Show future canon spoilers in the Timeline</label>
+        <label><input type="checkbox" id="st-local-combat-recap" checked /> Free local combat recaps</label>
+        <label><input type="checkbox" id="st-local-reentry-recap" checked /> Free local return summaries</label>
+        <label><input type="checkbox" id="st-local-message-gate" checked /> Skip irrelevant background message calls</label>
         <label><input type="checkbox" id="st-developer-mode" /> Developer diagnostics</label>
       </div>
       <label>Music Volume</label>
@@ -598,6 +610,10 @@
           <p class="hint">Requires an OpenAI-compatible /images endpoint.</p>
         </div>
       </div>
+      <label>Image Provider</label>
+      <select id="st-image-provider"><option value="inherit">Inherit AI mode</option><option value="local">Local image server</option><option value="cloud">OpenAI Cloud</option></select>
+      <label>Local Image Server (optional separate endpoint)</label>
+      <input id="st-local-image-base-url" type="text" placeholder="Defaults to the Local Server above" />
       <label>Portrait Quality</label>
       <select id="st-portrait-quality">
         <option selected>low</option>

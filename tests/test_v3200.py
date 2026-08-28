@@ -20,7 +20,7 @@ from worlds import abilities_for
 class WorldwalkerV3200ClassGameplayTests(unittest.TestCase):
     def test_release_version(self):
         from worlds import APP_VERSION
-        self.assertEqual(APP_VERSION, "3.27.2")
+        self.assertEqual(APP_VERSION, "3.28.0")
 
     def campaign(self, role="Summoner"):
         game = GameSession()

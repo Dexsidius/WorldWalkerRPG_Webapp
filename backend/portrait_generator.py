@@ -276,7 +276,8 @@ def reference_path(state):
 def portrait_ready(settings):
     if not settings.get("portrait_generation_enabled", True):
         return False
-    if settings.get("provider", "local") == "cloud":
+    provider = settings.get("image_provider") if settings.get("image_provider") in {"local", "cloud"} else settings.get("provider", "local")
+    if provider == "cloud":
         return bool(settings.get("api_key") and settings.get("image_model", "gpt-image-2"))
     return bool(settings.get("local_image_model"))
 
@@ -351,7 +352,7 @@ def _decode_image(data):
 def generate_portrait(state, settings, force=False):
     if not settings.get("portrait_generation_enabled", True):
         raise RuntimeError("Automatic AI portraits are disabled in Settings.")
-    provider = settings.get("provider", "local")
+    provider = settings.get("image_provider") if settings.get("image_provider") in {"local", "cloud"} else settings.get("provider", "local")
     if provider == "cloud":
         key = settings.get("api_key", "")
         if not key:
@@ -360,7 +361,7 @@ def generate_portrait(state, settings, force=False):
         token = key
         model = settings.get("image_model") or "gpt-image-2"
     else:
-        base_url = str(settings.get("local_base_url") or "http://localhost:1234/v1").rstrip("/")
+        base_url = str(settings.get("local_image_base_url") or settings.get("local_base_url") or "http://localhost:1234/v1").rstrip("/")
         token = settings.get("local_token", "")
         model = str(settings.get("local_image_model") or "").strip()
         if not model:

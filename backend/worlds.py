@@ -6,10 +6,11 @@ import math
 import re
 
 from bleach_data import BLEACH_GM_RULES
+from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.27.2"
+APP_VERSION = "3.28.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1838,7 +1839,7 @@ def power_profile_for(world, stats, archetype=""):
         f"{peak_name} is an extreme specialty, but {speed_name} and {defense_name} still govern speed and defense."
         if lopsided else "The character's highest capability and supporting combat attributes are broadly aligned."
     )
-    return {
+    profile = {
         "overall": _power_tier_row(overall_score),
         "combat": _power_tier_row(combat_score),
         "peak": {**_power_tier_row(peak_value), "stat": peak_name, "value": int(peak_value),
@@ -1853,6 +1854,11 @@ def power_profile_for(world, stats, archetype=""):
         "interpretation": interpretation,
         "scale_rule": "Current mechanical stats outrank starting labels and stock-canon assumptions about the player character.",
     }
+    profile["world_overall"] = benchmark_tier(world, overall_score)
+    profile["world_combat"] = benchmark_tier(world, combat_score)
+    profile["world_peak"] = benchmark_tier(world, peak_value)
+    profile["benchmark_reference"] = benchmark_context(world)
+    return profile
 
 
 def ability_resource_type_for(world, archetype=""):

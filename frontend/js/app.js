@@ -3103,8 +3103,8 @@ function estimatePowerTier(stats) {
 function openPowerSummary() {
   const s = APP.state || {};
   const profile = s._power_profile || {};
-  const tier = profile.combat || estimatePowerTier(s.stats);
-  const overall = profile.overall || estimatePowerTier(s.stats);
+  const tier = profile.world_combat || profile.combat || estimatePowerTier(s.stats);
+  const overall = profile.world_overall || profile.overall || estimatePowerTier(s.stats);
   const peak = profile.peak || {};
   const axes = profile.axes || {};
   const maxStat = Math.max(1, ...Object.values(s.stats || {}).map(Number).filter(Number.isFinite));
@@ -3123,8 +3123,8 @@ function openPowerSummary() {
       <div><b>${escapeHtml(s.name || "Traveler")}</b><span>${escapeHtml(s.world || "")}${s.position ? ` · ${escapeHtml(s.position)}` : ""}</span></div>
     </div>
     <div class="power-tier-card">
-      <div class="power-tier-badge">Balanced Combat · Tier ${escapeHtml(tier.index)} · ${escapeHtml(tier.name)}</div>
-      <p>${escapeHtml(tier.description)}</p>
+      <div class="power-tier-badge">Balanced Combat · ${escapeHtml(s.world || "World")} Tier ${escapeHtml(tier.index)} · ${escapeHtml(tier.name)}</div>
+      <p>${escapeHtml(tier.description || profile.interpretation || "World-relative balanced combat standing.")}</p>
       <div class="power-axis-grid">
         <span><b>Peak</b>${escapeHtml(peak.stat || "—")} ${escapeHtml(peak.value ?? "—")}</span>
         <span><b>Offense</b>${escapeHtml(axes.offense?.stat || "—")} ${escapeHtml(axes.offense?.value ?? "—")}</span>
@@ -3661,6 +3661,24 @@ function paintMapTerritories(canvas, nodes) {
   const controllers = [...new Set(owners.map((n) => n.controller))];
   const colors = new Map(controllers.map((name) => [name, factionColor(name)]));
   const withAlpha = new Map([...colors].map(([k, v]) => [k, v.replace("hsl(", "hsla(").replace(")", ",.25)")]));
+  const hasPolygons = owners.some((n) => Array.isArray(n.polygon) && n.polygon.length >= 3);
+  if (hasPolygons) {
+    owners.forEach((n) => {
+      const points = Array.isArray(n.polygon) && n.polygon.length >= 3 ? n.polygon : [];
+      if (!points.length) return;
+      ctx.beginPath();
+      points.forEach((point, index) => { const x = Number(point[0]) * GRID / 100, y = Number(point[1]) * GRID / 100; index ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.closePath(); ctx.fillStyle = withAlpha.get(n.controller); ctx.fill();
+      ctx.strokeStyle = n.recently_changed ? "rgba(255,220,116,.98)" : "rgba(245,240,219,.82)";
+      ctx.lineWidth = n.recently_changed ? 1.4 : .65; ctx.lineJoin = "round"; ctx.stroke();
+      if ((n.contested_by || []).length) {
+        ctx.save(); ctx.clip(); ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = .55;
+        for (let line = -GRID; line < GRID * 2; line += 7) { ctx.beginPath(); ctx.moveTo(line, 0); ctx.lineTo(line + GRID, GRID); ctx.stroke(); }
+        ctx.restore();
+      }
+    });
+    return;
+  }
   const ownerGrid = new Int16Array(GRID * GRID);
   ownerGrid.fill(-1);
   for (let gy = 0; gy < GRID; gy++) {
@@ -4311,6 +4329,10 @@ async function openSettingsModal() {
   $("#st-main-model").value = s.model || "";
   $("#st-bg-model").value = s.secondary_model || "";
   $("#st-major-model").value = s.major_event_model || "";
+  $("#st-advisor-model").value = s.advisor_model || "";
+  $("#st-advisor-provider").value = s.advisor_provider || "inherit";
+  $("#st-creative-model").value = s.creative_model || "";
+  $("#st-creative-provider").value = s.creative_provider || "inherit";
   $("#st-cost-request-limit").value = Number(s.max_ai_cost_per_request_usd || 0);
   $("#st-session-budget").value = Number(s.session_budget_warning_usd ?? 5);
   $("#st-api-key").value = "";
@@ -4324,7 +4346,12 @@ async function openSettingsModal() {
   $("#st-portrait-enabled").checked = s.portrait_generation_enabled !== false;
   $("#st-portrait-auto").checked = s.portrait_auto_generate === true;
   $("#st-canon-foreknowledge").checked = s.canon_foreknowledge === true;
+  $("#st-local-combat-recap").checked = s.local_combat_recap !== false;
+  $("#st-local-reentry-recap").checked = s.local_reentry_recap !== false;
+  $("#st-local-message-gate").checked = s.local_message_gate !== false;
   $("#st-image-model").value = s.image_model || "gpt-image-2";
+  $("#st-image-provider").value = s.image_provider || "inherit";
+  $("#st-local-image-base-url").value = s.local_image_base_url || "";
   $("#st-local-image-model").value = s.local_image_model || "";
   $("#st-portrait-quality").value = s.portrait_quality || "low";
   $("#st-developer-mode").checked = !!s.developer_mode;
@@ -4370,6 +4397,10 @@ $("#btn-save-settings").addEventListener("click", async () => {
     model: $("#st-main-model").value,
     secondary_model: $("#st-bg-model").value || $("#st-main-model").value,
     major_event_model: $("#st-major-model").value.trim(),
+    advisor_model: $("#st-advisor-model").value.trim(),
+    advisor_provider: $("#st-advisor-provider").value,
+    creative_model: $("#st-creative-model").value.trim(),
+    creative_provider: $("#st-creative-provider").value,
     max_ai_cost_per_request_usd: Number($("#st-cost-request-limit").value || 0),
     session_budget_warning_usd: Number($("#st-session-budget").value || 0),
     narration: $("#st-narration").value,
@@ -4382,7 +4413,12 @@ $("#btn-save-settings").addEventListener("click", async () => {
     portrait_generation_enabled: $("#st-portrait-enabled").checked,
     portrait_auto_generate: $("#st-portrait-auto").checked,
     canon_foreknowledge: $("#st-canon-foreknowledge").checked,
+    local_combat_recap: $("#st-local-combat-recap").checked,
+    local_reentry_recap: $("#st-local-reentry-recap").checked,
+    local_message_gate: $("#st-local-message-gate").checked,
     image_model: $("#st-image-model").value.trim() || "gpt-image-2",
+    image_provider: $("#st-image-provider").value,
+    local_image_base_url: $("#st-local-image-base-url").value.trim(),
     local_image_model: $("#st-local-image-model").value.trim(),
     portrait_quality: $("#st-portrait-quality").value,
     developer_mode: $("#st-developer-mode").checked,
@@ -4462,6 +4498,8 @@ async function refreshUsagePill() {
   try {
     const u = await apiGet("/api/usage");
     const pill = $("#hdr-cost"), summary = $("#usage-summary");
+    const taskRows = Object.entries(u.by_task || {}).sort((a, b) => Number(b[1].cost_usd || 0) - Number(a[1].cost_usd || 0) || Number(b[1].calls || 0) - Number(a[1].calls || 0));
+    const taskLabel = taskRows.slice(0, 5).map(([task, row]) => `${humanLabel(task)}: ${row.calls} call(s), ~$${Number(row.cost_usd || 0).toFixed(3)}`).join(" · ");
     if (u.provider !== "cloud") {
       pill.hidden = true;
       if (summary) summary.textContent = "Local mode: text inference is free. Portrait counts still track below.";
@@ -4471,6 +4509,7 @@ async function refreshUsagePill() {
       pill.textContent = `${prefix}${u.total_cost_usd.toFixed(2)} this session`;
       pill.classList.toggle("over-budget", !!u.over_session_budget);
       pill.title = `${u.total_calls} AI call(s) — main model + background model + ${u.portraits.generated} portrait(s).`
+        + (taskLabel ? ` By task — ${taskLabel}.` : "")
         + (u.cached_input_tokens ? ` ${u.cached_input_tokens.toLocaleString()} input tokens were reported as cached.` : "")
         + (u.cost_is_conservative ? " Cached-input discounts are not subtracted, so this is a conservative ceiling." : "")
         + (u.cost_estimate_complete ? "" : " (one or more models are unpriced; total is a floor, not exact.)");
@@ -4483,6 +4522,7 @@ async function refreshUsagePill() {
         + (u.cached_input_tokens ? ` Cached input reported: ${u.cached_input_tokens.toLocaleString()} tokens.` : "")
         + (u.cost_is_conservative ? " The dollar estimate keeps cached input at full rate, so actual provider billing may be lower." : "")
         + (u.cost_estimate_complete ? "" : " Some pricing is unknown for the selected model(s), so this is a floor, not an exact total.");
+      if (taskLabel) summary.textContent += ` Task breakdown: ${taskLabel}.`;
     }
   } catch (e) { /* usage is a convenience readout, never block on it */ }
 }

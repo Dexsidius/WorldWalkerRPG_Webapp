@@ -1,6 +1,6 @@
 """Flask application: serves the frontend, game assets, and the JSON API
 that the browser-based UI drives the game engine through."""
-import io, json, os, secrets, threading, traceback, sys, time
+import copy, io, json, os, secrets, threading, traceback, sys, time
 from datetime import timedelta
 from urllib.parse import quote
 from pathlib import Path
@@ -30,6 +30,7 @@ from support import repair_campaign_state, build_diagnostic_bundle
 from friend_accounts import FriendAccountStore, FriendGameRegistry, persistent_secret
 from multiplayer import (MultiplayerStore, character_from_state, player_view,
                          apply_character_update, split_player_results)
+from multiplayer_combat import resolve_multiplayer_combat_round
 from ai_client import AI
 from overgeared_classes import class_encyclopedia
 
@@ -302,6 +303,20 @@ def _resolve_multiplayer_room(room_id, force=False):
         target_game.state["queued_actions"] = []
         target_game.state["standing_orders"] = []
         target_game.multiplayer_context = {"round": int(room["round_number"]), "participants": participants}
+        combat_result = resolve_multiplayer_combat_round(target_game.state, plan["participants"], int(room["round_number"]))
+        if combat_result:
+            target_game.state = combat_result["state"]
+            characters = combat_result["characters"]
+            host_id = room["host_user_id"]
+            if host_id in characters:
+                for key, value in characters[host_id].items():
+                    if key in {"hp", "hp_max", "resource", "resource_max", "alive", "status", "conditions"}:
+                        target_game.state[key] = copy.deepcopy(value)
+            result = combat_result["result"]
+            player_results = split_player_results(result, plan["participants"], characters, host_id)
+            _multiplayer_store.save_characters(room_id, characters)
+            target_game.save(); _multiplayer_store.complete(room_id, result, player_results)
+            return True
         assessed = target_game.assess_time_skip(amount, unit, orders, intensity, use_model=False)
         manual_rolls = {}
         result = target_game.run_time_skip(
@@ -829,13 +844,20 @@ def api_usage():
     Numbers only get more accurate as calls happen — nothing here is
     predictive, it's a running tally of what's already been spent."""
     main_u, bg_u, major_u, portrait_u = game.ai.usage, game.ai_bg.usage, game.ai_major.usage, portrait_usage()
-    unique_clients = list({id(client): client for client in (game.ai, game.ai_bg, game.ai_major)}.values())
+    unique_clients = list({id(client): client for client in (game.ai, game.ai_bg, game.ai_major, game.ai_advisor, game.ai_creative)}.values())
     cost_known = not any(client.usage.get("cost_unknown") for client in unique_clients)
     total_cost = sum(client.usage.get("cost_usd", 0.0) for client in unique_clients) + portrait_u.get("cost_usd", 0.0)
+    by_task = {}
+    for client in unique_clients:
+        for task, row in (client.usage.get("by_task") or {}).items():
+            merged = by_task.setdefault(task, {"calls": 0, "input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0, "cost_usd": 0.0})
+            for key in merged:
+                merged[key] += row.get(key, 0)
     warning_at = max(0.0, float(game.settings.get("session_budget_warning_usd", 0) or 0))
     return jsonify({
         "provider": game.settings.get("provider", "local"),
-        "main": main_u, "background": bg_u, "major": major_u, "portraits": portrait_u,
+        "main": main_u, "background": bg_u, "major": major_u, "advisor": game.ai_advisor.usage,
+        "creative": game.ai_creative.usage, "portraits": portrait_u,
         "major_model": game.settings.get("major_event_model", ""),
         "major_is_separate": game.ai_major is not game.ai,
         "total_cost_usd": round(total_cost, 4),
@@ -845,6 +867,7 @@ def api_usage():
         "cost_is_conservative": any(client.usage.get("cost_is_conservative") for client in unique_clients),
         "cached_input_tokens": sum(client.usage.get("cached_input_tokens", 0) for client in unique_clients),
         "total_calls": sum(client.usage.get("calls", 0) for client in unique_clients),
+        "by_task": by_task,
     })
 
 
@@ -1388,13 +1411,14 @@ def api_settings_post():
     d = request.get_json(force=True)
     patch = {k: d[k] for k in [
         "provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model",
+        "advisor_model", "advisor_provider", "creative_model", "creative_provider",
         "max_ai_cost_per_request_usd", "session_budget_warning_usd",
         "narration", "autosave", "sound_enabled", "music_enabled", "music_volume", "animations_enabled",
-        "portrait_generation_enabled", "portrait_auto_generate", "image_model", "local_image_model", "portrait_quality", "developer_mode",
-        "onboarding_seen", "simulation_mode", "canon_foreknowledge"
+        "portrait_generation_enabled", "portrait_auto_generate", "image_model", "image_provider", "local_image_base_url", "local_image_model", "portrait_quality", "developer_mode",
+        "onboarding_seen", "simulation_mode", "canon_foreknowledge", "local_reentry_recap", "local_combat_recap", "local_message_gate"
     ] if k in d}
     settings_game = getattr(g, "worldwalker_personal_game", None) or game
-    if any(key in patch for key in ("provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model")):
+    if any(key in patch for key in ("provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model", "advisor_model", "advisor_provider", "creative_model", "creative_provider")):
         patch.update(ai_connection_status="untested", ai_validated_model="", ai_validated_provider="")
     settings_game.update_settings(patch)
     return jsonify({"ok": True})

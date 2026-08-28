@@ -22,6 +22,7 @@ from world_progression import normalize_world_progression
 from world_depth import normalize_world_depth
 from lit_systems import initialize_lit_systems
 from skill_system import infer_skill_metadata
+from ability_mechanics import compile_ability_mechanics
 from overgeared_classes import canon_class_prompt_reference, infer_class_type, starter_kit_for
 from jjk_system import (apply_birth_slot, generate_birth_slot, generate_curse_identity,
                         initialize_jjk_state, is_curse_origin, normalized_grade,
@@ -737,6 +738,10 @@ class CampaignMixin:
                 if not self.generated_ability_archive.is_duplicate(world, category, variant):
                     candidate = variant
                     break
+        current = getattr(self, "state", {}) or {}
+        profile = power_profile_for(world, current.get("stats", {}), current.get("archetype", ""))
+        tier = int((profile.get("world_peak") or profile.get("peak") or {}).get("index", 3) or 3)
+        candidate = compile_ability_mechanics(world, candidate, tier)
         self.generated_ability_archive.record(world, category, candidate, source=source)
         return candidate
 
@@ -1094,7 +1099,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 instructions += f"\nThis is a reroll. Create a genuinely different identity and mechanic; do not reuse the name {exclude_name}."
             payload = {"background": str(background or ""), "schema": {key: "concise setting-native detail" for key in fallback}}
             try:
-                raw = self.ai_bg.request(instructions, payload, max_output_tokens=700)
+                raw = (getattr(self, "ai_creative", None) or self.ai_bg).request(instructions, payload, max_output_tokens=700)
                 if isinstance(raw, dict):
                     authored = {key: str(raw.get(key) or "").strip() for key in fallback if str(raw.get(key) or "").strip()}
             except Exception as exc:
@@ -1704,7 +1709,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     "domain_cost":"cost and burnout", "domain_counters":["anti-domain response"],
                 }
                 try:
-                    authored = self.ai_bg.request(
+                    authored = (getattr(self, "ai_creative", None) or self.ai_bg).request(
                         "Design one complete original Jujutsu Kaisen innate-technique package. Every application, cost, counter and Domain must follow the same governing rule; do not rename a fallback while retaining its old applications. Respect the exclusive birth slot. Use the background and requested power guarantee. Match canon techniques in depth, uniqueness, complexity and possible power. If the background clearly establishes Heavenly Restriction, keep the fallback restriction instead. Do not invent a fake weakness when the power genuinely has none. Return JSON only.",
                         {"background":background, "origin":origin, "guarantee_strong":bool(jjk_guarantee_strong), "fallback":jjk_birth_slot, "schema":schema},
                         max_output_tokens=950,
