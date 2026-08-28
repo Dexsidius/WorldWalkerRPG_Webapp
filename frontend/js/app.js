@@ -138,6 +138,13 @@ const APP = {
   lastMajorVisualKey: "",
   activeWorldCue: null,
   narutoDeathCueActive: false,
+  mobileView: "chronicle",
+  mobileStoryFilter: "all",
+  mobileInstallPrompt: null,
+  mobileLowData: false,
+  mobileHaptics: true,
+  mobileLargeText: false,
+  mobileScrollCampaign: "",
 };
 
 // ---------------------------------------------------------------------------
@@ -541,7 +548,7 @@ function appendStoryEntries(entries) {
     const worldParts = worldTime.split(/\s+[—-]\s+/);
     const dateText = dayLabel(run.day) || (worldParts.length > 1 ? worldParts[0] : "");
     const clockLabel = worldParts.length > 1 ? worldParts.slice(1).join(" — ") : "";
-    beat.innerHTML = `<header class="story-beat-head"><span>${escapeHtml(dateText || storyBeatLabel(run.entries))}</span>${clockLabel ? `<time>${escapeHtml(clockLabel)}</time>` : ""}</header>`;
+    beat.innerHTML = `<header class="story-beat-head"><span>${escapeHtml(dateText || storyBeatLabel(run.entries))}</span>${clockLabel ? `<time>${escapeHtml(clockLabel)}</time>` : ""}<button type="button" class="mobile-beat-toggle" aria-expanded="true">Routine details</button></header>`;
     const entriesWrap = document.createElement("div");
     entriesWrap.className = "story-beat-entries";
     beat.appendChild(entriesWrap);
@@ -589,6 +596,12 @@ function appendStoryEntries(entries) {
       const div = document.createElement("div");
       const isContinuation = part.tag === "narrative" && !part.hasOwnTitle && lastWasUntitledNarrative;
       div.className = "story-entry " + part.tag + (isContinuation ? " continuation" : "");
+      const sourceText = `${part.label} ${part.body}`;
+      div.dataset.storyKind = part.tag === "roll" || /\bcombat\b/i.test(sourceText)
+        ? "combat"
+        : /\b(xp|level|stat|training|mastery|skill learned|breakthrough|growth)\b/i.test(sourceText)
+          ? "growth"
+          : part.tag === "narrative" || part.tag === "player" ? "story" : "world";
       lastWasUntitledNarrative = part.tag === "narrative" && !part.hasOwnTitle;
       const label = document.createElement("div");
       label.className = "story-entry-label";
@@ -673,7 +686,22 @@ function appendStoryEntries(entries) {
     feed.appendChild(beat);
   });
   pruneStoryFeed(feed);
+  applyMobileStoryFilter(APP.mobileStoryFilter || "all");
   feed.scrollTop = feed.scrollHeight + 400;
+}
+
+function applyMobileStoryFilter(filter) {
+  APP.mobileStoryFilter = filter || "all";
+  $$("#mobile-chronicle-tools [data-story-filter]").forEach((button) => {
+    button.setAttribute("aria-pressed", String(button.getAttribute("data-story-filter") === APP.mobileStoryFilter));
+  });
+  $$("#story-feed .story-entry").forEach((entry) => {
+    entry.classList.toggle("mobile-filtered", APP.mobileStoryFilter !== "all" && entry.dataset.storyKind !== APP.mobileStoryFilter);
+  });
+  $$("#story-feed .story-beat").forEach((beat) => {
+    const visible = Array.from(beat.querySelectorAll(".story-entry")).some((entry) => !entry.classList.contains("mobile-filtered"));
+    beat.classList.toggle("mobile-empty", !visible);
+  });
 }
 
 // Loading a save stays fast on its own — this fires as an unawaited
@@ -1165,6 +1193,103 @@ function applyWorldInterfaceTheme(world) {
   $("#chronicle-title").textContent = theme.chronicle;
 }
 
+function isMobileLayout() { return window.matchMedia("(max-width: 720px)").matches; }
+
+function mobileCampaignKey(kind) {
+  const id = APP.state?.campaign_id || APP.account?.username || "local";
+  return `worldwalker_mobile_${kind}_${id}`;
+}
+
+function mobileVibrate(pattern = 12) {
+  if (!isMobileLayout() || !APP.mobileHaptics || !navigator.vibrate) return;
+  try { navigator.vibrate(pattern); } catch (_) { /* haptics are optional */ }
+}
+
+function setMobileView(view, focus = true) {
+  const allowed = new Set(["chronicle", "actions", "character"]);
+  if (isMobileLayout() && APP.mobileView) {
+    try { localStorage.setItem(mobileCampaignKey(`scroll_${APP.mobileView}`), String(window.scrollY || 0)); } catch (_) {}
+  }
+  APP.mobileView = allowed.has(view) ? view : "chronicle";
+  document.body.setAttribute("data-mobile-view", APP.mobileView);
+  $$("#mobile-bottom-nav [data-mobile-view]").forEach((button) => {
+    const selected = button.getAttribute("data-mobile-view") === view;
+    button.setAttribute("aria-selected", String(selected));
+  });
+  if (!focus || !isMobileLayout()) return;
+  let saved = 0;
+  try { saved = Number(localStorage.getItem(mobileCampaignKey(`scroll_${APP.mobileView}`)) || 0); } catch (_) {}
+  requestAnimationFrame(() => window.scrollTo({ top: saved, behavior: "auto" }));
+  if (APP.mobileView === "actions") requestAnimationFrame(() => $("#action-input")?.focus({ preventScroll: true }));
+}
+
+function mobileTimeText() {
+  const unit = $("#time-unit")?.value || "moment";
+  const amount = Number($("#time-amount")?.value || 1);
+  if (unit === "moment") return "Moment";
+  if (unit === "next_event") return "Next major event";
+  return `${amount} ${amount === 1 ? unit.replace(/s$/, "") : unit}`;
+}
+
+function renderMobileState(s) {
+  const mobile = isMobileLayout();
+  $("#mobile-status-ribbon").hidden = !mobile;
+  $("#mobile-bottom-nav").hidden = !mobile;
+  $("#mobile-advance-dock").hidden = !mobile;
+  if (!mobile) return;
+  const campaignId = s.campaign_id || APP.account?.username || "local";
+  if (APP.mobileScrollCampaign !== campaignId) {
+    APP.mobileScrollCampaign = campaignId;
+    requestAnimationFrame(() => {
+      let saved = 0;
+      try { saved = Number(localStorage.getItem(mobileCampaignKey(`scroll_${APP.mobileView}`)) || 0); } catch (_) {}
+      if (saved > 0) window.scrollTo({ top: saved, behavior: "auto" });
+    });
+  }
+  if (!document.body.hasAttribute("data-mobile-view")) setMobileView("chronicle", false);
+  const status = (Array.isArray(s.status) ? s.status.join(", ") : s.status) || "Normal";
+  const tension = s._tension || { label: "Calm" };
+  const combat = !!s.combat?.active;
+  const chips = [
+    `<span class="mobile-status-chip"><span>HP</span><b>${escapeHtml(s.hp ?? 0)} / ${escapeHtml(s.hp_max ?? 0)}</b></span>`,
+    `<span class="mobile-status-chip"><span>${escapeHtml(s.resource_name || "Energy")}</span><b>${escapeHtml(s.resource ?? 0)}</b></span>`,
+    `<span class="mobile-status-chip"><span>Status</span><b>${escapeHtml(status)}</b></span>`,
+    `<span class="mobile-status-chip"><span>Time</span><b>${escapeHtml(s.world_time || "Day 1")}</b></span>`,
+    `<span class="mobile-status-chip ${/critical|danger/i.test(tension.label || "") ? "danger" : ""}"><span>Risk</span><b>${escapeHtml(tension.label || "Calm")}</b></span>`,
+    combat ? `<span class="mobile-status-chip danger"><span>Combat</span><b>Round ${escapeHtml(s.combat?.round || 1)}</b></span>` : "",
+  ].filter(Boolean);
+  $("#mobile-status-ribbon").innerHTML = chips.join("");
+  const count = (s.queued_actions || []).length;
+  $("#mobile-queue-count").textContent = count;
+  $("#mobile-action-count").textContent = `${count} queued action${count === 1 ? "" : "s"}`;
+  $("#mobile-time-label").textContent = mobileTimeText();
+  document.body.classList.toggle("mobile-combat-active", combat);
+  $("#mobile-combat-dock").hidden = !combat;
+  $("#mobile-advance-dock").hidden = combat;
+  $("#mobile-bottom-nav").hidden = combat;
+}
+
+function autoGrowMobileComposer() {
+  const input = $("#action-input");
+  if (!input || !isMobileLayout()) return;
+  input.style.height = "auto";
+  input.style.height = `${Math.min(input.scrollHeight, Math.round(window.innerHeight * .38))}px`;
+}
+
+function saveMobileDraft() {
+  const input = $("#action-input");
+  if (!input) return;
+  try { localStorage.setItem(mobileCampaignKey("draft"), input.value); } catch (_) {}
+  autoGrowMobileComposer();
+}
+
+function restoreMobileDraft() {
+  const input = $("#action-input");
+  if (!input || input.value) return;
+  try { input.value = localStorage.getItem(mobileCampaignKey("draft")) || ""; } catch (_) {}
+  autoGrowMobileComposer();
+}
+
 function renderState(state) {
   APP.state = state;
   const s = state;
@@ -1353,6 +1478,8 @@ function renderState(state) {
     openModal("modal-chapter-recap");
     APP.lastChapterCount = chapters.length;
   }
+  renderMobileState(s);
+  restoreMobileDraft();
 }
 
 // A chapter break already gets a quiet Chronicle note; this turns the same
@@ -1431,7 +1558,8 @@ function renderQueuedActions(actions) {
     return `Approx. day ${start}${end > start ? `–${end}` : ""} · ${actionType(actions[index])}`;
   };
   const countdown = APP.state?._canon_countdown?.available ? `<div class="queue-interruption">Possible interruption: ${escapeHtml(APP.state._canon_countdown.label)}</div>` : "";
-  box.innerHTML = actions.map((action, index) => `<div class="queued-action"><span class="queue-index">${index + 1}</span><span class="queue-copy"><b>${escapeHtml(action)}</b><small>${escapeHtml(schedule(index))}</small></span><span class="queue-controls"><button type="button" data-move-action="${index}" data-to-index="${index - 1}" title="Move earlier" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-move-action="${index}" data-to-index="${index + 1}" title="Move later" ${index === actions.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-edit-action="${index}" title="Edit queued action">✎</button><button type="button" data-remove-action="${index}" title="Remove queued action">✕</button></span></div>`).join("") + countdown;
+  box.innerHTML = actions.map((action, index) => `<div class="queued-action" data-action-index="${index}"><span class="queue-index">${index + 1}</span><span class="queue-copy"><b>${escapeHtml(action)}</b><small>${escapeHtml(schedule(index))}</small></span><span class="queue-controls"><button type="button" data-move-action="${index}" data-to-index="${index - 1}" title="Move earlier" ${index === 0 ? "disabled" : ""}>↑</button><button type="button" data-move-action="${index}" data-to-index="${index + 1}" title="Move later" ${index === actions.length - 1 ? "disabled" : ""}>↓</button><button type="button" data-duplicate-action="${index}" title="Duplicate queued action">⧉</button><button type="button" data-edit-action="${index}" title="Edit queued action">✎</button><button type="button" data-remove-action="${index}" title="Remove queued action">✕</button></span></div>`).join("") + countdown;
+  if (APP.state) renderMobileState(APP.state);
 }
 
 $("#btn-music-play").addEventListener("click", async () => {
@@ -1463,7 +1591,7 @@ $("#music-widget-volume").addEventListener("input", (event) => setMusicWidgetVol
 $("#music-widget-volume").addEventListener("change", (event) => setMusicWidgetVolume(event.target.value, true));
 
 $("#queued-actions").addEventListener("click", async (event) => {
-  const button = event.target.closest("[data-remove-action], [data-edit-action], [data-move-action]");
+  const button = event.target.closest("[data-remove-action], [data-edit-action], [data-move-action], [data-duplicate-action]");
   if (!button || APP.busy) return;
   try {
     let result;
@@ -1471,6 +1599,9 @@ $("#queued-actions").addEventListener("click", async (event) => {
       result = await apiPost("/api/actions/remove", { index: Number(button.getAttribute("data-remove-action")) });
     } else if (button.hasAttribute("data-move-action")) {
       result = await apiPost("/api/actions/move", { index: Number(button.getAttribute("data-move-action")), to_index: Number(button.getAttribute("data-to-index")) });
+    } else if (button.hasAttribute("data-duplicate-action")) {
+      const index = Number(button.getAttribute("data-duplicate-action"));
+      result = await apiPost("/api/actions/queue", { action: APP.state.queued_actions[index] });
     } else {
       const index = Number(button.getAttribute("data-edit-action"));
       const revised = window.prompt("Edit queued action", APP.state.queued_actions[index]);
@@ -2018,6 +2149,7 @@ $$(".modal-backdrop").forEach((m) => m.addEventListener("click", (e) => {
 function openEventNotice(result) {
   const isCanon = result.interruption_kind === "canon_event";
   const isDanger = result.interruption_kind === "danger";
+  mobileVibrate(isDanger || result.state?.combat?.active ? [30, 45, 30] : [15, 35, 15]);
   const title = result.major_event_title || result.state?.active_canon_event ||
     (isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT");
   playSceneTransition(result.state?.combat?.active ? "combat" : "event", result.state || APP.state);
@@ -2069,6 +2201,8 @@ async function submitAction(text) {
   try {
     const result = await apiPost("/api/actions/queue", { action: text });
     $("#action-input").value = "";
+    try { localStorage.removeItem(mobileCampaignKey("draft")); } catch (_) {}
+    autoGrowMobileComposer();
     APP.state.queued_actions = result.queued_actions || [];
     renderQueuedActions(APP.state.queued_actions);
   } catch (e) {
@@ -2564,6 +2698,7 @@ function updateSelectedTimeLabel() {
     const shownUnit = amount === 1 ? unit.replace(/s$/, "") : unit;
     label.textContent = `Selected skip: ${amount} ${shownUnit}`;
   }
+  if (APP.state && isMobileLayout()) renderMobileState(APP.state);
 }
 
 $("#time-unit").addEventListener("change", () => syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help"));
@@ -4752,6 +4887,169 @@ function initCollapsiblePanels() {
   });
 }
 
+function initMobileExperience() {
+  const readFlag = (key, fallback) => {
+    try { const value = localStorage.getItem(`worldwalker_mobile_${key}`); return value === null ? fallback : value === "true"; }
+    catch (_) { return fallback; }
+  };
+  const storeFlag = (key, value) => { try { localStorage.setItem(`worldwalker_mobile_${key}`, String(value)); } catch (_) {} };
+  APP.mobileLowData = readFlag("low_data", false);
+  APP.mobileHaptics = readFlag("haptics", true);
+  APP.mobileLargeText = readFlag("large_text", false);
+  document.body.classList.toggle("mobile-low-data", APP.mobileLowData);
+  document.body.classList.toggle("mobile-large-text", APP.mobileLargeText);
+  $("#mobile-low-data").checked = APP.mobileLowData;
+  $("#mobile-haptics").checked = APP.mobileHaptics;
+  $("#mobile-large-text").checked = APP.mobileLargeText;
+  setMobileView("chronicle", false);
+
+  $("#action-input").addEventListener("input", saveMobileDraft);
+  $("#mobile-chronicle-tools").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-story-filter]");
+    if (button) applyMobileStoryFilter(button.getAttribute("data-story-filter"));
+  });
+  $("#story-feed").addEventListener("click", (event) => {
+    const button = event.target.closest(".mobile-beat-toggle");
+    if (!button) return;
+    const beat = button.closest(".story-beat");
+    const collapsed = beat.classList.toggle("mobile-collapsed");
+    button.setAttribute("aria-expanded", String(!collapsed));
+    button.textContent = collapsed ? "Show routine details" : "Hide routine details";
+  });
+  $("#btn-mobile-queue-toggle").addEventListener("click", () => {
+    const card = $(".action-chat-card");
+    const collapsed = card.classList.toggle("queue-collapsed");
+    $("#btn-mobile-queue-toggle").setAttribute("aria-expanded", String(!collapsed));
+  });
+  $("#btn-mobile-queue-clear").addEventListener("click", async () => {
+    if (APP.busy || !(APP.state?.queued_actions || []).length) return;
+    try {
+      for (let index = APP.state.queued_actions.length - 1; index >= 0; index -= 1) {
+        const result = await apiPost("/api/actions/remove", { index });
+        APP.state.queued_actions = result.queued_actions || [];
+      }
+      renderQueuedActions(APP.state.queued_actions);
+      mobileVibrate(10);
+    } catch (error) { showToast(error.message, "danger"); }
+  });
+
+  $$("#mobile-bottom-nav [data-mobile-view]").forEach((button) => button.addEventListener("click", async () => {
+    const view = button.getAttribute("data-mobile-view");
+    mobileVibrate(8);
+    if (view === "world") {
+      $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
+      await openJournal("map");
+    } else if (view === "more") {
+      $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
+      openModal("modal-mobile-more");
+    } else setMobileView(view);
+  }));
+  $("#modal-journal").addEventListener("transitionend", () => {
+    if (!$("#modal-journal").classList.contains("open")) setMobileView(APP.mobileView, false);
+  });
+  $("#modal-mobile-more").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-mobile-open]");
+    if (!button) return;
+    const target = button.getAttribute("data-mobile-open");
+    if (target === "install") {
+      if (APP.mobileInstallPrompt) {
+        APP.mobileInstallPrompt.prompt();
+        APP.mobileInstallPrompt.userChoice.finally(() => { APP.mobileInstallPrompt = null; button.hidden = true; });
+      } else showToast("Use your browser menu and choose Add to Home Screen.", "notify");
+      return;
+    }
+    closeModal("modal-mobile-more");
+    if (target === "advisor") $("#btn-open-advisor").click();
+    else if (target === "settings") $("#btn-settings-gear").click();
+    else openJournal(target);
+  });
+  $("#mobile-low-data").addEventListener("change", (event) => {
+    APP.mobileLowData = event.target.checked; storeFlag("low_data", APP.mobileLowData);
+    document.body.classList.toggle("mobile-low-data", APP.mobileLowData);
+  });
+  $("#mobile-haptics").addEventListener("change", (event) => {
+    APP.mobileHaptics = event.target.checked; storeFlag("haptics", APP.mobileHaptics); mobileVibrate([10, 20, 10]);
+  });
+  $("#mobile-large-text").addEventListener("change", (event) => {
+    APP.mobileLargeText = event.target.checked; storeFlag("large_text", APP.mobileLargeText);
+    document.body.classList.toggle("mobile-large-text", APP.mobileLargeText);
+  });
+
+  $("#btn-mobile-time").addEventListener("click", () => $("#btn-detailed-time").click());
+  $("#btn-mobile-advance").addEventListener("click", () => { mobileVibrate(12); $("#btn-advance").click(); });
+  $("#mobile-combat-dock").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-combat-proxy]");
+    if (!button) return;
+    const action = button.getAttribute("data-combat-proxy");
+    mobileVibrate(action === "attack" ? 18 : 9);
+    if (["attack", "defend", "flee"].includes(action)) $(`#btn-combat-${action}`).click();
+    else if (action === "ability") { setMobileView("actions"); requestAnimationFrame(() => $("#combat-ability")?.focus()); }
+    else if (action === "item") openJournal("inventory");
+    else if (action === "nonlethal") {
+      const toggle = $("#combat-mercy-toggle"); toggle.checked = !toggle.checked; toggle.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  });
+
+  let queueGesture = null;
+  $("#queued-actions").addEventListener("pointerdown", (event) => {
+    if (!isMobileLayout() || event.target.closest("button")) return;
+    const row = event.target.closest(".queued-action");
+    if (!row) return;
+    queueGesture = { row, index: Number(row.dataset.actionIndex), x: event.clientX, y: event.clientY };
+  });
+  $("#queued-actions").addEventListener("pointermove", (event) => {
+    if (!queueGesture) return;
+    const dx = Math.min(0, event.clientX - queueGesture.x);
+    if (Math.abs(dx) > 12) queueGesture.row.style.transform = `translateX(${Math.max(-90, dx)}px)`;
+  });
+  const finishQueueGesture = async (event) => {
+    if (!queueGesture) return;
+    const gesture = queueGesture; queueGesture = null;
+    gesture.row.style.transform = "";
+    const dx = event.clientX - gesture.x, dy = event.clientY - gesture.y;
+    try {
+      let result = null;
+      if (dx < -72) result = await apiPost("/api/actions/remove", { index: gesture.index });
+      else if (Math.abs(dy) > 58) {
+        const toIndex = Math.max(0, Math.min((APP.state?.queued_actions || []).length - 1, gesture.index + (dy > 0 ? 1 : -1)));
+        if (toIndex !== gesture.index) result = await apiPost("/api/actions/move", { index: gesture.index, to_index: toIndex });
+      }
+      if (result) { APP.state.queued_actions = result.queued_actions || []; renderQueuedActions(APP.state.queued_actions); mobileVibrate(10); }
+    } catch (error) { showToast(error.message, "danger"); }
+  };
+  $("#queued-actions").addEventListener("pointerup", finishQueueGesture);
+  $("#queued-actions").addEventListener("pointercancel", () => { if (queueGesture) queueGesture.row.style.transform = ""; queueGesture = null; });
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault(); APP.mobileInstallPrompt = event; $("#btn-mobile-install").hidden = false;
+  });
+  const updateNetwork = async () => {
+    const offline = !navigator.onLine;
+    $("#mobile-network-banner").hidden = !offline;
+    $("#mobile-network-banner").textContent = offline ? "Connection lost. Your draft is safe; turns will resume after reconnecting." : "";
+    if (!offline && APP.campaignActive) {
+      try { const result = await apiGet("/api/state"); renderState(result.state); showToast("Reconnected to the campaign.", "notify"); }
+      catch (_) { /* the next normal request will retry */ }
+    }
+  };
+  window.addEventListener("offline", updateNetwork);
+  window.addEventListener("online", updateNetwork);
+  document.addEventListener("visibilitychange", () => document.body.classList.toggle("app-backgrounded", document.hidden));
+  window.addEventListener("resize", () => APP.state && renderMobileState(APP.state));
+  let mobileScrollTimer = null;
+  window.addEventListener("scroll", () => {
+    if (!isMobileLayout()) return;
+    clearTimeout(mobileScrollTimer);
+    mobileScrollTimer = setTimeout(() => {
+      try { localStorage.setItem(mobileCampaignKey(`scroll_${APP.mobileView}`), String(window.scrollY || 0)); } catch (_) {}
+    }, 120);
+  }, { passive: true });
+  window.addEventListener("beforeunload", (event) => {
+    if (!$("#action-input").value.trim() && !(APP.state?.queued_actions || []).length) return;
+    event.preventDefault(); event.returnValue = "";
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
@@ -4991,4 +5289,5 @@ async function boot() {
     openModal("modal-auth");
   }
 }
+initMobileExperience();
 boot();

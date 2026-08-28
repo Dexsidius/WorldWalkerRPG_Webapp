@@ -108,11 +108,13 @@ VISIBLE_EQUIPMENT_KEYS = re.compile(
     re.I,
 )
 FORM_ACTIVATION_RE = re.compile(
-    r"\b(?:activate|awaken|open|enter|invoke|manifest|unleash|release|assume|transform(?:ing)?\s+into|use)\b",
+    r"\b(?:activate|awaken|open|enter|invoke|manifest|unleash|release|assume|transform(?:ing)?\s+into|use|"
+    r"draw\s+on|channel|cloak\s+myself\s+in|wrap\s+myself\s+in)\b",
     re.I,
 )
 FORM_NAME_RE = re.compile(
     r"\b(?:tailed beast mode|bijuu mode|baryon mode|version [12](?: cloak)?|chakra cloak|"
+    r"(?:one|two|three|four|five|six|seven|eight|nine|ten)[- ]tails?(?: chakra)? cloak|tailed[- ]beast chakra cloak|"
     r"sharingan|mangeky[ōo] sharingan|eternal mangeky[ōo] sharingan|byakugan|rinnegan|d[ōo]jutsu|"
     r"shikai|bankai|domain expansion|heavenly restriction|released form|awakening|transformation)\b",
     re.I,
@@ -177,6 +179,11 @@ def _known_visual_forms(state):
     if host.get("beast"):
         for label in ("Chakra Cloak", "Version 1", "Version 2", "Partial Transformation", "Tailed Beast Mode", "Baryon Mode"):
             forms.append((label, "Jinchūriki transformation", f"{label} powered by {host.get('beast')}; show the established chakra mantle, tails, markings, eyes, and beast traits appropriate to this exact stage."))
+        beast = str(host.get("beast") or "Tailed Beast").strip()
+        title = str(host.get("title") or "Tailed Beast").strip()
+        cloak_details = f"A tailed-beast chakra cloak powered by {beast}; show the established chakra mantle, tails, markings, eyes, and beast traits appropriate to the current control stage."
+        for alias in (f"{beast} Chakra Cloak", f"{beast} Cloak", f"{title} Chakra Cloak", f"{title} Cloak", "Tailed-Beast Chakra Cloak"):
+            forms.append((alias, "Jinchūriki transformation", cloak_details))
     for key in ("Dōjutsu Profile", "Kekkei Genkai Profile"):
         profile = special.get(key) if isinstance(special.get(key), dict) else {}
         if profile.get("name"):
@@ -228,10 +235,11 @@ def sync_active_portrait_form(state, actions, narrative="", events=None):
     if FORM_STOP_RE.search(action_text) or re.search(r"\b(?:form|cloak|release|domain|d[ōo]jutsu)\b.{0,28}\b(?:fades?|ends?|deactivates?|drops?|closes?|reverts?)\b", narrative, re.I):
         return clear_active_portrait_form(state)
     failed = bool(re.search(r"\b(?:fails?|failed|cannot|could not|does not activate|did not activate)\b", narrative, re.I))
-    if failed or not (FORM_ACTIVATION_RE.search(action_text) and (FORM_NAME_RE.search(action_text) or any(name.lower() in action_text.lower() for name, _, _ in _known_visual_forms(state)))):
+    known_forms = _known_visual_forms(state)
+    if failed or not (FORM_ACTIVATION_RE.search(action_text) and (FORM_NAME_RE.search(combined) or any(name.lower() in combined.lower() for name, _, _ in known_forms))):
         return False
-    candidates = sorted(_known_visual_forms(state), key=lambda row: len(row[0]), reverse=True)
-    matched = next((row for row in candidates if row[0].lower() in action_text.lower()), None)
+    candidates = sorted(known_forms, key=lambda row: len(row[0]), reverse=True)
+    matched = next((row for row in candidates if row[0].lower() in combined.lower()), None)
     if matched:
         return set_active_portrait_form(state, *matched, source="story")
     raw = FORM_NAME_RE.search(action_text)

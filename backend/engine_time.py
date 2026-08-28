@@ -9,7 +9,7 @@ from pathlib import Path
 from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAULT_MODEL, SECONDARY_MODEL, APP_VERSION, expansion_for, abilities_for, stat_style_for, primary_stats_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, format_calendar_date
 from ai_client import AI
 from lore import format_lore_context
-from portrait_generator import portrait_view
+from portrait_generator import portrait_view, sync_active_portrait_form
 from state_guard import apply_guarded_patch, migrate_state
 from continuity import update_continuity
 from reliability import update_narrative_memory, record_progression_ledger, advance_hidden_class_discovery
@@ -1674,6 +1674,12 @@ class TimeSkipMixin:
             jjk_notes = advance_jjk_state(
                 self.state, before, context.get("actions", []), data.get("narrative", ""),
                 data.get("events", []), self.duration_minutes(elapsed_amount, elapsed_unit),
+            )
+            # Advance is the game's normal turn path. Visible releases and
+            # transformations must update the portrait here just as they do
+            # in the direct single-resolution path.
+            sync_active_portrait_form(
+                self.state, context.get("actions", []), data.get("narrative", ""), data.get("events", []),
             )
             lit_notes = process_lit_turn(
                 before, self.state, context.get("actions", []), data.get("narrative", ""),

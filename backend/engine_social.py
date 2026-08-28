@@ -188,15 +188,19 @@ class SocialMixin:
             r"\b(compare[ds]?|comparison|versus|vs\.?|against|relative to|stack up|other members?|"
             r"stronger than|weaker than|where do i rank|among the)\b", str(question), re.I))
         wants_chart = bool(re.search(r"\b(graph|chart|plot|visuali[sz]e|bar\s*chart)\b", str(question), re.I)) or comparison_requested
+        named_character_power_question = bool(re.search(
+            r"\b(how strong (?:is|was|are)|power (?:level|tier|of)|strength of|could .* beat|who (?:wins|is stronger))\b",
+            str(question), re.I))
         payload = {
             "task": "advisor_question", "question": question, "state": self.task_state_for_ai("advisor", question),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
             "canon_divergences": self.state.get("canon_divergences", []),
             "comparison_requested": comparison_requested,
+            "named_character_power_question": named_character_power_question,
             "power_comparison_guardrail": {
                 "rule": "Use the player's mechanical_power_profile. Never compare against their stock-canon self or a stale starting label.",
                 "relative_language": "Do not say much weaker/stronger without a same-scale opponent estimate and an axis-by-axis explanation.",
-                "unknown_opponents": "Estimate untracked canon opponents on the supplied balanced-score ladder and label the estimate.",
+                "unknown_opponents": "Estimate every named character from campaign narrative, tracked feats/status and current canon baseline. Exact numeric sheets are never required; label confidence instead of refusing.",
             },
             # The current question was appended above and is already present
             # in payload.question. Excluding it here prevents the model from
@@ -225,6 +229,7 @@ You may freely:
 - Assess relative power levels of the player, companions, rivals, factions and known threats, using terms appropriate to this world (bounty/Haki tier, Nen category/rank, jutsu/village rank, class/level, etc.) by default.
 - For the player, state.mechanical_power_profile and the current raw state.stats are mechanically authoritative. Never substitute the canon version of a player-controlled character, their starting rank, their old title, or an earlier Advisor estimate. An extreme peak stat means extreme output in that discipline; it does not erase the separately listed speed, defense, or overall foundation.
 - When comparing the player with a canon opponent who has no tracked numeric sheet, estimate that opponent on the SAME balanced-score ladder and label it as a canon-based estimate. Compare offense, speed, defense, special techniques, experience and matchup hazards separately. If the player's tracked axis exceeds a reasonable estimate, say so plainly even when the opponent remains dangerous on other axes; never summarize them as simply 'much weaker' in contradiction with the numbers.
+- You can estimate the current strength of ANY named character that has appeared, been mentioned, or exists in this campaign. First use their tracked NPC memory, current condition, relationships, faction/rank, recent narrative actions and question_evidence; then use demonstrated campaign feats; finally use their canon strength at the current date as a baseline. If the campaign has changed them, the campaign version wins. A missing numeric character sheet is not a reason to refuse and you must never say you can only provide a canon estimate. Give a practical low/middle/high estimate or world-appropriate tier, explain the feats and assumptions behind it, and label confidence when evidence is thin.
 - If the player asks for a specific comparison framework instead — a numeric scale, tiers, percentages, or even a well-known scale borrowed from another series (e.g. "give me this in DBZ power levels") — use exactly the framing they asked for as a communication device to convey relative strength, even when it isn't native to this world. It's a translation aid, not a claim that this world works that way.
 - When you need your OWN internal sense of "how strong is strong" — placing the player, a companion, or a threat on a scale, deciding whether a fight is winnable, judging if a request for a graph makes sense numerically — anchor to this reference ladder instead of improvising a different scale each time:
 {power_tier_reference()}
@@ -271,7 +276,10 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         comparison_requested = bool(re.search(
             r"\b(compare[ds]?|comparison|versus|vs\.?|against|relative to|stack up|other members?|"
             r"stronger than|weaker than|where do i rank|among the)\b", text))
-        if re.search(r"\b(how strong|power level|power tier|my strength|my stats)\b", text) and not comparison_requested:
+        player_power_question = bool(re.search(
+            r"\b(how strong am i|how powerful am i|my (?:current )?(?:strength|power|power level|power tier|stats)|where do i rank)\b",
+            text))
+        if player_power_question and not comparison_requested:
             combat = profile.get("world_combat") or profile.get("combat", {})
             peak = profile.get("peak", {})
             axes = profile.get("axes", {})

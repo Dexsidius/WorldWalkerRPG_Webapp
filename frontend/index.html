@@ -76,6 +76,8 @@
     </div>
   </header>
 
+  <div id="mobile-status-ribbon" class="mobile-status-ribbon" aria-label="Character status" hidden></div>
+
   <aside class="col col-left">
     <section class="panel character-card">
       <div class="portrait-frame">
@@ -197,6 +199,13 @@
         <button id="btn-rate-turn-good" class="story-rate-good" type="button" title="Mark the most recent turn as a good example — the GM will draw on it as a real example of what you liked">👍 Good turn</button>
         <button id="btn-story-latest" class="story-latest" type="button" title="Jump to the newest story beat">↓ LATEST</button>
       </header>
+      <div id="mobile-chronicle-tools" class="mobile-chronicle-tools" aria-label="Chronicle filters">
+        <button type="button" data-story-filter="all" aria-pressed="true">All</button>
+        <button type="button" data-story-filter="story" aria-pressed="false">Story</button>
+        <button type="button" data-story-filter="combat" aria-pressed="false">Combat</button>
+        <button type="button" data-story-filter="world" aria-pressed="false">World</button>
+        <button type="button" data-story-filter="growth" aria-pressed="false">Growth</button>
+      </div>
       <div class="panel-body story-feed" id="story-feed"></div>
       <div class="suggestion-dock">
         <details id="change-reasons" class="change-reasons" hidden>
@@ -240,6 +249,10 @@
     <section class="panel composer-card action-chat-card no-collapse">
       <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></i>Action Chat</span></header>
       <div class="panel-body">
+        <div class="mobile-queue-tools">
+          <button id="btn-mobile-queue-toggle" type="button" aria-expanded="true">Queued plan <b id="mobile-queue-count">0</b></button>
+          <button id="btn-mobile-queue-clear" type="button">Clear</button>
+        </div>
         <div id="queued-actions" class="queued-actions"><p class="hint">No actions queued. Add as many as you want, in order.</p></div>
         <div class="composer-row">
           <textarea id="action-input" rows="4" placeholder="TYPE AN ACTION HERE&#10;Press Enter or Add to keep it in this chat until you Advance."></textarea>
@@ -307,6 +320,30 @@
     </section>
   </aside>
 </div>
+
+<div id="mobile-network-banner" class="mobile-network-banner" role="status" aria-live="polite" hidden></div>
+
+<div id="mobile-advance-dock" class="mobile-advance-dock" hidden>
+  <button id="btn-mobile-time" type="button" aria-label="Open detailed time controls"><b id="mobile-time-label">Moment</b><small id="mobile-action-count">0 queued actions</small></button>
+  <button id="btn-mobile-advance" type="button">ADVANCE</button>
+</div>
+
+<nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Mobile navigation" hidden>
+  <button type="button" data-mobile-view="chronicle" aria-selected="true"><span>☷</span>Chronicle</button>
+  <button type="button" data-mobile-view="actions" aria-selected="false"><span>✎</span>Actions</button>
+  <button type="button" data-mobile-view="character" aria-selected="false"><span>♙</span>Character</button>
+  <button type="button" data-mobile-view="world" aria-selected="false"><span>⌖</span>World</button>
+  <button type="button" data-mobile-view="more" aria-selected="false"><span>•••</span>More</button>
+</nav>
+
+<nav id="mobile-combat-dock" class="mobile-combat-dock" aria-label="Mobile combat actions" hidden>
+  <button type="button" data-combat-proxy="attack">Attack</button>
+  <button type="button" data-combat-proxy="defend">Defend</button>
+  <button type="button" data-combat-proxy="ability">Ability</button>
+  <button type="button" data-combat-proxy="item">Item</button>
+  <button type="button" data-combat-proxy="flee">Flee</button>
+  <button type="button" data-combat-proxy="nonlethal">Nonlethal</button>
+</nav>
 
 <!-- ============ MODALS ============ -->
 
@@ -666,6 +703,24 @@
         <textarea id="advisor-input" rows="2" placeholder="e.g. How strong am I compared to the local Marines? What should I focus on right now?"></textarea>
         <button id="btn-advisor-send" class="btn-primary">ASK</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modal-mobile-more">
+  <div class="modal modal-lg mobile-more-modal">
+    <header class="modal-head"><span>More</span><button class="modal-close" data-close="modal-mobile-more">✕</button></header>
+    <div class="modal-body mobile-more-grid">
+      <button type="button" data-mobile-open="advisor"><b>Advisor</b><small>Ask without passing time</small></button>
+      <button type="button" data-mobile-open="party"><b>Party</b><small>Companions and roles</small></button>
+      <button type="button" data-mobile-open="quests"><b>Quests</b><small>Active narrative leads</small></button>
+      <button type="button" data-mobile-open="relationships"><b>Relationships</b><small>People and factions</small></button>
+      <button type="button" data-mobile-open="inventory"><b>Inventory</b><small>Important equipment</small></button>
+      <button type="button" data-mobile-open="settings"><b>Settings</b><small>AI and interface options</small></button>
+      <button type="button" data-mobile-open="install" id="btn-mobile-install" hidden><b>Install App</b><small>Add Worldwalker to this phone</small></button>
+      <label class="mobile-setting-toggle"><input id="mobile-low-data" type="checkbox"><span><b>Low-data mode</b><small>Reduce artwork and background effects</small></span></label>
+      <label class="mobile-setting-toggle"><input id="mobile-haptics" type="checkbox" checked><span><b>Haptics</b><small>Vibrate for important feedback</small></span></label>
+      <label class="mobile-setting-toggle"><input id="mobile-large-text" type="checkbox"><span><b>Large text</b><small>Increase Chronicle and journal text</small></span></label>
     </div>
   </div>
 </div>

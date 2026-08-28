@@ -6,10 +6,17 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.30.2** (schema 19).
+Current app/save version: **3.31.0** (schema 19).
 
-Version 3.30.2 reconstructs missing Jinchūriki progression from confirmed
-campaign events and restores full AI-powered, charted Advisor comparisons.
+Version 3.31.0 adds the approved phone companion interface: persistent bottom
+navigation, a compact live status ribbon, full-screen mobile journals and
+Advisor, a keyboard-safe action queue, sticky Advance and combat controls,
+Chronicle filters, map improvements, draft recovery, low-data and large-text
+modes, offline feedback, haptics, and installable-PWA refinements. The Advisor
+also estimates any named character from current campaign evidence and canon
+context instead of refusing when no numeric NPC sheet exists. Tailed-beast
+chakra cloaks now trigger and later restore transformation portraits through
+the normal Advance flow.
 
 Version 3.30.1 restores a fully grounded Advisor, removes the last local combat
 fallback that could scale an underspecified enemy to the player, makes ordinary
