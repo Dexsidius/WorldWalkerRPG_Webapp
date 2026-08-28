@@ -324,7 +324,21 @@
 <div id="mobile-network-banner" class="mobile-network-banner" role="status" aria-live="polite" hidden></div>
 
 <div id="mobile-advance-dock" class="mobile-advance-dock" hidden>
-  <button id="btn-mobile-time" type="button" aria-label="Open detailed time controls"><b id="mobile-time-label">Moment</b><small id="mobile-action-count">0 queued actions</small></button>
+  <div class="mobile-time-quick" aria-label="Quick time controls">
+    <b id="mobile-time-label" hidden>Moment</b>
+    <div>
+      <input id="mobile-time-amount" type="number" min="1" max="999" value="1" aria-label="Time skip amount" hidden />
+      <select id="mobile-time-unit" aria-label="Time skip unit">
+        <option value="moment">Moment</option>
+        <option value="next_event">Next major event</option>
+        <option value="days">Days</option>
+        <option value="weeks">Weeks</option>
+        <option value="months">Months</option>
+      </select>
+    </div>
+    <small id="mobile-action-count">0 queued actions</small>
+  </div>
+  <button id="btn-mobile-time" class="mobile-time-details" type="button" aria-label="Open detailed time controls" title="Detailed time controls"><span aria-hidden="true">◷</span></button>
   <button id="btn-mobile-advance" type="button">ADVANCE</button>
 </div>
 
@@ -773,8 +787,9 @@
           </select>
         </div>
       </div>
-      <label>Planned Actions — performed in order (one per line)</label>
-      <textarea id="td-orders" rows="6" placeholder="Travel to the training grounds&#10;Practice sword forms&#10;Eat and recover&#10;Ask around for rumors"></textarea>
+      <div id="td-queued-summary" class="time-queued-summary"></div>
+      <label>Additional standing orders (optional)</label>
+      <textarea id="td-orders" rows="4" placeholder="Add only extra instructions that are not already in Action Chat"></textarea>
       <label>Intensity</label>
       <select id="td-intensity">
         <option value="light">Light</option>

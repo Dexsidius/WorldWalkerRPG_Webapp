@@ -15,7 +15,7 @@ from worlds import APP_VERSION, BASE_STATE, power_profile_for
 
 class WorldwalkerV3280Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.31.0")
+        self.assertEqual(APP_VERSION, "3.32.0")
 
     def test_world_power_benchmark_is_part_of_authoritative_profile(self):
         profile = power_profile_for("Naruto", {"Taijutsu": 199, "Ninjutsu": 749, "Genjutsu": 35,
@@ -43,15 +43,34 @@ class WorldwalkerV3280Tests(unittest.TestCase):
             self.assertTrue(archive.is_duplicate("Naruto", "starting_ability", renamed))
             self.assertEqual(len(archive.entries()), 1)
 
-    def test_territories_have_true_polygon_geometry_and_transfer(self):
+    def test_territories_use_non_overlapping_strategy_geometry_and_transfer(self):
         state = {"turn": 4, "canon_day": 0, "polity_state": {}, "factions": {}, "faction_clocks": {},
                  "political_regions": [{"id": "rain", "name": "Rain Country", "controller": "Akatsuki", "anchor": "Amegakure", "size": 18}],
                  "location_details": {}}
         normalize_political_state(state)
         regions = political_regions_for_map(state, [{"name": "Amegakure", "x": 44, "y": 52, "controller": "Akatsuki"}])
-        self.assertEqual(len(regions[0]["polygon"]), 12)
+        self.assertEqual(regions[0]["geometry"], "strategic")
+        self.assertIsNone(regions[0]["polygon"])
         self.assertEqual(transfer_territory(state, "rain", "New Rain", ["Akatsuki"])["to"], "New Rain")
         self.assertEqual(state["political_regions"][0]["contested_by"], ["Akatsuki"])
+        self.assertEqual(state["location_details"]["Amegakure"]["controlling_faction"], "New Rain")
+
+    def test_narrative_location_control_repaints_matching_region(self):
+        state = {"turn": 9, "canon_day": 0, "polity_state": {}, "factions": {}, "faction_clocks": {},
+                 "political_regions": [{"id": "rain", "name": "Rain Country", "controller": "Amegakure", "anchor": "Amegakure", "size": 18}],
+                 "location_details": {"Amegakure": {"controlling_faction": "Player's Rain", "controller_changed_turn": 9}}}
+        normalize_political_state(state)
+        self.assertEqual(state["political_regions"][0]["controller"], "Player's Rain")
+        regions = political_regions_for_map(state, [{"name": "Amegakure", "x": 44, "y": 52, "controller": "Player's Rain", "recently_changed": True}])
+        self.assertEqual(regions[0]["controller"], "Player's Rain")
+        self.assertTrue(regions[0]["recently_changed"])
+
+    def test_authored_boundaries_remain_available_to_strategy_partition(self):
+        state = {"turn": 1, "political_regions": [{"id": "isle", "name": "Crown Isle", "controller": "Crown", "x": 30, "y": 40,
+                 "polygon": [[20, 30], [40, 30], [42, 48], [22, 50]]}]}
+        regions = political_regions_for_map(state, [])
+        self.assertEqual(regions[0]["geometry"], "authored")
+        self.assertEqual(len(regions[0]["polygon"]), 4)
 
     def test_local_advisor_power_answer_uses_no_ai_call(self):
         game = GameSession(); game.settings["ai_connection_status"] = "valid"; game.settings["model"] = "local-test"

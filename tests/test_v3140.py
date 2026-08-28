@@ -16,7 +16,7 @@ from worlds import APP_VERSION, BASE_STATE, WORLD_DATA
 
 class WorldwalkerV3140Tests(unittest.TestCase):
     def test_version_and_schema(self):
-        self.assertEqual(APP_VERSION, "3.31.0")
+        self.assertEqual(APP_VERSION, "3.32.0")
         self.assertEqual(BASE_STATE["schema_version"], 19)
 
     def test_player_founded_land_becomes_a_first_class_faction_and_region(self):
@@ -95,8 +95,8 @@ class WorldwalkerV3140Tests(unittest.TestCase):
     def test_frontend_merges_same_owner_regions_at_the_border_layer(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn("data.map_data?.regions", js)
-        self.assertIn("if (right !== here)", js)
-        self.assertIn("if (down !== here)", js)
+        self.assertIn("neighborForEdge", js)
+        self.assertIn("neighborForEdge(cell, edge)?.controller === cell.controller", js)
 
 
 if __name__ == "__main__":

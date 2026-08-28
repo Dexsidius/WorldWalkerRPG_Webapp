@@ -22,7 +22,7 @@ class WorldwalkerV380Tests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.31.0")
+        self.assertEqual(APP_VERSION, "3.32.0")
 
     def test_high_status_original_starts_are_mechanical(self):
         marine = self.create("One Piece", "Marine Recruit", "Marksman", "Shells Town", "Starting posted as a Marine recruit at Shells Town.")

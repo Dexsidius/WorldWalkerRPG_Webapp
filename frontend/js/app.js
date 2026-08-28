@@ -1231,6 +1231,25 @@ function mobileTimeText() {
   return `${amount} ${amount === 1 ? unit.replace(/s$/, "") : unit}`;
 }
 
+function syncMobileTimeInputs() {
+  const unit = $("#time-unit"), amount = $("#time-amount");
+  const mobileUnit = $("#mobile-time-unit"), mobileAmount = $("#mobile-time-amount");
+  if (!unit || !amount || !mobileUnit || !mobileAmount) return;
+  mobileUnit.value = unit.value;
+  mobileAmount.value = amount.value || "1";
+  const fixedAmount = ["moment", "next_event"].includes(unit.value);
+  mobileAmount.hidden = fixedAmount;
+  mobileAmount.disabled = fixedAmount;
+}
+
+function applyMobileTimeInputs() {
+  const unit = $("#mobile-time-unit")?.value || "moment";
+  const amount = $("#mobile-time-amount")?.value || "1";
+  $("#time-unit").value = unit;
+  $("#time-amount").value = ["moment", "next_event"].includes(unit) ? "1" : amount;
+  syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
+}
+
 function renderMobileState(s) {
   const mobile = isMobileLayout();
   $("#mobile-status-ribbon").hidden = !mobile;
@@ -1262,7 +1281,8 @@ function renderMobileState(s) {
   const count = (s.queued_actions || []).length;
   $("#mobile-queue-count").textContent = count;
   $("#mobile-action-count").textContent = `${count} queued action${count === 1 ? "" : "s"}`;
-  $("#mobile-time-label").textContent = mobileTimeText();
+  if ($("#mobile-time-label")) $("#mobile-time-label").textContent = mobileTimeText();
+  syncMobileTimeInputs();
   document.body.classList.toggle("mobile-combat-active", combat);
   $("#mobile-combat-dock").hidden = !combat;
   $("#mobile-advance-dock").hidden = combat;
@@ -2698,11 +2718,14 @@ function updateSelectedTimeLabel() {
     const shownUnit = amount === 1 ? unit.replace(/s$/, "") : unit;
     label.textContent = `Selected skip: ${amount} ${shownUnit}`;
   }
+  syncMobileTimeInputs();
   if (APP.state && isMobileLayout()) renderMobileState(APP.state);
 }
 
 $("#time-unit").addEventListener("change", () => syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help"));
 $("#time-amount").addEventListener("input", () => { renderQueuedActions(APP.state?.queued_actions || []); updateSelectedTimeLabel(); });
+$("#mobile-time-unit").addEventListener("change", applyMobileTimeInputs);
+$("#mobile-time-amount").addEventListener("input", applyMobileTimeInputs);
 $("#td-unit").addEventListener("change", () => syncTimeControl("#td-unit", "#td-amount", "#td-amount-field"));
 syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
 syncTimeControl("#td-unit", "#td-amount", "#td-amount-field");
@@ -2721,6 +2744,10 @@ $("#btn-detailed-time").addEventListener("click", () => {
   $("#td-unit").value = $("#time-unit").value;
   syncTimeControl("#td-unit", "#td-amount", "#td-amount-field");
   $("#td-orders").value = $("#time-plan").value;
+  const queued = APP.state?.queued_actions || [];
+  $("#td-queued-summary").innerHTML = queued.length
+    ? `<b>${queued.length} queued action${queued.length === 1 ? "" : "s"} will be kept</b>${queued.map((action, index) => `<span>${index + 1}. ${escapeHtml(action)}</span>`).join("")}`
+    : `<b>No queued actions yet</b><span>Your current Action Chat draft will be added before the time skip begins.</span>`;
   openModal("modal-time-detail");
 });
 $("#btn-begin-timeskip").addEventListener("click", async () => {
@@ -2728,8 +2755,14 @@ $("#btn-begin-timeskip").addEventListener("click", async () => {
   const amount = ["moment", "next_event"].includes(unit) ? 1 : parseInt($("#td-amount").value || "1", 10);
   const orders = $("#td-orders").value;
   const intensity = $("#td-intensity").value;
+  $("#time-unit").value = unit;
+  $("#time-amount").value = String(amount);
+  $("#time-plan").value = orders;
+  syncTimeControl("#time-unit", "#time-amount", null, null, "#time-control-help");
   playNarutoAdvanceCue();
   closeModal("modal-time-detail");
+  const draft = $("#action-input").value.trim();
+  if (draft) await submitAction(draft);
   await beginTimeSkip(amount, unit, orders, intensity);
 });
 
@@ -3747,17 +3780,21 @@ async function openJournal(tab) {
     const nodes = data.map_data?.nodes || [];
     const regions = data.map_data?.regions || [];
     const knownCount = nodes.filter((node) => node.discovered).length;
-    const legendChips = groupNodesByController(regions.length ? regions : nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}">${escapeHtml(t.controller)}</span>`).join("");
-    panel.innerHTML = `<div class="map-heading"><div><b>${escapeHtml(data.world || s.world || "World")} Atlas</b><small>${nodes.length} important landmarks · ${knownCount} visited/discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
+    const legendChips = groupNodesByController(regions.length ? regions : nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}"><i></i>${escapeHtml(t.controller)}</span>`).join("");
+    panel.innerHTML = `<div class="map-heading"><div><span class="map-kicker">POLITICAL ATLAS</span><b>${escapeHtml(data.world || s.world || "World")}</b><small>${nodes.length} important landmarks · ${knownCount} visited or discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
       (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
-      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>A reference atlas — click a landmark for what's known about it, who's tied to it, and who controls it. Drag to pan, scroll or use the buttons to zoom.</p></aside></div>`;
+      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="strategic" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>Territory is shown as one clean strategy layer. Borders join automatically when the same faction controls neighboring land and repaint when the story changes ownership.</p><small>Drag to pan. Scroll or use the controls to zoom.</small></aside></div>`;
     const canvas = $("#map-canvas");
-    paintMapTerritories($("#map-territory-canvas"), regions.length ? regions : nodes);
+    const territoryData = regions.length ? regions : nodes;
+    const territoryLayout = paintMapTerritories($("#map-territory-canvas"), territoryData);
+    renderMapFactionLabels($("#map-faction-labels"), territoryLayout, nodes);
     applyNativeMapFx(nodes);
     nodes.forEach((node) => {
       const dot = document.createElement("button");
       dot.type = "button";
-      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
+      const majorKinds = new Set(["capital", "city", "village", "nation", "region", "realm", "island"]);
+      const major = majorKinds.has(String(node.kind || "").toLowerCase());
+      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
       dot.style.left = node.x + "%"; dot.style.top = node.y + "%";
       dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}${node.recently_changed ? " · Control recently changed" : ""}`;
       dot.setAttribute("data-map-node", node.name);
@@ -3765,6 +3802,7 @@ async function openJournal(tab) {
       canvas.appendChild(dot);
     });
     APP.mapNodes = nodes;
+    APP.mapRegions = regions;
     APP.travelGraph = data.travel_graph || { edges: {} };
     initMapPanZoom();
   } else if (tab === "lore") {
@@ -3801,10 +3839,9 @@ async function openJournal(tab) {
 }
 
 // ---------------------------------------------------------------------------
-// Political territory is painted from map anchors with a bounded influence
-// radius. Nearest influence wins where claims overlap. Borders are drawn only
-// between unlike owners (or owned and unclaimed land), so two adjacent pieces
-// controlled by the same polity read as one continuous possession.
+// Political territory uses a single non-overlapping strategy grid. Each cell
+// can have exactly one controller. Same-owner neighbors share no border, so
+// annexations visibly join instead of stacking translucent blobs.
 // ---------------------------------------------------------------------------
 function factionColor(name) {
   let hash = 0;
@@ -3818,77 +3855,124 @@ function groupNodesByController(nodes) {
     if (!controller || controller === "Unknown" || controller === "Unclaimed") return;
     (byFaction[controller] = byFaction[controller] || []).push(n);
   });
-  return Object.keys(byFaction).map((controller) => ({ controller, color: factionColor(controller) }));
+  return Object.keys(byFaction).sort((a, b) => a.localeCompare(b)).map((controller) => ({ controller, color: factionColor(controller) }));
+}
+function mapHash(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i++) { hash ^= value.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+  return (hash >>> 0) / 4294967295;
+}
+function mapPointInPolygon(x, y, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = Number(polygon[i][0]), yi = Number(polygon[i][1]);
+    const xj = Number(polygon[j][0]), yj = Number(polygon[j][1]);
+    const crosses = ((yi > y) !== (yj > y)) && (x < ((xj - xi) * (y - yi)) / ((yj - yi) || .00001) + xi);
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+function mapHexPath(ctx, cx, cy, radius) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const angle = Math.PI / 180 * (30 + i * 60);
+    const x = cx + radius * Math.cos(angle), y = cy + radius * Math.sin(angle);
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  }
+  ctx.closePath();
+}
+function renderMapFactionLabels(layer, layout, nodes = []) {
+  if (!layer) return;
+  layer.innerHTML = "";
+  const landmarkNames = new Set(nodes.map((node) => String(node.name || "").trim().toLowerCase()));
+  (layout?.labels || []).forEach((label) => {
+    if (label.cells < 5 || landmarkNames.has(String(label.controller).trim().toLowerCase())) return;
+    const node = document.createElement("span");
+    node.className = "map-faction-label";
+    node.style.left = `${label.x}%`; node.style.top = `${label.y}%`; node.style.setProperty("--fc", label.color);
+    node.textContent = label.controller;
+    layer.appendChild(node);
+  });
 }
 function paintMapTerritories(canvas, nodes) {
   if (!canvas) return;
   const owners = nodes.filter((n) => n.controller && n.controller !== "Unknown" && n.controller !== "Unclaimed");
-  const GRID = 160;
-  canvas.width = GRID;
-  canvas.height = GRID;
+  const WIDTH = 640, HEIGHT = 400, HEX = 7.2;
+  canvas.width = WIDTH;
+  canvas.height = HEIGHT;
   const ctx = canvas.getContext("2d");
-  ctx.clearRect(0, 0, GRID, GRID);
-  if (!owners.length) return;
+  ctx.clearRect(0, 0, WIDTH, HEIGHT);
+  if (!owners.length) return { labels: [] };
   const controllers = [...new Set(owners.map((n) => n.controller))];
   const colors = new Map(controllers.map((name) => [name, factionColor(name)]));
-  const withAlpha = new Map([...colors].map(([k, v]) => [k, v.replace("hsl(", "hsla(").replace(")", ",.25)")]));
-  const hasPolygons = owners.some((n) => Array.isArray(n.polygon) && n.polygon.length >= 3);
-  if (hasPolygons) {
-    owners.forEach((n) => {
-      const points = Array.isArray(n.polygon) && n.polygon.length >= 3 ? n.polygon : [];
-      if (!points.length) return;
-      ctx.beginPath();
-      points.forEach((point, index) => { const x = Number(point[0]) * GRID / 100, y = Number(point[1]) * GRID / 100; index ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-      ctx.closePath(); ctx.fillStyle = withAlpha.get(n.controller); ctx.fill();
-      ctx.strokeStyle = n.recently_changed ? "rgba(255,220,116,.98)" : "rgba(245,240,219,.82)";
-      ctx.lineWidth = n.recently_changed ? 1.4 : .65; ctx.lineJoin = "round"; ctx.stroke();
-      if ((n.contested_by || []).length) {
-        ctx.save(); ctx.clip(); ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = .55;
-        for (let line = -GRID; line < GRID * 2; line += 7) { ctx.beginPath(); ctx.moveTo(line, 0); ctx.lineTo(line + GRID, GRID); ctx.stroke(); }
-        ctx.restore();
-      }
-    });
-    return;
-  }
-  const ownerGrid = new Int16Array(GRID * GRID);
-  ownerGrid.fill(-1);
-  for (let gy = 0; gy < GRID; gy++) {
-    for (let gx = 0; gx < GRID; gx++) {
-      const px = ((gx + 0.5) / GRID) * 100, py = ((gy + 0.5) / GRID) * 100;
-      let best = null, bestScore = Infinity;
-      for (const n of owners) {
-        const radius = Math.max(4, Math.min(42, Number(n.size) || 12));
-        const dx = Number(n.x) - px, dy = Number(n.y) - py;
-        const score = Math.sqrt(dx * dx + dy * dy) / radius;
-        if (score <= 1 && score < bestScore) { bestScore = score; best = n; }
-      }
-      if (best) {
-        ownerGrid[gy * GRID + gx] = controllers.indexOf(best.controller);
-        ctx.fillStyle = withAlpha.get(best.controller);
-        ctx.fillRect(gx, gy, 1, 1);
-      }
+  const dx = Math.sqrt(3) * HEX, dy = 1.5 * HEX;
+  const rowCount = Math.ceil(HEIGHT / dy) + 1, colCount = Math.ceil(WIDTH / dx) + 1;
+  const cells = [], byKey = new Map();
+  for (let row = -1; row < rowCount; row++) {
+    for (let col = -1; col < colCount; col++) {
+      const cx = col * dx + (row & 1 ? dx / 2 : 0), cy = row * dy;
+      if (cx < -HEX || cy < -HEX || cx > WIDTH + HEX || cy > HEIGHT + HEX) continue;
+      const px = cx / WIDTH * 100, py = cy / HEIGHT * 100;
+      let winner = null, winnerScore = Infinity;
+      owners.forEach((region, index) => {
+        const polygon = Array.isArray(region.polygon) && region.polygon.length >= 3 ? region.polygon : null;
+        const radius = Math.max(4, Math.min(42, Number(region.size) || 12));
+        const rx = Number(region.x) || 50, ry = Number(region.y) || 50;
+        const distance = Math.hypot((px - rx) * 1.04, py - ry);
+        const score = distance / radius;
+        const edgeNoise = (mapHash(`${region.id || region.name}:${row}:${col}`) - .5) * .16;
+        const claimed = polygon ? mapPointInPolygon(px, py, polygon) : score <= 1.04 + edgeNoise;
+        if (claimed && score < winnerScore) { winner = { region, index }; winnerScore = score; }
+      });
+      const cell = { row, col, cx, cy, winner, controller: winner?.region.controller || null };
+      cells.push(cell); byKey.set(`${row}:${col}`, cell);
     }
   }
-  // One continuous outline per resulting control surface. There is no line
-  // between neighboring cells with the same owner, which visually combines
-  // annexed or jointly controlled areas without inventing new geometry.
-  ctx.beginPath();
-  for (let gy = 0; gy < GRID; gy++) {
-    for (let gx = 0; gx < GRID; gx++) {
-      const here = ownerGrid[gy * GRID + gx];
-      if (here < 0) continue;
-      const right = gx + 1 < GRID ? ownerGrid[gy * GRID + gx + 1] : -1;
-      const down = gy + 1 < GRID ? ownerGrid[(gy + 1) * GRID + gx] : -1;
-      if (right !== here) { ctx.moveTo(gx + 1, gy); ctx.lineTo(gx + 1, gy + 1); }
-      if (down !== here) { ctx.moveTo(gx, gy + 1); ctx.lineTo(gx + 1, gy + 1); }
-      if (gx === 0) { ctx.moveTo(gx, gy); ctx.lineTo(gx, gy + 1); }
-      if (gy === 0) { ctx.moveTo(gx, gy); ctx.lineTo(gx + 1, gy); }
+  // Paint opaque cells to a separate wash, then composite that entire layer
+  // once. This avoids darker alpha accumulation along internal cell edges.
+  const wash = document.createElement("canvas");
+  wash.width = WIDTH; wash.height = HEIGHT;
+  const washCtx = wash.getContext("2d");
+  cells.forEach((cell) => {
+    if (!cell.controller) return;
+    mapHexPath(washCtx, cell.cx, cell.cy, HEX + .62);
+    washCtx.fillStyle = colors.get(cell.controller); washCtx.fill();
+  });
+  ctx.save(); ctx.globalAlpha = .27; ctx.drawImage(wash, 0, 0); ctx.restore();
+  const neighborForEdge = (cell, edge) => {
+    const odd = Boolean(cell.row & 1), r = cell.row, c = cell.col;
+    const keys = odd
+      ? [[r + 1, c + 1], [r + 1, c], [r, c - 1], [r - 1, c], [r - 1, c + 1], [r, c + 1]]
+      : [[r + 1, c], [r + 1, c - 1], [r, c - 1], [r - 1, c - 1], [r - 1, c], [r, c + 1]];
+    return byKey.get(`${keys[edge][0]}:${keys[edge][1]}`);
+  };
+  // Only political borders are visible. Internal cells disappear, while
+  // adjacent holdings with the same controller become one continuous realm.
+  cells.forEach((cell) => {
+    if (!cell.controller) return;
+    for (let edge = 0; edge < 6; edge++) {
+      if (neighborForEdge(cell, edge)?.controller === cell.controller) continue;
+      const a = Math.PI / 180 * (30 + edge * 60), b = Math.PI / 180 * (30 + ((edge + 1) % 6) * 60);
+      ctx.beginPath(); ctx.moveTo(cell.cx + HEX * Math.cos(a), cell.cy + HEX * Math.sin(a));
+      ctx.lineTo(cell.cx + HEX * Math.cos(b), cell.cy + HEX * Math.sin(b));
+      ctx.strokeStyle = cell.winner?.region.recently_changed ? "rgba(255,220,116,.98)" : colors.get(cell.controller);
+      ctx.lineWidth = cell.winner?.region.recently_changed ? 3.5 : 2.15;
+      ctx.lineCap = "round"; ctx.stroke();
     }
-  }
-  ctx.strokeStyle = "rgba(245, 240, 219, .82)";
-  ctx.lineWidth = .55;
-  ctx.lineJoin = "round";
-  ctx.stroke();
+    if ((cell.winner?.region.contested_by || []).length) {
+      ctx.save(); mapHexPath(ctx, cell.cx, cell.cy, HEX - .4); ctx.clip();
+      ctx.strokeStyle = "rgba(255,255,255,.30)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cell.cx - HEX, cell.cy + HEX * .7); ctx.lineTo(cell.cx + HEX, cell.cy - HEX * .7); ctx.stroke();
+      ctx.restore();
+    }
+  });
+  const totals = {};
+  cells.forEach((cell) => {
+    if (!cell.controller) return;
+    const total = totals[cell.controller] ||= { controller: cell.controller, x: 0, y: 0, cells: 0, color: colors.get(cell.controller) };
+    total.x += cell.cx / WIDTH * 100; total.y += cell.cy / HEIGHT * 100; total.cells++;
+  });
+  return { labels: Object.values(totals).map((row) => ({ ...row, x: row.x / row.cells, y: row.y / row.cells })) };
 }
 
 // ---------------------------------------------------------------------------

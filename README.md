@@ -6,7 +6,17 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.31.0** (schema 19).
+Current app/save version: **3.32.0** (schema 19).
+
+Version 3.32.0 replaces overlapping territory blobs with a single clean
+strategy-atlas layer. Political shading can no longer overlap, borders vanish
+between neighboring holdings controlled by the same faction, authored borders
+remain supported, and narrative location-control changes repaint the map
+immediately. The atlas also gains clearer political labels, a compact legend,
+cleaner landmark priority, and mobile-safe sizing. Mobile time controls now
+offer amount and unit selectors directly beside Advance, plus a separate clock
+button for the detailed modal; queued actions and the current draft remain
+intact when changing time settings.
 
 Version 3.31.0 adds the approved phone companion interface: persistent bottom
 navigation, a compact live status ribbon, full-screen mobile journals and
