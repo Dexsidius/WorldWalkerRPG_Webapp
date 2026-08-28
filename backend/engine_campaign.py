@@ -26,6 +26,9 @@ from overgeared_classes import canon_class_prompt_reference, infer_class_type, s
 from jjk_system import (apply_birth_slot, generate_birth_slot, generate_curse_identity,
                         initialize_jjk_state, is_curse_origin, normalized_grade,
                         normalize_birth_slot_package)
+from naruto_system import (apply_jinchuriki_start, build_chakra_affinity_profile,
+                           build_jinchuriki_profile, jinchuriki_requested,
+                           normalize_chakra_affinity_profile, normalize_jinchuriki_profile)
 
 
 DEFAULT_SETTINGS = {
@@ -1588,6 +1591,24 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             skills.update(copy.deepcopy(standard_class_profile.get("skills", {})))
         hidden_class = None
         generated_ability = None
+        jinchuriki_profile = None
+        naruto_affinity_profile = None
+        if world == "Naruto":
+            naruto_affinity_profile = build_chakra_affinity_profile(
+                background, seed=f"{origin}|{archetype}|{start_location}"
+            )
+        if world == "Naruto" and allow_starting_specials and jinchuriki_requested(background):
+            jinchuriki_profile = build_jinchuriki_profile(
+                background, seed=f"{origin}|{archetype}|{start_location}"
+            )
+            adjusted = apply_jinchuriki_start(adjusted, jinchuriki_profile)
+            background_profile["growth_profile"]["accelerators"].append(
+                f"The seal and relationship with {jinchuriki_profile['beast']} create a separate bond, control, and transformation path"
+            )
+            background_profile["growth_profile"]["constraints"].extend([
+                "The tailed beast is an independent person whose cooperation must be earned",
+                "Seal integrity, loss of control, physical strain, extraction, and political targeting",
+            ])
         class_requested = allow_starting_specials and self.hidden_class_requested(background)
         # Bleach progression is expressed through the Zanpakuto relationship,
         # releases and Kido—not a generic hidden-class card.
@@ -1612,6 +1633,15 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 f"The {hidden_class['name']} class opens specialized practice routes"
             )
         ability_requested = allow_starting_specials and self.background_ability_requested(background)
+        if jinchuriki_profile:
+            # Being a host is its own Naruto system.  Do not turn the same
+            # sentence into an unrelated generic Starting Ability as well;
+            # explicitly separate bloodlines/techniques can still coexist.
+            ability_requested = bool(re.search(
+                r"\b(kekkei genkai|bloodline|lineage|d[ōo]jutsu|eye technique|special eyes?|ocular|"
+                r"separate ability|another ability|also (?:have|possess|wield|know)|jutsu named)\b",
+                str(background), re.I,
+            ))
         ability_declined = self.background_ability_declined(background)
         ability_awarded = world != "Jujutsu Kaisen" and (
             ability_requested or (
@@ -1696,6 +1726,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         else:
             equipment = {"Weapon": specific_gear or WORLD_STARTER_GEAR.get(world, WORLD_STARTER_GEAR["Custom World"])}
         hp_max, resource_max = self.derive_pools(world, adjusted)
+        if jinchuriki_profile:
+            resource_max = max(resource_max, int(round(resource_max * float(jinchuriki_profile.get("reserve_multiplier", 1.0) or 1.0))))
         if world == "Jujutsu Kaisen" and (jjk_guarantee_strong or is_curse_origin(origin)):
             band = power_profile_for(world, adjusted, archetype).get("overall", {}).get("name", band)
         notice = ""
@@ -1711,8 +1743,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "starting_currency": starting_currency, "_base_stats": base_stats,
                 "_base_learning_rate": learning_rate,
                 "_boost": boost, "_core_skill_name": skill_name,
-                "bleach_release_profile": bleach_release_profile, "prerequisite_tracks": bleach_tracks,
-                "naruto_lineage_profile": naruto_lineage_profile,
+                 "bleach_release_profile": bleach_release_profile, "prerequisite_tracks": bleach_tracks,
+                 "naruto_lineage_profile": naruto_lineage_profile,
+                 "jinchuriki_profile": jinchuriki_profile,
+                 "naruto_affinity_profile": naruto_affinity_profile,
                 "standard_class_profile": standard_class_profile,
                 "jjk_birth_slot": jjk_birth_slot, "jjk_curse_identity": jjk_curse_identity,
                 "jjk_curse_grade": normalized_grade(jjk_curse_grade) if world == "Jujutsu Kaisen" and is_curse_origin(origin) else "",
@@ -2149,6 +2183,26 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         normalized["generated_ability"] = None
         normalized["hidden_class"] = None
         normalized["class_profile"] = copy.deepcopy(scenario.get("class_profile")) if isinstance(scenario.get("class_profile"), dict) else {}
+        if world == "Naruto":
+            established = scenario.get("special_patch") if isinstance(scenario.get("special_patch"), dict) else {}
+            legacy_host = established.get("Jinchuriki", "")
+            normalized["jinchuriki_profile"] = normalize_jinchuriki_profile(
+                normalized.get("jinchuriki_profile"), legacy=legacy_host,
+                background=scenario.get("background", ""), seed=scenario.get("id", ""),
+            )
+            known_jutsu = " ".join(map(str, established.get("Known Jutsu", []))) + " " + " ".join(map(str, (scenario.get("skills") or {}).keys()))
+            if scenario.get("id") in {"naruto_birth", "naruto_graduation"}:
+                known_natures = ["Wind Release"]
+            elif "Five Basic Nature Transformations" in known_jutsu:
+                known_natures = ["Fire Release", "Wind Release", "Lightning Release", "Earth Release", "Water Release"]
+            else:
+                known_natures = [nature for nature in ("Fire Release", "Wind Release", "Lightning Release", "Earth Release", "Water Release") if nature in known_jutsu]
+            normalized["naruto_affinity_profile"] = normalize_chakra_affinity_profile(
+                None, legacy=known_natures or established.get("Nature Affinity", ""),
+                background=scenario.get("background", ""), seed=scenario.get("id", ""),
+            )
+            if scenario.get("id") in {"naruto_birth", "naruto_graduation"}:
+                normalized["naruto_affinity_profile"]["discovery_status"] = "Latent / not yet tested"
         if world == "Jujutsu Kaisen":
             established = scenario.get("special_patch") if isinstance(scenario.get("special_patch"), dict) else {}
             technique = str(established.get("Innate Technique") or "None")
@@ -2202,6 +2256,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         }
         normalized["start_package"] = package
         normalized["hp_max"], normalized["resource_max"] = self.derive_pools(world, stats)
+        if normalized.get("jinchuriki_profile"):
+            multiplier = float(normalized["jinchuriki_profile"].get("reserve_multiplier", 1.0) or 1.0)
+            normalized["resource_max"] = max(normalized["resource_max"], int(round(normalized["resource_max"] * multiplier)))
         power = power_profile_for(world, stats, scenario.get("archetype", ""))
         normalized["power_band"] = power["overall"]["name"]
         normalized["power_notice"] = power.get("interpretation", "") if power.get("lopsided") else ""
@@ -2282,6 +2339,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             profile = self.apply_start_package_to_profile(world, profile, start_package)
         profile_stats = profile.get("stats") if isinstance(profile.get("stats"), dict) else rolled
         hp_max, resource_max = self.derive_pools(world, profile_stats)
+        if isinstance(profile.get("jinchuriki_profile"), dict):
+            multiplier = float(profile["jinchuriki_profile"].get("reserve_multiplier", 1.0) or 1.0)
+            resource_max = max(resource_max, int(round(resource_max * multiplier)))
         with self.lock:
             self.state = copy.deepcopy(BASE_STATE)
             self.state.update(
@@ -2325,6 +2385,17 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 label = "Dōjutsu Profile" if lineage.get("category") == "Dōjutsu" else "Kekkei Genkai Profile"
                 self.state["special"][label] = lineage
                 self.state["special"][lineage.get("category", "Kekkei Genkai")] = lineage.get("name", "Unawakened Bloodline")
+            if isinstance(profile.get("jinchuriki_profile"), dict) and profile["jinchuriki_profile"]:
+                host = copy.deepcopy(profile["jinchuriki_profile"])
+                self.state["special"]["Jinchūriki Profile"] = host
+                self.state["special"]["Jinchuriki"] = f"{host.get('beast', 'Tailed Beast')} — {host.get('mastery', 'Unmastered')}"
+            if isinstance(profile.get("naruto_affinity_profile"), dict) and profile["naruto_affinity_profile"]:
+                affinity = copy.deepcopy(profile["naruto_affinity_profile"])
+                host = profile.get("jinchuriki_profile") if isinstance(profile.get("jinchuriki_profile"), dict) else {}
+                if host:
+                    affinity["external_natures"] = copy.deepcopy(host.get("nature_transformations", []))
+                self.state["special"]["Chakra Affinity Profile"] = affinity
+                self.state["special"]["Nature Affinity"] = affinity.get("primary", "Unknown")
             if isinstance(profile.get("hidden_class"), dict):
                 self.state["special"]["Hidden Class"] = copy.deepcopy(profile["hidden_class"])
             self.state["portrait_traits"] = [appearance_desc] if appearance_desc.strip() else []
@@ -2363,6 +2434,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             if str(age).strip():
                 self.state["age"] = str(age).strip()
             self.state["codex"] = [{"name": start, "type": "Location", "notes": "Starting location."}]
+            host = self.state.get("special", {}).get("Jinchūriki Profile")
+            if isinstance(host, dict) and host:
+                self.state["codex"].append({
+                    "name": host.get("beast", "Tailed Beast"), "type": "Tailed Beast",
+                    "notes": "An independent being sealed within the host. Its full canon potential, current cooperation, seal, transformations, and drawbacks are tracked separately from ordinary jutsu.",
+                })
             # Knowing a faction exists does not grant a private line to it.
             for faction_name in wd["factions"]:
                 can_contact = faction_name in WORLD_PUBLIC_CONTACTS.get(world, set())

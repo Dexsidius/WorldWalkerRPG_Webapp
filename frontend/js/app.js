@@ -944,7 +944,19 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
   }
   if (world === "Naruto") {
     const p = special["Shinobi Profile"] || {};
-    return `<section class="world-system-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system")}${card("CHAKRA & TECHNIQUES", p.kekkei_genkai && p.kekkei_genkai !== "None" ? p.kekkei_genkai : "Shinobi Development", [["Nature affinities",p.nature_affinities],["Known jutsu",p.known_jutsu],["Summons",p.summons],["Transformations",p.transformations]], "naruto-system")}</section>`;
+    const affinity = special["Chakra Affinity Profile"] || p.chakra_affinity || {};
+    const host = special["Jinchūriki Profile"] || p.jinchuriki || {};
+    const hostCard = host?.beast ? card("JINCHŪRIKI", `${host.beast} · ${host.title || "Tailed Beast"}`, [
+      ["Status",host.status], ["Seal",host.seal], ["Mastery",`${host.mastery || "Unmastered"} · ${Number(host.control || 0)}% control`],
+      ["Relationship",`${host.relationship || "Undeveloped"} · ${Number(host.bond_progress || 0)}% bond`], ["Current stage",host.transformation_stage],
+      ["Nature transformations",host.nature_transformations], ["Beast traits",host.beast_traits],
+      ["Available now",host.available_abilities], ["Locked by mastery",host.locked_by_mastery],
+      ["Drawbacks & dangers",host.drawbacks], ["Development",host.progression],
+    ], "naruto-jinchuriki-system") : "";
+    const rates = affinity.learning_rates || {};
+    const rateSummary = Object.entries(rates).map(([nature, rate]) => `${nature.replace(" Release", "")}: ${Number(rate).toFixed(2)}×`).join(" · ");
+    const affinityCard = card("CHAKRA AFFINITY", affinity.primary || special["Nature Affinity"] || "Untested", [["Discovery",affinity.discovery_status],["Secondary affinities",affinity.secondary],["Learned natures",affinity.mastered_natures],["Learning pace",rateSummary],["Native advantage",affinity.native_rule],["Off-affinity training",affinity.off_affinity_rule],["Combined natures",affinity.combined_nature_rule],["External access",affinity.external_natures]], "naruto-affinity-system");
+    return `<section class="world-system-grid">${card("SERVICE RECORD", p.rank || special["Shinobi Rank"], [["Home village",p.home_village],["Clan",p.clan],["Mission record",p.mission_record]], "naruto-system")}${affinityCard}${card("CHAKRA & TECHNIQUES", p.kekkei_genkai && p.kekkei_genkai !== "None" ? p.kekkei_genkai : "Shinobi Development", [["Known jutsu",p.known_jutsu],["Summons",p.summons],["Transformations",p.transformations]], "naruto-system")}${hostCard}</section>`;
   }
   if (world === "Jujutsu Kaisen") {
     const sys = data.jjk_system || {}, slot = sys.birth_slot || special["Innate Technique Profile"] || special["Heavenly Restriction Profile"] || {};
@@ -2067,7 +2079,8 @@ async function handleTurnResult(result, action) {
 // consequences exactly like any other resolved turn.
 // ---------------------------------------------------------------------------
 function combatLogLine(e) {
-  const swingNote = e.extra_swing ? " [bonus swing — faster]" : "";
+  if (e.actor === "system" && e.action === "bonus_turn") return { text: `Your speed advantage earns another full action before the enemy responds${e.reason ? ` (${e.reason})` : ""}.`, cls: "player" };
+  const swingNote = e.extra_swing ? " [quickened action — faster]" : "";
   if (e.actor === "player" && e.action === "controlled") return { text: `You cannot act while ${e.status || "controlled"}.`, cls: "miss" };
   if (e.actor === "player" && e.action === "defend") return { text: "You brace for the enemy's attack.", cls: "player" };
   if (e.actor === "player" && e.action === "flee") return { text: e.success ? "You break away from the fight." : "You try to flee — it fails.", cls: e.success ? "player" : "miss" };
@@ -2241,6 +2254,9 @@ function renderCombatPanel(s) {
   panel.hidden = false;
   actionInput.placeholder = "Combat is active — use the combat controls, or describe a specific combat action here.";
   $("#combat-round").textContent = combat.round ?? 1;
+  const bonusTurn = $("#combat-bonus-turn");
+  bonusTurn.hidden = !combat.bonus_turn_pending;
+  if (combat.bonus_turn_pending) bonusTurn.querySelector("span").textContent = `${combat.bonus_turn_reason || "Your speed advantage"} — choose any combat action before the enemy responds.`;
   $("#combat-mode-badge").hidden = !combat.non_lethal;
   // The mercy toggle only means anything for a real, lethal-by-default fight
   // — a spar/test (non_lethal) already floors both sides, so the choice is
@@ -2323,6 +2339,7 @@ async function submitCombatAction(action) {
     if (result.resource !== undefined) { APP.state.resource = result.resource; APP.state.resource_max = result.resource_max; }
     APP.state.combat = result.combat;
     renderState(APP.state);
+    if (result.awaiting_bonus_action) showToast("Speed advantage: choose your bonus action before the enemy responds.", "notify");
     const newEnemyHp = Number(result.combat?.enemy?.hp ?? NaN);
     if (Number.isFinite(priorEnemyHp) && Number.isFinite(newEnemyHp) && newEnemyHp < priorEnemyHp) {
       spawnFloatingCombatNumber("#combat-enemy .bar-track", priorEnemyHp - newEnemyHp, "damage");
@@ -4128,6 +4145,10 @@ function renderCampaignPreview(p, payload) {
       Bankai: profile.bleach_release_profile.stage === "Bankai" ? profile.bleach_release_profile.bankai_name : "Unachieved",
       PreviewConcept: profile.bleach_release_profile.stage === "Dormant",
     } : { Shikai: "Unachieved", Bankai: "Unachieved" }) : "";
+    const host = profile.jinchuriki_profile || {};
+    const jinchurikiPreviewCard = p.world === "Naruto" && host.beast ? `<details class="world-system-card expandable-special-card naruto-jinchuriki-system" open><summary><header><small>JINCHŪRIKI</small><h3>${escapeHtml(host.beast)} · ${escapeHtml(host.mastery || "Unmastered")}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body"><div class="world-system-detail"><b>Seal & relationship</b><span>${escapeHtml(`${host.seal || "Established seal"} · ${host.relationship || "Undeveloped"}`)}</span></div><div class="world-system-detail"><b>Available now</b><span>${escapeHtml(compactReadable(host.available_abilities) || "No deliberate access yet")}</span></div><div class="world-system-detail"><b>Full canon potential</b><span>${escapeHtml(compactReadable(host.canonical_abilities))}</span></div><div class="world-system-detail"><b>Drawbacks & dangers</b><span>${escapeHtml(compactReadable(host.drawbacks))}</span></div></div></details>` : "";
+    const affinity = profile.naruto_affinity_profile || {};
+    const affinityPreviewCard = p.world === "Naruto" && affinity.primary ? `<details class="world-system-card expandable-special-card naruto-affinity-system" open><summary><header><small>CHAKRA AFFINITY</small><h3>${escapeHtml(affinity.primary)}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body"><div class="world-system-detail"><b>Natural advantage</b><span>${escapeHtml(affinity.native_rule)}</span></div><div class="world-system-detail"><b>Other natures</b><span>${escapeHtml(affinity.off_affinity_rule)}</span></div><div class="world-system-detail"><b>Learning rates</b><span>${escapeHtml(Object.entries(affinity.learning_rates || {}).map(([nature,rate]) => `${nature.replace(" Release", "")} ${Number(rate).toFixed(2)}×`).join(" · "))}</span></div></div></details>` : "";
     const startWarnings = (p.start_warnings || []).filter(Boolean);
     const warningCard = startWarnings.length ? `<section class="start-warnings"><b>START CONSISTENCY NOTE</b>${startWarnings.map((warning) => `<span>${escapeHtml(warning)}</span>`).join("")}</section>` : "";
     const primer = p.world_primer || {};
@@ -4149,7 +4170,7 @@ function renderCampaignPreview(p, payload) {
     const ordinaryGrowth = Math.abs(learningRate - 1) < 0.005 && String(growth.aptitude || "").toLowerCase().includes("typical");
     const growthLabel = !ordinaryGrowth && String(growth.aptitude || "").toLowerCase().includes("typical") ? "Modified learning potential" : (growth.aptitude || "Unusual potential");
     const growthSummary = ordinaryGrowth ? "" : `<div class="growth-summary"><b>${escapeHtml(growthLabel)}</b><span>${escapeHtml(learningRate.toFixed(2))}× sustained-learning rate</span><small>${escapeHtml(growth.explanation || "Actual growth still depends on time, training conditions, instruction, and recovery.")}</small></div>`;
-    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${warningCard}${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Starting attributes</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${bleachReleaseCard}${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section>${growthSummary}${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : (p.starting_era ? "This original character begins in the selected timeline era." : "This original character begins shortly before the world's main story.")}</p>`;
+    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${warningCard}${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Starting attributes</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${bleachReleaseCard}${affinityPreviewCard}${jinchurikiPreviewCard}${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section>${growthSummary}${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : (p.starting_era ? "This original character begins in the selected timeline era." : "This original character begins shortly before the world's main story.")}</p>`;
     openModal("modal-campaign-preview");
 }
 

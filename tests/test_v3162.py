@@ -31,7 +31,7 @@ EXPECTED_NARUTO_TRACKS = {
 
 class WorldwalkerV3162Tests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.27.1")
+        self.assertEqual(APP_VERSION, "3.27.2")
 
     def test_all_default_bleach_tracks_are_bundled(self):
         folder = ROOT / "music" / "Bleach"

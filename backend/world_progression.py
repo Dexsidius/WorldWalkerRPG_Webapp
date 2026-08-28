@@ -8,6 +8,7 @@ import copy
 import re
 
 from overgeared_classes import COMPACT_CLASS_GENERATION_RULE, infer_class_type
+from naruto_system import CHAKRA_NATURES, normalize_chakra_affinity_profile, normalize_jinchuriki_profile
 
 
 def _safe_int(value, default=0):
@@ -48,8 +49,9 @@ WORLD-SYSTEM RECORD: Keep special['Devil Fruit Profile'] as a structured profile
 WORLD-SYSTEM RECORD: Keep special['Nen Profile'] with visibility, category, Ten, Zetsu, Ren and Hatsu Profile. Before Nen is plausibly learned, visibility is Undiscovered and public characters must not know its terminology. Once authored, an original Hatsu is permanent and records name, category_mix, effect, activation, vows, limitations, counters, aura_cost, evidence and growth_path. Strength comes from personality-fit, skill, aura and real restrictions—not a generic spell list.
 """,
     "Naruto": """
-WORLD-SYSTEM RECORD: Keep official Shinobi Rank separate from measured combat ability. Maintain special['Shinobi Profile'] with home_village, rank, clan, nature_affinities, kekkei_genkai, summons, transformations and known_jutsu. Original bloodlines and techniques are allowed when the background or story supports them, but must record mechanism, chakra cost, limitations, counters, prerequisites and training evidence. Never lower a power assessment merely because the official rank is lower.
-""",
+ WORLD SYSTEM: Keep rank separate from power and preserve the structured Naruto profiles. Native elemental jutsu learn about twice as readily as off-affinity natures; others remain possible with more training. Combined releases keep special prerequisites; beast natures are external access.
+ JINCHŪRIKI: The beast is independent. Track full canon potential separately from current access and enforce the profile's unmastered dangers. Mastery removes only recorded loss-of-control/corrosion—not agency, cost, collateral, suppression, seal/extraction, or political risks. Change bond, control, seal, access, and forms only through play.
+ """,
     "Solo Max-Level Newbie": """
 WORLD-SYSTEM RECORD: Keep special['System Profile'] with floor, unspent_stat_points, copied_abilities, copy_capacity, achievements and hidden_conditions. System rewards, copied skills, titles, conditions and floor clears must be explicit and persistent. A copied ability records source, rank, effect, copy_condition, condition_progress, restriction and slot_cost. Foreknowledge separates remembered game information from facts confirmed in lethal reality; it reveals routes only when the character knows them and never silently completes their conditions. When a floor is truly cleared, update tower_floor. Present important rewards as concise System notices in the prose. Rivals, administrators and party roles remain independent actors rather than passive flavor.
 """,
@@ -201,7 +203,10 @@ def normalize_world_progression(state, before=None):
         sync(profile, "rank", "Shinobi Rank", "Civilian")
         sync(profile, "clan", "Clan", "None")
         affinities = special.get("Nature Affinity", "Unknown")
-        profile.setdefault("nature_affinities", affinities if isinstance(affinities, list) else ([affinities] if affinities not in {"", "Unknown", "None"} else []))
+        affinity_profile = normalize_chakra_affinity_profile(
+            special.get("Chakra Affinity Profile"), legacy=affinities,
+            background=state.get("background", ""), seed=state.get("campaign_id", ""),
+        )
         kekkei_profile = _profile(special.get("Kekkei Genkai Profile"))
         dojutsu_profile = _profile(special.get("Dōjutsu Profile"))
         legacy_kekkei = special.get("Kekkei Genkai", "None")
@@ -228,6 +233,17 @@ def normalize_world_progression(state, before=None):
             special["Dōjutsu Profile"] = dojutsu_profile
         profile["kekkei_genkai"] = copy.deepcopy(kekkei_profile or legacy_kekkei)
         profile["dojutsu"] = copy.deepcopy(dojutsu_profile or legacy_dojutsu)
+        jinchuriki = normalize_jinchuriki_profile(
+            special.get("Jinchūriki Profile"), legacy=special.get("Jinchuriki", ""),
+            background=state.get("background", ""), seed=state.get("campaign_id", ""),
+        )
+        if jinchuriki:
+            special["Jinchūriki Profile"] = jinchuriki
+            special["Jinchuriki"] = f"{jinchuriki.get('beast', 'Tailed Beast')} — {jinchuriki.get('mastery', 'Unmastered')}"
+            profile["jinchuriki"] = copy.deepcopy(jinchuriki)
+            affinity_profile["external_natures"] = copy.deepcopy(jinchuriki.get("nature_transformations", []))
+        else:
+            profile.setdefault("jinchuriki", {})
         profile.setdefault("summons", special.get("Summons", []))
         profile.setdefault("transformations", special.get("Transformations", []))
         profile["known_jutsu"] = copy.deepcopy(special.get("Known Jutsu", profile.get("known_jutsu", [])))
@@ -235,7 +251,15 @@ def normalize_world_progression(state, before=None):
         if starting.get("name") and starting["name"] not in profile["known_jutsu"]:
             profile["known_jutsu"].append(starting["name"])
         special["Known Jutsu"] = copy.deepcopy(profile["known_jutsu"])
-        special["Nature Affinity"] = copy.deepcopy(profile["nature_affinities"] or "Unknown")
+        learned_text = " ".join([*map(str, profile["known_jutsu"]), *map(str, (state.get("skills") or {}).keys())])
+        for nature in CHAKRA_NATURES:
+            if nature.lower() in learned_text.lower() and nature not in affinity_profile["mastered_natures"]:
+                affinity_profile["mastered_natures"].append(nature)
+                affinity_profile.setdefault("training_evidence", []).append(f"Established a learned {nature} technique")
+        special["Chakra Affinity Profile"] = affinity_profile
+        special["Nature Affinity"] = affinity_profile["primary"]
+        profile["nature_affinities"] = copy.deepcopy(affinity_profile["mastered_natures"])
+        profile["chakra_affinity"] = copy.deepcopy(affinity_profile)
         profile.setdefault("mission_record", {})
         profile.setdefault("team", [])
         profile.setdefault("mentors", [])

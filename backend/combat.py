@@ -54,7 +54,7 @@ COOLDOWN_ROUNDS = 3             # cooldown-type abilities (e.g. Overgeared Skill
 # better d100 bonus: a decisively faster combatant gets a bonus swing, a
 # decisively harder-hitting one does drastically more damage, and a
 # decisively tougher one can just shrug a hit off completely.
-SPEED_GAP_THRESHOLD = 25         # player_speed - enemy_power (or the reverse) at/above this grants a bonus swing
+SPEED_GAP_THRESHOLD = 25         # player edge grants a chosen bonus turn; enemy edge grants its extra swing
 MASSIVE_GAP_THRESHOLD = 30       # offense-vs-power gap at/above this triggers massive damage; the mirrored gap fully negates a hit
 MASSIVE_DAMAGE_MULTIPLIER = 2.5
 
@@ -556,10 +556,14 @@ class CombatMixin:
         if not enemy.get("alive", True) or int(enemy.get("hp", 0)) <= 0:
             return self.end_combat("victory", log_start)
 
+        bonus_action = bool(combat.get("bonus_turn_pending"))
+
         # Persistent status damage is resolved locally at the start of the
         # exchange. New effects therefore last for their advertised future
-        # rounds instead of damaging a target immediately a second time.
-        for status in combat.get("enemy_statuses", []):
+        # rounds instead of damaging a target immediately a second time. A
+        # speed-earned bonus action is still part of the same exchange, so it
+        # must not tick damage or duration a second time.
+        for status in ([] if bonus_action else combat.get("enemy_statuses", [])):
             dot = float(status.get("damage_over_time_pct", 0) or 0)
             if dot > 0:
                 damage = max(1, round(int(enemy.get("hp_max", 1)) * dot))
@@ -567,7 +571,7 @@ class CombatMixin:
                 combat["log"].append({"round": combat["round"], "actor": "status", "target": "enemy",
                                       "action": "status damage", "status": status.get("name", "Lingering effect"),
                                       "damage": damage})
-        for status in combat.get("player_statuses", []):
+        for status in ([] if bonus_action else combat.get("player_statuses", [])):
             dot = float(status.get("damage_over_time_pct", 0) or 0)
             if dot > 0:
                 damage = max(1, round(int(self.state.get("hp_max", 1)) * dot))
@@ -596,6 +600,7 @@ class CombatMixin:
         player_offense_stat_value = int(self.state.get("stats", {}).get(ability, 30) or 30)
         player_offense_stat_value = round(player_offense_stat_value * (1 + player_effects["power_pct"]))
         events = []
+        earned_bonus_turn = False
         player_disabling = self._active_disabling_status(combat.get("player_statuses", []))
 
         if player_disabling:
@@ -633,32 +638,34 @@ class CombatMixin:
         else:
             requested_skill = ability_name if ability_name and ability_name in self.state.get("skills", {}) else None
             requested_type = self._ability_resource_type(requested_skill) if requested_skill else "free"
-            requested_effect = self._ability_effect_type(requested_skill) if requested_skill else "damage"
-            # Speed grants extra attacks, not duplicated heals, summons,
-            # transformations or status applications.
-            swings = 2 if requested_effect == "damage" and (player_speed - enemy_power) >= SPEED_GAP_THRESHOLD else 1
-            for swing_index in range(swings):
-                if swing_index > 0 and requested_type == "cooldown":
-                    # Can't reuse a move that its own first swing just put on
-                    # cooldown; the bonus swing falls back to a plain attack.
-                    swing_skill, resource_type = None, "free"
-                else:
-                    swing_skill, resource_type = requested_skill, requested_type
-                try:
-                    event = self._resolve_swing(combat, enemy, ability, swing_skill, resource_type, ally_support,
-                                                 player_offense_stat_value, enemy_power, swing_index > 0)
-                except RuntimeError:
-                    if swing_index > 0:
-                        break  # not enough left over for the bonus swing; the first swing's result still stands
-                    raise
-                events.append(event)
-                if not enemy.get("alive", True):
-                    break
+            event = self._resolve_swing(combat, enemy, ability, requested_skill, requested_type, ally_support,
+                                        player_offense_stat_value, enemy_power, bonus_action)
+            events.append(event)
+
+        # A decisive speed edge used to duplicate an attacking move. It now
+        # grants another full player choice after any valid first action. A
+        # disabling effect still consumes the character's opportunity to act.
+        earned_bonus_turn = (
+            not bonus_action and not player_disabling and enemy.get("alive", True)
+            and (player_speed - enemy_power) >= SPEED_GAP_THRESHOLD
+        )
 
         combat["log"].extend([{"round": combat["round"], **e} for e in events])
 
         if not enemy.get("alive", True):
             return self.end_combat("victory", log_start)
+
+        if earned_bonus_turn:
+            reason = f"Speed advantage: {player_speed} vs {enemy_power}"
+            combat["bonus_turn_pending"] = True
+            combat["bonus_turn_reason"] = reason
+            combat["bonus_turn_first_action"] = action
+            bonus_event = {"round": combat["round"], "actor": "system", "action": "bonus_turn", "reason": reason}
+            combat["log"].append(bonus_event)
+            self.autosave()
+            return {"combat": combat, "hp": self.state.get("hp"), "hp_max": self.state.get("hp_max"),
+                    "resource": self.state.get("resource"), "resource_max": self.state.get("resource_max"),
+                    "log_tail": combat["log"][log_start:], "player_died": False, "awaiting_bonus_action": True}
 
         # Newly used movement, stealth, buff and transformation skills affect
         # the retaliation in this same exchange, not one round late.
@@ -669,6 +676,9 @@ class CombatMixin:
         player_defense_stat_value = round(player_defense_stat_value * (1 + player_effects["defense_pct"]))
 
         disabling = self._active_disabling_status(combat.get("enemy_statuses", []))
+        defended_this_exchange = action == "defend" or (
+            bonus_action and combat.get("bonus_turn_first_action") == "defend"
+        )
         retaliation_due = action != "flee" or bool(player_disabling)
         if retaliation_due and disabling:
             combat["log"].append({"round": combat["round"], "actor": "enemy", "action": "controlled",
@@ -691,7 +701,7 @@ class CombatMixin:
                 if check["success"] and not shrugged:
                     dmg = self._damage(self.state.get("hp_max", 100), check["margin"], 0, check["breakthrough"], massive)
                     dmg = max(1, round(dmg * eff["damage_multiplier"]))
-                    if action == "defend":
+                    if defended_this_exchange:
                         dmg = max(1, round(dmg * DEFEND_DAMAGE_REDUCTION))
                     shield_before = int(combat.get("player_shield", 0) or 0)
                     absorbed = min(shield_before, dmg)
@@ -713,6 +723,9 @@ class CombatMixin:
                 if self.state.get("hp", 1) <= floor:
                     break
 
+        combat.pop("bonus_turn_pending", None)
+        combat.pop("bonus_turn_reason", None)
+        combat.pop("bonus_turn_first_action", None)
         self._tick_effects(combat)
 
         combat["round"] += 1

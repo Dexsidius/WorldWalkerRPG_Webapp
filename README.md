@@ -6,7 +6,22 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.27.1** (schema 19).
+Current app/save version: **3.27.2** (schema 19).
+
+Version 3.27.2 gives Naruto Jinchūriki a dedicated power system separate from
+ordinary jutsu, Kekkei Genkai, Dōjutsu, and classes. It tracks the sealed
+tailed beast as an independent character, its complete canon potential,
+currently accessible abilities, seal condition, relationship, bond, control,
+transformation stage, reserve increase, mastery requirements, and the physical,
+social, political, and extraction dangers that remain relevant.
+Naruto characters also receive a persistent chakra-affinity profile: native
+elemental jutsu develop faster and more efficiently, off-affinity natures need
+more time and instruction but remain possible, combined releases retain their
+special prerequisites, and tailed-beast nature access stays distinct from the
+host's own natural affinity.
+Combat speed advantages now pause after the first action and return the full
+combat controls for a player-chosen quickened turn instead of automatically
+repeating the same move.
 
 Version 3.27.1 adds a mobile-safe signed login fallback for browsers and
 installed PWAs that discard the normal secure session cookie. It also records

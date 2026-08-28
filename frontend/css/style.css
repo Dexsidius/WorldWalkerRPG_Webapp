@@ -628,6 +628,10 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 .combat-panel{ border-color:rgba(var(--danger-rgb),.4); }
 .combat-panel .panel-head{ color:#ffc0b8; }
 .combat-mode-badge{ margin-left:8px; font-size:9px; font-weight:800; letter-spacing:.06em; padding:2px 7px; border-radius:999px; background:rgba(var(--accent2-rgb),.15); border:1px solid rgba(var(--accent2-rgb),.4); color:var(--accent2); vertical-align:middle; }
+.combat-bonus-turn{ display:flex; flex-direction:column; gap:2px; margin:0 0 9px; padding:8px 10px; border:1px solid rgba(var(--accent2-rgb),.5); border-left:4px solid var(--accent2); border-radius:8px; background:rgba(var(--accent2-rgb),.12); }
+.combat-bonus-turn[hidden]{ display:none; }
+.combat-bonus-turn b{ color:var(--accent2); font:800 10px var(--font-label); letter-spacing:.12em; }
+.combat-bonus-turn span{ color:var(--text); font-size:11.5px; line-height:1.4; }
 .combat-enemy{ background:rgba(0,0,0,.18); border:1px solid var(--border-soft); border-radius:10px; padding:8px 10px; margin-bottom:10px; }
 .combat-mercy-row{ display:flex; align-items:center; gap:7px; color:var(--sub); font-weight:600; font-size:11.5px; margin:-2px 0 10px; cursor:pointer; }
 .combat-mercy-row input{ accent-color:var(--accent2); width:14px; height:14px; flex-shrink:0; }
@@ -1558,6 +1562,22 @@ body[data-world="Naruto"] .tag-list li{ border-left:3px solid var(--nrt-leaf-bri
 body[data-world="Naruto"] .story-feed{
   border-top:6px solid transparent;
   border-image:repeating-linear-gradient(90deg,#4a3a26 0 4px,#3a2d1c 4px 8px) 6;
+}
+body[data-world="Naruto"] .naruto-jinchuriki-system{
+  grid-column:1/-1;
+  border-color:#b45132;
+  background:
+    radial-gradient(circle at 86% 15%,rgba(255,170,77,.22),transparent 30%),
+    linear-gradient(145deg,rgba(150,45,27,.25),rgba(28,12,9,.78));
+  box-shadow:inset 4px 0 0 #d97a3c,0 8px 24px rgba(44,8,3,.25);
+}
+body[data-world="Naruto"] .naruto-jinchuriki-system>summary>header{
+  background:linear-gradient(90deg,rgba(217,92,48,.22),rgba(255,176,70,.04));
+}
+body[data-world="Naruto"] .naruto-jinchuriki-system>summary>header small{ color:#ffb052; }
+body[data-world="Naruto"] .naruto-affinity-system{
+  border-left:3px solid var(--nrt-leaf-bright);
+  background:linear-gradient(145deg,rgba(92,122,74,.18),rgba(20,14,11,.45));
 }
 
 /* Hunter x Hunter — license / modern adventurer */
