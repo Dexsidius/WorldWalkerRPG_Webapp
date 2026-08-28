@@ -33,6 +33,7 @@ from jjk_system import advance_jjk_state
 from standing_intents import (advance_standing_intents, player_training_directives,
                               register_standing_intents, standing_intent_context)
 from simulation_core import refresh_simulation_core, record_resolution_transaction
+from age_system import advance_character_age
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -1411,6 +1412,14 @@ class TimeSkipMixin:
         date_str = format_calendar_date(self.state.get("world", "Custom World"), canon_day, self.state.get("calendar_epoch"), self.state.get("calendar_anchor_day"))
         self.state["world_time"] = f"{date_str} — {period}, {hour:02d}:{minute:02d}"
         pending_canon_appends = self.fire_canon_events(canon_before, canon_after)
+        age_change = advance_character_age(self.state, before)
+        if age_change:
+            years = age_change["years"]
+            elapsed_note = f" after {years} completed campaign years" if years > 1 else ""
+            pending_canon_appends.append({
+                "text": f"[BIRTHDAY]\n{self.state.get('name', 'The character')} is now {age_change['age']}{elapsed_note}.",
+                "tag": "growth", "canon_day": canon_day, "major": False, "event_title": "",
+            })
         # A full status-window popup every ~3 in-game months (90 days),
         # regardless of how time was spent getting there — a periodic
         # check-in on the character's overall progress.

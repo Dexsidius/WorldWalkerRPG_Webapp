@@ -6,7 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.33.0** (schema 19).
+Current app/save version: **3.33.1** (schema 19).
+
+Version 3.33.1 makes character age advance with completed campaign years.
+Existing saves created before age tracking receive a one-time deterministic
+repair from their current calendar year, and long skips add one compact
+birthday update instead of leaving the creation age permanently frozen.
 
 Version 3.33.0 adds a local cinematic feedback system without adding AI calls.
 Every world now has its own restrained ambient identity, while time, weather,

@@ -13,6 +13,7 @@ from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for
 from knowledge import normalize_npc_knowledge
 from bleach_data import CANON_HADO, CANON_BAKUDO
 from world_progression import normalize_world_progression
+from age_system import initialize_age_tracking
 from world_depth import normalize_world_depth
 from lit_systems import initialize_lit_systems
 from skill_system import normalize_skill_map
@@ -396,6 +397,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
 def migrate_state(state, from_version="unknown"):
     migrated = copy.deepcopy(state) if isinstance(state, dict) else {}
     old_schema = int(migrated.get("schema_version", 0) or 0)
+    missing_age_anchor = "age_anchor_year" not in migrated
     if old_schema < 5 and isinstance(migrated.get("stats"), dict):
         # Convert the former 3-20 D&D-like scale to the open-ended local scale
         # while preserving relative strengths. Pool damage/resource ratios are
@@ -419,6 +421,7 @@ def migrate_state(state, from_version="unknown"):
                         resource_max=resource_new, resource=max(0, round(resource_new * resource_ratio)))
     for key, default in BASE_STATE.items():
         migrated.setdefault(key, copy.deepcopy(default))
+    initialize_age_tracking(migrated, repair_elapsed=missing_age_anchor)
     migrated["schema_version"] = BASE_STATE.get("schema_version", 12)
     normalize_npc_knowledge(migrated, {}, "migration")
     repairs = _repair(migrated)

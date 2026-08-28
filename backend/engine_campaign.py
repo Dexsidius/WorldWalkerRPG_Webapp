@@ -27,6 +27,7 @@ from overgeared_classes import canon_class_prompt_reference, infer_class_type, s
 from jjk_system import (apply_birth_slot, generate_birth_slot, generate_curse_identity,
                         initialize_jjk_state, is_curse_origin, normalized_grade,
                         normalize_birth_slot_package)
+from age_system import initialize_age_tracking
 from naruto_system import (apply_jinchuriki_start, build_chakra_affinity_profile,
                            build_jinchuriki_profile, jinchuriki_requested,
                            normalize_chakra_affinity_profile, normalize_jinchuriki_profile)
@@ -2456,6 +2457,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             # rule table would be.
             if str(age).strip():
                 self.state["age"] = str(age).strip()
+            initialize_age_tracking(self.state, reset=True)
             self.state["codex"] = [{"name": start, "type": "Location", "notes": "Starting location."}]
             host = self.state.get("special", {}).get("Jinchūriki Profile")
             if isinstance(host, dict) and host:
