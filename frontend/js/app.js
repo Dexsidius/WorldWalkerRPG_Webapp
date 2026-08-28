@@ -54,7 +54,14 @@ async function api(path, opts = {}) {
   if (APP?.authToken) headers.set("Authorization", `Bearer ${APP.authToken}`);
   if (APP?.csrfToken && !["GET", "HEAD", "OPTIONS"].includes(method)) headers.set("X-Worldwalker-CSRF", APP.csrfToken);
   requestOptions.headers = headers;
-  const res = await fetch(path, requestOptions);
+  let res;
+  try {
+    res = await fetch(path, requestOptions);
+    if (APP.serverReachable === false) setHostConnectionState(true);
+  } catch (error) {
+    setHostConnectionState(false, "The phone lost contact with the Worldwalker PC. Your typed draft is still safe on this device.");
+    throw new Error("The Worldwalker host is temporarily unavailable.");
+  }
   let data = {};
   try { data = await res.json(); } catch (e) { /* empty body */ }
   if (res.status === 401 && data.authentication_required) openModal("modal-auth");
@@ -149,6 +156,62 @@ const APP = {
   mobileHaptics: true,
   mobileLargeText: false,
   mobileScrollCampaign: "",
+  serverReachable: null,
+  serverProbeTimer: null,
+};
+
+function setHostConnectionState(connected, message = "") {
+  const wasUnavailable = APP.serverReachable === false;
+  APP.serverReachable = connected;
+  document.documentElement.classList.toggle("host-unreachable", !connected);
+  const status = $("#asset-recovery-status");
+  const title = $("#asset-recovery-title");
+  const banner = $("#mobile-network-banner");
+  if (!connected) {
+    if (title) title.textContent = "Reconnecting to Worldwalker";
+    if (status) status.textContent = message || "Keep Phone Mode open on the PC, keep the PC awake, and make sure both devices are on the same Wi-Fi.";
+    if (banner) {
+      banner.hidden = false;
+      banner.textContent = "The game host is unavailable. Your typed draft remains on this phone.";
+    }
+  } else if (banner) {
+    banner.hidden = true;
+    banner.textContent = "";
+  }
+  return wasUnavailable;
+}
+
+async function probeGameServer({ restoreState = false } = {}) {
+  if (!navigator.onLine) {
+    setHostConnectionState(false, "This phone is offline. Reconnect to the same Wi-Fi as the Worldwalker PC.");
+    return false;
+  }
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 4500);
+  try {
+    const response = await fetch(`/api/version?connection_check=${Date.now()}`, {
+      cache: "no-store", signal: controller.signal, headers: { "Accept": "application/json" },
+    });
+    if (!response.ok) throw new Error(`Host returned ${response.status}`);
+    const wasUnavailable = setHostConnectionState(true);
+    if (wasUnavailable && restoreState && APP.campaignActive) {
+      const result = await apiGet("/api/state");
+      renderState(result.state);
+      showToast("Reconnected to the campaign.", "notify");
+    }
+    return true;
+  } catch (_) {
+    setHostConnectionState(false, "The phone cannot reach the Worldwalker PC. Keep Phone Mode open, prevent the PC from sleeping, and confirm both devices are on the same Wi-Fi.");
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+window.worldwalkerRetry = async () => {
+  const status = $("#asset-recovery-status");
+  if (status) status.textContent = "Checking the Worldwalker host…";
+  if (await probeGameServer({ restoreState: true })) window.location.reload();
 };
 
 // ---------------------------------------------------------------------------
@@ -5342,18 +5405,16 @@ function initMobileExperience() {
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault(); APP.mobileInstallPrompt = event; $("#btn-mobile-install").hidden = false;
   });
-  const updateNetwork = async () => {
-    const offline = !navigator.onLine;
-    $("#mobile-network-banner").hidden = !offline;
-    $("#mobile-network-banner").textContent = offline ? "Connection lost. Your draft is safe; turns will resume after reconnecting." : "";
-    if (!offline && APP.campaignActive) {
-      try { const result = await apiGet("/api/state"); renderState(result.state); showToast("Reconnected to the campaign.", "notify"); }
-      catch (_) { /* the next normal request will retry */ }
-    }
-  };
+  const updateNetwork = () => probeGameServer({ restoreState: true });
   window.addEventListener("offline", updateNetwork);
   window.addEventListener("online", updateNetwork);
-  document.addEventListener("visibilitychange", () => document.body.classList.toggle("app-backgrounded", document.hidden));
+  window.addEventListener("pageshow", (event) => { if (event.persisted) updateNetwork(); });
+  document.addEventListener("visibilitychange", () => {
+    document.body.classList.toggle("app-backgrounded", document.hidden);
+    if (!document.hidden) updateNetwork();
+  });
+  window.clearInterval(APP.serverProbeTimer);
+  APP.serverProbeTimer = window.setInterval(updateNetwork, 15000);
   window.addEventListener("resize", () => APP.state && renderMobileState(APP.state));
   let mobileScrollTimer = null;
   window.addEventListener("scroll", () => {
@@ -5596,6 +5657,7 @@ $("#btn-welcome-signout").addEventListener("click", signOutAccount);
 async function boot() {
   try {
     const auth = await apiGet("/api/auth/session");
+    setHostConnectionState(true);
     applyAccountSession(auth);
     if (auth.accounts_enabled && !auth.authenticated) {
       openModal("modal-auth");
@@ -5604,8 +5666,7 @@ async function boot() {
     await finishGameBoot();
   } catch (e) {
     console.error(e);
-    showAuthError("The game server did not respond. Refresh the page and try again.");
-    openModal("modal-auth");
+    setHostConnectionState(false, "The game server did not respond. Keep Phone Mode open on the PC, prevent the PC from sleeping, and then try again.");
   }
 }
 initMobileExperience();

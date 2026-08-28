@@ -6,9 +6,9 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.33.1** (schema 19).
+Current app/save version: **3.33.2** (schema 19).
 
-Version 3.33.1 makes character age advance with completed campaign years.
+Version 3.33.2 prevents local-phone tabs from returning as raw HTML after iOS suspends them. Versioned presentation assets remain available in the phone cache, and the app now detects an unreachable PC host, preserves the typed draft, retries after returning to the tab, and shows a readable reconnect screen instead of a broken page.
 Existing saves created before age tracking receive a one-time deterministic
 repair from their current calendar year, and long skips add one compact
 birthday update instead of leaving the creation age permanently frozen.

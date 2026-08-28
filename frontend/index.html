@@ -10,9 +10,30 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cinzel+Decorative:wght@700;900&family=Inter:wght@400;500;600;700&family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&family=Yuji+Syuku&family=Pirata+One&family=MedievalSharp&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/css/style.css" />
+<!-- This tiny recovery shell is deliberately inline. If iOS restores a LAN
+     tab while the PC is asleep, it remains readable even when the main CSS
+     request cannot complete. The versioned stylesheet is retried on reload. -->
+<style>
+  #asset-recovery{display:none;position:fixed;inset:0;z-index:2147483647;box-sizing:border-box;padding:24px;background:#090d17;color:#eef3ff;font:16px/1.5 system-ui,-apple-system,sans-serif;align-items:center;justify-content:center;text-align:center}
+  html.assets-missing #asset-recovery,html.host-unreachable #asset-recovery{display:flex}
+  #asset-recovery>div{width:min(440px,100%);padding:26px 22px;border:1px solid #406277;border-radius:16px;background:#121a27;box-shadow:0 22px 70px #0009}
+  #asset-recovery strong{display:block;margin-bottom:8px;color:#f1bd70;font-size:21px}
+  #asset-recovery p{margin:0 0 18px;color:#c4cfdf}
+  #asset-recovery button{min-height:48px;padding:10px 22px;border:1px solid #79c9db;border-radius:9px;background:#173648;color:#fff;font:700 14px system-ui,-apple-system,sans-serif}
+</style>
+<link id="app-stylesheet" rel="stylesheet" href="/css/style.css"
+      onload="document.documentElement.classList.remove('assets-missing')"
+      onerror="document.documentElement.classList.add('assets-missing')" />
 </head>
 <body data-world="Custom World" data-scene="starry_sky">
+
+<div id="asset-recovery" role="alert" aria-live="assertive">
+  <div>
+    <strong id="asset-recovery-title">Reconnecting to Worldwalker</strong>
+    <p id="asset-recovery-status">Keep Phone Mode open on the PC, keep the PC awake, and make sure both devices are on the same Wi-Fi.</p>
+    <button id="btn-asset-retry" type="button" onclick="window.worldwalkerRetry ? window.worldwalkerRetry() : window.location.reload()">TRY AGAIN</button>
+  </div>
+</div>
 
 <aside id="phone-host-banner" hidden>
   <div><strong>PHONE MODE IS RUNNING</strong><span>Open <b id="phone-host-url"></b> on a phone connected to this trusted Wi-Fi.</span></div>

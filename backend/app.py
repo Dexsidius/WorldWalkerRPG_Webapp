@@ -125,12 +125,44 @@ def bind_friend_account():
     return None
 
 
+def _cache_control_for(path, version=""):
+    """Return a cache policy that is safe for desktop and resilient on LAN phones.
+
+    The HTML shell and APIs must revalidate, but versioned code can be kept
+    indefinitely.  This matters on iOS: Safari may discard an inactive tab
+    and reconstruct it later, while plain HTTP LAN pages cannot install a
+    service worker.  Keeping the versioned shell assets locally prevents a
+    brief sleeping-PC or Wi-Fi interruption from turning the restored page
+    into unstyled HTML.
+    """
+    if path.startswith("/api/"):
+        return "no-store, no-cache, must-revalidate, max-age=0"
+    if path in {"/", "/sw.js", "/manifest.webmanifest"}:
+        return "no-cache, max-age=0, stale-if-error=86400"
+    if path.startswith(("/css/", "/js/")):
+        if version == APP_VERSION:
+            return "public, max-age=31536000, immutable"
+        return "public, max-age=300, stale-while-revalidate=86400, stale-if-error=86400"
+    if path.startswith("/assets/"):
+        return "public, max-age=604800, stale-while-revalidate=2592000, stale-if-error=2592000"
+    if path.startswith("/portrait-cache/"):
+        return "private, max-age=86400, stale-if-error=604800"
+    if path.startswith("/music/"):
+        return "private, max-age=3600, stale-if-error=86400"
+    return "no-cache, max-age=0, stale-if-error=86400"
+
+
 @app.after_request
-def disable_desktop_cache(response):
-    """A desktop build must never reuse JS/assets from an older extraction."""
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
+def apply_client_cache_policy(response):
+    """Cache immutable presentation files without caching game/account data."""
+    policy = _cache_control_for(request.path, request.args.get("v", ""))
+    response.headers["Cache-Control"] = policy
+    if policy.startswith("no-store"):
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    else:
+        response.headers.pop("Pragma", None)
+        response.headers.pop("Expires", None)
     response.headers["X-Worldwalker-Version"] = APP_VERSION
     return response
 
