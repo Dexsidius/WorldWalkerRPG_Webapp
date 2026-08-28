@@ -60,7 +60,7 @@ class WorldwalkerV372Tests(unittest.TestCase):
         return state
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.33.2")
+        self.assertEqual(APP_VERSION, "3.34.0")
 
     def test_extreme_specialty_is_not_called_reality_bending_overall(self):
         stats = {"Taijutsu": 199, "Ninjutsu": 749, "Genjutsu": 35,

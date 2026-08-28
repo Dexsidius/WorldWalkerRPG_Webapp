@@ -13,7 +13,7 @@ from worlds import APP_VERSION, BASE_STATE
 
 class WorldwalkerV362Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.33.2")
+        self.assertEqual(APP_VERSION, "3.34.0")
 
     def fresh(self):
         game = GameSession()
@@ -31,7 +31,8 @@ class WorldwalkerV362Tests(unittest.TestCase):
     def test_event_notice_has_no_private_chat_or_yes_no_intervention(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("CLOSE — CONTINUE IN CHRONICLE", html)
+        self.assertIn("ACKNOWLEDGE EVENT", html)
+        self.assertIn("response prompt is waiting in the Chronicle", html)
         self.assertNotIn('id="event-window-input"', html)
         self.assertNotIn('id="btn-canon-intervene"', html)
         self.assertNotIn("/api/event/respond", js)

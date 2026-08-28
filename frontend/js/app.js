@@ -1243,6 +1243,62 @@ function renderAiPortrait(s) {
   if (!APP.deferPortraitGeneration && (s._portrait_auto_generate || formName)) ensureAiPortrait(s);
 }
 
+function renderActiveFormPanel(s) {
+  const panel = $("#active-form-panel");
+  if (!panel) return;
+  const form = s?._portrait_active_form && typeof s._portrait_active_form === "object" ? s._portrait_active_form : {};
+  const name = String(form.name || "").trim();
+  panel.hidden = !name;
+  if (!name) return;
+
+  const details = String(form.details || form.description || form.effect || "").trim();
+  const formEffect = portraitFormEffect(s) || "aura";
+  const special = s?.special && typeof s.special === "object" ? s.special : {};
+  const matchingBuffs = [...(s?.combat?.player_buffs || []), ...(s?.combat?.player_statuses || [])]
+    .filter((row) => row && (row.effect_type === "transform" || String(row.name || "").toLowerCase() === name.toLowerCase()));
+  const percent = (value) => `${Math.round(Number(value || 0) * 100)}%`;
+  const bonusParts = [];
+  matchingBuffs.forEach((row) => {
+    if (Number(row.power_pct || 0)) bonusParts.push(`Power ${Number(row.power_pct) > 0 ? "+" : ""}${percent(row.power_pct)}`);
+    if (Number(row.defense_pct || 0)) bonusParts.push(`Defense ${Number(row.defense_pct) > 0 ? "+" : ""}${percent(row.defense_pct)}`);
+    if (Number(row.speed_pct || 0)) bonusParts.push(`Speed ${Number(row.speed_pct) > 0 ? "+" : ""}${percent(row.speed_pct)}`);
+  });
+  let structuredBonuses = form.stat_bonuses || form.bonuses;
+  let worldAbilities = form.abilities;
+  let worldRisk = form.risk || form.cost || form.limitation;
+  if (formEffect === "bijuu") {
+    const shinobi = special["Shinobi Profile"] || {};
+    const host = special["Jinchūriki Profile"] || shinobi.jinchuriki || {};
+    structuredBonuses ||= host.stat_boosts;
+    worldAbilities ||= host.available_abilities;
+    worldRisk ||= host.drawbacks;
+    const reserve = Number(host.chakra_reserve_bonus_percent ?? Math.round((Number(host.reserve_multiplier || 1) - 1) * 100));
+    if (reserve) bonusParts.push(`Chakra maximum +${reserve}%`);
+  } else if (formEffect === "bankai" || formEffect === "shikai") {
+    const blade = special["Zanpakuto Profile"] || {};
+    worldAbilities ||= formEffect === "bankai" ? blade.bankai_effect : blade.shikai_effect;
+    worldRisk ||= formEffect === "bankai" ? blade.bankai_cost : blade.shikai_limitation;
+  } else if (formEffect === "domain") {
+    const domain = s?.jjk_system?.domain || {};
+    worldAbilities ||= [domain.sure_hit, domain.manifestation].filter(Boolean);
+    worldRisk ||= domain.cost || domain.counterplay;
+  }
+  if (!bonusParts.length && structuredBonuses && typeof structuredBonuses === "object" && !Array.isArray(structuredBonuses)) {
+    Object.entries(structuredBonuses).forEach(([key, value]) => bonusParts.push(`${humanLabel(key)} ${Number(value) > 0 ? "+" : ""}${value}`));
+  }
+  const abilities = Array.isArray(worldAbilities) ? worldAbilities.filter(Boolean).map(compactReadable).join(" · ") : compactReadable(worldAbilities);
+  const risk = Array.isArray(worldRisk) ? worldRisk.filter(Boolean).map(compactReadable).join(" · ") : compactReadable(worldRisk);
+  const unstable = /uncontrolled|unstable|berserk|corrupt|dangerous|overload/i.test(`${details} ${risk}`);
+
+  $("#active-form-name").textContent = name;
+  $("#active-form-state").textContent = unstable ? "UNSTABLE" : "CONTROLLED";
+  $("#active-form-state").classList.toggle("unstable", unstable);
+  $("#active-form-bonuses").textContent = bonusParts.length ? [...new Set(bonusParts)].join(" · ") : "Narrative transformation active";
+  $("#active-form-abilities").textContent = abilities || details || "Its established abilities remain available while this form is active.";
+  $("#active-form-risk").textContent = risk || (unstable ? details : "No special drawback is currently recorded.");
+  panel.dataset.formEffect = formEffect;
+}
+
 async function ensureAiPortrait(s, force = false) {
   if (!s || !APP.campaignActive || !s._portrait_generation_enabled || !s._portrait_generation_ready) return;
   const signature = s._portrait_signature;
@@ -1510,6 +1566,7 @@ function renderState(state) {
   // Generated portraits are keyed by visually relevant state and update only
   // when appearance, form, or visible equipment actually changes.
   renderAiPortrait(s);
+  renderActiveFormPanel(s);
   $("#portrait-name").textContent = s.name || "Traveler";
   $("#portrait-class").textContent = worldIdentityLabel(s);
   const locationEl = $("#portrait-location");
@@ -1644,9 +1701,22 @@ function renderState(state) {
   // suggested actions
   const sugg = $("#suggested-actions");
   sugg.innerHTML = "";
-  (s.suggested_actions || []).forEach((a) => {
+  const suggestions = s.suggested_actions || [];
+  const suggestionIcon = (action, index) => {
+    const text = String(action || "").toLowerCase();
+    if (/travel|journey|go to|head to|reach|visit|return/.test(text)) return "➜";
+    if (/talk|ask|meet|contact|send|negotiate|diplom/.test(text)) return "◉";
+    if (/train|learn|practice|study|master|improve/.test(text)) return "✦";
+    if (/investigat|scout|search|track|inspect|find/.test(text)) return "⌕";
+    if (/defend|protect|fight|attack|mobilize|prepare/.test(text)) return "⚑";
+    return ["◆", "◇", "✧"][index % 3];
+  };
+  suggestions.forEach((a, index) => {
     const btn = document.createElement("button");
-    btn.textContent = a;
+    btn.type = "button";
+    btn.className = "suggestion-card";
+    btn.setAttribute("aria-label", a);
+    btn.innerHTML = `<span class="suggestion-card-icon" aria-hidden="true">${suggestionIcon(a, index)}</span><span>${escapeHtml(a)}</span>`;
     btn.addEventListener("click", () => {
       const input = $("#action-input");
       const current = input.value.trim();
@@ -1657,6 +1727,18 @@ function renderState(state) {
     });
     sugg.appendChild(btn);
   });
+  if (suggestions.length) {
+    const own = document.createElement("button");
+    own.type = "button";
+    own.className = "suggestion-card suggestion-card-own";
+    own.innerHTML = '<span class="suggestion-card-icon" aria-hidden="true">✎</span><span>Describe another approach</span>';
+    own.addEventListener("click", () => {
+      const input = $("#action-input");
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
+    });
+    sugg.appendChild(own);
+  }
   const reasons = Array.isArray(s.last_cause_effect) ? s.last_cause_effect : [];
   const reasonBox = $("#change-reasons");
   reasonBox.hidden = !reasons.length;
@@ -2411,6 +2493,7 @@ $$(".modal-backdrop").forEach((m) => m.addEventListener("click", (e) => {
 function openEventNotice(result) {
   const isCanon = result.interruption_kind === "canon_event";
   const isDanger = result.interruption_kind === "danger";
+  const notice = result.event_notice || {};
   mobileVibrate(isDanger || result.state?.combat?.active ? [30, 45, 30] : [15, 35, 15]);
   const title = result.major_event_title || result.state?.active_canon_event ||
     (isCanon ? "MAJOR CANON EVENT" : isDanger ? "DANGER" : "MAJOR EVENT");
@@ -2422,9 +2505,23 @@ function openEventNotice(result) {
   $("#event-window-heading").textContent = title;
   $("#event-window-context").textContent = result.interruption_context || result.interruption_reason ||
     "An important event has reached your character's current place in the story.";
+  const meta = $("#event-window-meta");
+  const eventDay = Number.isFinite(Number(notice.canon_day)) ? Number(notice.canon_day) : Number(result.state?.canon_day);
+  const dateLabel = Number.isFinite(eventDay)
+    ? formatCalendarDate(result.state?.world || APP.state?.world || "Custom World", eventDay, result.state?.calendar_epoch, result.state?.calendar_anchor_day)
+    : "";
+  const metaBits = [dateLabel, notice.location, notice.scope ? humanLabel(notice.scope) : ""].filter(Boolean);
+  meta.textContent = metaBits.join("  ·  ");
+  meta.hidden = !metaBits.length;
+  const facts = $("#event-window-facts");
+  const showFacts = !isDanger && Boolean(notice.player_location || notice.travel_time || notice.involvement);
+  facts.hidden = !showFacts;
+  $("#event-window-player-location").textContent = notice.player_location || result.state?.location || "Unknown";
+  $("#event-window-travel").textContent = notice.travel_time || "Depends on the available route";
+  $("#event-window-involvement").textContent = notice.involvement || "The situation is still developing.";
   const banner = $("#event-window-banner");
-  const bannerUrl = isCanon ? (result.state?._scene_image || "") : "";
-  if (bannerUrl && bannerUrl.includes("/assets/canon_events/")) {
+  const bannerUrl = isCanon ? (notice.scene_image || result.state?._scene_image || "") : "";
+  if (bannerUrl && (bannerUrl.includes("/assets/canon_events/") || bannerUrl.includes("/assets/generated_scenes/"))) {
     banner.src = bannerUrl; banner.hidden = false;
   } else {
     banner.removeAttribute("src"); banner.hidden = true;
@@ -3359,7 +3456,9 @@ async function processTimeSkipResolution(result, payload) {
     $("#major-roll-result").textContent = "Ready to roll";
     setPercentileDice(null);
     const marks = {"Naruto":"忍","Bleach":"魂","Jujutsu Kaisen":"呪","One Piece":"海","Hunter x Hunter":"H×H","Solo Max-Level Newbie":"塔","Overgeared":"OG","Reincarnated as a Slime":"◉","Custom World":"WW"};
+    const themeNames = {"Naruto":"SHINOBI FATE","Bleach":"SOUL VERDICT","Jujutsu Kaisen":"CURSED FATE","One Piece":"GRAND LINE FATE","Hunter x Hunter":"HUNTER CHECK","Solo Max-Level Newbie":"TOWER SYSTEM","Overgeared":"SATISFY SYSTEM","Reincarnated as a Slime":"WORLD VOICE","Custom World":"WORLDWALKER"};
     $("#percentile-world-mark").textContent = marks[APP.state?.world] || "WW";
+    $("#percentile-theme-label").textContent = themeNames[APP.state?.world] || "WORLDWALKER";
     $("#d100-orb").classList.remove("rolling", "revealed");
     $("#btn-major-roll").disabled = false;
     openModal("modal-major-roll");
@@ -4095,10 +4194,27 @@ async function openJournal(tab) {
 // can have exactly one controller. Same-owner neighbors share no border, so
 // annexations visibly join instead of stacking translucent blobs.
 // ---------------------------------------------------------------------------
+const MAP_FACTION_PALETTE = [
+  "#d95b53", "#d4a43d", "#397fc1", "#735fc6", "#3f9c8e", "#b96aab",
+  "#8da54a", "#cf754d", "#5a9eb4", "#9a6cbe", "#b77b42", "#6b9f62",
+];
+function factionHash(name) {
+  let hash = 2166136261;
+  for (let i = 0; i < String(name).length; i++) { hash ^= String(name).charCodeAt(i); hash = Math.imul(hash, 16777619); }
+  return hash >>> 0;
+}
+function factionColorMap(names) {
+  const colors = new Map(), used = new Set();
+  [...new Set(names)].sort((a, b) => a.localeCompare(b)).forEach((name) => {
+    let slot = factionHash(name) % MAP_FACTION_PALETTE.length;
+    for (let attempts = 0; attempts < MAP_FACTION_PALETTE.length && used.has(slot); attempts++) slot = (slot + 1) % MAP_FACTION_PALETTE.length;
+    used.add(slot);
+    colors.set(name, MAP_FACTION_PALETTE[slot]);
+  });
+  return colors;
+}
 function factionColor(name) {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
-  return `hsl(${hash % 360}, 62%, 55%)`;
+  return MAP_FACTION_PALETTE[factionHash(name) % MAP_FACTION_PALETTE.length];
 }
 function groupNodesByController(nodes) {
   const byFaction = {};
@@ -4107,7 +4223,9 @@ function groupNodesByController(nodes) {
     if (!controller || controller === "Unknown" || controller === "Unclaimed") return;
     (byFaction[controller] = byFaction[controller] || []).push(n);
   });
-  return Object.keys(byFaction).sort((a, b) => a.localeCompare(b)).map((controller) => ({ controller, color: factionColor(controller) }));
+  const controllers = Object.keys(byFaction).sort((a, b) => a.localeCompare(b));
+  const colors = factionColorMap(controllers);
+  return controllers.map((controller) => ({ controller, color: colors.get(controller) }));
 }
 function mapHash(value) {
   let hash = 2166136261;
@@ -4201,8 +4319,8 @@ function paintMapTerritories(canvas, nodes) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   if (!owners.length) return { labels: [] };
-  const controllers = [...new Set(owners.map((n) => n.controller))];
-  const colors = new Map(controllers.map((name) => [name, factionColor(name)]));
+  const controllers = [...new Set(owners.map((n) => n.controller))].sort((a, b) => a.localeCompare(b));
+  const colors = factionColorMap(controllers);
   const dx = Math.sqrt(3) * HEX, dy = 1.5 * HEX;
   const rowCount = Math.ceil(HEIGHT / dy) + 1, colCount = Math.ceil(WIDTH / dx) + 1;
   const cells = [], byKey = new Map();
@@ -4236,7 +4354,7 @@ function paintMapTerritories(canvas, nodes) {
     mapHexPath(washCtx, cell.cx, cell.cy, HEX + .62);
     washCtx.fillStyle = colors.get(cell.controller); washCtx.fill();
   });
-  ctx.save(); ctx.globalAlpha = .27; ctx.drawImage(wash, 0, 0); ctx.restore();
+  ctx.save(); ctx.globalAlpha = .20; ctx.drawImage(wash, 0, 0); ctx.restore();
   const neighborForEdge = (cell, edge) => {
     const odd = Boolean(cell.row & 1), r = cell.row, c = cell.col;
     const keys = odd
@@ -4253,9 +4371,13 @@ function paintMapTerritories(canvas, nodes) {
       const a = Math.PI / 180 * (30 + edge * 60), b = Math.PI / 180 * (30 + ((edge + 1) % 6) * 60);
       ctx.beginPath(); ctx.moveTo(cell.cx + HEX * Math.cos(a), cell.cy + HEX * Math.sin(a));
       ctx.lineTo(cell.cx + HEX * Math.cos(b), cell.cy + HEX * Math.sin(b));
+      ctx.lineCap = "round";
+      ctx.strokeStyle = "rgba(1,4,8,.82)";
+      ctx.lineWidth = cell.winner?.region.recently_changed ? 5 : 3.8;
+      ctx.stroke();
       ctx.strokeStyle = cell.winner?.region.recently_changed ? "rgba(255,220,116,.98)" : colors.get(cell.controller);
-      ctx.lineWidth = cell.winner?.region.recently_changed ? 3.5 : 2.15;
-      ctx.lineCap = "round"; ctx.stroke();
+      ctx.lineWidth = cell.winner?.region.recently_changed ? 2.7 : 1.65;
+      ctx.stroke();
     }
     if ((cell.winner?.region.contested_by || []).length) {
       ctx.save(); mapHexPath(ctx, cell.cx, cell.cy, HEX - .4); ctx.clip();
@@ -5016,6 +5138,14 @@ $("#btn-save-settings").addEventListener("click", async () => {
 
 $("#btn-portrait-regenerate").addEventListener("click", () => {
   if (APP.state) ensureAiPortrait(APP.state, true);
+});
+
+$("#btn-end-transformation").addEventListener("click", async () => {
+  try {
+    const result = await apiPost("/api/portrait/form/end", {});
+    renderState(result.state);
+    showToast("Returned to base form.", "notify");
+  } catch (error) { showToast(error.message, "danger"); }
 });
 
 async function openPortraitManager() {

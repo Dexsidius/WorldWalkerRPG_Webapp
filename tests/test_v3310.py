@@ -16,7 +16,7 @@ from portrait_generator import portrait_signature
 
 class WorldwalkerV3310MobileTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.33.2")
+        self.assertEqual(APP_VERSION, "3.34.0")
 
     def test_approved_mobile_navigation_and_persistent_controls_ship(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")

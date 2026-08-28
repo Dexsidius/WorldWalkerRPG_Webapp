@@ -2,7 +2,7 @@
 logic (character creation, assess/roll/resolve turn loop, time skips, chat,
 world ticks, memory management, save/load) with all Tkinter UI code removed.
 Returns plain dicts so a Flask layer can serialize them straight to JSON."""
-import copy, json, random, re, secrets, threading
+import copy, json, math, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
@@ -384,6 +384,67 @@ class TimeSkipMixin:
         position = self.state.get("position") or "their present role"
         return (f"What does {name} do from {location}, given their current standing as {position}, "
                 f"as {title} reaches the part of the situation they can actually affect?")
+
+    def _event_notice_payload(self, data, canon_stop=None):
+        """Deterministic, display-only context for the informational event sheet.
+
+        The narrator still owns the prose and intervention prompt. These rows
+        are calculated locally so the notice cannot forget the player's real
+        location, claim they teleported into a distant event, or spend another
+        AI call merely formatting facts the game already tracks.
+        """
+        canon_stop = canon_stop if isinstance(canon_stop, dict) else {}
+        world = self.state.get("world", "Custom World")
+        player_location = str(self.state.get("location") or "Unknown")
+        event_location = str(canon_stop.get("location") or data.get("major_event_location") or "Unknown")
+        same_place = self._same_place(player_location, event_location)
+
+        nodes = list(WORLD_DATA.get(world, {}).get("map", []) or [])
+        for entry in self.state.get("custom_locations", []) or []:
+            if isinstance(entry, dict) and entry.get("name"):
+                nodes.append((entry.get("name"), entry.get("x", 50), entry.get("y", 50), entry.get("kind", "landmark"), entry.get("tier", 1)))
+
+        def find_node(location):
+            return next((node for node in nodes if self._same_place(location, node[0])), None)
+
+        travel_time = "Already in the event area" if same_place else "Requires travel from the current location"
+        start, destination = find_node(player_location), find_node(event_location)
+        if not same_place and start and destination:
+            distance = math.dist((float(start[1]), float(start[2])), (float(destination[1]), float(destination[2])))
+            scale = float(progression_preset_for(world).get("travel_scale", 1.0) or 1.0)
+            minutes = max(30, int(round(distance * 38 * scale + max(0, int(destination[4] or 1) - 1) * 12)))
+            if minutes < 120:
+                travel_time = f"About {max(30, int(round(minutes / 15) * 15))} minutes by an ordinary route"
+            elif minutes < 1440:
+                travel_time = f"About {max(1, round(minutes / 60))} hours by an ordinary route"
+            else:
+                days = max(1, round(minutes / 1440, 1))
+                travel_time = f"About {days:g} days by an ordinary route"
+
+        combat_active = bool(isinstance(self.state.get("combat"), dict) and self.state.get("combat", {}).get("active"))
+        if combat_active:
+            involvement = "Direct — combat has already begun"
+        elif same_place:
+            involvement = "Direct — the event has reached your current area"
+        elif data.get("interrupted"):
+            involvement = "Indirect but actionable — your ties, authority, or access give you a meaningful response"
+        else:
+            involvement = "Indirect — information and access are limited by distance"
+
+        scene_state = copy.deepcopy(self.state)
+        if data.get("active_major_event"):
+            scene_state["active_canon_event"] = data.get("active_major_event")
+        scene_image, _ = scene_image_url(scene_state)
+        return {
+            "title": str(data.get("major_event_title") or canon_stop.get("title") or "Major event"),
+            "location": event_location,
+            "player_location": player_location,
+            "travel_time": travel_time,
+            "involvement": involvement,
+            "scope": str(canon_stop.get("scope") or data.get("major_event_scope") or "personal"),
+            "canon_day": int(canon_stop.get("canon_day", self.state.get("canon_day", 0)) or 0),
+            "scene_image": scene_image or "",
+        }
 
     @staticmethod
     def _power_goal_chance(days_invested):
@@ -1105,6 +1166,8 @@ class TimeSkipMixin:
         progression_actions = list(dict.fromkeys([*orders, *persistent_training]))
         self.enforce_training_progress(data, results, training_amount, training_unit, progression_actions, intensity)
         ensure_productive_failures(data, results)
+        if data.get("interrupted") and str(data.get("interruption_kind") or "").lower() in {"canon_event", "world_event"}:
+            data["event_notice"] = self._event_notice_payload(data, canon_stop)
         return self.apply_time_skip(data, amount, unit, progression_context={
             "actions": orders, "rolls": results,
             "progression_actions": progression_actions,
@@ -1940,6 +2003,7 @@ class TimeSkipMixin:
                 if isinstance(data.get("interruption_user_ids"), list) else None,
                 "interruption_context": data.get("interruption_context", ""),
                 "intervention_prompt": data.get("intervention_prompt", ""),
+                "event_notice": copy.deepcopy(data.get("event_notice", {})) if isinstance(data.get("event_notice"), dict) else {},
                 "danger_notice_required": danger_notice_required,
                 "major_event_reached": bool(data.get("major_event_reached")),
                 "major_event_kind": data.get("major_event_kind", ""),

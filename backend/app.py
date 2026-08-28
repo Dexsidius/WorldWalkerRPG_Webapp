@@ -11,7 +11,9 @@ from werkzeug.local import LocalProxy
 from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for, power_profile_for
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
-from portrait_generator import PORTRAIT_CACHE_DIR, generate_portrait, save_reference, portrait_history, revert_portrait, portrait_usage, portrait_view
+from portrait_generator import (PORTRAIT_CACHE_DIR, clear_active_portrait_form, generate_portrait,
+                                save_reference, portrait_history, revert_portrait,
+                                portrait_usage, portrait_view)
 from lore import (list_lore_sources, import_lore_pack, import_lore_url, lore_library_status,
                   lore_automation_status, configure_lore_automation, refresh_lore_sources,
                   seed_recommended_lore_sources)
@@ -1418,6 +1420,28 @@ def api_portrait_reference():
 def api_portrait_history():
     portrait_state, character = request_portrait_state()
     return jsonify({"history": portrait_history(portrait_state), "identity": character.get("portrait_identity", {})})
+
+
+@app.route("/api/portrait/form/end", methods=["POST"])
+def api_portrait_form_end():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    portrait_state, character = request_portrait_state()
+    changed = clear_active_portrait_form(portrait_state)
+    if character is not portrait_state:
+        clear_active_portrait_form(character)
+    for target in {id(portrait_state): portrait_state, id(character): character}.values():
+        combat = target.get("combat") if isinstance(target.get("combat"), dict) else None
+        if combat:
+            combat["player_buffs"] = [row for row in combat.get("player_buffs", [])
+                                      if not (isinstance(row, dict) and row.get("effect_type") == "transform")]
+    room = getattr(g, "worldwalker_room", None)
+    user = getattr(g, "worldwalker_user", None)
+    if room and user and _multiplayer_store:
+        _multiplayer_store.save_character(room["id"], user["id"], character)
+    else:
+        game.autosave()
+    return jsonify({"ok": True, "changed": changed, "state": request_public_state()})
 
 
 @app.route("/api/portrait/revert", methods=["POST"])

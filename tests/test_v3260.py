@@ -29,7 +29,7 @@ class WorldwalkerV3260RecurringFinancePersistenceTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.33.2")
+        self.assertEqual(APP_VERSION, "3.34.0")
 
     def test_unmentioned_income_survives_an_unrelated_recurring_finances_patch(self):
         """The real bug: establishing a second income source later, without
@@ -174,7 +174,7 @@ class WorldwalkerV3260PlaytestPresentationTests(unittest.TestCase):
     def test_sticky_modal_header_has_an_opaque_surface(self):
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         modal_head = css.split(".modal-head{", 1)[1].split("}", 1)[0]
-        self.assertIn("rgba(var(--glass-rgb),.98)", modal_head)
+        self.assertIn("rgba(var(--glass-rgb),.97)", modal_head)
 
 
 if __name__ == "__main__":

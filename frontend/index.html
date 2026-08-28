@@ -121,6 +121,30 @@
       </div>
     </section>
 
+    <section id="active-form-panel" class="panel active-form-panel" hidden>
+      <details id="active-form-details" open>
+        <summary>
+          <span class="active-form-summary-copy"><small>ACTIVE FORM</small><b id="active-form-name">Transformation</b></span>
+          <span id="active-form-state" class="active-form-state">CONTROLLED</span>
+        </summary>
+        <div class="active-form-body">
+          <div class="active-form-row">
+            <span>Current effects</span>
+            <strong id="active-form-bonuses">Narrative transformation active</strong>
+          </div>
+          <div class="active-form-row">
+            <span>Granted abilities</span>
+            <strong id="active-form-abilities">See the Chronicle for its established abilities.</strong>
+          </div>
+          <div class="active-form-row active-form-risk-row">
+            <span>Cost or risk</span>
+            <strong id="active-form-risk">No special drawback is currently recorded.</strong>
+          </div>
+          <button id="btn-end-transformation" class="btn-ghost active-form-end" type="button">RETURN TO BASE FORM</button>
+        </div>
+      </details>
+    </section>
+
     <section class="panel">
       <header class="panel-head"><span><i class="panel-head-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg></i><span id="character-sheet-title">Character Sheet</span></span></header>
       <div class="panel-body stat-summary" id="stat-summary-body">
@@ -869,17 +893,25 @@
 
 <div class="modal-backdrop event-window-backdrop" id="modal-event-window">
   <div class="modal event-window-modal" role="dialog" aria-modal="true" aria-labelledby="event-window-title">
+    <div class="event-window-grip" aria-hidden="true"></div>
     <header class="modal-head">
       <span id="event-window-title">MAJOR EVENT</span>
       <button type="button" id="btn-event-window-leave" aria-label="Close event notice">✕</button>
     </header>
-    <img id="event-window-banner" class="event-window-banner" alt="" hidden>
     <div class="event-window-notice">
       <p class="event-window-kicker" id="event-window-kicker">THE SIMULATION HAS STOPPED HERE</p>
       <h3 id="event-window-heading">An important event is happening.</h3>
+      <div class="event-window-meta" id="event-window-meta" hidden></div>
+      <img id="event-window-banner" class="event-window-banner" alt="" hidden>
       <p id="event-window-context"></p>
-      <p class="event-window-guidance">The full scene and your position-aware next prompt are in the Chronicle. Continue through the normal Action Chat; if combat has begun, its controls are ready on the main screen.</p>
-      <button id="btn-event-window-continue" class="btn-primary full" type="button">CLOSE — CONTINUE IN CHRONICLE</button>
+      <dl class="event-window-facts" id="event-window-facts" hidden>
+        <dt>Your position</dt><dd id="event-window-player-location">Unknown</dd>
+        <dt>Travel time</dt><dd id="event-window-travel">Unknown</dd>
+        <dt>Involvement</dt><dd id="event-window-involvement">The situation is still developing.</dd>
+        <dt>Simulation</dt><dd>Paused at a major world event</dd>
+      </dl>
+      <button id="btn-event-window-continue" class="btn-primary full" type="button">ACKNOWLEDGE EVENT</button>
+      <p class="event-window-guidance">Your position-aware response prompt is waiting in the Chronicle. No decision is made from this notice.</p>
     </div>
   </div>
 </div>
@@ -923,6 +955,9 @@
     </header>
     <div class="percentile-tray" id="percentile-tray" aria-busy="false">
       <span class="percentile-world-mark" id="percentile-world-mark" aria-hidden="true">WW</span>
+      <span class="percentile-theme-label" id="percentile-theme-label" aria-hidden="true">WORLDWALKER</span>
+      <span class="percentile-theme-stroke percentile-theme-stroke-a" aria-hidden="true"></span>
+      <span class="percentile-theme-stroke percentile-theme-stroke-b" aria-hidden="true"></span>
       <div class="percentile-dice" role="img" aria-label="Percentile dice waiting to roll">
         <div class="percentile-die die-tens"><svg viewBox="0 0 160 180" aria-hidden="true"><path class="die-base" d="M80 13 145 50 80 87 15 50Z"/><path class="face-dark" d="M15 50 80 87 80 160 15 123Z"/><path class="face-light" d="M80 87 145 50 145 123 80 160Z"/><path class="die-seam" d="M15 50 80 87 145 50M80 87V160"/><path class="die-outline" d="M80 13 145 50 145 123 80 160 15 123 15 50Z"/><text class="die-number" x="80" y="64" id="d100-tens">—</text><text class="side-number" x="49" y="116" transform="rotate(29 49 116)">20</text><text class="side-number" x="112" y="116" transform="rotate(-29 112 116)">50</text></svg></div>
         <div class="percentile-die die-ones"><svg viewBox="0 0 160 180" aria-hidden="true"><path class="die-base" d="M80 13 145 50 80 87 15 50Z"/><path class="face-dark" d="M15 50 80 87 80 160 15 123Z"/><path class="face-light" d="M80 87 145 50 145 123 80 160Z"/><path class="die-seam" d="M15 50 80 87 145 50M80 87V160"/><path class="die-outline" d="M80 13 145 50 145 123 80 160 15 123 15 50Z"/><text class="die-number" x="80" y="64" id="d100-ones">—</text><text class="side-number" x="49" y="116" transform="rotate(29 49 116)">2</text><text class="side-number" x="112" y="116" transform="rotate(-29 112 116)">5</text></svg></div>

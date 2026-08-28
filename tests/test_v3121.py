@@ -17,7 +17,7 @@ from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.33.2")
+        self.assertEqual(APP_VERSION, "3.34.0")
 
     def make_system_game(self, world):
         game = GameSession()
@@ -207,7 +207,7 @@ class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
     def test_mobile_suggestions_wrap_instead_of_clipping(self):
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         mobile = css[css.index("@media(max-width:720px){", css.index("@media(max-width:720px){") + 1):]
-        self.assertIn(".suggested-actions{ max-width:100%; flex-wrap:wrap; overflow-x:visible; }", mobile)
+        self.assertIn(".suggested-actions{ max-width:100%; grid-template-columns:repeat(2,minmax(0,1fr)); overflow:visible; }", mobile)
         self.assertIn("white-space:normal", mobile)
 
     def test_completed_combat_cannot_override_current_landmark_art(self):
