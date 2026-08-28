@@ -1115,6 +1115,23 @@ function renderNarutoJinchurikiPanel(host = {}) {
   return `<details class="world-system-card expandable-special-card naruto-jinchuriki-system"><summary><span class="naruto-system-mark" aria-hidden="true">尾</span><header><small>JINCHŪRIKI</small><h3>${escapeHtml(host.beast)}</h3><p>${escapeHtml(host.mastery || "Unmastered")} · ${escapeHtml(Number(host.control || 0))}% control</p></header><span class="expand-label"></span></summary><div class="expandable-special-body jinchuriki-expanded"><figure class="jinchuriki-beast-figure"><div class="jinchuriki-beast-art" data-tails="${tails}" role="img" aria-label="Illustration of ${escapeHtml(host.beast)}"></div><figcaption>${escapeHtml(host.title || `${tails}-Tails`)} · ${escapeHtml(host.relationship || "Undeveloped bond")}</figcaption></figure><div class="jinchuriki-dossier"><section class="jinchuriki-status-strip"><div><small>SEAL</small><b>${escapeHtml(host.status || "Sealed host")}</b></div><div><small>CURRENT FORM</small><b>${escapeHtml(host.transformation_stage || "Base form")}</b></div><div><small>BOND</small><b>${escapeHtml(Number(host.bond_progress || 0))}%</b></div></section><section class="jinchuriki-boosts"><header><b>Host bonuses</b><span>Permanent mechanical gains from the sealed beast</span></header><div class="jinchuriki-boost-grid">${reserve ? `<span class="reserve-boost"><b>+${escapeHtml(reserve)}%</b>Chakra maximum</span>` : ""}${boostChips || `<span><b>0</b>Direct stat boosts while sealing is pending</span>`}</div></section><section class="jinchuriki-ability-section"><header><b>Abilities available now</b><span>${escapeHtml((host.available_abilities || []).length)} unlocked</span></header><ul>${abilityList}</ul></section>${locked}${drawbacks}<div class="jinchuriki-detail-grid"><div><b>Seal condition</b><span>${escapeHtml(compactReadable(host.seal) || "Not recorded")}</span></div><div><b>Beast natures</b><span>${escapeHtml(compactReadable(host.nature_transformations) || "Not recorded")}</span></div><div><b>Beast traits</b><span>${escapeHtml(compactReadable(host.beast_traits) || "Not recorded")}</span></div><div><b>Development path</b><span>${escapeHtml(compactReadable(host.progression) || "Build control and trust through play")}</span></div></div></div></div></details>`;
 }
 
+function renderNenPanel(nen = {}, special = {}, preview = false) {
+  const discovered = String(nen.visibility || special["Nen Access"] || "Undiscovered") !== "Undiscovered";
+  if (!discovered) {
+    return `<details class="world-system-card expandable-special-card hxh-system nen-locked-panel" open><summary><span class="nen-aura-mark" aria-hidden="true">念</span><header><small>LATENT NEN</small><h3>Undiscovered</h3><p>Your aura identity already exists, but your character does not know it yet.</p></header><span class="expand-label"></span></summary><div class="expandable-special-body"><div class="world-system-detail"><b>What is visible</b><span>No affinity, Hatsu name, or ability mechanics are revealed before awakening.</span></div><div class="world-system-detail"><b>Discovery</b><span>Find a Nen teacher, survive a legitimate awakening, or encounter another setting-valid initiation. The ability revealed later remains the one fixed at creation.</span></div></div></details>`;
+  }
+  const hatsu = nen.hatsu_profile || {};
+  const order = ["Enhancement", "Transmutation", "Conjuration", "Specialization", "Manipulation", "Emission"];
+  const efficiency = nen.category_efficiency || {};
+  const affinityNodes = order.map((name, index) => `<div class="nen-affinity-node n${index}${name === nen.category ? " primary" : ""}"><b>${escapeHtml(name)}</b><span>${escapeHtml(efficiency[name] ?? (name === nen.category ? 100 : "—"))}%</span></div>`).join("");
+  const rows = [
+    ["Governing effect", hatsu.effect || hatsu.governing_rule], ["Activation", hatsu.activation],
+    ["Applications", hatsu.applications], ["Vows", hatsu.vows], ["Limits", hatsu.limitations],
+    ["Counters", hatsu.counters], ["Aura cost", hatsu.aura_cost], ["Growth path", hatsu.growth_path],
+  ].filter(([, value]) => compactReadable(value));
+  return `<details class="world-system-card expandable-special-card hxh-system nen-profile-panel"${preview ? " open" : ""}><summary><span class="nen-aura-mark" aria-hidden="true">念</span><header><small>NEN PROFILE</small><h3>${escapeHtml(hatsu.name || special.Hatsu || "Developing Hatsu")}</h3><p>${escapeHtml(nen.category || special["Nen Category"] || "Unknown")} · Ten ${escapeHtml(nen.ten || 0)} · Zetsu ${escapeHtml(nen.zetsu || 0)} · Ren ${escapeHtml(nen.ren || 0)}</p></header><span class="expand-label"></span></summary><div class="expandable-special-body nen-profile-body"><section class="nen-affinity"><header><b>Aura affinity</b><span>Natural efficiency across the six Nen categories</span></header><div class="nen-affinity-graph"><div class="nen-hex-lines" aria-hidden="true"></div>${affinityNodes}<strong class="nen-affinity-core">${escapeHtml((nen.category || "?").slice(0, 1))}</strong></div></section><section class="nen-hatsu-dossier"><header><small>PERSONAL HATSU</small><h4>${escapeHtml(hatsu.name || "Developing Hatsu")}</h4><span>${escapeHtml(compactReadable(hatsu.category_mix) || nen.category || "Unknown")}</span></header>${rows.map(([label,value]) => `<div class="world-system-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(compactReadable(value))}</span></div>`).join("")}</section></div></details>`;
+}
+
 function renderWorldProgression(world, special, classProfile, data = {}) {
   const value = (raw, fallback = "Not established") => compactReadable(raw) || fallback;
   const card = (eyebrow, title, rows, tone = "") => `<details class="world-system-card expandable-special-card ${tone}"><summary><header><small>${escapeHtml(eyebrow)}</small><h3>${escapeHtml(value(title))}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body">${rows.filter(([,v]) => v !== undefined && v !== null && value(v, "") !== "").map(([label,v]) => `<div class="world-system-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value(v))}</span></div>`).join("")}</div></details>`;
@@ -1132,8 +1149,7 @@ function renderWorldProgression(world, special, classProfile, data = {}) {
   }
   if (world === "Hunter x Hunter") {
     const nen = special["Nen Profile"] || {}, hatsu = nen.hatsu_profile || {};
-    if ((nen.visibility || special["Nen Access"]) === "Undiscovered") return card("NEN", "Undiscovered", [["Current understanding","Aura terminology and techniques have not been learned in character."],["Discovery route","Find a legitimate teacher, survive an awakening, or encounter a setting-valid initiation."]], "hxh-system");
-    return `<section class="world-system-grid">${card("NEN TYPE", nen.category || special["Nen Category"], [["Ten",nen.ten],["Zetsu",nen.zetsu],["Ren",nen.ren],["Status",nen.visibility]], "hxh-system")}${card("HATSU", hatsu.name || special.Hatsu, [["Category mix",hatsu.category_mix],["Effect",hatsu.effect],["Activation",hatsu.activation],["Vows",hatsu.vows],["Limits",hatsu.limitations],["Growth",hatsu.growth_path]], "hxh-system")}</section>`;
+    return renderNenPanel(nen, special);
   }
   if (world === "Naruto") {
     const p = special["Shinobi Profile"] || {};
@@ -4713,8 +4729,12 @@ function refreshCampaignWorldFields() {
   fillSelect($("#nc-origin"), origins, origins[0]);
   fillSelect($("#nc-archetype"), archetypes, archetypes[0]);
   const isJjk = world === "Jujutsu Kaisen";
+  const isHxh = world === "Hunter x Hunter";
+  const isOnePiece = world === "One Piece";
   $("#nc-archetype-field").hidden = isJjk;
   $("#nc-jjk-options").hidden = !isJjk;
+  $("#nc-hxh-options").hidden = !isHxh;
+  $("#nc-one-piece-options").hidden = !isOnePiece;
   if (isJjk) $("#nc-archetype").innerHTML = '<option value="Jujutsu Sorcerer">Jujutsu Sorcerer</option>';
   $("#nc-custom-label").style.opacity = world === "Custom World" ? "1" : ".45";
   const abilities = wd.abilities || ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
@@ -4753,6 +4773,8 @@ function refreshCampaignWorldFields() {
     : "Create an original character shortly before the main storyline.";
   refreshEraRow();
   refreshJjkCreationOptions();
+  refreshHxhCreationOptions();
+  refreshOnePieceCreationOptions();
 }
 
 function refreshEraRow() {
@@ -4787,6 +4809,17 @@ function refreshJjkCreationOptions() {
   }
 }
 
+function refreshHxhCreationOptions() {
+  const active = $("#nc-world").value === "Hunter x Hunter" && !$("#nc-character-mode").value;
+  $("#nc-hxh-options").hidden = !active;
+}
+
+function refreshOnePieceCreationOptions() {
+  const active = $("#nc-world").value === "One Piece" && !$("#nc-character-mode").value;
+  $("#nc-one-piece-options").hidden = !active;
+  $("#nc-op-haki-types").hidden = !(active && $("#nc-op-haki").checked);
+}
+
 function collectCampaignPayload() {
   const stats = {};
   $$("#nc-stats input").forEach((inp) => { stats[inp.getAttribute("data-stat")] = parseInt(inp.value || "0", 10); });
@@ -4804,6 +4837,13 @@ function collectCampaignPayload() {
     starting_era_id: $("#nc-era-row").hidden ? "" : ($("#nc-starting-era").value || ""),
     jjk_guarantee_strong: !!$("#nc-jjk-strong").checked,
     jjk_curse_grade: $("#nc-origin").value === "Sentient Cursed Spirit" ? $("#nc-jjk-curse-grade").value : "",
+    hxh_start_with_nen: !!$("#nc-hxh-nen").checked,
+    one_piece_devil_fruit: !!$("#nc-op-devil-fruit").checked,
+    one_piece_haki_types: $("#nc-op-haki").checked ? [
+      $("#nc-op-observation").checked ? "Observation" : "",
+      $("#nc-op-armament").checked ? "Armament" : "",
+      $("#nc-op-conqueror").checked ? "Conqueror" : "",
+    ].filter(Boolean) : [],
   };
 }
 
@@ -4828,9 +4868,13 @@ async function openNewCampaignModal() {
 }
 $("#nc-world").addEventListener("change", refreshCampaignWorldFields);
 $("#nc-origin").addEventListener("change", refreshJjkCreationOptions);
+$("#nc-op-haki").addEventListener("change", refreshOnePieceCreationOptions);
 $("#nc-difficulty").addEventListener("change", () => { $("#nc-diff-desc").textContent = APP.worldsMeta.difficulties[$("#nc-difficulty").value].description; });
 $("#nc-character-mode").addEventListener("change", () => {
   refreshEraRow();
+  refreshJjkCreationOptions();
+  refreshHxhCreationOptions();
+  refreshOnePieceCreationOptions();
   const c = selectedCanonCharacter();
   if (!c) {
     if (ncCharacterStash) {
@@ -4888,6 +4932,11 @@ function renderCampaignPreview(p, payload) {
     const jinchurikiPreviewCard = p.world === "Naruto" && host.beast ? `<details class="world-system-card expandable-special-card naruto-jinchuriki-system" open><summary><header><small>JINCHŪRIKI</small><h3>${escapeHtml(host.beast)} · ${escapeHtml(host.mastery || "Unmastered")}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body"><div class="world-system-detail"><b>Seal & relationship</b><span>${escapeHtml(`${host.seal || "Established seal"} · ${host.relationship || "Undeveloped"}`)}</span></div><div class="world-system-detail"><b>Available now</b><span>${escapeHtml(compactReadable(host.available_abilities) || "No deliberate access yet")}</span></div><div class="world-system-detail"><b>Full canon potential</b><span>${escapeHtml(compactReadable(host.canonical_abilities))}</span></div><div class="world-system-detail"><b>Drawbacks & dangers</b><span>${escapeHtml(compactReadable(host.drawbacks))}</span></div></div></details>` : "";
     const affinity = profile.naruto_affinity_profile || {};
     const affinityPreviewCard = p.world === "Naruto" && affinity.primary ? `<details class="world-system-card expandable-special-card naruto-affinity-system" open><summary><header><small>CHAKRA AFFINITY</small><h3>${escapeHtml(affinity.primary)}</h3></header><span class="expand-label"></span></summary><div class="expandable-special-body"><div class="world-system-detail"><b>Natural affinities</b><span>${escapeHtml(compactReadable(affinity.natural_affinities) || affinity.primary)}</span></div><div class="world-system-detail"><b>Learned proficiencies</b><span>${escapeHtml(compactReadable(affinity.proficiencies) || "None yet")}</span></div><div class="world-system-detail"><b>Natural advantage</b><span>${escapeHtml(affinity.native_rule)}</span></div><div class="world-system-detail"><b>Other natures</b><span>${escapeHtml(affinity.off_affinity_rule)}</span></div><div class="world-system-detail"><b>Learning rates</b><span>${escapeHtml(Object.entries(affinity.learning_rates || {}).map(([nature,rate]) => `${nature.replace(" Release", "")} ${Number(rate).toFixed(2)}×`).join(" · "))}</span></div></div></details>` : "";
+    const nenPreviewCard = p.world === "Hunter x Hunter" ? renderNenPanel(profile.nen_profile || {}, {}, true) : "";
+    const onePiecePreviewCard = p.world === "One Piece" && (profile.devil_fruit_profile || Object.keys(profile.haki_profile || {}).length) ? renderWorldProgression("One Piece", {
+      "Devil Fruit Profile": profile.devil_fruit_profile || { name: "None", type: "None" },
+      "Devil Fruit": profile.devil_fruit_profile?.name || "None", "Haki Profile": profile.haki_profile || {}, Bounty: 0,
+    }, {}, {}) : "";
     const startWarnings = (p.start_warnings || []).filter(Boolean);
     const warningCard = startWarnings.length ? `<section class="start-warnings"><b>START CONSISTENCY NOTE</b>${startWarnings.map((warning) => `<span>${escapeHtml(warning)}</span>`).join("")}</section>` : "";
     const primer = p.world_primer || {};
@@ -4903,13 +4952,13 @@ function renderCampaignPreview(p, payload) {
         "Custom World": "Hidden potential",
     };
     const classLabel = classLabels[p.world] || "Hidden potential";
-    const specialReroll = p.world === "Bleach" ? `<button type="button" data-preview-reroll="zanpakuto">Zanpakutō abilities</button>` : p.world === "Jujutsu Kaisen" ? `<button type="button" data-preview-reroll="jjk_special">Innate technique / restriction</button>` : `<button type="button" data-preview-reroll="class">${escapeHtml(classLabel)}</button><button type="button" data-preview-reroll="ability">Starting ability</button>`;
+    const specialReroll = p.world === "Bleach" ? `<button type="button" data-preview-reroll="zanpakuto">Zanpakutō abilities</button>` : p.world === "Jujutsu Kaisen" ? `<button type="button" data-preview-reroll="jjk_special">Innate technique / restriction</button>` : p.world === "Hunter x Hunter" ? `<button type="button" data-preview-reroll="nen_ability">Nen ability</button>` : p.world === "One Piece" && profile.devil_fruit_profile ? `<button type="button" data-preview-reroll="devil_fruit">Devil Fruit</button><button type="button" data-preview-reroll="class">Hidden potential</button>` : `<button type="button" data-preview-reroll="class">${escapeHtml(classLabel)}</button><button type="button" data-preview-reroll="ability">Starting ability</button>`;
     const rerolls = p.canon_character ? "" : `<section class="preview-rerolls"><b>Keep the character, reroll one part</b><div>${specialReroll}<button type="button" data-preview-reroll="backstory">Expanded backstory</button><button type="button" data-preview-reroll="loadout">Starting loadout</button></div><small>Only the selected part changes. Everything else remains locked.</small></section>`;
     const learningRate = Number(growth.learning_rate || 1);
     const ordinaryGrowth = Math.abs(learningRate - 1) < 0.005 && String(growth.aptitude || "").toLowerCase().includes("typical");
     const growthLabel = !ordinaryGrowth && String(growth.aptitude || "").toLowerCase().includes("typical") ? "Modified learning potential" : (growth.aptitude || "Unusual potential");
     const growthSummary = ordinaryGrowth ? "" : `<div class="growth-summary"><b>${escapeHtml(growthLabel)}</b><span>${escapeHtml(learningRate.toFixed(2))}× sustained-learning rate</span><small>${escapeHtml(growth.explanation || "Actual growth still depends on time, training conditions, instruction, and recovery.")}</small></div>`;
-    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${warningCard}${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Starting attributes</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${bleachReleaseCard}${affinityPreviewCard}${jinchurikiPreviewCard}${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section>${growthSummary}${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : (p.starting_era ? "This original character begins in the selected timeline era." : "This original character begins shortly before the world's main story.")}</p>`;
+    $("#campaign-preview").innerHTML = `${primerCard}<div class="preview-hero"><h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.world)} · ${escapeHtml(p.difficulty)}</p></div>${warningCard}${profile.power_notice ? `<div class="power-notice"><b>POWER NOTICE — ${escapeHtml(profile.power_band)}</b><span>${escapeHtml(profile.power_notice)}</span></div>` : ""}<div class="preview-grid"><div><b>Beginning</b><span>${escapeHtml(p.start_location)} · ${escapeHtml(formatCalendarDate(p.world, p.start_day, null, p.start_day))}</span></div><div><b>Role</b><span>${escapeHtml(p.origin)} · ${escapeHtml(p.archetype)}${p.race ? ` · ${escapeHtml(p.race)}` : ""}</span></div><div><b>Timeline</b><span>${escapeHtml(p.canon_anchor || "Before the main story")}</span></div><div><b>Starting pools</b><span>HP ${escapeHtml(profile.hp_max)} · ${escapeHtml(p.resource)} ${escapeHtml(profile.resource_max)}</span></div></div><h3>Starting attributes</h3><div class="preview-stats">${Object.entries(p.abilities || {}).map(([k,v]) => `<span><b>${escapeHtml(k)}</b> ${escapeHtml(v)}</span>`).join("")}</div><h3>Starting loadout</h3><div class="preview-loadout">${loadout.map((x) => `<span>${escapeHtml(x)}</span>`).join("")}</div>${bleachReleaseCard}${onePiecePreviewCard}${nenPreviewCard}${affinityPreviewCard}${jinchurikiPreviewCard}${classCard}${abilityCard}<section class="generated-backstory"><b>BACKGROUND</b><p>${escapeHtml(p.background || "The GM will complete a fitting background during the opening.")}</p></section>${growthSummary}${rerolls}<p class="hint">${p.uses_xp ? "This setting canonically uses visible XP and levels." : "This setting progresses through stats, techniques, knowledge and titles—no artificial XP levels."} ${p.canon_character ? "You have full control of this major character." : (p.starting_era ? "This original character begins in the selected timeline era." : "This original character begins shortly before the world's main story.")}</p>`;
     openModal("modal-campaign-preview");
 }
 

@@ -74,6 +74,21 @@ WORLD_STARTER_SKILL = {
     "Jujutsu Kaisen": "Jujutsu Fundamentals",
 }
 
+NEN_CATEGORIES = ("Enhancement", "Transmutation", "Conjuration", "Specialization", "Manipulation", "Emission")
+
+
+def nen_category_efficiency(primary):
+    """Canon-shaped affinity wheel used by creation, UI and progression."""
+    primary = primary if primary in NEN_CATEGORIES else "Enhancement"
+    index = NEN_CATEGORIES.index(primary)
+    values = {}
+    for position, category in enumerate(NEN_CATEGORIES):
+        distance = min((position - index) % 6, (index - position) % 6)
+        values[category] = (100, 80, 60, 40)[min(distance, 3)]
+    if primary == "Enhancement":
+        values["Specialization"] = 0
+    return values
+
 STARTER_SKILL_DESCRIPTIONS = {
     ("One Piece", "Navigator"): "Charts courses, reads weather and currents, corrects a ship's heading, and recognizes common navigation hazards.",
     ("One Piece", "Shipwright"): "Inspects hulls and rigging, performs practical repairs, chooses suitable materials, and keeps a vessel seaworthy.",
@@ -1024,6 +1039,155 @@ Return JSON only, with no markdown."""
             "additional_skills": blueprint.get("starting_skills", []),
         }
 
+    def generate_nen_profile(self, background="", awakened=False):
+        """Author one persistent, never-repeated Hatsu and its affinity wheel.
+
+        The latent package is generated even when Nen starts locked so the
+        eventual awakening reveals the same identity instead of inventing a
+        convenient power after the story has already begun.
+        """
+        text = str(background or "").lower()
+        cues = {
+            "Enhancement": ("strong", "brawler", "tough", "heal", "protect", "direct"),
+            "Transmutation": ("trick", "electric", "elastic", "change", "deceive", "swift"),
+        "Conjuration": ("weapon", "tool", "craft", "book", "chain", "create", "contract", "promise", "bind", "binding", "rule"),
+            "Specialization": ("rare", "mystery", "prophecy", "memory", "unique", "impossible"),
+            "Manipulation": ("control", "command", "puppet", "strategy", "influence", "order"),
+            "Emission": ("range", "projectile", "gun", "beam", "distance", "remote"),
+        }
+        weighted = [category for category, words in cues.items() for _ in range(1 + sum(word in text for word in words) * 3)]
+        category = random.choice(weighted or list(NEN_CATEGORIES))
+        aspects = [word.title() for word in re.findall(r"[a-zA-Z]{4,}", str(background or ""))
+                   if word.lower() not in {"with", "that", "have", "from", "their", "character", "hunter", "ability", "power"}]
+        aspect = random.choice(aspects[:24]) if aspects else random.choice(("Echo", "Compass", "Lantern", "Threshold", "Pulse", "Oath", "Mirror", "Orbit"))
+        titles = ("Dead Reckoning", "Second Bell", "Quiet Meridian", "Borrowed Horizon", "Glass Testament",
+                  "Last Witness", "Red Thread Atlas", "Zero Hour Garden", "Hollow Compass", "Unbroken Measure")
+        mechanisms = {
+            "Enhancement": "concentrates aura into a chosen body function or held object, sharply amplifying it while the declared purpose remains unchanged",
+            "Transmutation": "gives aura a shifting, reactive property keyed to the user's chosen rhythm and emotional state",
+            "Conjuration": "materializes a rule-bound tool whose functions change according to the evidence the user has personally gathered",
+            "Specialization": "records one witnessed causal relationship and temporarily forces the next matching exchange to acknowledge it",
+            "Manipulation": "places a visible aura instruction on a willing target or a target the user has physically tagged",
+            "Emission": "anchors packets of aura at marked positions and releases their stored force across the distance between them",
+        }
+        activations = (
+            "The user states a precise objective, forms Ren, and touches the intended target or anchor.",
+            "The ability begins only after the user names what is being risked and traces its sigil with aura.",
+            "The user must observe the target without interruption, then clap once to commit the aura pattern.",
+            "Activation requires a spoken rule, a deliberate breath held through Ren, and direct line of sight.",
+        )
+        vows = (
+            "Breaking the declared objective ends the effect and seals the spent aura until the user sleeps.",
+            "The stronger the target, the more specific and costly the user's declared restriction must be.",
+            "The effect doubles when protecting someone else, but cannot be used for the user's direct profit during that activation.",
+            "Only one active mark is allowed; replacing it forfeits all aura invested in the first.",
+        )
+        limits = (
+            "It cannot create information, force or matter outside its stated mechanism, and poor observation produces a weak result.",
+            "Range, duration and precision compete for the same aura; maximizing one sharply reduces the others.",
+            "A target that understands the rule can disrupt the setup, break line of sight or force the user to violate the condition.",
+            "Maintaining the technique occupies sustained attention and becomes unstable under exhaustion or conflicting goals.",
+        )
+        for _ in range(24):
+            name = f"{aspect}: {random.choice(titles)}"
+            candidate = {
+                "name": name,
+                "category_mix": [category],
+                "governing_rule": mechanisms[category],
+                "effect": f"{name} {mechanisms[category]}.",
+                "activation": random.choice(activations),
+                "vows": [random.choice(vows)],
+                "limitations": [random.choice(limits)],
+                "counters": ["Interrupt the setup, exploit its declared condition, force Zetsu, or overwhelm the user's available aura."],
+                "aura_cost": "Moderate while prepared; high when its vow multiplies the result.",
+                "applications": [f"{aspect} Mark — establishes the ability's first valid target or anchor."],
+                "evidence": ["Latent identity fixed at character creation"],
+                "growth_path": "Master Ten, Zetsu and Ren; test the governing rule; then earn additional applications without changing its identity.",
+                "canon_balance": "Built on the same affinity, aura, restriction and counterplay logic as canon Nen abilities.",
+            }
+            if not self.generated_ability_archive.is_duplicate("Hunter x Hunter", "nen_ability", candidate):
+                break
+        hatsu = self._finalize_original_special("Hunter x Hunter", "nen_ability", candidate, source="character_preview")
+        return {
+            "visibility": "Discovered" if awakened else "Undiscovered",
+            "category": category if awakened else "Unknown",
+            "ten": 22 if awakened else 0,
+            "zetsu": 16 if awakened else 0,
+            "ren": 18 if awakened else 0,
+            "hatsu_profile": hatsu if awakened else {"name": "Undiscovered", "concealed": True},
+            "latent_hatsu_profile": hatsu,
+            "latent_category": category,
+            "category_efficiency": nen_category_efficiency(category) if awakened else {},
+            "vow_registry": copy.deepcopy(hatsu.get("vows", [])) if awakened else [],
+            "restriction_consequences": copy.deepcopy(hatsu.get("limitations", [])) if awakened else [],
+        }
+
+    @staticmethod
+    def install_nen_skill(skills, nen_profile):
+        if not isinstance(nen_profile, dict) or nen_profile.get("visibility") != "Discovered":
+            return
+        hatsu = nen_profile.get("hatsu_profile") if isinstance(nen_profile.get("hatsu_profile"), dict) else {}
+        name = str(hatsu.get("name") or "").strip()
+        if name and name != "Undiscovered":
+            skills[name] = {
+                "rank": "Hatsu", "category": "nen ability", "effect_type": "special",
+                "combat_usable": True, "description": hatsu.get("effect", ""),
+                "effect": hatsu.get("effect", ""), "activation": hatsu.get("activation", ""),
+                "limitation": "; ".join(map(str, hatsu.get("limitations", []))),
+                "growth_path": hatsu.get("growth_path", ""), "bonus": 6,
+            }
+
+    def generate_devil_fruit_profile(self, background=""):
+        """Create a background-shaped original fruit with account-wide dedupe."""
+        text = str(background or "")
+        lower = text.lower()
+        fruit_type = ("Mythical Zoan" if "mythical zoan" in lower else "Ancient Zoan" if "ancient zoan" in lower
+                      else "Zoan" if "zoan" in lower or re.search(r"\b(animal|beast|creature|dragon|wolf|bird)\b", lower)
+                      else "Logia" if "logia" in lower or re.search(r"\b(element|fire|flame|smoke|sand|lightning|ice|wind)\b", lower)
+                      else "Paramecia")
+        described = re.search(
+            r"(?:devil\s+fruit|(?:paramecia|logia|zoan)\s+fruit|fruit)\s+(?:based\s+on|that\s+(?:controls?|creates?|turns?\s+me\s+into)|of)\s+([^,.;\n]+)",
+            text, re.I,
+        )
+        if described:
+            aspect_words = re.findall(r"[A-Za-z]+", described.group(1))[:3]
+            aspect = " ".join(aspect_words).title()
+        else:
+            aspect = self.ability_aspect(text)
+        if not text.strip() or aspect.lower() in {"resolve", "ability", "power"}:
+            aspect = random.choice(("Chime", "Fold", "Mosaic", "Tether", "Prism", "Quill", "Drift", "Latch", "Velvet", "Orbit"))
+        forms = {
+            "Paramecia": f"lets the user create, control, and embody rule-bound properties of {aspect.lower()} in touched objects or their immediate surroundings",
+            "Logia": f"lets the user create, control, and transform into an original {aspect.lower()} element, while Haki and natural counters can still strike the true body",
+            "Zoan": f"grants human, hybrid, and full-beast forms shaped by the {aspect.lower()} creature described by the user's background",
+            "Ancient Zoan": f"grants durable human, hybrid, and full forms of an ancient {aspect.lower()} creature with exceptional physical recovery",
+            "Mythical Zoan": f"grants human, hybrid, and full forms of a mythic {aspect.lower()} being plus one coherent supernatural trait from its legend",
+        }
+        for _ in range(32):
+            epithet = random.choice(("Chime", "Fold", "Mosaic", "Tether", "Prism", "Quill", "Drift", "Latch", "Velvet", "Orbit"))
+            spoken = re.sub(r"[^A-Za-z]+", " ", aspect).strip().title() or epithet
+            fruit_word = spoken if _ == 0 else f"{spoken} {epithet}"
+            name = f"{fruit_word}-{fruit_word} Fruit"
+            core = forms[fruit_type]
+            candidate = {
+                "name": name, "type": fruit_type,
+                "abilities": [
+                    f"Core rule — {core}.",
+                    f"{aspect} Shift — applies the fruit's rule in a focused movement, defense, or attack.",
+                    f"{aspect} Field — extends the same rule across a prepared local area at substantially greater stamina cost.",
+                ],
+                "limitations": ["Seawater and Sea-Prism Stone weaken the user and prevent reliable power use.",
+                                "The fruit cannot produce unrelated effects outside its single governing concept."],
+                "counters": ["Haki can strike or resist the user directly.", "Opponents can exploit the fruit's stated material, range, setup, or stamina limits."],
+                "awakening_status": "Unawakened",
+                "awakening_requirements": ["Bring mind and body into full alignment with the fruit through prolonged, high-level use.",
+                                           "Develop multiple applications without abandoning the fruit's governing concept."],
+                "origin": "An original Devil Fruit established for this character; its exact history can be discovered in play.",
+            }
+            if not self.generated_ability_archive.is_duplicate("One Piece", "devil_fruit", candidate):
+                break
+        return self._finalize_original_special("One Piece", "devil_fruit", candidate, source="character_preview")
+
     def generate_background_ability(self, world, background, boost):
         candidate = None
         for _ in range(6):
@@ -1527,7 +1691,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         }
 
     def infer_starting_profile(self, world, origin, archetype, background, stats, start_location="", allow_starting_specials=True,
-                               jjk_guarantee_strong=False, jjk_curse_grade=""):
+                               jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False,
+                               one_piece_devil_fruit=False, one_piece_haki_types=None):
         text = f"{origin} {archetype} {background}".lower()
         # Explicit descriptive language in the player's own background wins.
         # Dropdown role labels remain a smaller fallback so selecting a canon
@@ -1620,7 +1785,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         # Bleach progression is expressed through the Zanpakuto relationship,
         # releases and Kido—not a generic hidden-class card.
         class_declined = self.hidden_class_declined(background)
-        class_awarded = world not in {"Bleach", "Jujutsu Kaisen"} and (
+        class_awarded = world not in {"Bleach", "Jujutsu Kaisen", "Hunter x Hunter"} and (
             class_requested or (
                 allow_starting_specials and not class_declined and random.random() < RANDOM_HIDDEN_CLASS_CHANCE
             )
@@ -1658,7 +1823,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 str(background), re.I,
             ))
         ability_declined = self.background_ability_declined(background)
-        ability_awarded = world != "Jujutsu Kaisen" and (
+        one_piece_fruit_requested = world == "One Piece" and allow_starting_specials and (
+            bool(one_piece_devil_fruit) or bool(re.search(r"\b(devil fruit|paramecia|logia|zoan)\b", str(background), re.I))
+        )
+        ability_awarded = world not in {"Jujutsu Kaisen", "Hunter x Hunter"} and not one_piece_fruit_requested and (
             ability_requested or (
                 allow_starting_specials and not ability_declined and not jinchuriki_profile
                 and random.random() < RANDOM_STARTING_ABILITY_CHANCE
@@ -1742,6 +1910,38 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             staged = apply_birth_slot({"stats":adjusted, "skills":skills}, jjk_birth_slot,
                                       normalized_grade(jjk_curse_grade) if is_curse_origin(origin) else "")
             adjusted, skills = staged["stats"], staged["skills"]
+        nen_profile = None
+        if world == "Hunter x Hunter" and allow_starting_specials:
+            nen_profile = self.generate_nen_profile(background, awakened=bool(hxh_start_with_nen))
+            self.install_nen_skill(skills, nen_profile)
+        devil_fruit_profile = None
+        haki_profile = None
+        if world == "One Piece" and allow_starting_specials:
+            if one_piece_fruit_requested:
+                devil_fruit_profile = self.generate_devil_fruit_profile(background)
+                fruit_name = str(devil_fruit_profile.get("name") or "Original Devil Fruit")
+                skills[fruit_name] = {
+                    "rank": devil_fruit_profile.get("type", "Devil Fruit"), "category": "devil fruit",
+                    "effect_type": "special", "combat_usable": True,
+                    "description": "; ".join(map(str, devil_fruit_profile.get("abilities", []))),
+                    "effect": "; ".join(map(str, devil_fruit_profile.get("abilities", []))),
+                    "limitation": "; ".join(map(str, devil_fruit_profile.get("limitations", []))),
+                    "growth_path": "; ".join(map(str, devil_fruit_profile.get("awakening_requirements", []))),
+                    "bonus": 6,
+                }
+            selected_haki = [name for name in (one_piece_haki_types or []) if name in {"Observation", "Armament", "Conqueror"}]
+            haki_profile = {}
+            for branch in ("Observation", "Armament", "Conqueror"):
+                active = branch in selected_haki
+                haki_profile[branch] = {
+                    "mastery": 18 if active else 0,
+                    "applications": ([{"Observation":"Presence sensing", "Armament":"Hardening", "Conqueror":"Intimidation burst"}[branch]] if active else []),
+                    "evidence": (["Awakened before campaign start by player choice"] if active else []),
+                }
+                if active:
+                    skill_name = f"{branch}'s Haki" if branch == "Conqueror" else f"{branch} Haki"
+                    skills[skill_name] = {"rank":"Awakened", "category":"haki", "effect_type":"special", "combat_usable":True,
+                                               "description": haki_profile[branch]["applications"][0], "bonus":5}
         specific_gear = WORLD_ARCHETYPE_GEAR.get(world, {}).get(archetype)
         if world == "Jujutsu Kaisen":
             equipment = ({"Natural Weapon":"Manifested cursed body"} if is_curse_origin(origin) else
@@ -1773,6 +1973,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "standard_class_profile": standard_class_profile,
                 "jjk_birth_slot": jjk_birth_slot, "jjk_curse_identity": jjk_curse_identity,
                 "jjk_curse_grade": normalized_grade(jjk_curse_grade) if world == "Jujutsu Kaisen" and is_curse_origin(origin) else "",
+                "nen_profile": nen_profile, "hxh_start_with_nen": bool(hxh_start_with_nen),
+                "devil_fruit_profile": devil_fruit_profile, "haki_profile": haki_profile,
+                "one_piece_devil_fruit": bool(one_piece_fruit_requested),
+                "one_piece_haki_types": list(one_piece_haki_types or []),
                 "background_stat_adjustments": background_adjustments,
                 "_background_supplied": bool(str(background or "").strip()),
                 **background_profile}
@@ -2035,15 +2239,42 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         profile = result.get("starting_profile") if isinstance(result.get("starting_profile"), dict) else {}
         world = result.get("world", "Custom World")
         kind = str(kind or "").lower()
-        if not profile or kind not in {"class", "ability", "backstory", "loadout", "zanpakuto", "jjk_special"}:
-            raise ValueError("Choose class, ability, Zanpakuto, JJK birth slot, backstory, or loadout to reroll.")
+        if not profile or kind not in {"class", "ability", "backstory", "loadout", "zanpakuto", "jjk_special", "nen_ability", "devil_fruit"}:
+            raise ValueError("Choose class, ability, Nen ability, Zanpakuto, JJK birth slot, backstory, or loadout to reroll.")
         if kind == "zanpakuto" and world != "Bleach":
             raise ValueError("Zanpakuto rerolls are available only for original Bleach characters.")
         if kind == "jjk_special" and world != "Jujutsu Kaisen":
             raise ValueError("JJK birth-slot rerolls are available only for original Jujutsu Kaisen characters.")
+        if kind == "nen_ability" and world != "Hunter x Hunter":
+            raise ValueError("Nen rerolls are available only for original Hunter x Hunter characters.")
+        if kind == "devil_fruit" and world != "One Piece":
+            raise ValueError("Devil Fruit rerolls are available only for original One Piece characters.")
         boost = int(profile.get("_boost", 0) or 0)
         primary = profile.get("primary_stats") or primary_stats_for(world, result.get("archetype", ""))
-        if kind == "class":
+        if kind == "devil_fruit":
+            old = profile.get("devil_fruit_profile") if isinstance(profile.get("devil_fruit_profile"), dict) else {}
+            if old.get("name"):
+                profile.setdefault("skills", {}).pop(old["name"], None)
+            fruit = self.generate_devil_fruit_profile(background)
+            profile["devil_fruit_profile"] = fruit
+            profile["one_piece_devil_fruit"] = True
+            profile.setdefault("skills", {})[fruit["name"]] = {
+                "rank": fruit.get("type", "Devil Fruit"), "category": "devil fruit", "effect_type": "special",
+                "combat_usable": True, "description": "; ".join(map(str, fruit.get("abilities", []))),
+                "effect": "; ".join(map(str, fruit.get("abilities", []))),
+                "limitation": "; ".join(map(str, fruit.get("limitations", []))), "bonus": 6,
+            }
+        elif kind == "nen_ability":
+            old = profile.get("nen_profile") if isinstance(profile.get("nen_profile"), dict) else {}
+            old_hatsu = old.get("hatsu_profile") if isinstance(old.get("hatsu_profile"), dict) else {}
+            latent = old.get("latent_hatsu_profile") if isinstance(old.get("latent_hatsu_profile"), dict) else {}
+            for name in {str(old_hatsu.get("name") or ""), str(latent.get("name") or "")}:
+                if name:
+                    profile.setdefault("skills", {}).pop(name, None)
+            nen = self.generate_nen_profile(background, awakened=bool(result.get("hxh_start_with_nen")))
+            self.install_nen_skill(profile.setdefault("skills", {}), nen)
+            profile["nen_profile"] = nen
+        elif kind == "class":
             old = profile.get("hidden_class") if isinstance(profile.get("hidden_class"), dict) else {}
             old_signature = old.get("signature_skill")
             if old_signature:
@@ -2288,7 +2519,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         normalized["power_notice"] = power.get("interpretation", "") if power.get("lopsided") else ""
         return normalized
 
-    def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id="", jjk_guarantee_strong=False, jjk_curse_grade=""):
+    def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id="", jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False, one_piece_devil_fruit=False, one_piece_haki_types=None):
         if world not in WORLD_DATA:
             raise ValueError("Unknown world selected.")
         if difficulty not in DIFFICULTIES:
@@ -2310,7 +2541,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         rolled = self.roll_starting_stats(world, archetype, stats or {})
         profile = self.infer_starting_profile(world, origin, archetype, background, rolled, start_location=start,
                                               allow_starting_specials=not bool(scenario), jjk_guarantee_strong=jjk_guarantee_strong,
-                                              jjk_curse_grade=jjk_curse_grade)
+                                              jjk_curse_grade=jjk_curse_grade, hxh_start_with_nen=hxh_start_with_nen,
+                                              one_piece_devil_fruit=one_piece_devil_fruit,
+                                              one_piece_haki_types=one_piece_haki_types)
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
         else:
@@ -2338,9 +2571,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             "starting_era": era, "starting_era_options": starting_eras_for(world),
             "start_warnings": start_warnings,
             "jjk_guarantee_strong": bool(jjk_guarantee_strong), "jjk_curse_grade": jjk_curse_grade,
+            "hxh_start_with_nen": bool(hxh_start_with_nen),
+            "one_piece_devil_fruit": bool(one_piece_devil_fruit),
+            "one_piece_haki_types": list(one_piece_haki_types or []),
         }
 
-    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age="", jjk_guarantee_strong=False, jjk_curse_grade=""):
+    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age="", jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False, one_piece_devil_fruit=False, one_piece_haki_types=None):
         wd = WORLD_DATA[world]
         scenario = self.canon_character_scenario(world, canon_character_id) if canon_character_id else None
         if scenario:
@@ -2355,7 +2591,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         profile = copy.deepcopy(preview_profile) if isinstance(preview_profile, dict) else self.infer_starting_profile(
             world, origin, archetype, background, rolled, start_location=start,
             allow_starting_specials=not bool(scenario), jjk_guarantee_strong=jjk_guarantee_strong,
-            jjk_curse_grade=jjk_curse_grade,
+            jjk_curse_grade=jjk_curse_grade, hxh_start_with_nen=hxh_start_with_nen,
+            one_piece_devil_fruit=one_piece_devil_fruit, one_piece_haki_types=one_piece_haki_types,
         )
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
@@ -2422,6 +2659,24 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 self.state["special"]["Nature Affinity"] = affinity.get("primary", "Unknown")
             if isinstance(profile.get("hidden_class"), dict):
                 self.state["special"]["Hidden Class"] = copy.deepcopy(profile["hidden_class"])
+            if world == "One Piece":
+                if isinstance(profile.get("devil_fruit_profile"), dict):
+                    fruit = copy.deepcopy(profile["devil_fruit_profile"])
+                    self.state["special"]["Devil Fruit Profile"] = fruit
+                    self.state["special"]["Devil Fruit"] = fruit.get("name", "Unknown Devil Fruit")
+                if isinstance(profile.get("haki_profile"), dict):
+                    haki = copy.deepcopy(profile["haki_profile"])
+                    self.state["special"]["Haki Profile"] = haki
+                    self.state["special"]["Haki"] = {name:int((row or {}).get("mastery", 0) or 0) for name, row in haki.items()}
+            if world == "Hunter x Hunter" and isinstance(profile.get("nen_profile"), dict):
+                nen = copy.deepcopy(profile["nen_profile"])
+                self.state["special"]["Nen Profile"] = nen
+                self.state["special"]["Nen Access"] = nen.get("visibility", "Undiscovered")
+                self.state["special"]["Nen Category"] = nen.get("category", "Unknown")
+                self.state["special"]["Ten"] = int(nen.get("ten", 0) or 0)
+                self.state["special"]["Zetsu"] = int(nen.get("zetsu", 0) or 0)
+                self.state["special"]["Ren"] = int(nen.get("ren", 0) or 0)
+                self.state["special"]["Hatsu"] = (nen.get("hatsu_profile") or {}).get("name", "Undeveloped")
             self.state["portrait_traits"] = [appearance_desc] if appearance_desc.strip() else []
             canon = timeline_for(world)
             if scenario:
@@ -2528,6 +2783,27 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     # turn it into a passive modal or a negotiable setup.
                     self.state["combat"] = copy.deepcopy(scenario["opening_combat"])
             self.apply_start_package_to_state(profile.get("start_package", start_package))
+            # The origin package supplies a conservative default.  The
+            # explicit creation toggle and authored latent profile are the
+            # final authority for whether Nen begins awakened.
+            if world == "Hunter x Hunter" and isinstance(profile.get("nen_profile"), dict):
+                nen = copy.deepcopy(profile["nen_profile"])
+                latent = nen.pop("latent_hatsu_profile", None)
+                latent_category = nen.pop("latent_category", None)
+                if isinstance(latent, dict):
+                    self.state["_latent_nen_profile"] = {
+                        "hatsu_profile": latent,
+                        "category": latent_category or "Enhancement",
+                    }
+                self.state["special"].update({
+                    "Nen Profile": nen,
+                    "Nen Access": nen.get("visibility", "Undiscovered"),
+                    "Nen Category": nen.get("category", "Unknown"),
+                    "Ten": int(nen.get("ten", 0) or 0),
+                    "Zetsu": int(nen.get("zetsu", 0) or 0),
+                    "Ren": int(nen.get("ren", 0) or 0),
+                    "Hatsu": (nen.get("hatsu_profile") or {}).get("name", "Undeveloped"),
+                })
             if world == "Bleach":
                 release = profile.get("bleach_release_profile")
                 if isinstance(release, dict):

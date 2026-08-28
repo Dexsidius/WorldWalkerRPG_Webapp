@@ -167,8 +167,20 @@ def normalize_world_progression(state, before=None):
     elif world == "Hunter x Hunter":
         nen = _profile(special.get("Nen Profile"))
         category = special.get("Nen Category", "Unknown")
-        learned = any(_safe_int(special.get(key, 0)) > 0 for key in ("Ten", "Zetsu", "Ren")) or str(category).lower() not in {"unknown", "none", ""}
-        nen.setdefault("visibility", "Discovered" if learned else "Undiscovered")
+        access = str(special.get("Nen Access") or nen.get("visibility") or "Undiscovered")
+        learned = (access.lower() not in {"undiscovered", "unknown", "none", ""} or
+                   any(_safe_int(special.get(key, 0)) > 0 for key in ("Ten", "Zetsu", "Ren")) or
+                   str(category).lower() not in {"unknown", "none", ""})
+        nen["visibility"] = "Discovered" if learned else "Undiscovered"
+        latent = state.get("_latent_nen_profile") if isinstance(state.get("_latent_nen_profile"), dict) else {}
+        if learned and isinstance(latent.get("hatsu_profile"), dict):
+            category = str(latent.get("category") or category or "Enhancement")
+            special["Nen Category"] = category
+            nen["category"] = category
+            nen["hatsu_profile"] = copy.deepcopy(latent["hatsu_profile"])
+            special["Hatsu"] = latent["hatsu_profile"].get("name", "Developing Hatsu")
+            state.pop("_latent_nen_profile", None)
+            repairs.append("Revealed the character's persistent latent Nen identity")
         category = sync(nen, "category", "Nen Category", category)
         for key in ("Ten", "Zetsu", "Ren"):
             nen.setdefault(key.lower(), _safe_int(special.get(key, 0)))
@@ -185,19 +197,29 @@ def normalize_world_progression(state, before=None):
         hatsu.setdefault("evidence", [])
         hatsu.setdefault("growth_path", "Learn the four major principles and define an ability that reflects the user's nature.")
         nen["hatsu_profile"] = hatsu
-        nen.setdefault("category_efficiency", {
-            "primary": category,
-            "note": "Affinity improves natural efficiency but does not prohibit creative mixed-category techniques.",
-        })
+        if learned and not isinstance(nen.get("category_efficiency"), dict):
+            nen["category_efficiency"] = {}
+        nen.setdefault("category_efficiency", {})
+        nen["category_efficiency"].setdefault("primary", category)
+        nen["category_efficiency"].setdefault("note", "Affinity improves natural efficiency but does not prohibit creative mixed-category techniques.")
         nen.setdefault("vow_registry", copy.deepcopy(hatsu.get("vows", [])))
         nen.setdefault("restriction_consequences", copy.deepcopy(hatsu.get("limitations", [])))
         if hatsu.get("name"):
             special["Hatsu"] = hatsu["name"]
+            if learned and hatsu.get("name") not in {"Undiscovered", "Undeveloped"}:
+                state.setdefault("skills", {}).setdefault(hatsu["name"], {
+                    "rank": "Hatsu", "category": "nen ability", "effect_type": "special",
+                    "combat_usable": True, "description": hatsu.get("effect", ""),
+                    "effect": hatsu.get("effect", ""), "activation": hatsu.get("activation", ""),
+                    "limitation": "; ".join(map(str, hatsu.get("limitations", []))),
+                    "growth_path": hatsu.get("growth_path", ""), "bonus": 6,
+                })
         special.setdefault("Hunter Career", {
             "license": special.get("Hunter License", "Unlicensed"),
             "specialties": [], "completed_work": [], "professional_access": [], "verified_intelligence": [],
         })
         special["Nen Profile"] = nen
+        special["Nen Access"] = nen["visibility"]
         repairs.append("Synchronized Nen progression profile")
 
     elif world == "Naruto":

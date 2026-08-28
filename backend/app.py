@@ -320,7 +320,20 @@ def _resolve_multiplayer_room(room_id, force=False):
         target_game.busy = True
         participants = []
         for person in plan["participants"]:
+            # Imported/older multiplayer rows can contain the JSON string
+            # value itself (or a legacy display name) instead of a decoded
+            # character object.  Repair the boundary here so one malformed
+            # member cannot lock every combat control for the whole room.
             character = person.get("character", {})
+            if isinstance(character, str):
+                try:
+                    decoded = json.loads(character)
+                    character = decoded if isinstance(decoded, dict) else {}
+                except (TypeError, ValueError):
+                    character = {}
+            elif not isinstance(character, dict):
+                character = {}
+            person["character"] = character
             participants.append({
                 "user_id": person["user_id"], "character_name": character.get("name", person["username"]),
                 "location": character.get("location", target_game.state.get("location", "")),
@@ -688,6 +701,9 @@ def api_campaign_new():
             age=d.get("age", ""),
             jjk_guarantee_strong=bool(d.get("jjk_guarantee_strong", False)),
             jjk_curse_grade=d.get("jjk_curse_grade", ""),
+            hxh_start_with_nen=bool(d.get("hxh_start_with_nen", False)),
+            one_piece_devil_fruit=bool(d.get("one_piece_devil_fruit", False)),
+            one_piece_haki_types=d.get("one_piece_haki_types", []),
         )
         return jsonify({"state": state, "story": game._flush_story()})
     except Exception as e:
@@ -705,6 +721,8 @@ def api_campaign_preview():
             d.get("start_location", ""), d.get("start_note", ""),
             d.get("canon_character_id", ""), d.get("starting_era_id", ""),
             bool(d.get("jjk_guarantee_strong", False)), d.get("jjk_curse_grade", ""),
+            bool(d.get("hxh_start_with_nen", False)),
+            bool(d.get("one_piece_devil_fruit", False)), d.get("one_piece_haki_types", []),
         )
         return jsonify({"preview": preview})
     except Exception as e:

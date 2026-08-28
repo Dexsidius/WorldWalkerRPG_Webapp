@@ -254,6 +254,10 @@ class JournalMixin:
         # Governance bookkeeping powers narrative reports and map changes,
         # but is intentionally not a visible management dashboard.
         s.pop("polity_state", None)
+        # Latent Nen is fixed at creation so later awakening is consistent,
+        # but its category/name/mechanics must not leak through the state API
+        # before the character discovers Nen in the story.
+        s.pop("_latent_nen_profile", None)
         try:
             s["_canon_countdown"] = self.canon_countdown()
         except Exception:

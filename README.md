@@ -6,7 +6,14 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.35.0** (schema 19).
+Current app/save version: **3.36.0** (schema 19).
+
+Version 3.36.0 repairs multiplayer combat states created with older or malformed
+character and enemy records so every combat control remains usable instead of
+raising a string-shape error. Hunter x Hunter creation now supports awakened or
+latent Nen with a unique persistent Hatsu and a dedicated affinity dossier. One
+Piece creation now supports chosen Haki branches and unique generated Devil
+Fruits that interpret the character background and never repeat for an account.
 
 Version 3.35.0 turns every canon-event interruption into a native full-screen cinematic using the event's real title, date, location, player position, travel context, world theme, and best available cached scene art. It adds replay, mobile composition, reduced-motion support, and keeps the Chronicle as the actual decision surface.
 

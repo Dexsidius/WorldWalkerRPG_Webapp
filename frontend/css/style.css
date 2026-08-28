@@ -2103,6 +2103,33 @@ body[data-world="Jujutsu Kaisen"] .brand::after{ content:"呪"; }
 .jjk-vow-system{ border-color:rgba(255,79,114,.52)!important; }
 .jjk-intel-system{ border-color:rgba(105,200,212,.45)!important; }
 .creation-world-options{ margin:14px 0; padding:14px; border:1px solid var(--border); border-radius:10px; background:rgba(173,130,255,.06); }
+.hxh-creation-options{ background:linear-gradient(135deg,rgba(72,202,156,.09),rgba(80,130,255,.05)); border-color:rgba(86,218,174,.34); }
+.one-piece-creation-options{ background:linear-gradient(135deg,rgba(234,183,65,.1),rgba(47,155,206,.06)); border-color:rgba(234,183,65,.34); }
+.creation-check-grid{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:10px 0 0 28px; }
+.creation-check-grid[hidden]{ display:none; }
+.creation-check-grid label{ display:flex; align-items:center; gap:7px; padding:8px 10px; border:1px solid var(--border-soft); border-radius:8px; background:rgba(0,0,0,.14); }
+
+.nen-profile-panel,.nen-locked-panel{ --nen-green:#67e4ad; --nen-blue:#6cb9ff; border-color:rgba(103,228,173,.42); background:radial-gradient(circle at 16% 10%,rgba(103,228,173,.13),transparent 32%),linear-gradient(145deg,rgba(4,25,29,.94),rgba(7,17,27,.96)); }
+.nen-profile-panel>summary,.nen-locked-panel>summary{ gap:12px; padding-left:12px; }
+.nen-aura-mark{ display:grid; place-items:center; width:42px; height:42px; flex:0 0 42px; border:1px solid rgba(103,228,173,.6); border-radius:50%; color:var(--nen-green); font:800 1.15rem var(--font-label); box-shadow:0 0 20px rgba(103,228,173,.2),inset 0 0 14px rgba(103,228,173,.1); }
+.nen-profile-panel>summary>header,.nen-locked-panel>summary>header{ flex:1; padding-left:0; }
+.nen-profile-panel>summary>header p,.nen-locked-panel>summary>header p{ margin:4px 0 0; color:var(--muted); font-size:.76rem; }
+.nen-profile-body{ display:grid; grid-template-columns:minmax(230px,.8fr) minmax(300px,1.3fr); gap:16px; padding:16px; }
+.nen-affinity>header{ display:flex; flex-direction:column; gap:2px; margin-bottom:8px; }
+.nen-affinity>header span{ color:var(--muted); font-size:.72rem; }
+.nen-affinity-graph{ position:relative; width:min(100%,310px); aspect-ratio:1.18; margin:auto; }
+.nen-hex-lines{ position:absolute; inset:17% 20%; border:1px solid rgba(103,228,173,.28); transform:rotate(30deg); }
+.nen-hex-lines::before,.nen-hex-lines::after{ content:""; position:absolute; inset:0; border:1px solid rgba(108,185,255,.18); transform:rotate(60deg); }
+.nen-hex-lines::after{ transform:rotate(120deg); }
+.nen-affinity-node{ position:absolute; display:flex; flex-direction:column; align-items:center; min-width:92px; padding:6px 8px; border:1px solid rgba(108,185,255,.3); border-radius:8px; color:var(--muted); background:rgba(3,14,22,.9); font-size:.65rem; text-align:center; box-shadow:0 5px 16px rgba(0,0,0,.25); }
+.nen-affinity-node span{ color:var(--nen-blue); font-weight:800; font-size:.75rem; }
+.nen-affinity-node.primary{ border-color:var(--nen-green); color:#edfff7; box-shadow:0 0 18px rgba(103,228,173,.24); }
+.nen-affinity-node.primary span{ color:var(--nen-green); }
+.nen-affinity-node.n0{ left:50%; top:0; transform:translateX(-50%); }.nen-affinity-node.n1{ left:0; top:25%; }.nen-affinity-node.n2{ left:0; bottom:8%; }.nen-affinity-node.n3{ left:50%; bottom:0; transform:translateX(-50%); }.nen-affinity-node.n4{ right:0; bottom:8%; }.nen-affinity-node.n5{ right:0; top:25%; }
+.nen-affinity-core{ position:absolute; left:50%; top:50%; display:grid; place-items:center; width:48px; height:48px; transform:translate(-50%,-50%); border-radius:50%; color:#071b18; background:var(--nen-green); box-shadow:0 0 28px rgba(103,228,173,.38); }
+.nen-hatsu-dossier{ border-left:1px solid rgba(103,228,173,.22); padding-left:16px; }
+.nen-hatsu-dossier>header{ margin-bottom:10px; }.nen-hatsu-dossier>header small{ color:var(--nen-green); letter-spacing:.14em; }.nen-hatsu-dossier>header h4{ margin:3px 0; color:var(--text); font-size:1.18rem; }.nen-hatsu-dossier>header span{ color:var(--nen-blue); font-size:.78rem; }
+@media(max-width:720px){ .creation-check-grid{ grid-template-columns:1fr; margin-left:0; }.nen-profile-body{ grid-template-columns:1fr; }.nen-hatsu-dossier{ border-left:0; border-top:1px solid rgba(103,228,173,.22); padding:14px 0 0; }.nen-affinity-graph{ max-width:290px; } }
 .creation-toggle{ display:flex; gap:10px; align-items:flex-start; cursor:pointer; }
 .creation-toggle input{ margin-top:4px; accent-color:var(--accent); }
 .creation-toggle span{ display:grid; gap:4px; }

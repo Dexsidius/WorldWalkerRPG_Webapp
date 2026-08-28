@@ -45,9 +45,12 @@ class WorldwalkerV251Tests(unittest.TestCase):
             "Whale Island Local", "Rookie Hunter", {},
             preview_stats=preview["abilities"], preview_profile=preview["starting_profile"],
         )
-        generated = preview["starting_profile"]["generated_ability"]
-        self.assertIn(generated["name"], state["skills"])
-        self.assertEqual(state["special"]["Starting Ability"]["name"], generated["name"])
+        # Hunter x Hunter now reserves supernatural personal powers for the
+        # persistent Nen system instead of a generic starting-ability card.
+        self.assertIsNone(preview["starting_profile"]["generated_ability"])
+        self.assertEqual(state["special"]["Nen Access"], "Undiscovered")
+        self.assertEqual(state["special"]["Hatsu"], "Undiscovered")
+        self.assertIn("_latent_nen_profile", game.state)
         self.assertIn("Growth Profile", state["special"])
         self.assertIn("Background Details", state["special"])
         self.assertIn("unfinished expectation", state["background"].lower())
