@@ -6,7 +6,16 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.32.0** (schema 19).
+Current app/save version: **3.33.0** (schema 19).
+
+Version 3.33.0 adds a local cinematic feedback system without adding AI calls.
+Every world now has its own restrained ambient identity, while time, weather,
+combat, transformations, major abilities, stat changes, level-ups, Chronicle
+beats, music, and map discoveries receive contextual visual feedback. Maps show
+known travel routes, danger and event markers, and fog pockets for undiscovered
+landmarks. All continuous effects respect animation, reduced-motion, and mobile
+low-data settings, and the existing desktop and phone information layouts stay
+intact.
 
 Version 3.32.0 replaces overlapping territory blobs with a single clean
 strategy-atlas layer. Political shading can no longer overlap, borders vanish

@@ -136,6 +136,10 @@ const APP = {
   lastLocation: null,
   lastCombatActive: false,
   lastMajorVisualKey: "",
+  lastPortraitFormVisual: "",
+  lastVisualState: null,
+  lastEffectSignature: "",
+  effectTimer: null,
   activeWorldCue: null,
   narutoDeathCueActive: false,
   mobileView: "chronicle",
@@ -277,6 +281,7 @@ function renderMusicStatus(folder) {
   $("#music-title").textContent = current ? `${current.name}${current.source === "Shared" ? " · Shared" : ""}` : "No music found";
   $("#music-help").textContent = current ? `${APP.music.index + 1} of ${APP.music.tracks.length} · ${APP.music.world}` : `Drop MP3/MP4 files into ${folder || `music/${APP.music.world}`}`;
   $("#btn-music-play").textContent = !musicPlayer().paused && current ? "❚❚" : "▶";
+  $("#music-visualizer")?.classList.toggle("playing", !musicPlayer().paused && !!current);
 }
 
 function loadMusicTrack(index, playNow = false) {
@@ -382,13 +387,13 @@ function handleNotifications(notifications) {
     if (toastCinematics.has(n.cinematic)) showToast(shownMessage, n.cinematic || n.tag);
     if (majorCinematics.has(n.cinematic)) {
       showCinematic(n.cinematic, shownMessage, n.world_system);
-      if (n.cinematic === "level_up") playSfx("level_up");
+      if (n.cinematic === "level_up") { playSfx("level_up"); triggerAbilityEffect("growth", shownMessage); }
       else if (n.cinematic === "position") playSfx("level_up");
-      else if (n.cinematic === "achievement") playSfx("achievement");
+      else if (n.cinematic === "achievement") { playSfx("achievement"); triggerAbilityEffect("growth", shownMessage); }
       else if (n.cinematic === "xp") playSfx("xp");
-      else if (n.cinematic === "danger") { playSfx("danger"); flashScreen("danger"); shakeApp(); }
-      else if (n.cinematic === "damage") { playSfx("hit"); flashScreen("danger"); shakeApp(); }
-      else if (n.cinematic === "canon_event") { playSfx("world_event"); flashScreen("danger"); shakeApp(); }
+      else if (n.cinematic === "danger") { playSfx("danger"); flashScreen("danger"); shakeApp(); triggerAbilityEffect("impact", shownMessage); }
+      else if (n.cinematic === "damage") { playSfx("hit"); flashScreen("danger"); shakeApp(); triggerAbilityEffect("impact", shownMessage); }
+      else if (n.cinematic === "canon_event") { playSfx("world_event"); flashScreen("danger"); shakeApp(); triggerAbilityEffect("canon", shownMessage); }
       else playSfx("notify");
     }
   });
@@ -529,7 +534,7 @@ function appendStoryEntries(entries) {
   const feed = $("#story-feed");
   const cleanEntries = (entries || []).filter((entry) => entry && String(entry.text || "").trim());
   if (!cleanEntries.length) return;
-  if (APP.state?.world === "Jujutsu Kaisen" && cleanEntries.some((entry) => /^\[JUJUTSU RECORD\][\s\S]*\bBLACK FLASH\b/i.test(String(entry.text || "")))) triggerBlackFlash();
+  triggerNarrativeVisuals(cleanEntries);
   // A multi-day skip returns entries stamped with different canon_day
   // values — split those into separate dated cards (like a history feed)
   // instead of lumping a whole week under one header. Entries without a
@@ -543,7 +548,10 @@ function appendStoryEntries(entries) {
   });
   runs.forEach((run) => {
     const beat = document.createElement("section");
-    beat.className = "story-beat";
+    const beatTags = new Set(run.entries.map((entry) => entry.tag || "narrative"));
+    const beatKind = beatTags.has("canon_event") ? "canon" : beatTags.has("danger") ? "danger" : beatTags.has("growth") ? "growth" : beatTags.has("roll") ? "combat" : "story";
+    beat.className = `story-beat story-beat-${beatKind}`;
+    beat.dataset.beatKind = beatKind;
     const worldTime = String(run.entries.find((entry) => entry.world_time)?.world_time || "");
     const worldParts = worldTime.split(/\s+[—-]\s+/);
     const dateText = dayLabel(run.day) || (worldParts.length > 1 ? worldParts[0] : "");
@@ -800,6 +808,61 @@ function triggerBlackFlash() {
   fx.innerHTML = '<i></i><i></i><i></i><i></i><i></i><strong>BLACK FLASH</strong>';
   document.body.appendChild(fx);
   window.setTimeout(() => fx.remove(), 950);
+}
+
+// Short, non-blocking ability treatments live at the edge of the viewport.
+// They communicate a major state change without covering the Chronicle or
+// turning ordinary actions into modal interruptions.
+function triggerAbilityEffect(kind, signature = "") {
+  if (!APP.animationsEnabled || APP.mobileLowData) return;
+  const effectSignature = `${kind}:${signature}`;
+  if (effectSignature === APP.lastEffectSignature) return;
+  APP.lastEffectSignature = effectSignature;
+  window.clearTimeout(APP.effectTimer);
+  document.querySelector(".ability-screen-fx")?.remove();
+  const fx = document.createElement("div");
+  fx.className = `ability-screen-fx ability-${kind}`;
+  fx.setAttribute("aria-hidden", "true");
+  fx.innerHTML = "<i></i><i></i><i></i><i></i><i></i><i></i>";
+  document.body.appendChild(fx);
+  APP.effectTimer = window.setTimeout(() => {
+    fx.remove();
+    if (APP.lastEffectSignature === effectSignature) APP.lastEffectSignature = "";
+  }, kind === "domain" || kind === "bankai" ? 1550 : 1050);
+}
+
+function narrativeAbilityEffect(text) {
+  const value = String(text || "");
+  if (/\bBLACK FLASH\b/i.test(value)) return "black-flash";
+  if (/\b(?:domain expansion|expands? (?:their |his |her )?domain|domain manifests?)\b/i.test(value)) return "domain";
+  if (/\b(?:bankai|final release)\b/i.test(value) && /\b(?:activate|release|unleash|manifest|achiev|awaken|enter|use|invoke)\w*/i.test(value)) return "bankai";
+  if (/\b(?:shikai|first release)\b/i.test(value) && /\b(?:activate|release|unleash|manifest|achiev|awaken|enter|use|invoke)\w*/i.test(value)) return "shikai";
+  if (/\b(?:tailed beast|jinchuriki|jinchūriki|chakra cloak|nine[- ]tails|bijuu|bijū)\b/i.test(value) && /\b(?:transform|cloak|manifest|release|enter|activate|unleash)\w*/i.test(value)) return "bijuu";
+  if (/\b(?:sharingan|rinnegan|byakugan|d[ōo]jutsu|mangeky[oō]|mystic eyes?)\b/i.test(value) && /\b(?:activate|awaken|open|manifest|use)\w*/i.test(value)) return "dojutsu";
+  if (/\b(?:evolves?|evolution|transforms?|ascends?|awakens? a new form|class advancement)\b/i.test(value)) return "evolution";
+  return "";
+}
+
+function triggerNarrativeVisuals(entries) {
+  const candidates = (entries || []).filter((entry) => ["narrative", "growth", "canon_event", "danger"].includes(entry.tag || "narrative"));
+  const joined = candidates.map((entry) => String(entry.text || "")).join("\n");
+  const effect = narrativeAbilityEffect(joined);
+  if (!effect) return;
+  const signature = joined.slice(-180);
+  if (effect === "black-flash") triggerBlackFlash();
+  else triggerAbilityEffect(effect, signature);
+}
+
+function playTimeAdvanceEffect(amount, unit) {
+  if (!APP.animationsEnabled || APP.mobileLowData) return;
+  document.querySelector(".time-flow-fx")?.remove();
+  const fx = document.createElement("div");
+  fx.className = `time-flow-fx time-flow-${unit || "moment"}`;
+  fx.setAttribute("aria-hidden", "true");
+  const pages = [0, 1, 2, 3].map((index) => `<i style="--page:${index}"></i>`).join("");
+  fx.innerHTML = `${pages}<span>${unit === "next_event" ? "NEXT EVENT" : unit === "moment" ? "NEXT BEAT" : `${Math.max(1, Number(amount || 1))} ${String(unit || "day").toUpperCase()}`}</span>`;
+  document.body.appendChild(fx);
+  window.setTimeout(() => fx.remove(), 900);
 }
 
 function questPresentation(world) {
@@ -1086,7 +1149,14 @@ function renderAiPortrait(s) {
   const img = $("#portrait-img");
   const activeForm = s._portrait_active_form && typeof s._portrait_active_form === "object" ? s._portrait_active_form : {};
   const formName = String(activeForm.name || "").trim();
-  img.closest(".portrait-frame")?.classList.toggle("special-form-active", !!formName);
+  const formEffect = portraitFormEffect(s);
+  const portraitFrame = img.closest(".portrait-frame");
+  portraitFrame?.classList.toggle("special-form-active", !!formName);
+  if (portraitFrame) portraitFrame.dataset.formEffect = formEffect || "none";
+  const formFx = $("#portrait-form-fx");
+  if (formFx) formFx.dataset.formEffect = formEffect || "none";
+  if (formName && formName !== APP.lastPortraitFormVisual) triggerAbilityEffect(formEffect || "evolution", formName);
+  APP.lastPortraitFormVisual = formName;
   const hasDisplayPortrait = !!s._portrait_image;
   if (hasDisplayPortrait) {
     loadPortraitImage(s._portrait_image);
@@ -1310,7 +1380,45 @@ function restoreMobileDraft() {
   autoGrowMobileComposer();
 }
 
+function pulseInterfaceTarget(element, kind = "updated") {
+  if (!element || !APP.animationsEnabled || APP.mobileLowData) return;
+  element.classList.remove("visual-update", "visual-danger");
+  void element.offsetWidth;
+  element.classList.add(kind === "danger" ? "visual-danger" : "visual-update");
+  window.setTimeout(() => element.classList.remove("visual-update", "visual-danger"), 1250);
+}
+
+function animateStateChanges(previous, next) {
+  if (!previous || !next || previous.campaign_id !== next.campaign_id || Number(previous.turn || 0) === Number(next.turn || 0)) return;
+  requestAnimationFrame(() => {
+    const summary = $("#stat-summary-body");
+    if (Number(previous.level || 0) !== Number(next.level || 0) || Number(previous.xp || 0) !== Number(next.xp || 0)) pulseInterfaceTarget($("#level-summary"));
+    if (Number(previous.hp || 0) !== Number(next.hp || 0)) pulseInterfaceTarget($("#bar-hp")?.closest(".bar-row"), Number(next.hp || 0) < Number(previous.hp || 0) ? "danger" : "updated");
+    if (Number(previous.resource || 0) !== Number(next.resource || 0)) pulseInterfaceTarget($("#bar-resource")?.closest(".bar-row"));
+    const oldStats = previous.stats || {};
+    Object.entries(next.stats || {}).forEach(([name, value]) => {
+      const delta = Number(value) - Number(oldStats[name] ?? value);
+      if (!delta) return;
+      const cell = $$(".attr-cell[data-stat-name]").find((row) => row.dataset.statName === name);
+      if (!cell) return;
+      pulseInterfaceTarget(cell, delta < 0 ? "danger" : "updated");
+      const marker = document.createElement("small");
+      marker.className = `stat-delta ${delta < 0 ? "negative" : "positive"}`;
+      marker.textContent = `${delta > 0 ? "+" : ""}${delta}`;
+      cell.appendChild(marker);
+      window.setTimeout(() => marker.remove(), 1250);
+    });
+    const oldSkillCount = Object.keys(previous.skills || {}).length + (previous.titles || []).length;
+    const newSkillCount = Object.keys(next.skills || {}).length + (next.titles || []).length;
+    if (newSkillCount > oldSkillCount) pulseInterfaceTarget($("#skills-list")?.closest(".panel"));
+    if ((next.quests || []).length > (previous.quests || []).length) pulseInterfaceTarget($("#active-quest-preview"));
+    if ((next.world_events || []).length > (previous.world_events || []).length) pulseInterfaceTarget($("#world-feed-nav"));
+    if (summary && Number(next.hp || 0) <= 0) pulseInterfaceTarget(summary, "danger");
+  });
+}
+
 function renderState(state) {
+  const previousState = APP.state;
   APP.state = state;
   const s = state;
   if (Number(s.hp || 0) > 0) APP.narutoDeathCueActive = false;
@@ -1318,6 +1426,7 @@ function renderState(state) {
   document.body.classList.toggle("motion-off", !APP.animationsEnabled);
   applyWorldInterfaceTheme(s.world || "Custom World");
   applyPortraitAmbient(s);
+  applyWorldAtmosphere(s);
 
   $("#hdr-world").textContent = s.world || "Custom World";
   $("#hdr-location").textContent = s.location || "Unknown";
@@ -1386,6 +1495,8 @@ function renderState(state) {
   $("#stat-currency-label").textContent = currency.name || "Currency";
   $("#stat-currency").textContent = currency.amount !== undefined ? Number(currency.amount).toLocaleString() : "0";
   $("#stat-summary-body").classList.toggle("narrative-progression", !s._uses_xp);
+  document.body.classList.toggle("health-critical", Number(s.hp || 0) > 0 && Number(s.hp || 0) / Math.max(1, Number(s.hp_max || 1)) <= .25);
+  animateStateChanges(previousState, s);
 
   // attributes — dynamic per world (see backend worlds.WORLD_ABILITIES)
   const attrs = s.stats || {};
@@ -1397,7 +1508,7 @@ function renderState(state) {
     const progressText = progress > .001
       ? (s._uses_xp ? `Practice +${progress.toFixed(progress >= 10 ? 1 : 2)}` : `${Math.round(progress * 100)}% to next point`)
       : "";
-    return `<div class="attr-cell"><div class="attr-name"><i class="a-icon">${abilityIcon(k)}</i>${escapeHtml(k)}</div><div class="attr-right">${progressText ? `<small class="attr-progress">${escapeHtml(progressText)}</small>` : ""}<span class="attr-val">${escapeHtml(v)}</span></div></div>`;
+    return `<div class="attr-cell" data-stat-name="${escapeHtml(k)}"><div class="attr-name"><i class="a-icon">${abilityIcon(k)}</i>${escapeHtml(k)}</div><div class="attr-right">${progressText ? `<small class="attr-progress">${escapeHtml(progressText)}</small>` : ""}<span class="attr-val">${escapeHtml(v)}</span></div></div>`;
   }).join("");
 
   const isFullSheet = s._stat_style === "full_sheet";
@@ -1782,6 +1893,17 @@ function weatherKeyFor(weather) {
 const FIRE_SCENES = new Set(["merchant_shop", "tavern_inn", "indoor_grandhall", "dungeon_cave", "monster_lair", "battlefield_dusk"]);
 const STAR_SCENES = new Set(["starry_sky", "night_wilderness", "tower_hub"]);
 const WIND_SCENES = new Set(["harbor_port", "ship_deck", "forest_path", "mountain_castle", "snow_region"]);
+const WORLD_VISUAL_PROFILES = {
+  "Naruto": { idle: "sakura", training: "chakra", portrait: "sakura" },
+  "One Piece": { idle: "sea-spray", training: "wind", portrait: "sea-spray" },
+  "Hunter x Hunter": { idle: "leaves", training: "nen", portrait: "nen" },
+  "Bleach": { idle: "reishi", training: "spirit", portrait: "reishi" },
+  "Jujutsu Kaisen": { idle: "cursed", training: "cursed", portrait: "cursed" },
+  "Overgeared": { idle: "forge", training: "energy", portrait: "forge" },
+  "Solo Max-Level Newbie": { idle: "tower", training: "system", portrait: "tower" },
+  "Reincarnated as a Slime": { idle: "magicules", training: "magic", portrait: "magicules" },
+  "Custom World": { idle: "motes", training: "energy", portrait: "motes" },
+};
 
 function timeOfDayFor(s) {
   const hour = Number(s?.calendar?.hour);
@@ -1812,21 +1934,17 @@ function activityFor(s) {
 function ambientModeFor(category, weather, s) {
   const weatherMode = weatherKeyFor(weather);
   if (weatherMode) return weatherMode;
+  const profile = WORLD_VISUAL_PROFILES[s?.world] || WORLD_VISUAL_PROFILES["Custom World"];
   if (s?.combat?.active || ["duel", "monster_battlefield", "battlefield_dusk"].includes(category)) return "sparks";
-  if (activityFor(s) === "training") return s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "sakura" : "energy";
+  if (s?.world === "Naruto") return "sakura";
+  if (activityFor(s) === "training") return profile.training;
   if (FIRE_SCENES.has(category)) return "embers";
   if (STAR_SCENES.has(category)) return "stars";
   if (WIND_SCENES.has(category)) return category === "forest_path" ? "leaves" : "wind";
   if (category === "rain_city") return "rain";
   if (category === "underwater") return "bubbles";
-  if (s?.world === "One Piece") return "wind";
-  if (s?.world === "Naruto") return "sakura";
-  if (s?.world === "Hunter x Hunter") return "leaves";
-  if (s?.world === "Overgeared") return activityFor(s) === "crafting" ? "embers" : "motes";
-  if (s?.world === "Bleach") return "spirit";
-  if (s?.world === "Solo Max-Level Newbie") return "system";
-  if (s?.world === "Reincarnated as a Slime") return "magic";
-  return "motes";
+  if (s?.world === "Overgeared" && activityFor(s) === "crafting") return "embers";
+  return profile.idle;
 }
 
 function stableAmbientUnit(seed) {
@@ -1858,9 +1976,18 @@ function applyNativeSceneFx(category, weather, s) {
   const layer = $("#scene-ambient");
   const mode = ambientModeFor(category, weather, s);
   const time = timeOfDayFor(s);
+  const activity = activityFor(s);
   document.body.setAttribute("data-time", time);
+  document.body.setAttribute("data-weather", weatherKeyFor(weather) || "clear");
+  document.body.setAttribute("data-activity", activity);
   layer.dataset.time = time;
-  layer.dataset.activity = activityFor(s);
+  layer.dataset.activity = activity;
+  const lighting = $("#scene-lighting");
+  if (lighting) {
+    lighting.dataset.time = time;
+    lighting.dataset.weather = weatherKeyFor(weather) || "clear";
+    lighting.dataset.activity = activity;
+  }
   const count = mode === "rain" || mode === "snow" ? 26 : mode === "sakura" ? 24 : 18;
   fillAmbientLayer(layer, mode, count, `${s?.world}:${category}:${mode}`);
 }
@@ -1868,21 +1995,73 @@ function applyNativeSceneFx(category, weather, s) {
 function applyPortraitAmbient(s) {
   const layer = $("#portrait-ambient");
   if (!layer) return;
-  const mode = s?.combat?.active ? "sparks" : s?.world === "Bleach" ? "spirit" : s?.world === "Naruto" ? "sakura" : s?.world === "Solo Max-Level Newbie" ? "system" : s?.world === "Overgeared" ? (activityFor(s) === "crafting" ? "embers" : "motes") : s?.world === "Reincarnated as a Slime" ? "magic" : s?.world === "One Piece" ? "wind" : "motes";
+  const profile = WORLD_VISUAL_PROFILES[s?.world] || WORLD_VISUAL_PROFILES["Custom World"];
+  const formEffect = portraitFormEffect(s);
+  const mode = formEffect === "bijuu" ? "chakra" : formEffect === "bankai" || formEffect === "shikai" ? "reishi" : formEffect === "domain" ? "cursed" : formEffect === "system" ? "tower" : s?.combat?.active ? "sparks" : s?.world === "Naruto" ? "sakura" : s?.world === "Overgeared" && activityFor(s) === "crafting" ? "embers" : profile.portrait;
   fillAmbientLayer(layer, mode, mode === "sakura" ? 16 : 12, `portrait:${s?.world}:${mode}`);
+}
+
+function applyWorldAtmosphere(s) {
+  const layer = $("#world-atmosphere");
+  const lighting = $("#world-lighting");
+  if (!layer || !lighting) return;
+  const profile = WORLD_VISUAL_PROFILES[s?.world] || WORLD_VISUAL_PROFILES["Custom World"];
+  const mode = weatherKeyFor(s?.weather) || (s?.combat?.active ? "sparks" : profile.idle);
+  const count = isMobileLayout() ? 8 : 14;
+  fillAmbientLayer(layer, mode, count, `world:${s?.world}:${mode}`);
+  lighting.dataset.time = timeOfDayFor(s);
+  lighting.dataset.weather = weatherKeyFor(s?.weather) || "clear";
+  lighting.dataset.activity = activityFor(s);
+}
+
+function portraitFormEffect(s) {
+  const form = s?._portrait_active_form && typeof s._portrait_active_form === "object" ? s._portrait_active_form : {};
+  const text = `${form.name || ""} ${form.description || ""} ${form.effect || ""}`.toLowerCase();
+  if (!text.trim()) return "";
+  if (/tailed|jinch|biju|bijū|chakra cloak|nine[- ]tails/.test(text)) return "bijuu";
+  if (/bankai/.test(text)) return "bankai";
+  if (/shikai|first release/.test(text)) return "shikai";
+  if (/domain expansion|innate domain/.test(text)) return "domain";
+  if (/sharingan|rinnegan|byakugan|d[ōo]jutsu|mangeky|eye/.test(text)) return "dojutsu";
+  if (/system|monarch|tower/.test(text)) return "system";
+  if (/evol|transform|awaken|form|mode/.test(text)) return "evolution";
+  return "aura";
 }
 
 function applyNativeMapFx(nodes) {
   const layer = $("#map-ambient");
   if (!layer) return;
   const dangerNodes = (nodes || []).filter((n) => String(n.danger_level || "").toLowerCase() === "critical");
-  layer.replaceChildren(...dangerNodes.map((node) => {
+  const glows = dangerNodes.map((node) => {
     const glow = document.createElement("i");
     glow.className = "map-danger-glow";
     glow.style.left = `${node.x}%`;
     glow.style.top = `${node.y}%`;
     return glow;
-  }));
+  });
+  const markers = (nodes || []).flatMap((node) => {
+    const words = `${node.name || ""} ${node.kind || ""} ${node.status || ""}`.toLowerCase();
+    let kind = "";
+    if (node.recently_changed) kind = "claim";
+    else if (/portal|gate|rift|garganta|senkaimon/.test(words)) kind = "portal";
+    else if (/burn|fire|volcan|eruption/.test(words)) kind = "fire";
+    else if (/storm|typhoon|hurricane|blizzard/.test(words)) kind = "storm";
+    else if (String(node.danger_level || "").toLowerCase() === "critical") kind = "conflict";
+    if (!kind) return [];
+    const marker = document.createElement("i");
+    marker.className = `map-event-marker map-event-${kind}`;
+    marker.style.left = `${node.x}%`;
+    marker.style.top = `${node.y}%`;
+    return [marker];
+  });
+  const fog = (nodes || []).filter((node) => !node.discovered).slice(0, 14).map((node) => {
+    const pocket = document.createElement("i");
+    pocket.className = "map-fog-pocket";
+    pocket.style.left = `${node.x}%`;
+    pocket.style.top = `${node.y}%`;
+    return pocket;
+  });
+  layer.replaceChildren(...fog, ...glows, ...markers);
   layer.dataset.dangerCount = String(dangerNodes.length);
 }
 
@@ -2458,7 +2637,14 @@ function renderCombatPanel(s) {
   const dead = e.alive === false || Number(e.hp) <= 0;
   const pct = 100 * (Number(e.hp) || 0) / Math.max(1, Number(e.hp_max) || 1);
   const enemyBox = $("#combat-enemy");
+  const wasDead = enemyBox.dataset.dead === "true";
   enemyBox.classList.toggle("dead", dead);
+  enemyBox.dataset.dead = String(dead);
+  if (dead && !wasDead) {
+    enemyBox.classList.remove("defeat-transition");
+    void enemyBox.offsetWidth;
+    enemyBox.classList.add("defeat-transition");
+  }
   const groupNote = e.is_group ? `<div class="combat-enemy-sub">Fighting as a group${e.group_size ? ` — roughly ${escapeHtml(e.group_size)} strong` : ""}</div>` : "";
   const defeatedLabel = combat.enemy_died ? "KILLED" : (combat.non_lethal || combat.spare_enemy || combat.death_prevented) ? "SUBDUED" : "DEFEATED";
   enemyBox.innerHTML = `<div class="combat-enemy-head"><b>${escapeHtml(e.name || "Enemy")}</b><span>${dead ? defeatedLabel : `${escapeHtml(e.hp)} / ${escapeHtml(e.hp_max)}`}</span></div>${groupNote}<div class="bar-track"><div class="bar-fill" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>`;
@@ -2814,6 +3000,7 @@ async function resolveAssessedTimeSkip(payload) {
     $("#action-input").value = "";
     $("#time-plan").value = "";
     renderQueuedActions([]);
+    playTimeAdvanceEffect(payload.amount, payload.unit);
     playSfx("time_skip");
     const result = await apiPost("/api/time/resolve", payload);
     await processTimeSkipResolution(result, payload);
@@ -3779,14 +3966,16 @@ async function openJournal(tab) {
   } else if (tab === "map") {
     const nodes = data.map_data?.nodes || [];
     const regions = data.map_data?.regions || [];
+    const travelGraph = data.travel_graph || { edges: {} };
     const knownCount = nodes.filter((node) => node.discovered).length;
     const legendChips = groupNodesByController(regions.length ? regions : nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}"><i></i>${escapeHtml(t.controller)}</span>`).join("");
     panel.innerHTML = `<div class="map-heading"><div><span class="map-kicker">POLITICAL ATLAS</span><b>${escapeHtml(data.world || s.world || "World")}</b><small>${nodes.length} important landmarks · ${knownCount} visited or discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
       (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
-      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="strategic" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>Territory is shown as one clean strategy layer. Borders join automatically when the same faction controls neighboring land and repaint when the story changes ownership.</p><small>Drag to pan. Scroll or use the controls to zoom.</small></aside></div>`;
+      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="strategic" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><canvas class="map-routes" id="map-route-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>Territory is shown as one clean strategy layer. Borders join automatically when the same faction controls neighboring land and repaint when the story changes ownership.</p><small>Drag to pan. Scroll or use the controls to zoom.</small></aside></div>`;
     const canvas = $("#map-canvas");
     const territoryData = regions.length ? regions : nodes;
     const territoryLayout = paintMapTerritories($("#map-territory-canvas"), territoryData);
+    paintMapRoutes($("#map-route-canvas"), nodes, travelGraph);
     renderMapFactionLabels($("#map-faction-labels"), territoryLayout, nodes);
     applyNativeMapFx(nodes);
     nodes.forEach((node) => {
@@ -3803,7 +3992,7 @@ async function openJournal(tab) {
     });
     APP.mapNodes = nodes;
     APP.mapRegions = regions;
-    APP.travelGraph = data.travel_graph || { edges: {} };
+    APP.travelGraph = travelGraph;
     initMapPanZoom();
   } else if (tab === "lore") {
     const sources = data.lore_sources || [];
@@ -3880,6 +4069,52 @@ function mapHexPath(ctx, cx, cy, radius) {
     i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
   }
   ctx.closePath();
+}
+function paintMapRoutes(canvas, nodes, graph) {
+  if (!canvas) return;
+  const rect = canvas.parentElement.getBoundingClientRect();
+  const width = Math.max(1, Math.round(rect.width));
+  const height = Math.max(1, Math.round(rect.height));
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  canvas.style.width = `${width}px`;
+  canvas.style.height = `${height}px`;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, width, height);
+  const nodeByName = new Map((nodes || []).map((node) => [node.name, node]));
+  const seen = new Set();
+  const routes = [];
+  Object.entries(graph?.edges || {}).forEach(([from, edges]) => {
+    const a = nodeByName.get(from);
+    if (!a || !a.discovered) return;
+    (edges || []).forEach((edge) => {
+      const b = nodeByName.get(edge.to);
+      if (!b || !b.discovered) return;
+      const key = [from, edge.to].sort().join("|");
+      if (seen.has(key)) return;
+      seen.add(key);
+      routes.push({ a, b, restricted: Boolean(edge.requirement) });
+    });
+  });
+  ctx.lineCap = "round";
+  routes.forEach(({ a, b, restricted }, index) => {
+    const ax = Number(a.x) / 100 * width, ay = Number(a.y) / 100 * height;
+    const bx = Number(b.x) / 100 * width, by = Number(b.y) / 100 * height;
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    const bend = (mapHash(`${a.name}:${b.name}`) - .5) * .16;
+    const mx = (ax + bx) / 2 - (by - ay) * bend;
+    const my = (ay + by) / 2 + (bx - ax) * bend;
+    ctx.quadraticCurveTo(mx, my, bx, by);
+    ctx.setLineDash(restricted ? [3, 5] : [8, 7]);
+    ctx.lineDashOffset = -(index % 7);
+    ctx.strokeStyle = restricted ? "rgba(240,186,106,.38)" : "rgba(220,240,244,.32)";
+    ctx.lineWidth = restricted ? 1.1 : 1.35;
+    ctx.stroke();
+  });
+  canvas.dataset.routeCount = String(routes.length);
 }
 function renderMapFactionLabels(layer, layout, nodes = []) {
   if (!layer) return;

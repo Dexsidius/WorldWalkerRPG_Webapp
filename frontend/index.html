@@ -21,6 +21,8 @@
 </aside>
 
 <div id="fx-layer" aria-hidden="true"></div>
+<div id="world-atmosphere" class="world-atmosphere ambient-fx" aria-hidden="true"></div>
+<div id="world-lighting" class="world-lighting" aria-hidden="true"></div>
 <div id="toast-stack"></div>
 <div id="cinematic-banner"></div>
 
@@ -83,6 +85,7 @@
       <div class="portrait-frame">
         <img id="portrait-img" class="portrait-image" alt="AI-generated character portrait" />
         <div id="portrait-ambient" class="portrait-ambient ambient-fx" aria-hidden="true"></div>
+        <div id="portrait-form-fx" class="portrait-form-fx" aria-hidden="true"><i></i><i></i><i></i></div>
         <div id="portrait-loading" class="portrait-loading" hidden><span></span><b>CREATING PORTRAIT…</b></div>
         <button id="btn-portrait-regenerate" class="portrait-regenerate" type="button" title="Regenerate AI portrait">↻</button>
         <button id="btn-portrait-manage" class="portrait-manage" type="button" title="Manage portrait identity">✦</button>
@@ -185,6 +188,7 @@
         <canvas id="scene-paint" class="scene-paint"></canvas>
         <img id="scene-img" class="scene-img" alt="" />
         <div id="scene-ambient" class="scene-ambient ambient-fx" aria-hidden="true"></div>
+        <div id="scene-lighting" class="scene-lighting" aria-hidden="true"></div>
         <div class="scene-shade"></div>
         <div class="scene-transition" id="scene-transition"></div>
         <div class="scene-badge" id="scene-category-badge">STARRY SKY</div>
@@ -305,7 +309,7 @@
           <span id="sys-moon" class="sys-icon">🌙</span>
         </div>
         <div class="music-controls">
-          <div class="music-now"><span>♫ WORLD MUSIC</span><b id="music-title">No music found</b></div>
+          <div class="music-now"><span>♫ WORLD MUSIC</span><b id="music-title">No music found</b><div id="music-visualizer" class="music-visualizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
           <div class="music-buttons">
             <button id="btn-music-prev" type="button" title="Previous track">◀</button>
             <button id="btn-music-play" type="button" title="Play or pause">▶</button>
