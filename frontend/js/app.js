@@ -158,6 +158,7 @@ const APP = {
   mobileScrollCampaign: "",
   serverReachable: null,
   serverProbeTimer: null,
+  trophyPrompted: new Set(),
 };
 
 function setHostConnectionState(connected, message = "") {
@@ -440,7 +441,24 @@ function shakeApp() {
   shell.classList.add("shake");
 }
 
+function showWorldSystemNotice(notifications) {
+  const world = APP.state?.world;
+  if (!["Overgeared", "Solo Max-Level Newbie"].includes(world)) return;
+  const messages = (notifications || []).map((row) => row?.display_message || row?.message).filter(Boolean).slice(0, 5);
+  if (!messages.length) return;
+  document.querySelector(".world-system-popup")?.remove();
+  const popup = document.createElement("aside");
+  popup.className = "world-system-popup";
+  popup.dataset.system = world === "Overgeared" ? "satisfy" : "tower";
+  popup.innerHTML = `<button type="button" aria-label="Close">×</button><small>${world === "Overgeared" ? "SATISFY NOTIFICATION" : "TOWER SYSTEM"}</small><b>${/quest/i.test(messages.join(" ")) ? "QUEST UPDATE" : "STATUS UPDATED"}</b><div>${messages.map((message) => `<p>${escapeHtml(message)}</p>`).join("")}</div>`;
+  document.body.appendChild(popup);
+  const close = () => popup.remove();
+  popup.querySelector("button").addEventListener("click", close);
+  window.setTimeout(close, 7500);
+}
+
 function handleNotifications(notifications) {
+  showWorldSystemNotice(notifications);
   (notifications || []).forEach((n) => {
     const shownMessage = n.display_message || n.message;
     // Reserve the large cinematic interruption for genuinely major changes.
@@ -597,6 +615,14 @@ function appendStoryEntries(entries) {
   const feed = $("#story-feed");
   const cleanEntries = (entries || []).filter((entry) => entry && String(entry.text || "").trim());
   if (!cleanEntries.length) return;
+  const presentationWorld = APP.state?.world || document.body.dataset.world || "Custom World";
+  const themedChronicle = new Set(["Naruto", "Bleach", "One Piece"]).has(presentationWorld);
+  const turnEnvelope = themedChronicle ? document.createElement("article") : null;
+  if (turnEnvelope) {
+    turnEnvelope.className = "world-turn-envelope";
+    turnEnvelope.dataset.presentation = presentationWorld === "Naruto" ? "scroll" : presentationWorld === "Bleach" ? "butterflies" : "poneglyph";
+    turnEnvelope.dataset.turn = APP.state?.turn || "";
+  }
   triggerNarrativeVisuals(cleanEntries);
   // A multi-day skip returns entries stamped with different canon_day
   // values — split those into separate dated cards (like a history feed)
@@ -702,9 +728,15 @@ function appendStoryEntries(entries) {
       const body = document.createElement("div");
       body.className = "story-entry-copy";
       bodyWrap.appendChild(body);
+      if (presentationWorld === "Bleach") {
+        const butterfly = document.createElement("i");
+        butterfly.className = "hell-butterfly-perch";
+        butterfly.setAttribute("aria-hidden", "true");
+        div.appendChild(butterfly);
+      }
       div.append(label, bodyWrap);
       entriesWrap.appendChild(div);
-      if (part.tag === "narrative" && APP.animationsEnabled) {
+      if (part.tag === "narrative" && APP.animationsEnabled && presentationWorld !== "Naruto") {
         typeText(body, part.body);
       } else if (part.tag === "narrative" || part.tag === "system" || part.tag === "canon_event") {
         renderBoldedText(body, part.body);
@@ -715,6 +747,12 @@ function appendStoryEntries(entries) {
       // moment turn's entry.detail (if any) is the roll-tooltip string
       // handled above, never an object, so this can't misfire on those.
       if (entry.detail && typeof entry.detail === "object") {
+        if (entry.detail.delivery) {
+          const delivery = document.createElement("small");
+          delivery.className = "story-delivery-source";
+          delivery.textContent = entry.detail.delivery;
+          label.appendChild(delivery);
+        }
         if (entry.detail.entities && entry.detail.entities.length) {
           const chips = document.createElement("div");
           chips.className = "story-entry-chips";
@@ -754,11 +792,45 @@ function appendStoryEntries(entries) {
         metaEntries.map((part) => `<div class="story-beat-system-row"><b>${escapeHtml(part.label)}</b><span>${escapeHtml(part.body)}</span></div>`).join("");
       entriesWrap.appendChild(strip);
     }
-    feed.appendChild(beat);
+    (turnEnvelope || feed).appendChild(beat);
   });
+  if (turnEnvelope) feed.appendChild(turnEnvelope);
   pruneStoryFeed(feed);
   applyMobileStoryFilter(APP.mobileStoryFilter || "all");
   feed.scrollTop = feed.scrollHeight + 400;
+}
+
+function promptForTrophy(proposal) {
+  if (!proposal?.id || APP.trophyPrompted.has(proposal.id) || document.querySelector(".trophy-consent")) return;
+  APP.trophyPrompted.add(proposal.id);
+  const overlay = document.createElement("div");
+  overlay.className = "trophy-consent modal-overlay open";
+  overlay.innerHTML = `<section class="trophy-consent-card" role="dialog" aria-modal="true" aria-labelledby="trophy-consent-title">
+    <small>LEGACY KEEPSAKE PROPOSED</small>
+    <h2 id="trophy-consent-title">${escapeHtml(proposal.title || "Campaign trophy")}</h2>
+    <p>${escapeHtml(proposal.description || "Keep a permanent record of this moment in the trophy collection?")}</p>
+    <div><button type="button" class="btn-ghost" data-trophy-choice="decline">LEAVE IT</button><button type="button" class="btn-primary" data-trophy-choice="accept">KEEP TROPHY</button></div>
+  </section>`;
+  document.body.appendChild(overlay);
+  overlay.querySelectorAll("[data-trophy-choice]").forEach((button) => button.addEventListener("click", async () => {
+    const accepted = button.dataset.trophyChoice === "accept";
+    overlay.querySelectorAll("button").forEach((row) => row.disabled = true);
+    try {
+      const result = await apiPost("/api/trophies/resolve", { id: proposal.id, accepted });
+      overlay.remove();
+      if (result.story?.length) appendStoryEntries(result.story);
+      if (result.state) renderState(result.state);
+      showToast(accepted ? "Trophy added to your legacy collection." : "Trophy left behind.", "notify");
+    } catch (error) {
+      overlay.remove(); showToast(error.message, "danger");
+    }
+  }));
+  overlay.querySelector("[data-trophy-choice='accept']")?.focus();
+}
+
+function checkTrophyProposals(state) {
+  const proposal = (state?.trophy_proposals || []).find((row) => row?.id && !APP.trophyPrompted.has(row.id));
+  if (proposal) window.setTimeout(() => promptForTrophy(proposal), 80);
 }
 
 function applyMobileStoryFilter(filter) {
@@ -1555,6 +1627,7 @@ function animateStateChanges(previous, next) {
 function renderState(state) {
   const previousState = APP.state;
   APP.state = state;
+  checkTrophyProposals(state);
   const s = state;
   if (Number(s.hp || 0) > 0) APP.narutoDeathCueActive = false;
   document.body.setAttribute("data-world", s.world || "Custom World");
@@ -3871,8 +3944,11 @@ async function openJournal(tab) {
   const s = APP.state || {};
   if (tab === "party") {
     const comp = data.companions || [];
+    const combinations = data.companion_combinations || [];
     const playerSummary = s._uses_xp ? `Level ${s.level ?? 1} · ${worldIdentityLabel(s)}` : worldIdentityLabel(s);
-    panel.innerHTML = comp.length ? comp.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Companion")}</b><br/>${escapeHtml(c.notes || c.role || "")}</div>`).join("") : `<div class="jrow">No companions have joined you yet.</div>` + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — ${escapeHtml(playerSummary)}</div>`;
+    const partyRows = comp.length ? comp.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Companion")}</b><br/>${escapeHtml(c.notes || c.role || "")}</div>`).join("") : `<div class="jrow">No companions have joined you yet.</div>`;
+    const comboRows = combinations.length ? `<h3>Combination abilities</h3>${combinations.map((combo) => `<details class="combination-card"><summary><b>${escapeHtml(combo.name)}</b><span>${escapeHtml(combo.mastery || 0)}% mastery</span></summary><p>${escapeHtml(combo.description || "A practiced shared technique.")}</p><small>${escapeHtml((combo.participants || []).join(" + "))}</small>${combo.activation ? `<p><b>Use:</b> ${escapeHtml(combo.activation)}</p>` : ""}${combo.limitation ? `<p><b>Limit:</b> ${escapeHtml(combo.limitation)}</p>` : ""}</details>`).join("")}` : "";
+    panel.innerHTML = partyRows + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — ${escapeHtml(playerSummary)}</div>` + comboRows;
   } else if (tab === "search") {
     panel.innerHTML = `<div class="system-summary"><b>SEARCH YOUR CAMPAIGN</b><span>Find old actions, people, quests, skills, chapters, facts, and player corrections without scrolling through the entire Chronicle.</span></div><form id="campaign-search-form" class="campaign-search-form"><input id="campaign-search-query" type="search" minlength="2" placeholder="Try a name, place, ability, promise, or event" required><button class="btn-primary" type="submit">SEARCH</button></form><div id="campaign-search-results" class="campaign-search-results"><div class="jrow hint">Enter at least two characters to search locally. This makes no AI call.</div></div>`;
     setTimeout(() => $("#campaign-search-query")?.focus(), 0);
@@ -3938,6 +4014,7 @@ async function openJournal(tab) {
   } else if (tab === "achievements") {
     const achievements = data.achievements || [];
     const titles = data.titles || [];
+    const legacy = data.legacy_trophies || [];
     const achievementView = (entry, index) => {
       const obj = entry && typeof entry === "object" ? entry : {};
       const name = compactReadable(obj.name || obj.title) || (typeof entry === "string" ? entry : `Achievement ${index + 1}`);
@@ -3957,7 +4034,8 @@ async function openJournal(tab) {
     const titleCards = titles.length
       ? titles.map((t) => `<article class="achievement-card title-card"><span class="achievement-icon">🎖</span><div class="achievement-copy"><b>${escapeHtml(titleLabel(t))}</b></div></article>`).join("")
       : '<div class="jrow hint">No titles earned yet.</div>';
-    panel.innerHTML = `<h3>Achievements</h3><div class="achievement-grid">${achievementCards}</div><h3>Titles Earned</h3><div class="achievement-grid">${titleCards}</div>`;
+    const legacyCards = legacy.length ? legacy.map((entry) => `<article class="achievement-card legacy-card"><span class="achievement-icon">◆</span><div class="achievement-copy"><b>${escapeHtml(entry.title || "Legacy trophy")}</b>${entry.description ? `<p>${escapeHtml(entry.description)}</p>` : ""}<small>${escapeHtml(entry.category || "Legacy")}</small></div></article>`).join("") : '<div class="jrow hint">No optional trophies have been kept yet.</div>';
+    panel.innerHTML = `<h3>Achievements</h3><div class="achievement-grid">${achievementCards}</div><h3>Legacy Trophies</h3><div class="achievement-grid">${legacyCards}</div><h3>Titles Earned</h3><div class="achievement-grid">${titleCards}</div>`;
     $$("[data-achievement-replay]").forEach((card) => card.addEventListener("click", () => {
       const name = card.getAttribute("data-achievement-replay");
       showCinematic("achievement", "ACHIEVEMENT UNLOCKED: " + name);
@@ -4381,6 +4459,7 @@ function paintMapTerritories(canvas, nodes) {
       const px = cx / WIDTH * 100, py = cy / HEIGHT * 100;
       let winner = null, winnerScore = Infinity;
       owners.forEach((region, index) => {
+        if (Number(region.hex_count) > 0) return;
         const polygon = Array.isArray(region.polygon) && region.polygon.length >= 3 ? region.polygon : null;
         const radius = Math.max(4, Math.min(42, Number(region.size) || 12));
         const rx = Number(region.x) || 50, ry = Number(region.y) || 50;
@@ -4394,6 +4473,26 @@ function paintMapTerritories(canvas, nodes) {
       cells.push(cell); byKey.set(`${row}:${col}`, cell);
     }
   }
+  // Narratively founded or explicitly resized holdings use an exact number
+  // of cells. A new player claim is therefore visibly one hex, not a fuzzy
+  // radius that happens to cover half the map; later state updates can grow
+  // it by increasing hex_count.
+  owners.filter((region) => Number(region.hex_count) > 0)
+    .sort((a, b) => Number(Boolean(a.player_founded)) - Number(Boolean(b.player_founded)))
+    .forEach((region) => {
+      const count = Math.max(1, Math.min(cells.length, Math.floor(Number(region.hex_count) || 1)));
+      const rx = Number(region.x) || 50, ry = Number(region.y) || 50;
+      const nearest = [...cells].sort((a, b) => {
+        const ad = Math.hypot(a.cx / WIDTH * 100 - rx, a.cy / HEIGHT * 100 - ry);
+        const bd = Math.hypot(b.cx / WIDTH * 100 - rx, b.cy / HEIGHT * 100 - ry);
+        return ad - bd || a.row - b.row || a.col - b.col;
+      }).slice(0, count);
+      const index = owners.indexOf(region);
+      nearest.forEach((cell) => {
+        cell.winner = { region, index };
+        cell.controller = region.controller;
+      });
+    });
   // Paint opaque cells to a separate wash, then composite that entire layer
   // once. This avoids darker alpha accumulation along internal cell edges.
   const wash = document.createElement("canvas");

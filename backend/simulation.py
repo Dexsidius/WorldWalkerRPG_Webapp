@@ -15,6 +15,7 @@ from datetime import datetime
 
 from worlds import abilities_for
 from director import enrich_npc_depth
+from campaign_features import recent_chat_context
 
 
 SIMULATION_MODES = {
@@ -142,6 +143,8 @@ def compile_context_snapshot(snapshot, state, query="", mode="balanced"):
         "mode": profile["id"], "detail_bubble": bubble,
         "rule": "Fully resolve the local bubble; treat listed coarse actors as summaries until they become relevant.",
     }
+    out["recent_chat_context"] = recent_chat_context(state, query)
+    out["chat_context_rule"] = "Treat these recent messages as established events. Agreements, threats, facts, warnings, promises and plans said in chat must affect the main simulation when relevant."
     return out
 
 

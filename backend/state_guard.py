@@ -21,6 +21,7 @@ from ability_mechanics import compile_ability_mechanics
 from power_benchmarks import benchmark_tier
 from politics import normalize_political_state
 from simulation_core import refresh_simulation_core
+from campaign_features import normalize_companion_combinations, normalize_trophy_state
 
 def _compile_skill_mechanics(state):
     skills = normalize_skill_map(state.get("skills", {}))
@@ -83,6 +84,7 @@ APP_OWNED = {
     "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
     "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version",
+    "legacy_trophies", "dismissed_trophy_ids", "downtime_surprise_state", "message_delivery_state",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -92,14 +94,14 @@ NESTED_DICT_FIELDS = {
     "reputation", "special", "contacts", "chat_threads", "combat", "portrait_identity",
     "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
     "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "jjk_system", "world_depth",
-    "polity_state",
+    "polity_state", "downtime_surprise_state", "message_delivery_state",
 }
 NESTED_LIST_FIELDS = {
     "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
     "companions", "codex", "status", "conditions", "known_recipes", "training_log",
     "active_encounters", "achievements", "travel_history", "loot_history", "queued_actions",
     "standing_orders", "suggested_actions", "prerequisite_tracks", "lore_sources",
-    "political_regions",
+    "political_regions", "companion_combinations", "trophy_proposals", "legacy_trophies", "dismissed_trophy_ids",
 }
 
 
@@ -381,6 +383,8 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     repairs.extend(normalize_world_depth(state, before))
     repairs.extend(initialize_lit_systems(state))
     repairs.extend(normalize_political_state(state, before))
+    normalize_companion_combinations(state, before)
+    normalize_trophy_state(state, before)
     refresh_simulation_core(state)
     knowledge_changes = normalize_npc_knowledge(state, before, source)
     if knowledge_changes:
@@ -430,6 +434,8 @@ def migrate_state(state, from_version="unknown"):
     repairs.extend(normalize_world_depth(migrated))
     repairs.extend(initialize_lit_systems(migrated))
     repairs.extend(normalize_political_state(migrated))
+    normalize_companion_combinations(migrated)
+    normalize_trophy_state(migrated)
     refresh_simulation_core(migrated)
     migrated.setdefault("diagnostics", {})["migration"] = {
         "from_version": from_version, "repairs": repairs,

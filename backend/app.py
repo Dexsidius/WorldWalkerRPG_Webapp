@@ -1160,6 +1160,7 @@ def api_panels():
         "inventory": s.get("inventory", []),
         "equipment": s.get("equipment", {}),
         "companions": s.get("companions", []),
+        "companion_combinations": s.get("companion_combinations", []),
         "titles": s.get("titles", []),
         "skills": visible_skills(s),
         "special": s.get("special", {}),
@@ -1174,6 +1175,8 @@ def api_panels():
         "timeline": s.get("timeline", []),
         "background_world_feed": s.get("background_world_feed", []),
         "achievements": s.get("achievements", []),
+        "trophy_proposals": s.get("trophy_proposals", []),
+        "legacy_trophies": s.get("legacy_trophies", []),
         "map": world_map,
         "map_data": map_snapshot(s, world_map, world),
         "map_image": f"/assets/generated_maps/{world_slug(s.get('world', 'Custom World'))}.webp",
@@ -1215,6 +1218,29 @@ def api_panels():
         "travel_graph": build_travel_graph(s),
         "canon_dependencies": dependencies,
     })
+
+
+@app.route("/api/trophies/resolve", methods=["POST"])
+def api_resolve_trophy():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    d = request.get_json(silent=True) or {}
+    proposal_id = str(d.get("id") or "").strip()
+    proposals = game.state.get("trophy_proposals") if isinstance(game.state.get("trophy_proposals"), list) else []
+    proposal = next((row for row in proposals if isinstance(row, dict) and str(row.get("id")) == proposal_id), None)
+    if not proposal:
+        return jsonify({"error": "That trophy proposal is no longer pending."}), 404
+    game.state["trophy_proposals"] = [row for row in proposals if row is not proposal]
+    accepted = bool(d.get("accepted"))
+    if accepted:
+        saved = dict(proposal)
+        saved["accepted_turn"] = int(game.state.get("turn", 0) or 0)
+        game.state.setdefault("legacy_trophies", []).append(saved)
+        game.append(f"[LEGACY KEPT]\n{saved.get('title')} was added to the campaign's trophy collection.", "meta")
+    else:
+        game.state.setdefault("dismissed_trophy_ids", []).append(proposal_id)
+    game.autosave()
+    return jsonify({"ok": True, "accepted": accepted, "state": game.public_state(), "story": game._flush_story()})
 
 
 @app.route("/api/campaign/search")

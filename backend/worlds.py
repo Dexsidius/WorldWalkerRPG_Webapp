@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.36.2"
+APP_VERSION = "3.37.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1471,7 +1471,7 @@ BASE_STATE = {
     # reputation change, consumed and cleared by continuity.py the same
     # turn it's written.
     "faction_chain":{}, "reputation_chain_events":{},
-    "factions":{},"affiliations":[],"companions":[],"codex":[],"location":"Starting Region","discovered_locations":[],"custom_locations":[],"political_regions":[],"polity_state":{},
+    "factions":{},"affiliations":[],"companions":[],"companion_combinations":[],"codex":[],"location":"Starting Region","discovered_locations":[],"custom_locations":[],"political_regions":[],"polity_state":{},
     "tower_floor":1,"tower_floor_deadline_day":None,"tower_over":False,"canon_event_engagement_count":0,"background_world_feed":[],
     "last_major_beat_day":None,"director_notes":"","simulation_scale":"Individual",
     "world_time":"Day 1 — Morning","status":[],"alive":True,"turn":0,"timeline":[],"special":{},
@@ -1511,6 +1511,7 @@ BASE_STATE = {
     # into the app-owned, deduplicated long-term narrative memory.
     "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]},
     "campaign_direction":{},"relationship_opportunities":[],"last_cause_effect":[],"last_training_summary":{},"last_ai_route":{},
+    "trophy_proposals":[],"legacy_trophies":[],"dismissed_trophy_ids":[],"downtime_surprise_state":{},"message_delivery_state":{},
     "capability_profile":{},"ability_registry":{},"progression_calibration":{},"npc_continuity":{},
     "encounter_state":{"version":1,"phase":"idle","negotiation_possible":True,"violence_committed":False},
     "story_threads":{},"resolution_ledger":[],"simulation_core_version":1

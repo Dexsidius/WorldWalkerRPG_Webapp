@@ -117,6 +117,9 @@ def _clean_region(raw, index):
         return None
     scale = str(raw.get("scale") or raw.get("scope") or "").strip().lower()
     default_size = CLAIM_SIZES.get(scale, 12.5)
+    authored_hexes = max(0, min(900, int(raw.get("hex_count", 0) or 0)))
+    if raw.get("player_founded"):
+        authored_hexes = max(1, authored_hexes)
     cleaned = {
         "id": str(raw.get("id") or f"{_slug(controller)}-{_slug(name)}-{index}")[:100],
         "name": name[:160],
@@ -124,6 +127,11 @@ def _clean_region(raw, index):
         "anchor": str(raw.get("anchor") or raw.get("source_location") or name)[:160],
         "scale": scale if scale in CLAIM_SIZES else "region",
         "size": _number(raw.get("size"), default_size, 4.0, 42.0),
+        # An authored hex_count is exact. New player holdings begin at one
+        # atlas hex and grow only when later narrative control expands them.
+        "hex_count": authored_hexes,
+        "player_founded": bool(raw.get("player_founded", False)),
+        "upgrades": [_text[:300] for _text in raw.get("upgrades", []) if isinstance(_text, str) and _text.strip()][:30] if isinstance(raw.get("upgrades"), list) else [],
     }
     if raw.get("x") is not None:
         cleaned["x"] = _number(raw.get("x"), 50.0, 0.0, 100.0)
@@ -250,6 +258,8 @@ def political_regions_for_map(state, nodes):
         regions.append({
             "id": raw.get("id"), "name": raw.get("name"), "controller": controller,
             "x": x, "y": y, "size": _number(raw.get("size"), 12.5, 4, 42),
+            "hex_count": max(0, int(raw.get("hex_count", 0) or 0)),
+            "player_founded": bool(raw.get("player_founded", False)),
             "polygon": polygon, "geometry": "authored" if polygon else "strategic",
             "contested_by": list(raw.get("contested_by") or []),
             "recently_changed": bool(raw.get("controller_changed_turn") is not None and int(state.get("turn", 0) or 0) - int(raw.get("controller_changed_turn", 0)) <= 3),

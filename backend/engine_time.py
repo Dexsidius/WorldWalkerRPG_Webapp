@@ -34,6 +34,7 @@ from standing_intents import (advance_standing_intents, player_training_directiv
                               register_standing_intents, standing_intent_context)
 from simulation_core import refresh_simulation_core, record_resolution_transaction
 from age_system import advance_character_age
+from campaign_features import downtime_surprise_prompt
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -757,6 +758,9 @@ class TimeSkipMixin:
         power_goal = None
         if not moment_mode and not event_mode and not canon_stop:
             power_goal = self._check_power_goal_progress(orders, self.duration_minutes(amount, unit) / 1440.0, results)
+        downtime_hint = downtime_surprise_prompt(
+            self.state, self.duration_minutes(simulation_amount, simulation_unit), orders
+        )
 
         payload = {
             "task": "resolve_time_skip", "duration": {"amount": simulation_amount, "unit": simulation_unit},
@@ -779,6 +783,7 @@ class TimeSkipMixin:
                 "canon_boundary": canon_stop or {},
                 "instruction": "Continue through routine beats and stop ONLY at the earliest genuinely major personal development or the canon boundary — see the requirements below for exactly what qualifies. End naturally; never ask whether the player intervenes."},
             "power_goal_progress": power_goal or {},
+            "downtime_surprise_hint": downtime_hint or {},
             "requirements": [
                 "Simulate the ENTIRE skipped period, not just its ending scene.",
                 "Any period longer than a single moment should cover several distinct notable beats/events spread across the timespan (e.g. across a day: morning training, an afternoon encounter, an evening development), not one flattened event. Only moment-to-moment turns focus on a single thing at a time.",
@@ -863,6 +868,10 @@ class TimeSkipMixin:
             "Training gains scale with actual sessions, intensity, aptitude, instruction, resources and recovery; do not compress a month into one session.",
             "Return sparse JSON: omit empty optional fields, empty arrays and empty objects.",
         ]
+        if downtime_hint:
+            payload["requirements"].append(
+                "This skip has a downtime_surprise_hint. Weave one optional, world-fitting personal surprise into the existing chronological updates if it naturally fits; do not make an extra AI pass and do not force it to become a major interruption."
+            )
         multiplayer_context = getattr(self, "multiplayer_context", None)
         if isinstance(multiplayer_context, dict) and multiplayer_context.get("participants"):
             payload["multiplayer"] = copy.deepcopy(multiplayer_context)
@@ -1174,6 +1183,7 @@ class TimeSkipMixin:
             "standing_intent_directives": intent_registration.get("consumed_directives", []),
             "elapsed_minutes": self.duration_minutes(training_amount, training_unit),
             "intensity": intensity, "model_used": getattr(narrator_client, "model", ""),
+            "downtime_surprise_used": bool(downtime_hint),
         })
 
     def next_canon_stop(self, amount, unit):
@@ -1697,8 +1707,7 @@ class TimeSkipMixin:
         self.log("Continuity correction applied: " + "; ".join(new_warnings))
         return {"addendum": addendum, "patched": bool(patch)}
 
-    @staticmethod
-    def _beat_detail(update, narrative_text):
+    def _beat_detail(self, update, narrative_text):
         """Structured extras for a dated time-skip beat, riding along on the
         story entry's existing free-form `detail` field: the entities the
         GM already bolded (same convention the Codex-linking already reads),
@@ -1720,9 +1729,10 @@ class TimeSkipMixin:
             speaker = ai_text(quote.get("speaker") or "")
             if text:
                 clean_quote = {"text": text, "speaker": speaker}
-        if not entities and not map_changes and not clean_quote:
+        delivery = ai_text(update.get("delivery_channel") or update.get("information_source") or "")
+        if not entities and not map_changes and not clean_quote and not delivery:
             return None
-        return {"entities": entities[:6], "map_changes": map_changes, "quote": clean_quote}
+        return {"entities": entities[:6], "map_changes": map_changes, "quote": clean_quote, "delivery": delivery}
 
     def apply_time_skip(self, data, requested_amount, requested_unit, progression_context=None):
         with self.lock:
@@ -1946,6 +1956,10 @@ class TimeSkipMixin:
                 "orders": self.state.get("standing_orders", []), "interrupted": interrupted
             })
             self.state["turn"] = before.get("turn", 0) + 1
+            if context.get("downtime_surprise_used"):
+                self.state["downtime_surprise_state"] = {
+                    "last_turn": self.state["turn"], "last_canon_day": self.state.get("canon_day", 0)
+                }
             self.state["time_mode"] = "moment"
             self.state["queued_actions"] = [ai_text(x) for x in data.get("deferred_actions", []) if ai_text(x)]
             self.state["suggested_actions"] = self.guided_suggestions(data.get("suggested_actions"))

@@ -479,6 +479,11 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         self.state.setdefault("chat_threads", {}).setdefault(thread, []).append(msg)
         if direction == "incoming":
             self.state.setdefault("unread_chats", []).append({"thread": thread, "turn": self.state.get("turn", 0)})
+            delivery = self.state.setdefault("message_delivery_state", {}).setdefault(thread, {})
+            delivery["last_incoming_turn"] = int(self.state.get("turn", 0) or 0)
+        elif direction == "outgoing":
+            delivery = self.state.setdefault("message_delivery_state", {}).setdefault(thread, {})
+            delivery["last_outgoing_turn"] = int(self.state.get("turn", 0) or 0)
         return msg
 
     def resolve_side_chat(self, thread, message):
@@ -570,11 +575,30 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
     def _incoming_message_candidates(self):
         """Zero-cost relevance gate before asking a model to compose a message."""
         turn = int(self.state.get("turn", 0) or 0); candidates = []
+        delivery = self.state.get("message_delivery_state") if isinstance(self.state.get("message_delivery_state"), dict) else {}
+        memories = self.state.get("npc_memories") if isinstance(self.state.get("npc_memories"), dict) else {}
+        schedules = self.state.get("npc_schedules") if isinstance(self.state.get("npc_schedules"), dict) else {}
         for name, contact in (self.state.get("contacts") or {}).items():
             if not isinstance(contact, dict):
                 continue
+            sent = delivery.get(name, {}) if isinstance(delivery.get(name), dict) else {}
+            if turn - int(sent.get("last_incoming_turn", -99) or -99) < 3:
+                continue
             due = contact.get("next_contact_turn")
             if contact.get("urgent") or contact.get("pending_reply") or contact.get("message_due") or (isinstance(due, (int, float)) and due <= turn):
+                candidates.append(str(name))
+                continue
+            thread = (self.state.get("chat_threads") or {}).get(name, [])
+            if isinstance(thread, list) and thread:
+                last = thread[-1] if isinstance(thread[-1], dict) else {}
+                if last.get("direction") == "outgoing" and turn - int(last.get("turn", turn) or turn) <= 6:
+                    candidates.append(str(name)); continue
+            memory = memories.get(name, {}) if isinstance(memories.get(name), dict) else {}
+            if memory.get("recurring") and (memory.get("goal") or memory.get("immediate_goal")):
+                candidates.append(str(name)); continue
+            schedule = schedules.get(name, {}) if isinstance(schedules.get(name), dict) else {}
+            due_turn = schedule.get("due_turn") or schedule.get("next_turn")
+            if isinstance(due_turn, (int, float)) and due_turn <= turn + 1:
                 candidates.append(str(name))
         for companion in self.state.get("companions", []) or []:
             if isinstance(companion, dict) and companion.get("name") and companion.get("location") and companion.get("location") != self.state.get("location"):

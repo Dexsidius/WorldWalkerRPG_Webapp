@@ -64,9 +64,11 @@ body{
   body[data-world="Naruto"]{ cursor:url("/cursors/naruto-kunai.svg") 2 2,default; }
   body[data-world="Bleach"]{ cursor:url("/cursors/bleach-zanpakuto.svg") 2 2,default; }
   body[data-world="Jujutsu Kaisen"]{ cursor:url("/cursors/jjk-sukuna-finger.svg") 4 2,default; }
+  body[data-world="One Piece"]{ cursor:url("/cursors/one-piece-strawhat-jolly-roger.svg") 16 10,default; }
   body[data-world="Naruto"] :is(button,a,summary,label,select,[role="button"]){ cursor:url("/cursors/naruto-kunai.svg") 2 2,pointer; }
   body[data-world="Bleach"] :is(button,a,summary,label,select,[role="button"]){ cursor:url("/cursors/bleach-zanpakuto.svg") 2 2,pointer; }
   body[data-world="Jujutsu Kaisen"] :is(button,a,summary,label,select,[role="button"]){ cursor:url("/cursors/jjk-sukuna-finger.svg") 4 2,pointer; }
+  body[data-world="One Piece"] :is(button,a,summary,label,select,[role="button"]){ cursor:url("/cursors/one-piece-strawhat-jolly-roger.svg") 16 10,pointer; }
   body[data-world="Naruto"].app-busy,
   body[data-world="Naruto"].app-busy :is(.app-shell,button,a,summary,label,select,[role="button"]){ cursor:url("/cursors/naruto-shuriken.svg") 16 14,wait; }
 }
@@ -886,6 +888,124 @@ body.motion-off .canon-cinematic .event-cinematic-particles{ display:none; }
   .canon-cinematic .event-window-kicker,.canon-cinematic .event-window-notice h3,.canon-cinematic .event-window-meta,.canon-cinematic #event-window-context,.canon-cinematic .event-window-facts,.canon-cinematic .event-window-actions,.canon-cinematic .event-window-guidance,.canon-cinematic .event-cinematic-frame{ opacity:1; transform:none; }
   .canon-cinematic .event-window-rule{ transform:scaleX(1); }
   .canon-cinematic .event-cinematic-cut,.canon-cinematic .event-cinematic-flash,.canon-cinematic .event-cinematic-particles{ display:none; }
+}
+
+/* v3.37 world-native Chronicle delivery. Every API response is one envelope,
+   while the existing cards and their information remain intact inside it. */
+.world-turn-envelope{ position:relative; flex:0 0 auto; width:100%; min-width:0; display:flex; flex-direction:column; gap:10px; }
+.story-delivery-source{ display:block; margin-top:5px; color:var(--accent2); font-size:8px; line-height:1.25; letter-spacing:.04em; text-transform:none; }
+
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"]{
+  margin:16px 8px; padding:28px 30px;
+  background:
+    linear-gradient(90deg,rgba(84,48,25,.15),transparent 7% 93%,rgba(84,48,25,.15)),
+    repeating-linear-gradient(0deg,rgba(83,51,28,.025) 0 1px,transparent 1px 7px),
+    #d8c39b;
+  border:1px solid #705134; border-radius:3px;
+  color:#2b1d15; box-shadow:0 10px 24px rgba(0,0,0,.42),inset 0 0 30px rgba(77,49,26,.13);
+  transform-origin:center; animation:narutoScrollUnfurl .48s cubic-bezier(.18,.8,.2,1) both;
+}
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"]::before,
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"]::after{
+  content:""; position:absolute; left:-10px; right:-10px; height:13px; border:1px solid #251b12; border-radius:8px;
+  background:linear-gradient(#735337,#332619 48%,#755438 52%,#302217); box-shadow:0 4px 8px rgba(0,0,0,.35); z-index:2;
+}
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"]::before{ top:-7px; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"]::after{ bottom:-7px; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-beat{ border:0; border-radius:0; background:transparent; box-shadow:none; color:#2b1d15; animation:none; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-beat+.story-beat{ border-top:1px solid rgba(74,43,24,.24); padding-top:8px; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-beat::before,
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-beat::after{ display:none; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-beat-head{ color:#7b2f27; border-color:rgba(74,43,24,.2); padding-inline:5px; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-entry{ padding-inline:5px; border-color:rgba(74,43,24,.13); background:transparent; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] :is(.story-entry-copy,.story-entry.narrative .story-entry-copy){ color:#2b1d15; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-entry-label{ color:#7b2f27; opacity:1; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-entry-copy strong{ color:#8b2f25; }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-entry-chips span{ color:#3e5d37; border-color:rgba(62,93,55,.36); background:rgba(62,93,55,.08); }
+@keyframes narutoScrollUnfurl{ from{ opacity:.2; transform:scaleX(.06); filter:brightness(.7); } 65%{ opacity:1; } to{ transform:scaleX(1); filter:none; } }
+
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"]{ gap:16px; padding:8px 3px; }
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-beat{ overflow:visible; border:0; background:transparent; box-shadow:none; animation:hellButterflyArrival .72s cubic-bezier(.15,.8,.2,1) both; }
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-beat::before,
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-beat::after{ display:none; }
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-beat-head{ width:max-content; max-width:90%; margin:0 auto -1px; padding:5px 22px; border:1px solid rgba(126,206,234,.4); background:#0b1118; color:#a9e4f4; z-index:2; position:relative; }
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry{
+  position:relative; isolation:isolate; grid-template-columns:1fr; gap:4px; min-height:118px; padding:28px clamp(26px,6vw,72px);
+  border:1px solid rgba(132,210,238,.28); overflow:hidden;
+  clip-path:polygon(50% 20%,58% 5%,88% 10%,100% 34%,89% 64%,96% 92%,65% 83%,50% 69%,35% 83%,4% 92%,11% 64%,0 34%,12% 10%,42% 5%);
+  background:
+    radial-gradient(ellipse at 22% 50%,rgba(58,136,174,.36),rgba(8,15,23,.94) 62%),
+    radial-gradient(ellipse at 78% 50%,rgba(58,136,174,.36),rgba(8,15,23,.94) 62%);
+  box-shadow:0 12px 34px rgba(0,0,0,.4),inset 0 0 40px rgba(88,190,227,.08);
+}
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry::before{
+  content:""; position:absolute; z-index:-1; inset:12px 48.7%; border-radius:999px; background:linear-gradient(#8be8ff,#173847 35%,#05090d 74%,#69c9e9); box-shadow:0 0 16px rgba(126,220,246,.55);
+}
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry+.story-entry{ margin-top:12px; }
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry-label{ color:#8edcf1; text-shadow:0 0 8px rgba(99,185,213,.45); }
+@keyframes hellButterflyArrival{ from{ opacity:0; transform:translate(18vw,-50px) rotate(5deg) scale(.5); filter:blur(3px); } 55%{ opacity:1; transform:translate(-8px,5px) rotate(-1deg) scale(1.02); } to{ transform:none; filter:none; } }
+
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"]{
+  margin:12px auto 24px; padding:34px clamp(20px,5vw,58px); width:min(96%,980px); min-height:220px;
+  border:4px solid #213e5d; border-radius:12px; color:#eaf5f6;
+  background:
+    repeating-linear-gradient(86deg,transparent 0 32px,rgba(91,203,220,.035) 33px 35px),
+    repeating-linear-gradient(-8deg,transparent 0 41px,rgba(0,0,0,.1) 42px 44px),
+    linear-gradient(145deg,#315b77,#173449 55%,#0c2638);
+  box-shadow:inset 0 0 0 3px #6aa4b9,inset 0 0 50px rgba(0,0,0,.46),0 18px 38px rgba(0,0,0,.48);
+  animation:poneglyphSink .64s cubic-bezier(.16,.76,.22,1) both;
+}
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"]::before{ content:""; position:absolute; inset:-22px -10% auto; height:38px; opacity:.35; background:radial-gradient(ellipse at center,rgba(105,226,240,.7),transparent 62%); animation:waterRing 1.2s ease-out both; }
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"] .story-beat{ border:0; border-radius:0; background:transparent; box-shadow:none; animation:none; }
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"] .story-beat+.story-beat{ border-top:1px solid rgba(133,214,225,.2); padding-top:8px; }
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"] .story-beat::before,
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"] .story-beat::after{ display:none; }
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"] .story-entry{ background:transparent; border-color:rgba(151,222,230,.12); }
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"] .story-entry{ grid-template-columns:1fr; gap:4px; padding-inline:5px; }
+body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"] .story-entry-label{ color:#f0c76b; }
+@keyframes poneglyphSink{ from{ opacity:0; transform:translateY(-85px) scale(.96); filter:blur(2px); } 62%{ opacity:1; transform:translateY(8px) scale(1.01); } to{ transform:none; filter:none; } }
+@keyframes waterRing{ from{ opacity:.7; transform:scaleX(.25); } to{ opacity:0; transform:scaleX(1.25); } }
+
+/* Approved source-material-inspired skins. Layout and visible information stay
+   exactly where the shared application places them. */
+body[data-world="Overgeared"]{
+  --bg:#080d1e; --bg-2:#050815; --panel:#111a38; --panel-soft:#172247; --header:#1d2850;
+  --border:#7897e9; --border-soft:#334b8a; --accent:#f2bd42; --accent-rgb:242,189,66;
+  --accent2:#9ebcff; --accent2-rgb:158,188,255; --text:#f7f8ff; --sub:#c1cbe7; --gold:#f2bd42;
+  --font-display:Bahnschrift,'Arial Narrow','Roboto Condensed',sans-serif; --font-body:'Roboto Condensed','Arial Narrow',sans-serif; --glass-rgb:10,17,42;
+}
+body[data-world="Overgeared"] .panel{ border:2px solid #718cd6; border-radius:2px; background:linear-gradient(180deg,rgba(45,61,118,.42),rgba(9,15,40,.92)); box-shadow:0 0 0 1px rgba(163,193,255,.25),inset 0 0 28px rgba(74,105,202,.13),var(--shadow-soft); }
+body[data-world="Overgeared"] .panel-head{ border-block:1px solid #9bb5ff; background:linear-gradient(90deg,transparent,rgba(99,127,220,.25),transparent); color:#fff; font-family:var(--font-display); text-transform:uppercase; letter-spacing:.045em; }
+body[data-world="Overgeared"] .panel::before,body[data-world="Overgeared"] .panel::after{ width:28px; height:7px; top:-4px; border:1px solid #a8c1ff; border-radius:70% 20%; background:#263d78; box-shadow:0 0 7px #6e91e9; }
+body[data-world="Overgeared"] :is(.attr-val,.world-system-card h3,.level-gain,.achievement-copy b){ color:#f2bd42; }
+
+body[data-world="Solo Max-Level Newbie"]{
+  --bg:#020518; --bg-2:#01020d; --panel:#061052; --panel-soft:#081862; --header:#0a1d78;
+  --border:#4ea3ff; --border-soft:#214aab; --accent:#f0f5ff; --accent-rgb:240,245,255;
+  --accent2:#5ab8ff; --accent2-rgb:90,184,255; --text:#f4f8ff; --sub:#b9caf3; --gold:#fff;
+  --font-display:Bahnschrift,'Arial Narrow','Roboto Condensed',sans-serif; --font-body:'Roboto Condensed','Arial Narrow',sans-serif; --glass-rgb:3,9,53;
+}
+body[data-world="Solo Max-Level Newbie"] .panel{ border:2px solid #69b9ff; background:linear-gradient(145deg,rgba(14,40,151,.96),rgba(2,7,55,.96)); box-shadow:0 0 0 1px #d9efff,inset 0 0 40px rgba(39,101,255,.22),0 10px 30px rgba(0,0,0,.55); }
+body[data-world="Solo Max-Level Newbie"] .panel::after{ content:"◆"; position:absolute; right:5px; top:4px; color:#fff; text-shadow:0 0 10px #57b8ff; font-size:12px; pointer-events:none; }
+body[data-world="Solo Max-Level Newbie"] .panel-head{ color:#fff; border-color:#69b9ff; background:linear-gradient(90deg,rgba(57,123,255,.25),transparent); font-family:var(--font-display); }
+
+.trophy-consent{ display:grid; place-items:center; z-index:10050; background:rgba(3,6,15,.68); backdrop-filter:blur(5px); }
+.trophy-consent-card{ width:min(92vw,520px); padding:26px; border:1px solid var(--accent2); border-radius:var(--radius-sm); background:linear-gradient(155deg,var(--header),var(--panel)); box-shadow:0 24px 70px rgba(0,0,0,.65),inset 0 0 32px rgba(var(--accent2-rgb),.08); }
+.trophy-consent-card>small{ color:var(--accent2); font-weight:800; letter-spacing:.12em; }
+.trophy-consent-card h2{ margin:9px 0; color:var(--gold); font-family:var(--font-display); }
+.trophy-consent-card p{ color:var(--text); line-height:1.6; }
+.trophy-consent-card>div{ display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+.combination-card{ margin:9px 0; padding:10px 12px; border:1px solid var(--border-soft); background:var(--panel-soft); }
+.combination-card summary{ display:flex; justify-content:space-between; gap:12px; cursor:pointer; color:var(--gold); }
+.combination-card summary span,.combination-card small{ color:var(--sub); }
+
+@media(max-width:720px){
+  body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"]{ margin:14px 4px; padding:24px 16px; }
+  body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry{ grid-template-columns:1fr; padding:24px 24px; border-radius:26% 26% 12% 12% / 32% 32% 18% 18%; }
+  body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"]{ width:100%; padding:25px 15px; }
+}
+@media(prefers-reduced-motion:reduce){
+  .world-turn-envelope,.world-turn-envelope .story-beat,.world-turn-envelope::before{ animation:none!important; }
 }
 .combat-enemy.dead{ opacity:.45; filter:grayscale(.72); }
 .combat-enemy.defeat-transition{ animation:enemyDefeat .9s var(--ease-out) both; }
@@ -2596,3 +2716,57 @@ body[data-world="Reincarnated as a Slime"] .quick-nav button:active, body[data-w
   .queued-action,.mobile-advance-dock,.mobile-bottom-nav{ transition:none!important; }
   .map-node.here .map-pip,.map-danger-glow,.map-node.territory-changed:not(.here) .map-pip::after{ animation:none!important; }
 }
+
+/* Final cascade for the approved Overgeared and Solo skins. */
+body[data-world="Overgeared"]{ --bg:#080d1e;--bg-2:#050815;--panel:#111a38;--panel-soft:#172247;--header:#1d2850;--border:#7897e9;--border-soft:#334b8a;--accent:#f2bd42;--accent-rgb:242,189,66;--accent2:#9ebcff;--accent2-rgb:158,188,255;--text:#f7f8ff;--sub:#c1cbe7;--gold:#f2bd42;--font-display:Bahnschrift,'Arial Narrow','Roboto Condensed',sans-serif;--font-body:'Roboto Condensed','Arial Narrow',sans-serif;--glass-rgb:10,17,42; }
+body[data-world="Overgeared"] .panel{ border:2px solid #718cd6;background:linear-gradient(180deg,rgba(45,61,118,.42),rgba(9,15,40,.92));box-shadow:0 0 0 1px rgba(163,193,255,.25),inset 0 0 28px rgba(74,105,202,.13),var(--shadow-soft); }
+body[data-world="Overgeared"] .panel-head{ border-block:1px solid #9bb5ff;background:linear-gradient(90deg,transparent,rgba(99,127,220,.25),transparent);color:#fff;text-transform:uppercase; }
+body[data-world="Solo Max-Level Newbie"]{ --bg:#020518;--bg-2:#01020d;--panel:#061052;--panel-soft:#081862;--header:#0a1d78;--border:#4ea3ff;--border-soft:#214aab;--accent:#f0f5ff;--accent-rgb:240,245,255;--accent2:#5ab8ff;--accent2-rgb:90,184,255;--text:#f4f8ff;--sub:#b9caf3;--gold:#fff;--font-display:Bahnschrift,'Arial Narrow','Roboto Condensed',sans-serif;--font-body:'Roboto Condensed','Arial Narrow',sans-serif;--glass-rgb:3,9,53; }
+body[data-world="Solo Max-Level Newbie"] .panel{ border:2px solid #69b9ff;background:linear-gradient(145deg,rgba(14,40,151,.96),rgba(2,7,55,.96));box-shadow:0 0 0 1px #d9efff,inset 0 0 40px rgba(39,101,255,.22),0 10px 30px rgba(0,0,0,.55); }
+body[data-world="Solo Max-Level Newbie"] .panel-head{ color:#fff;border-color:#69b9ff;background:linear-gradient(90deg,rgba(57,123,255,.25),transparent); }
+.hell-butterfly-perch{ display:none; }
+body[data-world="Bleach"] .story-feed{ min-height:220px; }
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry{
+  overflow:visible; clip-path:none; isolation:isolate; min-height:176px; padding:34px clamp(42px,12%,76px); border:0; border-radius:0;
+  background:transparent; box-shadow:none;
+}
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry::before{ display:none; }
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .hell-butterfly-perch{
+  display:block; position:absolute; z-index:0; inset:0; width:100%; height:100%; pointer-events:none;
+  background:url('/assets/reference/bleach-hell-butterfly.webp') center/100% 100% no-repeat;
+  mix-blend-mode:screen; filter:invert(1) hue-rotate(180deg) brightness(.43) contrast(1.28) drop-shadow(0 0 7px rgba(203,238,250,.24)) drop-shadow(0 0 10px rgba(236,35,137,.46)); transform-origin:50% 58%;
+  animation:hellButterflyLand .78s cubic-bezier(.18,.75,.2,1) both,hellButterflyRest 4.6s ease-in-out .78s infinite;
+}
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry-label{
+  position:relative; z-index:2; min-height:16px; padding:0; text-align:center; color:#e9f8ff;
+}
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry-body{
+  position:relative; z-index:2; width:100%; margin-top:7px; padding:10px 12px; text-align:center;
+  border:1px solid rgba(216,241,250,.2); border-radius:8px; background:rgba(4,8,13,.7);
+  box-shadow:inset 0 0 20px rgba(28,53,67,.34); backdrop-filter:blur(1.5px);
+}
+body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry-copy{ max-width:100%; overflow-wrap:anywhere; word-break:normal; }
+@keyframes hellButterflyLand{
+  0%{ opacity:0; transform:translateY(105px) rotate(-5deg) scale(.68,.34); }
+  30%{ opacity:1; transform:translateY(42px) rotate(3deg) scale(.84,.58); }
+  56%{ transform:translateY(13px) rotate(-2deg) scale(.95,.82); }
+  78%{ transform:translateY(-3px) rotate(.8deg) scale(1.02,.97); }
+  100%{ opacity:1; transform:none; }
+}
+@keyframes hellButterflyRest{ 0%,100%{ transform:translateY(0) scaleX(1); } 48%{ transform:translateY(-1px) scaleX(.985); } 54%{ transform:translateY(0) scaleX(1); } }
+@media(max-width:720px){
+  body[data-world="Bleach"] .story-feed{ min-height:calc(100dvh - 430px); }
+  body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry{ min-height:170px; padding:34px 34px; }
+  body[data-world="Bleach"] .world-turn-envelope[data-presentation="butterflies"] .story-entry-body{ padding:9px 10px; }
+}
+@media(prefers-reduced-motion:reduce){body[data-world="Bleach"] .hell-butterfly-perch{animation:none!important}}
+.world-system-popup{ position:fixed; z-index:10020; top:12%; left:50%; width:min(560px,90vw); transform:translateX(-50%); padding:22px 28px; color:#f7f9ff; background:linear-gradient(150deg,#14235a,#080f33); border:2px solid #91b6ff; box-shadow:0 20px 60px rgba(0,0,0,.62),inset 0 0 35px rgba(94,141,255,.18); clip-path:polygon(16px 0,calc(100% - 16px) 0,100% 16px,100% calc(100% - 16px),calc(100% - 16px) 100%,16px 100%,0 calc(100% - 16px),0 16px); animation:systemNoticeOpen .34s cubic-bezier(.15,.8,.2,1) both; }
+.world-system-popup>button{ position:absolute; right:13px; top:8px; border:0; background:transparent; color:#dce9ff; font-size:22px; }
+.world-system-popup>small{ display:block; color:#9fc4ff; letter-spacing:.13em; font-weight:900; }
+.world-system-popup>b{ display:block; margin:5px 0 12px; font:800 22px Bahnschrift,'Arial Narrow',sans-serif; color:#fff; }
+.world-system-popup p{ margin:5px 0; padding-top:5px; border-top:1px solid rgba(160,190,255,.2); }
+body[data-world="Overgeared"] .world-system-popup{ border-color:#9bb5ff; background:linear-gradient(155deg,#27386f,#101a42); }
+body[data-world="Overgeared"] .world-system-popup>b{ color:#f2bd42; }
+body[data-world="Solo Max-Level Newbie"] .world-system-popup{ border-color:#76c7ff; box-shadow:0 20px 60px rgba(0,0,0,.62),0 0 22px rgba(54,153,255,.28),inset 0 0 36px rgba(42,104,255,.28); }
+@keyframes systemNoticeOpen{ from{ opacity:0; transform:translate(-50%,-26px) scale(.9); } to{ opacity:1; transform:translateX(-50%) scale(1); } }
+@media(prefers-reduced-motion:reduce){.world-system-popup{animation:none}}

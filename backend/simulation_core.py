@@ -298,11 +298,14 @@ def record_resolution_transaction(state, before, actions, elapsed_minutes, narra
 
 
 def refresh_simulation_core(state, actions=None, elapsed_minutes=0, action=""):
+    from campaign_features import normalize_companion_combinations, normalize_trophy_state
     build_capability_profile(state)
     normalize_ability_registry(state)
     normalize_npc_continuity(state)
     normalize_encounter_state(state, action or "; ".join(str(x) for x in (actions or [])))
     normalize_story_threads(state)
+    normalize_companion_combinations(state)
+    normalize_trophy_state(state)
     progression_calibration(state, actions or [], elapsed_minutes)
     state["simulation_core_version"] = CORE_VERSION
     return state

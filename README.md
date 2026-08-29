@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.36.2** (schema 19).
+Current app/save version: **3.37.0** (schema 19).
+
+Version 3.37.0 gives each world a more native Chronicle presentation, including
+Naruto scroll turns, Bleach Hell Butterfly dispatches, One Piece Poneglyph
+records, and game-system styling for Overgeared and Solo Max-Level Newbie. It
+also adds persistent companion combination abilities, narrative territory and
+headquarters growth, world-native information delivery, downtime surprises,
+incoming social messages, chat-aware GM context, and player-approved legacy
+trophies.
 
 Version 3.36.2 replaces renamed-template power rerolls with persistent,
 mechanic-level originality across every world that supports unique abilities.
