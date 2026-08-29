@@ -319,16 +319,23 @@ def _seed_overgeared(state):
     profile = special.setdefault("Satisfy Profile", {})
     mastery = _number(profile.get("crafting_mastery", special.get("Crafting Mastery", 0)))
     class_profile = state.get("class_profile") if isinstance(state.get("class_profile"), dict) else {}
-    class_name = str(profile.get("primary_class") or special.get("Class") or class_profile.get("name") or "Beginner")
+    profile_name = str(class_profile.get("name") or "").strip()
+    profile_is_unclassed = profile_name.lower() in {"", "beginner", "unclassed"} or str(class_profile.get("class_type") or "").lower() == "unassigned"
+    class_name = str((profile.get("primary_class") if profile_is_unclassed else profile_name)
+                     or special.get("Class") or profile_name or "Beginner")
+    is_unclassed = class_name.lower() in {"beginner", "unclassed"} or (profile_is_unclassed and str(profile.get("class_reception") or "").lower().startswith("pending"))
     class_type = str(profile.get("class_type") or class_profile.get("class_type") or infer_class_type(
         class_name, special.get("Archetype"), class_profile.get("description"), class_profile.get("effect")
     ))
     starter = starter_kit_for(special.get("Archetype") or class_name)
-    if not class_profile:
+    if not class_profile and not is_unclassed:
         class_type = starter.get("class_type", class_type)
         skill_map = state.setdefault("skills", {})
         for skill_name, detail in starter.get("skills", {}).items():
             skill_map.setdefault(skill_name, copy.deepcopy(detail))
+    if is_unclassed:
+        class_name, class_type = "Beginner", "Unassigned"
+    profile["primary_class"] = class_name
     profile["class_type"] = class_type
     production_relevant = _production_relevant(profile, special, class_profile)
     starting_path = _production_path_for_text(" ".join([
@@ -336,6 +343,16 @@ def _seed_overgeared(state):
         " ".join(str(x) for x in _list(profile.get("production_specialties"))),
     ]))
     system = state.setdefault("overgeared_system", {})
+    reception = system.setdefault("class_reception", {
+        "status": "pending" if is_unclassed else "received", "preferred_route": str(profile.get("preferred_class_route") or special.get("Archetype") or "Adventurer"),
+        "source": "Choose through the Chronicle" if is_unclassed else "Established class", "received_class": "" if is_unclassed else class_name,
+    })
+    if not is_unclassed and reception.get("status") != "received":
+        reception.update({"status":"received", "received_class":class_name, "received_turn":state.get("turn", 0), "source":"Narrative class reception"})
+        notice = f"[Class acquired]\n[{class_name}] has been received through the events of the Chronicle."
+        system.setdefault("system_notifications", []).append({"turn":state.get("turn", 0), "type":"class", "message":notice})
+    special["Class"] = class_name
+    special["Class Rarity"] = str(class_profile.get("rank") or ("Common" if is_unclassed else profile.get("class_rarity") or "Normal"))
     paths = system.setdefault("production_paths", {})
     if production_relevant and not paths:
         paths[starting_path] = {"mastery": mastery, "rank": _production_rank(mastery), "progress": 0}
@@ -345,10 +362,10 @@ def _seed_overgeared(state):
         "class": class_name,
         "class_type": class_type,
         "rarity": str(profile.get("class_rarity") or class_profile.get("rank") or "Normal"),
-        "stage": "Foundation", "stage_progress": 0,
-        "next_unlock": str(class_profile.get("growth_path") or "Use the class successfully and complete a defining class quest."),
-        "unlocked_features": ([str(class_profile.get("signature_skill"))] if class_profile.get("signature_skill")
-                              else list(starter.get("features", []))),
+        "stage": "Awaiting class" if is_unclassed else "Foundation", "stage_progress": 0,
+        "next_unlock": ("Find and fulfill a class-change opportunity in the story." if is_unclassed else str(class_profile.get("growth_path") or "Use the class successfully and complete a defining class quest.")),
+        "unlocked_features": ([] if is_unclassed else ([str(class_profile.get("signature_skill"))] if class_profile.get("signature_skill")
+                              else list(starter.get("features", [])))),
     })
     system["class_progression"]["class"] = class_name
     system["class_progression"]["class_type"] = class_type
@@ -356,7 +373,7 @@ def _seed_overgeared(state):
     system.setdefault("companion_contracts", {})
     system.setdefault("system_notifications", [])
     system.setdefault("class_questlines", [])
-    if class_name and not system["class_questlines"]:
+    if class_name and not is_unclassed and not system["class_questlines"]:
         starter_quest = starter.get("quest", {}) if not class_profile else {}
         system["class_questlines"].append({
             "name": str(starter_quest.get("name") or f"The Path of {class_name}"), "class": class_name, "stage": "Foundation",
@@ -364,7 +381,9 @@ def _seed_overgeared(state):
             "next_unlock": str(starter_quest.get("reward") or "A new class feature or specialization lead"), "status": "Active",
         })
     profile["class_features"] = list(dict.fromkeys(profile.get("class_features", []) + system["class_progression"].get("unlocked_features", [])))
-    if not profile.get("advancement") or profile.get("advancement") == "Develop the class through meaningful class-aligned actions and quests.":
+    if is_unclassed:
+        profile["advancement"] = "Receive a class through an in-world class-change opportunity, quest, item, achievement, or hidden condition."
+    elif not profile.get("advancement") or profile.get("advancement") == "Develop the class through meaningful class-aligned actions and quests.":
         profile["advancement"] = class_profile.get("growth_path") or starter.get("growth_path")
     system.setdefault("npc_affinity", {})
     system.setdefault("affinity_history", {})
@@ -500,7 +519,17 @@ def _overgeared_turn(before, state, action_text, narrative, elapsed_minutes):
             notes.append("[New commission registered]\nIts materials, specifications, deadline, and payment remain governed by the Chronicle.")
 
     class_type = str(profile.get("class_type") or system["class_progression"].get("class_type") or "Adventuring / Flexible")
-    if CLASS_RE.search(action_text) or _class_action_aligned(class_type, action_text):
+    reception = system.setdefault("class_reception", {})
+    awaiting_class = str(reception.get("status") or "").lower() == "pending"
+    if awaiting_class and re.search(r"\b(?:class|job|profession|trainer|master|quest|trial|achievement|hidden condition|class change)\b", action_text, re.I):
+        old_progress = _number(reception.get("opportunity_progress"), 0)
+        gain = max(2, round(days * 4))
+        reception["opportunity_progress"] = min(100, old_progress + gain)
+        reception["last_evidence"] = str(action_text)[:240]
+        reception["preferred_route"] = str(reception.get("preferred_route") or special.get("Archetype") or "Adventurer")
+        if old_progress < 25 <= reception["opportunity_progress"]:
+            notes.append(f"[Class opportunity]\nYour actions have begun revealing a possible {reception['preferred_route']} class-change route. The actual class and conditions will be established through the Chronicle.")
+    if (CLASS_RE.search(action_text) or _class_action_aligned(class_type, action_text)) and not awaiting_class:
         cp = system["class_progression"]
         gain = max(1, round(days * (5 if CLASS_RE.search(action_text) else 3)))
         cp["stage_progress"] = min(100, _number(cp.get("stage_progress"), 0) + gain)

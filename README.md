@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.40.0** (schema 20).
+Current app/save version: **3.41.0** (schema 20).
+
+Version 3.41.0 adds dated multi-beat skips, independent companion and NPC
+development, persistent ability-evolution history, world-specific downtime,
+reactive incoming messages, local AI prompt budgeting, targeted campaign
+recovery, and narrative-first Satisfy class reception with optional Hidden
+and Legendary class starts.
 
 Version 3.40.0 gives the GM a persistent live-scene ledger, broader conditional
 response repair, narrative/mechanical outcome-scale checks, canon-divergence

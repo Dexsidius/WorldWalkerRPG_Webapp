@@ -47,6 +47,55 @@ def repair_campaign_state(state, repair_id="safe_all"):
     requested = {repair_id}
     if repair_id == "safe_all":
         requested = {"map_current_location", "normalize_quests", "describe_skills", "remove_deceased_companions", "deduplicate_rewards"}
+    if "repair_scene" in requested:
+        from campaign_reliability import refresh_scene_state
+        before = copy.deepcopy(state.get("scene_state", {}))
+        refresh_scene_state(state, {}, [])
+        if state.get("scene_state", {}) != before:
+            applied.append("Rebuilt the current scene identity from the campaign's real location and context.")
+    if "repair_combat" in requested:
+        combat = state.get("combat") if isinstance(state.get("combat"), dict) else {}
+        if combat.get("active"):
+            enemy = combat.get("enemy")
+            if not isinstance(enemy, dict):
+                name = ai_text(enemy) or "Current opponent"
+                baseline = max(10, int(max((state.get("stats") or {}).values(), default=20) * .65))
+                combat["enemy"] = {"name":name, "is_group":False, "group_size":None, "hp":baseline * 2,
+                                   "hp_max":baseline * 2, "difficulty_min":35, "difficulty_max":55,
+                                   "attack_min":30, "attack_max":50, "power":baseline, "alive":True}
+                applied.append("Rebuilt a malformed combat opponent without changing the encounter outcome.")
+            else:
+                hp_max = max(1, int(enemy.get("hp_max", enemy.get("hp", 1)) or 1))
+                enemy["hp_max"] = hp_max; enemy["hp"] = max(0, min(hp_max, int(enemy.get("hp", hp_max) or 0)))
+                enemy.setdefault("alive", enemy["hp"] > 0)
+                combat["round"] = max(1, int(combat.get("round", 1) or 1))
+                applied.append("Normalized the active combatant, HP, and round state.")
+        elif state.get("combat") not in ({}, None) and not isinstance(state.get("combat"), dict):
+            state["combat"] = {}; applied.append("Cleared an unreadable inactive combat record.")
+    if "repair_progression" in requested:
+        from world_progression import normalize_world_progression
+        from lit_systems import initialize_lit_systems
+        normalize_world_progression(state); initialize_lit_systems(state)
+        state["hp_max"] = max(1, int(state.get("hp_max", state.get("hp", 1)) or 1))
+        state["hp"] = max(0, min(state["hp_max"], int(state.get("hp", state["hp_max"]) or 0)))
+        state["resource_max"] = max(0, int(state.get("resource_max", state.get("resource", 0)) or 0))
+        state["resource"] = max(0, min(state["resource_max"], int(state.get("resource", state["resource_max"]) or 0)))
+        applied.append("Reconciled world progression, levels, pools, and special-system records.")
+    if "repair_abilities" in requested:
+        from simulation_core import normalize_ability_registry
+        normalize_ability_registry(state)
+        requested.add("describe_skills")
+        applied.append("Rebuilt the ability registry from the character's established skills and special powers.")
+    if "repair_social" in requested:
+        from simulation_core import normalize_npc_continuity
+        normalize_npc_continuity(state)
+        requested.add("remove_deceased_companions")
+        applied.append("Reconciled named NPC continuity, relationships, and active party membership.")
+    if "repair_world" in requested:
+        from simulation_core import refresh_simulation_core
+        refresh_simulation_core(state, [], 0, "Campaign recovery")
+        requested.add("map_current_location")
+        applied.append("Rebuilt world threads, location continuity, and local simulation indexes.")
     if "map_current_location" in requested:
         location = str(state.get("location") or "").strip()
         if location and location not in state.setdefault("discovered_locations", []):

@@ -22,7 +22,7 @@ class WorldwalkerV380Tests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.40.0")
+        self.assertEqual(APP_VERSION, "3.41.0")
 
     def test_high_status_original_starts_are_mechanical(self):
         marine = self.create("One Piece", "Marine Recruit", "Marksman", "Shells Town", "Starting posted as a Marine recruit at Shells Town.")
@@ -39,7 +39,8 @@ class WorldwalkerV380Tests(unittest.TestCase):
         self.assertGreaterEqual(jonin.state["stats"]["Ninjutsu"], 48)
 
         craftsman = self.create("Overgeared", "Renowned Craftsman", "Blacksmith", "Winston")
-        self.assertEqual(craftsman.state["special"]["Class"], "Master Craftsman")
+        self.assertEqual(craftsman.state["special"]["Class"], "Beginner")
+        self.assertEqual(craftsman.state["overgeared_system"]["class_reception"]["status"], "pending")
         self.assertGreaterEqual(craftsman.state["special"]["Crafting Mastery"], 65)
 
     def test_tempest_officer_default_is_moved_to_a_possible_era(self):

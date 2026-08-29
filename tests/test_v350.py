@@ -18,7 +18,7 @@ from worlds import APP_VERSION, BASE_STATE, timeline_for
 
 class WorldwalkerV350Tests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.40.0")
+        self.assertEqual(APP_VERSION, "3.41.0")
         self.assertEqual(BASE_STATE["schema_version"], 20)
         self.assertFalse(BASE_STATE["opening_complete"])
 

@@ -22,6 +22,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
 from knowledge import npc_knowledge_boundaries, concealed_player_facts
 from simulation import (compile_context_snapshot, normalize_simulation_mode,
                         simulation_profile, output_budget)
+from simulation_enhancements import apply_prompt_budget
 from simulation_integrity import canon_dependency_graph, campaign_search
 from overgeared_classes import canon_class_prompt_reference
 from ability_archive import GeneratedAbilityArchive
@@ -307,7 +308,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log", "prompt_budget_log")
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -336,7 +337,7 @@ class CoreMixin:
                 names.add(name)
         return names
 
-    def trimmed_state_for_ai(self, query=""):
+    def trimmed_state_for_ai(self, query="", purpose="moment"):
         """The raw state grows without bound over a long campaign —
         campaign_canon alone can hold up to 250 full turn records. Once a
         stretch of turns has been consolidated into a chapter_summaries
@@ -391,7 +392,8 @@ class CoreMixin:
         canon = self.state.get("campaign_canon") or []
         if not canon:
             snapshot.pop("campaign_canon", None)
-            return self._prune_ai_context(compile_context_snapshot(snapshot, self.state, query, self.simulation_mode()))
+            compiled = compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
+            return self._prune_ai_context(apply_prompt_budget(compiled, self.state, query, purpose, self.simulation_mode()))
         chapters = self.state.get("chapter_summaries") or []
         if chapters:
             try:
@@ -412,6 +414,7 @@ class CoreMixin:
                 ("id", "name", "controller", "anchor", "scale", "contested_by", "controller_changed_turn")
                 if region.get(key) not in (None, "", [], {})} for region in compiled["political_regions"] if isinstance(region, dict)]
         compiled["recent_state_delta"] = copy.deepcopy((compiled.get("campaign_canon") or [])[-3:])
+        compiled = apply_prompt_budget(compiled, self.state, query, purpose, self.simulation_mode())
         return self._prune_ai_context(compiled)
 
     @classmethod
@@ -824,7 +827,7 @@ Return ONLY valid JSON. No markdown fences."""
         learn_player_style(self.state)
         reconcile_commitments_and_consequences(self.state, {}, 0)
         refresh_canon_divergence_impacts(self.state)
-        snapshot = self.trimmed_state_for_ai(query)
+        snapshot = self.trimmed_state_for_ai(query, purpose)
         snapshot["mechanical_power_profile"] = power_profile_for(
             self.state.get("world", "Custom World"), self.state.get("stats", {}),
             self.state.get("special", {}).get("Archetype", ""),
@@ -1209,6 +1212,18 @@ COMBAT-SUMMARY JOB
             if uses_xp_for(world_name, self.state.get("custom_world", "")) else
             "\n- This world does not canonically expose XP or numbered levels. Never award XP or change level. Progress is shown through open-ended world-relative attributes, knowledge, techniques, ranks, titles and positions. Attributes have no fixed maximum."
         )
+        class_reception_rule = ""
+        if world_name == "Overgeared":
+            reception = ((self.state.get("overgeared_system") or {}).get("class_reception") or {})
+            if str(reception.get("status") or "").lower() == "pending":
+                class_reception_rule = (
+                    "\n- OVERGEARED CLASS RECEPTION: The character is currently a Satisfy Beginner without an awarded class. "
+                    "Do not grant a class merely because they train or because their creator archetype names a preference. Build an actual in-world "
+                    "class-change opportunity through a quest, NPC/master, class-change location, item, achievement, unusual behavior, or hidden condition. "
+                    "The player may pursue, reject, or reshape it. When they genuinely receive a class, update state_patch.class_profile with its complete "
+                    "identity/mechanics, state_patch.special['Satisfy Profile'], state_patch.special.Class/Class Rarity, all granted skills, and a literal Satisfy "
+                    "System notification in the same result. Original classes are allowed and should follow the player's demonstrated behavior rather than a fixed tree."
+                )
         position_rule = (
             "\n- If the character reaches a singular, defining position of power or authority appropriate to this world (e.g. Hokage, a Yonko or "
             "Pirate King, a Demon Lord or the Chairman of the Hunter Association, a Guild Master, a nation's ruler) — something the whole world "
@@ -1403,7 +1418,7 @@ NON-NEGOTIABLE RULES
 - Keep narrative prose short: a few sentences to one short paragraph per response. Only a single moment-to-moment turn focuses on one thing at a time — any longer timespan (a day, a training session, a journey) should move through several distinct beats/events across it rather than one flattened event, while still staying concise overall.
 - Award XP only when this world's progression rule explicitly says it has a canonical in-fiction XP/level system.
 - Explicitly update open-ended stats, knowledge, techniques, skills, titles, quests, items, reputation, companions, codex, locations and special world systems whenever justified.
-- Stats are setting-relative and theoretically unbounded. Never use D&D benchmarks, modifiers, level caps or a universal human maximum.{hidden_stat_rule}{voice_rule}{tower_rule}{progression_rule}{position_rule}{scale_rule}{gear_rule}{race_rule}{pacing_rule}{director_notes_rule}{nemesis_rule}{faction_conflict_rule}{leadership_rule}{espionage_rule}
+- Stats are setting-relative and theoretically unbounded. Never use D&D benchmarks, modifiers, level caps or a universal human maximum.{hidden_stat_rule}{voice_rule}{tower_rule}{progression_rule}{class_reception_rule}{position_rule}{scale_rule}{gear_rule}{race_rule}{pacing_rule}{director_notes_rule}{nemesis_rule}{faction_conflict_rule}{leadership_rule}{espionage_rule}
 - Every high/extreme player-initiated lethal action must be warned about before resolution.
 - Death is possible. If death occurs: hp=0 and alive=false.
 - hp MUST change in the SAME state_patch as any turn whose narrative describes the player taking a real wound — cut, stabbed, burned, bleeding, knocked out, a solid hit landed — never implied in prose and left for a later turn to catch up on. BAD: narrative says "the blade cuts into you and you stagger back bleeding" but state_patch.hp is unchanged. GOOD: the same narrative, with hp reduced in this same state_patch. Conversely, don't drop hp for a blow the player dodged, blocked, or shrugged off with no real wound described. EDGE CASE (don't over-correct): narrative says "the strike goes wide and you slip past it, unscathed" — hp correctly stays unchanged here even though a weapon was swung, since no wound actually landed; don't dock hp for a near-miss just to be cautious.

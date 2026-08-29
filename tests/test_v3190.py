@@ -31,7 +31,7 @@ class WorldwalkerV3190SatisfyBreadthTests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.40.0")
+        self.assertEqual(APP_VERSION, "3.41.0")
 
     def test_full_canon_catalog_is_available_only_as_class_design_reference(self):
         self.assertGreaterEqual(len(CANON_CLASS_NAMES), 130)
@@ -52,14 +52,14 @@ class WorldwalkerV3190SatisfyBreadthTests(unittest.TestCase):
     def test_nonproduction_start_has_role_progression_without_fake_crafting_path(self):
         state = self.campaign(archetype="Summoner").state
         system = state["overgeared_system"]
-        self.assertIn("Companion", state["special"]["Satisfy Profile"]["class_type"])
+        self.assertEqual(state["special"]["Satisfy Profile"]["class_type"], "Unassigned")
+        self.assertEqual(system["class_reception"]["preferred_route"], "Summoner")
         self.assertEqual(system["production_paths"], {})
         self.assertNotIn("Production standing", system["rankings"])
         before = copy.deepcopy(state)
         process_lit_turn(before, state, ["Train with my summoned companion and coordinate our formation"],
                          "The pair refine their timing through repeated field drills.", 7 * 1440)
-        self.assertGreater(state["overgeared_system"]["class_progression"]["stage_progress"], 0)
-        self.assertGreater(state["overgeared_system"]["role_development"]["aligned_actions"], 0)
+        self.assertEqual(state["overgeared_system"]["class_progression"]["stage"], "Awaiting class")
         self.assertEqual(state["overgeared_system"]["production_paths"], {})
 
     def test_a_nonproduction_character_can_later_choose_a_real_profession(self):

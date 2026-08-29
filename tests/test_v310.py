@@ -27,7 +27,7 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.game.settings["autosave"] = False
 
     def test_v310_schema_declares_owned_memory_and_progression_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.40.0")
+        self.assertEqual(APP_VERSION, "3.41.0")
         self.assertEqual(BASE_STATE["schema_version"], 20)
         self.assertIn("narrative_memory", BASE_STATE)
         self.assertIn("progression_ledger", BASE_STATE)
@@ -111,21 +111,15 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.assertTrue(any(change["name"] == "Stone Guard" for change in entry["changes"]))
         self.assertIn("72/55", entry["rolls"][0])
 
-    def test_random_hidden_class_begins_concealed_but_mechanics_still_apply(self):
+    def test_overgeared_does_not_randomly_award_a_class_without_the_creation_option(self):
         stats = {name: 30 for name in abilities_for("Overgeared")}
         with patch("engine_campaign.random.random", side_effect=[0.0, 1.0]), \
              patch("engine_campaign.random.choice", side_effect=lambda seq: seq[0]), \
              patch("engine_campaign.random.uniform", return_value=1.0):
             profile = self.game.infer_starting_profile("Overgeared", "New Player", "Blacksmith", "An ordinary crafter.", stats)
-        hidden = profile["hidden_class"]
-        self.assertTrue(hidden["discovery"]["concealed"])
-        self.assertIn(hidden["signature_skill"], profile["skills"])
-        visible = visible_class_profile(hidden)
-        self.assertTrue(visible["name"].startswith("Unidentified "))
-        self.assertIn("Hidden Class", visible["name"])
-        self.assertIn("affinity", visible["name"])
-        state = {"skills": profile["skills"], "class_profile": hidden}
-        self.assertNotIn(hidden["signature_skill"], visible_skills(state))
+        self.assertIsNone(profile["hidden_class"])
+        self.assertEqual(profile["class_profile"]["name"], "Beginner")
+        self.assertEqual(profile["overgeared_class_start"], "narrative")
 
     def test_explicit_hidden_class_is_fully_identified(self):
         stats = {name: 30 for name in abilities_for("Naruto")}

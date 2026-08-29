@@ -344,6 +344,20 @@ def visible_class_profile(state_or_profile):
 
 def visible_skills(state):
     skills = copy.deepcopy(state.get("skills", {})) if isinstance(state.get("skills"), dict) else {}
+    evolution = state.get("ability_evolution") if isinstance(state.get("ability_evolution"), dict) else {}
+    for name, detail in list(skills.items()):
+        history = evolution.get(name) if isinstance(evolution.get(name), dict) else {}
+        if not history:
+            continue
+        if not isinstance(detail, dict):
+            detail = {"description": str(detail)}
+            skills[name] = detail
+        detail["developed_applications"] = copy.deepcopy(history.get("applications", []))
+        detail["evolution_history"] = [
+            str(row.get("development") or "").strip()
+            + (f" — {str(row.get('application')).strip()}" if str(row.get("application") or "").strip() else "")
+            for row in history.get("history", [])[-8:] if isinstance(row, dict) and str(row.get("development") or "").strip()
+        ]
     profile = state.get("class_profile") if isinstance(state.get("class_profile"), dict) else {}
     discovery = profile.get("discovery") if isinstance(profile.get("discovery"), dict) else {}
     if discovery.get("concealed") and int(discovery.get("progress", 0) or 0) < 50:

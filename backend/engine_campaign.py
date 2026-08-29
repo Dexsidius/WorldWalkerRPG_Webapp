@@ -2007,7 +2007,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
 
     def infer_starting_profile(self, world, origin, archetype, background, stats, start_location="", allow_starting_specials=True,
                                jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False,
-                               one_piece_devil_fruit=False, one_piece_haki_types=None):
+                               one_piece_devil_fruit=False, one_piece_haki_types=None,
+                               overgeared_class_start="narrative"):
         text = f"{origin} {archetype} {background}".lower()
         # Explicit descriptive language in the player's own background wins.
         # Dropdown role labels remain a smaller fallback so selecting a canon
@@ -2072,9 +2073,23 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         # releases, class features, and other setting-recognizable abilities.
         skills = {}
         standard_class_profile = None
+        class_profile = None
+        preferred_class_route = None
+        overgeared_class_start = str(overgeared_class_start or "narrative").strip().lower()
+        if overgeared_class_start not in {"narrative", "hidden", "legendary"}:
+            overgeared_class_start = "narrative"
         if world == "Overgeared":
-            standard_class_profile = starter_kit_for(archetype)
-            skills.update(copy.deepcopy(standard_class_profile.get("skills", {})))
+            preferred_class_route = starter_kit_for(archetype)
+            if overgeared_class_start == "narrative":
+                class_profile = {
+                    "name": "Beginner", "kind": "Unclassed Satisfy Player", "rank": "Common",
+                    "class_type": "Unassigned", "revealed": True,
+                    "description": "No class has been received yet. Satisfy's class-change opportunities will respond to the character's actions, achievements, relationships, discoveries, and hidden conditions.",
+                    "effect": "The player can develop freely and pursue class opportunities without a class-specific feature yet.",
+                    "limitation": "No class bonuses or class-exclusive skills apply until a class is actually received in the story.",
+                    "growth_path": "Encounter and complete a class-change opportunity through the Chronicle.",
+                    "preferred_route": str(archetype or "Adventurer"),
+                }
         hidden_class = None
         generated_ability = None
         jinchuriki_profile = None
@@ -2096,20 +2111,27 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "The tailed beast is an independent person whose cooperation must be earned",
                 "Seal integrity, loss of control, physical strain, extraction, and political targeting",
             ])
-        class_requested = allow_starting_specials and self.hidden_class_requested(background)
+        overgeared_special_start = world == "Overgeared" and overgeared_class_start in {"hidden", "legendary"}
+        class_requested = allow_starting_specials and (self.hidden_class_requested(background) or overgeared_special_start)
         # Bleach progression is expressed through the Zanpakuto relationship,
         # releases and Kido—not a generic hidden-class card.
         class_declined = self.hidden_class_declined(background)
         class_awarded = world not in {"Bleach", "Jujutsu Kaisen", "Hunter x Hunter"} and (
             class_requested or (
-                allow_starting_specials and not class_declined and random.random() < RANDOM_HIDDEN_CLASS_CHANCE
+                world != "Overgeared" and allow_starting_specials and not class_declined
+                and random.random() < RANDOM_HIDDEN_CLASS_CHANCE
             )
         )
         if class_awarded:
+            class_boost = max(boost, 180) if world == "Overgeared" and overgeared_class_start == "legendary" else boost
             hidden_class = self.generate_hidden_class(
-                world, background, boost, primary, adjusted,
+                world, background, class_boost, primary, adjusted,
                 concealed=(not class_requested) or self.hidden_class_should_remain_unknown(background),
             )
+            if world == "Overgeared" and overgeared_class_start == "legendary":
+                hidden_class["rank"] = "Legendary"
+                hidden_class["revealed"] = True
+                hidden_class.setdefault("discovery", {}).update({"concealed": False, "progress": 100, "stage": "understood"})
             for ability, bonus in hidden_class["stat_bonuses"].items():
                 adjusted[ability] = max(1, int(adjusted.get(ability, 1)) + int(bonus))
             skills[hidden_class["signature_skill"]] = copy.deepcopy(hidden_class["skill"])
@@ -2294,7 +2316,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                  "naruto_lineage_profile": naruto_lineage_profile,
                  "jinchuriki_profile": jinchuriki_profile,
                  "naruto_affinity_profile": naruto_affinity_profile,
+                "class_profile": class_profile,
                 "standard_class_profile": standard_class_profile,
+                "preferred_class_route": preferred_class_route,
+                "overgeared_class_start": overgeared_class_start,
                 "jjk_birth_slot": jjk_birth_slot, "jjk_curse_identity": jjk_curse_identity,
                 "jjk_curse_grade": normalized_grade(jjk_curse_grade) if world == "Jujutsu Kaisen" and is_curse_origin(origin) else "",
                 "nen_profile": nen_profile, "hxh_start_with_nen": bool(hxh_start_with_nen),
@@ -2849,7 +2874,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         normalized["power_notice"] = power.get("interpretation", "") if power.get("lopsided") else ""
         return normalized
 
-    def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id="", jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False, one_piece_devil_fruit=False, one_piece_haki_types=None):
+    def preview_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", canon_character_id="", starting_era_id="", jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False, one_piece_devil_fruit=False, one_piece_haki_types=None, overgeared_class_start="narrative"):
         if world not in WORLD_DATA:
             raise ValueError("Unknown world selected.")
         if difficulty not in DIFFICULTIES:
@@ -2873,7 +2898,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                                               allow_starting_specials=not bool(scenario), jjk_guarantee_strong=jjk_guarantee_strong,
                                               jjk_curse_grade=jjk_curse_grade, hxh_start_with_nen=hxh_start_with_nen,
                                               one_piece_devil_fruit=one_piece_devil_fruit,
-                                              one_piece_haki_types=one_piece_haki_types)
+                                              one_piece_haki_types=one_piece_haki_types,
+                                              overgeared_class_start=overgeared_class_start)
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
         else:
@@ -2904,9 +2930,10 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             "hxh_start_with_nen": bool(hxh_start_with_nen),
             "one_piece_devil_fruit": bool(one_piece_devil_fruit),
             "one_piece_haki_types": list(one_piece_haki_types or []),
+            "overgeared_class_start": overgeared_class_start,
         }
 
-    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age="", jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False, one_piece_devil_fruit=False, one_piece_haki_types=None):
+    def new_campaign(self, name, world, difficulty, background, appearance_desc, custom_world, origin, archetype, stats, start_location="", start_note="", preview_stats=None, preview_profile=None, canon_character_id="", starting_era_id="", age="", jjk_guarantee_strong=False, jjk_curse_grade="", hxh_start_with_nen=False, one_piece_devil_fruit=False, one_piece_haki_types=None, overgeared_class_start="narrative"):
         wd = WORLD_DATA[world]
         scenario = self.canon_character_scenario(world, canon_character_id) if canon_character_id else None
         if scenario:
@@ -2923,6 +2950,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             allow_starting_specials=not bool(scenario), jjk_guarantee_strong=jjk_guarantee_strong,
             jjk_curse_grade=jjk_curse_grade, hxh_start_with_nen=hxh_start_with_nen,
             one_piece_devil_fruit=one_piece_devil_fruit, one_piece_haki_types=one_piece_haki_types,
+            overgeared_class_start=overgeared_class_start,
         )
         if scenario:
             profile = self.normalize_canon_start_profile(world, scenario, profile)
@@ -2945,7 +2973,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 special=copy.deepcopy(wd["special"]), discovered_locations=[start],
                 stats=copy.deepcopy(profile_stats), skills=copy.deepcopy(profile.get("skills", {})),
                 titles=copy.deepcopy(profile.get("titles", [])), equipment=copy.deepcopy(profile.get("equipment", {})),
-                class_profile=copy.deepcopy(profile.get("class_profile") or profile.get("hidden_class") or {}),
+                class_profile=copy.deepcopy(profile.get("hidden_class") or profile.get("class_profile") or {}),
                 hp=hp_max, hp_max=hp_max, resource=resource_max, resource_max=resource_max,
                 starting_power_band=profile.get("power_band", "Average beginner"),
                 starting_power_notice=profile.get("power_notice", ""),
@@ -3114,6 +3142,34 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     # turn it into a passive modal or a negotiable setup.
                     self.state["combat"] = copy.deepcopy(scenario["opening_combat"])
             self.apply_start_package_to_state(profile.get("start_package", start_package))
+            if world == "Overgeared":
+                reception = str(profile.get("overgeared_class_start") or overgeared_class_start or "narrative").lower()
+                preferred = profile.get("preferred_class_route") if isinstance(profile.get("preferred_class_route"), dict) else {}
+                awarded = self.state.get("class_profile") if isinstance(self.state.get("class_profile"), dict) else {}
+                is_unclassed = str(awarded.get("name") or "").lower() in {"", "beginner", "unclassed"}
+                if is_unclassed:
+                    self.state["class_profile"] = copy.deepcopy(profile.get("class_profile") or {
+                        "name":"Beginner", "kind":"Unclassed Satisfy Player", "rank":"Common",
+                        "class_type":"Unassigned", "growth_path":"Receive a class through the story.",
+                    })
+                    self.state["special"]["Class"] = "Beginner"
+                    self.state["special"]["Class Rarity"] = "Common"
+                else:
+                    self.state["special"]["Class"] = awarded.get("name", "Hidden Class")
+                    self.state["special"]["Class Rarity"] = awarded.get("rank", "Hidden")
+                satisfy = self.state["special"].setdefault("Satisfy Profile", {})
+                satisfy.update({
+                    "primary_class": self.state["special"]["Class"],
+                    "class_rarity": self.state["special"]["Class Rarity"],
+                    "preferred_class_route": str(preferred.get("name") or archetype or "Adventurer"),
+                    "class_reception": "Pending narrative class change" if is_unclassed else "Received before campaign start",
+                })
+                self.state.setdefault("overgeared_system", {})["class_reception"] = {
+                    "status": "pending" if is_unclassed else "received",
+                    "preferred_route": satisfy["preferred_class_route"],
+                    "source": "Choose through the Chronicle" if is_unclassed else "Character creation option",
+                    "received_class": "" if is_unclassed else self.state["special"]["Class"],
+                }
             # The origin package supplies a conservative default.  The
             # explicit creation toggle and authored latent profile are the
             # final authority for whether Nen begins awakened.
@@ -3238,6 +3294,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "Do not move it forward, begin it now, or imply that it already happened. Open only in the selected era's present-day situation."
             )
         requirements.append("Every starting ability and hidden-class signature skill must remain named in state_patch.skills and be explainable through its in-world origin, effect, limitation or cost, growth path, and canon_balance. Introduce it naturally in the opening; it is a real capability, not a rumor or disposable plot hook. Preserve class_profile, its original non-canon identity, and its mechanical stat bonuses. A unique generated class or bloodline is as real as a canon one and may develop new applications whenever its recorded rules and the narrative permit.")
+        if self.state.get("world") == "Overgeared" and str(((self.state.get("overgeared_system") or {}).get("class_reception") or {}).get("status") or "").lower() == "pending":
+            requirements.append("This Satisfy character deliberately begins as the Beginner class. Their archetype is only a preferred direction. Do not award that class in the opening; establish a concrete class-change lead, quest, NPC, location, item, achievement, or hidden-condition clue that they can choose to pursue through the story.")
         requirements.append("Open with a concrete situation and at least one actionable lead tied to this location, background, goal or upcoming world pressure. End with exactly 3 optional next actions: follow the lead, prepare/progress, or explore an alternate hook.")
         p = {"task": "opening", "state": self.task_state_for_ai("opening"), "requirements": requirements,
              "schema": {"narrative": "1 short paragraph, 3-5 sentences, ending with an open situation",

@@ -17,7 +17,7 @@ from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.40.0")
+        self.assertEqual(APP_VERSION, "3.41.0")
 
     def make_system_game(self, world):
         game = GameSession()
@@ -95,7 +95,8 @@ class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
         days = [entry["canon_day"] for entry in dated]
         self.assertEqual(days, sorted(days))
         self.assertEqual(dated[-1]["canon_day"], result["state"]["canon_day"])
-        self.assertIn("TRAINING COMPLETE", dated[-1]["text"])
+        self.assertTrue(any("TRAINING COMPLETE" in entry["text"] for entry in dated))
+        self.assertTrue(any("SHINOBI DOWNTIME" in entry["text"] for entry in dated))
 
     def test_successful_opening_check_changes_combat_state_once(self):
         game = self.make_system_game("Overgeared")

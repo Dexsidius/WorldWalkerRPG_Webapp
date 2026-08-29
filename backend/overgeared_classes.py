@@ -345,8 +345,16 @@ def class_action_bonus(state, action):
     if not isinstance(state, dict) or state.get("world") != "Overgeared":
         return 0
     special = state.get("special") if isinstance(state.get("special"), dict) else {}
-    archetype = special.get("Archetype") or special.get("Class")
-    kit = starter_kit_for(archetype)
+    reception = ((state.get("overgeared_system") or {}).get("class_reception") or {})
+    if str(reception.get("status") or "").lower() == "pending":
+        return 0
+    profile = state.get("class_profile") if isinstance(state.get("class_profile"), dict) else {}
+    class_name = profile.get("name") or special.get("Class")
+    kit = starter_kit_for(class_name)
+    class_type = profile.get("class_type") or infer_class_type(
+        class_name, profile.get("description"), profile.get("effect"), kit.get("class_type"),
+    )
+    mechanical_bonus = int(profile.get("mechanical_bonus", kit.get("mechanical_bonus", 4)) or 0)
     text = str(action or "").lower()
     patterns = {
         "Combat": r"\b(?:fight|attack|strike|guard|defend|duel|shoot|stab|block|weapon)\b",
@@ -357,7 +365,7 @@ def class_action_bonus(state, action):
         "Exploration / Utility": r"\b(?:explore|scout|search|track|map|infiltrate|discover|investigate|disarm)\b",
         "Production": r"\b(?:craft|forge|smith|brew|sew|build|repair|create|produce)\b",
     }
-    return int(kit.get("mechanical_bonus", 0) or 0) if any(
-        label in str(kit.get("class_type")) and re.search(pattern, text, re.I)
+    return mechanical_bonus if any(
+        label in str(class_type) and re.search(pattern, text, re.I)
         for label, pattern in patterns.items()
     ) else 0

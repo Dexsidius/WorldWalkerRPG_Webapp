@@ -1,6 +1,21 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.41.0": {
+        "title": "A World That Keeps Moving",
+        "summary": "Long skips, companions, NPCs, abilities, messages, recovery, and Satisfy classes now develop through persistent local systems with less AI overhead.",
+        "highlights": [
+            {"title": "Dated multi-beat time skips", "example": "A month can show separate training, companion, communication, and world developments across the actual dates instead of one flattened result."},
+            {"title": "Independent companion work", "example": "A companion assigned to maintain a shelter or investigate a lead can reach milestones while the player pursues something else."},
+            {"title": "NPCs develop on their own", "example": "Recurring allies and rivals can train and grow from their own established goals without being scaled to the player."},
+            {"title": "Ability evolution history", "example": "Opening a skill can show the applications and breakthroughs it has gained during this campaign."},
+            {"title": "World-specific downtime", "example": "Bleach skips include division duties, while Naruto includes mission reports and village routines and Satisfy includes rankings and class opportunities."},
+            {"title": "Messages that answer world events", "example": "Known contacts can send grounded reports or reactions after important developments without requiring another AI request."},
+            {"title": "Lower prompt overhead", "example": "A local budget keeps the most relevant abilities, items, people, chats, and campaign facts in each AI request instead of resending unrelated save history."},
+            {"title": "Targeted campaign recovery", "example": "Diagnostics can repair only the scene, combat, progression, abilities, NPCs, or world state that became malformed."},
+            {"title": "Narrative Satisfy classes", "example": "Overgeared characters normally begin as Beginners and earn a class through story events, with optional Hidden or Legendary class starts still available."},
+        ],
+    },
     "3.40.0": {
         "title": "A More Consistent Game Master",
         "summary": "This update makes the GM better at remembering the live scene, carrying consequences forward, and keeping narration aligned with the character sheet.",

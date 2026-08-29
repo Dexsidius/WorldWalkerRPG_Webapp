@@ -20,7 +20,7 @@ from worlds import abilities_for
 class WorldwalkerV3200ClassGameplayTests(unittest.TestCase):
     def test_release_version(self):
         from worlds import APP_VERSION
-        self.assertEqual(APP_VERSION, "3.40.0")
+        self.assertEqual(APP_VERSION, "3.41.0")
 
     def campaign(self, role="Summoner"):
         game = GameSession()
@@ -34,29 +34,27 @@ class WorldwalkerV3200ClassGameplayTests(unittest.TestCase):
             )
         return game
 
-    def test_every_creation_role_has_named_skills_features_quest_and_advancement(self):
+    def test_every_creation_role_is_a_preference_until_a_class_is_received(self):
         for role in ROLE_STARTER_KITS:
             state = self.campaign(role).state
             kit = starter_kit_for(role)
             self.assertGreaterEqual(len(kit["skills"]), 2, role)
-            self.assertTrue(set(kit["skills"]).issubset(state["skills"]), role)
-            self.assertIn(kit["quest"]["name"], [row["name"] for row in state["quests"]], role)
+            self.assertFalse(set(kit["skills"]).issubset(state["skills"]), role)
+            self.assertEqual(state["special"]["Class"], "Beginner")
+            self.assertEqual(state["overgeared_system"]["class_reception"]["preferred_route"], role)
             self.assertEqual(len(kit["advancements"]), 2, role)
 
-    def test_summoner_contract_is_structured_and_visible(self):
+    def test_summoner_contract_is_not_granted_before_the_class(self):
         state = self.campaign("Summoner").state
-        contract = state["overgeared_system"]["companion_contracts"]["Lumen Wisp"]
-        self.assertEqual(contract["condition"], "Stable")
-        self.assertGreater(contract["loyalty"], 0)
-        self.assertTrue(contract["abilities"])
-        self.assertIn("Lumen Wisp", [row["name"] for row in state["companions"]])
+        self.assertEqual(state["overgeared_system"]["companion_contracts"], {})
+        self.assertNotIn("Lumen Wisp", [row["name"] for row in state["companions"]])
 
-    def test_suggestions_and_mechanical_bonus_follow_the_class(self):
+    def test_suggestions_follow_the_preferred_route_without_an_unearned_bonus(self):
         game = self.campaign("Summoner")
         joined = " | ".join(game.state["suggested_actions"])
-        self.assertIn("Lumen Wisp", joined)
+        self.assertIn("Summoner", joined)
         self.assertNotIn("Weapon Proficiency", joined)
-        self.assertEqual(class_action_bonus(game.state, "Command Lumen Wisp to bind the attacker"), 4)
+        self.assertEqual(class_action_bonus(game.state, "Command Lumen Wisp to bind the attacker"), 0)
         self.assertEqual(class_action_bonus(game.state, "Forge a sword"), 0)
 
     def test_support_social_scout_and_companion_contributions_receive_real_xp(self):
@@ -67,15 +65,17 @@ class WorldwalkerV3200ClassGameplayTests(unittest.TestCase):
             self.assertGreaterEqual(xp, 10, action)
             self.assertIn("contribution", rows[0]["reason"])
 
-    def test_class_quest_completion_unlocks_specialization_then_evolution(self):
+    def test_receiving_a_class_in_the_narrative_synchronizes_the_system(self):
         state = self.campaign("Summoner").state
-        for _ in range(2):
-            before = copy.deepcopy(state)
-            process_lit_turn(before, state, ["Train Lumen Wisp through contract formations"],
-                             "The contract pair completes sustained field work.", 40 * 1440)
-        profile = state["special"]["Satisfy Profile"]
-        self.assertIn("Contract Marshal", profile["specializations"])
-        self.assertEqual(state["overgeared_system"]["class_progression"]["class"], "Concord Summoner")
+        before = copy.deepcopy(state)
+        state["class_profile"] = {
+            "name":"Concord Summoner", "kind":"Summoner Class", "rank":"Rare", "class_type":"Companion / Summoning",
+            "growth_path":"Develop contracts through shared achievements.", "signature_skill":"Concord Contract",
+        }
+        process_lit_turn(before, state, ["Accept the Concord Summoner class from the spirit shrine"],
+                         "The Satisfy System awards the class.", 60)
+        self.assertEqual(state["special"]["Class"], "Concord Summoner")
+        self.assertEqual(state["overgeared_system"]["class_reception"]["status"], "received")
         self.assertTrue(state["overgeared_system"]["system_notifications"])
 
     def test_class_encyclopedia_exposes_breadth_without_an_ai_call(self):

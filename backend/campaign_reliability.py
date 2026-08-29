@@ -295,6 +295,21 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     packet["divergence_impacts"] = copy.deepcopy((state.get("canon_divergence_impacts") or {}).get("affected_events", []))[:8]
     packet["outcome_scale"] = copy.deepcopy(state.get("last_outcome_scale", {}))
     packet["player_style"] = copy.deepcopy(state.get("player_style_profile", {}))
+    packet["companion_autonomy"] = {
+        name: {"progress": row.get("progress"), "directives": copy.deepcopy(row.get("directives", [])),
+               "latest": copy.deepcopy((row.get("history") or [])[-1:])}
+        for name, row in list((state.get("companion_autonomy") or {}).items())[:8] if isinstance(row, dict)
+    }
+    packet["npc_development"] = {
+        name: {"progress": row.get("progress"), "basis": row.get("basis"),
+               "latest": copy.deepcopy((row.get("history") or [])[-1:])}
+        for name, row in list((state.get("npc_development") or {}).items())[:8] if isinstance(row, dict)
+    }
+    packet["ability_evolution"] = {
+        name: {"applications": copy.deepcopy((row.get("applications") or [])[-8:]),
+               "latest": copy.deepcopy((row.get("history") or [])[-3:])}
+        for name, row in list((state.get("ability_evolution") or {}).items())[:12] if isinstance(row, dict)
+    }
 
     people = []
     companions = {ai_text(row.get("name") if isinstance(row, dict) else row).lower()

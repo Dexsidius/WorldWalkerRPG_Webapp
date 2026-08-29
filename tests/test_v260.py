@@ -736,7 +736,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         dated = [e for e in result["story"] if e.get("canon_day") is not None]
         days = [e["canon_day"] for e in dated]
         self.assertEqual(days, sorted(days))
-        self.assertEqual(days, [-4386, -4380, -4379])
+        self.assertEqual(days, [-4386, -4380, -4380, -4379])
         self.assertIn("Nine-Tails", dated[1]["text"])
         self.assertEqual(result["state"].get("active_canon_event"), "Naruto's birth and the Nine-Tails attack")
 

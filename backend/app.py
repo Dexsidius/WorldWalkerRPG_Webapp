@@ -705,6 +705,7 @@ def api_campaign_new():
             hxh_start_with_nen=bool(d.get("hxh_start_with_nen", False)),
             one_piece_devil_fruit=bool(d.get("one_piece_devil_fruit", False)),
             one_piece_haki_types=d.get("one_piece_haki_types", []),
+            overgeared_class_start=d.get("overgeared_class_start", "narrative"),
         )
         return jsonify({"state": state, "story": game._flush_story()})
     except Exception as e:
@@ -724,6 +725,7 @@ def api_campaign_preview():
             bool(d.get("jjk_guarantee_strong", False)), d.get("jjk_curse_grade", ""),
             bool(d.get("hxh_start_with_nen", False)),
             bool(d.get("one_piece_devil_fruit", False)), d.get("one_piece_haki_types", []),
+            d.get("overgeared_class_start", "narrative"),
         )
         return jsonify({"preview": preview})
     except Exception as e:

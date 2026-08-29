@@ -1090,6 +1090,8 @@ function renderSkillCard(name, rawDetail) {
     ["Origin", detail.origin],
     ["Cost / limits", detail.limitation || detail.limitations || detail.cost || detail.drawback],
     ["How to improve", detail.growth_path || detail.growth || detail.next_steps],
+    ["Developed applications", detail.developed_applications],
+    ["Evolution history", detail.evolution_history],
   ].map(([label, value]) => [label, compactReadable(value)]).filter(([, value]) => value);
   const chips = [rank ? `<span>${escapeHtml(rank)}</span>` : "", category ? `<span>${escapeHtml(humanLabel(category))}</span>` : "", bonus !== null ? `<span>${bonus >= 0 ? "+" : ""}${escapeHtml(bonus)} check bonus</span>` : ""].filter(Boolean).join("");
   return `<details class="skill-journal-card expandable-special-card"><summary><h3>✦ ${escapeHtml(name)}</h3><div class="skill-summary-actions">${chips ? `<div class="skill-chips">${chips}</div>` : ""}<span class="expand-label"></span></div></summary><div class="expandable-special-body"><p class="skill-summary">${escapeHtml(summary)}</p>${rows.map(([label, value]) => `<div class="skill-detail"><b>${escapeHtml(label)}</b><span>${escapeHtml(value)}</span></div>`).join("")}</div></details>`;
@@ -4894,10 +4896,12 @@ function refreshCampaignWorldFields() {
   const isJjk = world === "Jujutsu Kaisen";
   const isHxh = world === "Hunter x Hunter";
   const isOnePiece = world === "One Piece";
+  const isOvergeared = world === "Overgeared";
   $("#nc-archetype-field").hidden = isJjk;
   $("#nc-jjk-options").hidden = !isJjk;
   $("#nc-hxh-options").hidden = !isHxh;
   $("#nc-one-piece-options").hidden = !isOnePiece;
+  $("#nc-overgeared-options").hidden = !isOvergeared;
   if (isJjk) $("#nc-archetype").innerHTML = '<option value="Jujutsu Sorcerer">Jujutsu Sorcerer</option>';
   $("#nc-custom-label").style.opacity = world === "Custom World" ? "1" : ".45";
   const abilities = wd.abilities || ["Strength", "Dexterity", "Constitution", "Intelligence", "Wisdom", "Charisma"];
@@ -4983,6 +4987,11 @@ function refreshOnePieceCreationOptions() {
   $("#nc-op-haki-types").hidden = !(active && $("#nc-op-haki").checked);
 }
 
+function refreshOvergearedCreationOptions() {
+  const active = $("#nc-world").value === "Overgeared" && !$("#nc-character-mode").value;
+  $("#nc-overgeared-options").hidden = !active;
+}
+
 function collectCampaignPayload() {
   const stats = {};
   $$("#nc-stats input").forEach((inp) => { stats[inp.getAttribute("data-stat")] = parseInt(inp.value || "0", 10); });
@@ -5007,6 +5016,7 @@ function collectCampaignPayload() {
       $("#nc-op-armament").checked ? "Armament" : "",
       $("#nc-op-conqueror").checked ? "Conqueror" : "",
     ].filter(Boolean) : [],
+    overgeared_class_start: $("#nc-overgeared-class-start").value || "narrative",
   };
 }
 
@@ -5038,6 +5048,7 @@ $("#nc-character-mode").addEventListener("change", () => {
   refreshJjkCreationOptions();
   refreshHxhCreationOptions();
   refreshOnePieceCreationOptions();
+  refreshOvergearedCreationOptions();
   const c = selectedCanonCharacter();
   if (!c) {
     if (ncCharacterStash) {
@@ -5533,6 +5544,19 @@ async function runMenuAction(action) {
 
 $("#btn-diagnostics-export").addEventListener("click", () => downloadEndpoint("/api/diagnostics/export"));
 $("#btn-diagnostics-bundle").addEventListener("click", () => downloadEndpoint("/api/diagnostics/bundle"));
+$("#diagnostics-recovery-actions").addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-diagnostic-repair]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const result = await apiPost("/api/campaign/health/repair", {repair_id: button.getAttribute("data-diagnostic-repair")});
+    renderState(result.state);
+    showToast((result.repair?.applied || []).join(" ") || "That part of the campaign was already healthy.", "notify");
+    const report = await apiGet("/api/diagnostics");
+    $("#diagnostics-json").textContent = JSON.stringify(report, null, 2);
+  } catch (error) { showToast(error.message, "danger"); }
+  finally { button.disabled = false; }
+});
 
 // Explicit listeners are more reliable than delegated clicks inside a native
 // WebView. Menus also toggle on click, so they do not depend on hover support.

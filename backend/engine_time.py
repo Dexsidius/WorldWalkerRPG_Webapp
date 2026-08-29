@@ -37,6 +37,11 @@ from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity
 from age_system import advance_character_age
 from campaign_features import downtime_surprise_prompt
+from simulation_enhancements import (
+    normalize_dated_updates, advance_companion_autonomy,
+    advance_npc_development, record_ability_evolution,
+    world_downtime_events, reactive_communication,
+)
 from campaign_reliability import (
     reconcile_narrated_consequences, consolidate_long_campaign_memory,
     refresh_scene_state, normalize_outcome_scale, reconcile_commitments_and_consequences,
@@ -858,7 +863,8 @@ class TimeSkipMixin:
                 "major_event_reached": "boolean; required in next major event mode", "major_event_kind": "personal|canon|empty", "major_event_title": "specific title or empty",
                 "active_major_event": "the EXACT title of a major canon event (matching one listed under UPCOMING CANON PRESSURES/CANON HISTORY) if this update is still directly part of that event's unfolding scene, or empty once it has concluded and the story has moved past it — this drives which banner art the player sees, so keep it set for as long as the scene is genuinely still that event and clear it the moment it resolves.",
                 "new_contacts": "EVERY named character or group the player had a real, individual interaction with this update — talked to, fought, helped, was helped by, was noticed by, negotiated with, or was introduced to. Not just plot-important figures — a shopkeeper who remembers the player, a rival genin, a rank-and-file guard who let something slip. If they're worth naming in the update at all, they belong here with {name, kind: person|group}.",
-                "incoming_chats": [{"thread": "contact/group", "sender": "sender", "message": "message"}]
+                "incoming_chats": [{"thread": "contact/group", "sender": "sender", "message": "message"}],
+                "ability_developments": [{"ability":"existing ability name", "kind":"application|mastery|breakthrough|evolution", "development":"specific lasting development", "application":"new named or practical application, or empty", "evidence":"what caused it"}]
                 ,"information_events": [{"fact":"what was learned", "source":"who or what supplied it", "channel":"witness|conversation|letter|rumor|broadcast|ability|research", "recipients":["named recipients"], "delay_minutes":"nonnegative integer", "confidence":"0-100"}]
                 ,"completed_actions": "ordered actions completed or meaningfully attempted",
                 "deferred_actions": "unfinished/unstarted actions retained for the next Advance",
@@ -1768,9 +1774,10 @@ class TimeSkipMixin:
             elapsed_amount = elapsed.get("amount", requested_amount)
             elapsed_unit = elapsed.get("unit", requested_unit)
             pending_canon_appends = self.advance_clock(before, elapsed_amount, elapsed_unit)
+            elapsed_minutes = self.duration_minutes(elapsed_amount, elapsed_unit)
             jjk_notes = advance_jjk_state(
                 self.state, before, context.get("actions", []), data.get("narrative", ""),
-                data.get("events", []), self.duration_minutes(elapsed_amount, elapsed_unit),
+                data.get("events", []), elapsed_minutes,
             )
             # Advance is the game's normal turn path. Visible releases and
             # transformations must update the portrait here just as they do
@@ -1780,14 +1787,14 @@ class TimeSkipMixin:
             )
             lit_notes = process_lit_turn(
                 before, self.state, context.get("actions", []), data.get("narrative", ""),
-                self.duration_minutes(elapsed_amount, elapsed_unit),
+                elapsed_minutes,
             )
             activity_notes = advance_world_activity(
                 self.state, before, context.get("actions", []), data.get("narrative", ""),
-                data.get("events", []), self.duration_minutes(elapsed_amount, elapsed_unit),
+                data.get("events", []), elapsed_minutes,
             )
             consequence_report = reconcile_narrated_consequences(
-                before, self.state, data, context.get("actions", []), self.duration_minutes(elapsed_amount, elapsed_unit),
+                before, self.state, data, context.get("actions", []), elapsed_minutes,
             )
             for ev in data.get("timeline_events", []) or []:
                 self.state.setdefault("timeline", []).append(ev)
@@ -1796,15 +1803,27 @@ class TimeSkipMixin:
                     self.ensure_contact(c.get("name"), c.get("kind", "person"), c)
                 else:
                     self.ensure_contact(str(c))
-            for m in data.get("incoming_chats", []) or []:
-                thread = m.get("thread") or m.get("sender")
-                self.ensure_contact(thread)
-                self.add_chat_message(thread, m.get("sender"), m.get("message", ""), "incoming")
+            autonomy_events = advance_companion_autonomy(self.state, elapsed_minutes)
+            npc_growth_events = advance_npc_development(self.state, elapsed_minutes)
+            downtime_events = world_downtime_events(self.state, elapsed_minutes, context.get("actions", []))
             updates = data.get("updates", []) if isinstance(data.get("updates"), list) else []
             updates = prioritize_updates(
-                [u for u in updates if isinstance(u, dict) and str(u.get("narrative", "")).strip()],
+                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events]
+                 if isinstance(u, dict) and str(u.get("narrative", "")).strip()],
                 self.simulation_mode(),
             )
+            updates = normalize_dated_updates(
+                updates, int(before.get("canon_day", 0) or 0),
+                int(self.state.get("canon_day", before.get("canon_day", 0)) or 0), elapsed_minutes,
+            )
+            incoming_chats = [m for m in (data.get("incoming_chats", []) or []) if isinstance(m, dict)]
+            incoming_chats.extend(reactive_communication(self.state, updates, elapsed_minutes, incoming_chats))
+            for m in incoming_chats:
+                thread = m.get("thread") or m.get("sender")
+                if not thread:
+                    continue
+                self.ensure_contact(thread)
+                self.add_chat_message(thread, m.get("sender"), m.get("message", ""), "incoming")
             record_simulation_events(self.state, updates, "narrator")
             # Canon-event notes (from fire_canon_events, day-anchored but not
             # authored by this turn's narrator) are merged into the SAME
@@ -1926,7 +1945,6 @@ class TimeSkipMixin:
                 "; ".join(str(x) for x in context.get("actions", [])), str(data.get("narrative") or "")
             ) if part.strip()))
             completed_quests = normalize_quest_state_machine(self.state)
-            elapsed_minutes = self.duration_minutes(elapsed_amount, elapsed_unit)
             advance_standing_intents(self.state, elapsed_minutes, data.get("standing_intent_updates"))
             adopted_directives = {ai_text(row).lower() for row in context.get("standing_intent_directives", []) if ai_text(row)}
             if adopted_directives:
@@ -1993,6 +2011,7 @@ class TimeSkipMixin:
             advance_hidden_class_discovery(self.state, action_summary)
             progression_summary = "Advance: " + "; ".join(context.get("progression_actions", context.get("actions", [])) or self.state.get("standing_orders", []))
             record_progression_ledger(before, self.state, progression_summary, elapsed_minutes, context.get("rolls", []))
+            record_ability_evolution(before, self.state, data, context.get("actions", []))
             relationship_offer = maybe_offer_relationship_scene(self.state, updates)
             if relationship_offer:
                 self.state["suggested_actions"] = self.guided_suggestions([relationship_offer["prompt"], *self.state.get("suggested_actions", [])])

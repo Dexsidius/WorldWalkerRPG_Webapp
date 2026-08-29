@@ -21,7 +21,7 @@
   #asset-recovery p{margin:0 0 18px;color:#c4cfdf}
   #asset-recovery button{min-height:48px;padding:10px 22px;border:1px solid #79c9db;border-radius:9px;background:#173648;color:#fff;font:700 14px system-ui,-apple-system,sans-serif}
 </style>
-<link id="app-stylesheet" rel="stylesheet" href="/css/style.css"
+<link id="app-stylesheet" rel="stylesheet" href="/css/style.css?v=3.41.0"
       onload="document.documentElement.classList.remove('assets-missing')"
       onerror="document.documentElement.classList.add('assets-missing')" />
 </head>
@@ -558,6 +558,16 @@
         <label class="creation-toggle"><input id="nc-hxh-nen" type="checkbox" /> <span><b>Start with Nen awakened</b><small>Begin with Ten, Zetsu, Ren, a visible affinity, and one unique Hatsu. Leave this off to discover the same hidden ability naturally during the story.</small></span></label>
       </section>
 
+      <section id="nc-overgeared-options" class="creation-world-options" hidden>
+        <label>How should your first class be received?</label>
+        <select id="nc-overgeared-class-start">
+          <option value="narrative" selected>Earn it through the story</option>
+          <option value="hidden">Start with a Hidden class</option>
+          <option value="legendary">Start with a Legendary class</option>
+        </select>
+        <p class="hint">The normal Satisfy path begins as a Beginner and awards a class through a class-change opportunity, quest, item, achievement, or hidden condition. Your archetype guides the kind of opportunities you seek; it does not automatically grant that class.</p>
+      </section>
+
       <section id="nc-one-piece-options" class="creation-world-options one-piece-creation-options" hidden>
         <label class="creation-toggle"><input id="nc-op-devil-fruit" type="checkbox" /> <span><b>Start with a Devil Fruit</b><small>Your background shapes its identity and abilities. If no details are supplied, the game creates a new world-valid fruit that this account has never seen before.</small></span></label>
         <label class="creation-toggle"><input id="nc-op-haki" type="checkbox" /> <span><b>Start with Haki</b><small>Choose the branches already awakened. Unticked branches remain learnable when canon permits.</small></span></label>
@@ -1075,6 +1085,18 @@
     <header class="modal-head"><span>Developer Diagnostics</span><button class="modal-close" data-close="modal-diagnostics">✕</button></header>
     <div class="modal-body">
       <div id="diagnostics-summary" class="diagnostics-summary"></div>
+      <section class="settings-section">
+        <h3>Targeted Campaign Recovery</h3>
+        <p class="hint">These repairs rebuild malformed records from facts already present in the save. They do not invent story outcomes or rewind choices.</p>
+        <div class="modal-actions wrap-actions" id="diagnostics-recovery-actions">
+          <button class="btn-ghost" data-diagnostic-repair="repair_scene">REPAIR SCENE</button>
+          <button class="btn-ghost" data-diagnostic-repair="repair_combat">REPAIR COMBAT</button>
+          <button class="btn-ghost" data-diagnostic-repair="repair_progression">REPAIR PROGRESSION</button>
+          <button class="btn-ghost" data-diagnostic-repair="repair_abilities">REPAIR ABILITIES</button>
+          <button class="btn-ghost" data-diagnostic-repair="repair_social">REPAIR NPCS & PARTY</button>
+          <button class="btn-ghost" data-diagnostic-repair="repair_world">REPAIR WORLD STATE</button>
+        </div>
+      </section>
       <pre id="diagnostics-json" class="diagnostics-json"></pre>
       <div class="modal-actions wrap-actions">
         <button id="btn-diagnostics-export" class="btn-ghost">EXPORT JSON REPORT</button>
@@ -1224,6 +1246,6 @@
 <audio id="snd-naruto_death" src="/assets/sounds/naruto_death.mp3" preload="auto"></audio>
 <audio id="music-player" preload="metadata"></audio>
 
-<script src="/js/app.js"></script>
+<script src="/js/app.js?v=3.41.0"></script>
 </body>
 </html>

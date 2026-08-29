@@ -32,7 +32,7 @@ class WorldwalkerV3110LitRPGTests(unittest.TestCase):
         return game
 
     def test_release_schema_and_owned_system_records(self):
-        self.assertEqual(APP_VERSION, "3.40.0")
+        self.assertEqual(APP_VERSION, "3.41.0")
         self.assertEqual(BASE_STATE["schema_version"], 20)
         self.assertIn("overgeared_system", BASE_STATE)
         self.assertIn("solo_system", BASE_STATE)
@@ -64,7 +64,8 @@ class WorldwalkerV3110LitRPGTests(unittest.TestCase):
                     "npc_affinity", "guild", "territory", "crafting_orders",
                     "rankings", "economy"):
             self.assertIn(key, system)
-        self.assertEqual(system["class_progression"]["class"], "Blacksmith")
+        self.assertEqual(system["class_progression"]["class"], "Beginner")
+        self.assertEqual(system["class_reception"]["status"], "pending")
         self.assertIn("Blacksmithing", system["production_paths"])
         self.assertEqual(system["economy"]["personal_gold"], state["currency"]["amount"])
         self.assertIn("Production standing", system["rankings"])
@@ -79,7 +80,7 @@ class WorldwalkerV3110LitRPGTests(unittest.TestCase):
         notes = process_lit_turn(before, state, ["Forge a named sword from star iron"],
                                  "The workshop rings for thirty days.", 30 * 1440)
         self.assertGreater(state["overgeared_system"]["production_paths"]["Blacksmithing"]["mastery"], 0)
-        self.assertEqual(state["overgeared_system"]["class_progression"]["class"], "Blacksmith")
+        self.assertEqual(state["overgeared_system"]["class_progression"]["class"], "Beginner")
         self.assertNotIn("Star Iron Ore", state["inventory"])
         self.assertEqual(state["inventory"][0]["name"], "Named Ember Blade")
         self.assertTrue(any("PRODUCTION" in row for row in notes))

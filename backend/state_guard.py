@@ -91,6 +91,7 @@ APP_OWNED = {
     "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
     "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version", "world_activity",
     "legacy_trophies", "dismissed_trophy_ids", "downtime_surprise_state", "message_delivery_state",
+    "companion_autonomy", "npc_development", "ability_evolution", "world_downtime_cycles", "prompt_budget_log",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
 FLEXIBLE_TYPES = {"age", "current_activity", "position"}
@@ -102,6 +103,7 @@ NESTED_DICT_FIELDS = {
     "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "polity_state", "downtime_surprise_state", "message_delivery_state", "world_activity", "memory_consolidation",
     "scene_state", "last_outcome_scale", "canon_divergence_impacts", "pacing_profile", "player_style_profile",
+    "companion_autonomy", "npc_development", "ability_evolution", "world_downtime_cycles",
 }
 NESTED_LIST_FIELDS = {
     "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
@@ -111,6 +113,7 @@ NESTED_LIST_FIELDS = {
     "political_regions", "companion_combinations", "trophy_proposals", "legacy_trophies", "dismissed_trophy_ids",
     "verified_memory_archive", "consequence_ledger",
     "scene_history", "outcome_scale_ledger", "obligation_ledger", "delayed_consequences", "lore_confidence_log",
+    "prompt_budget_log",
 }
 
 
