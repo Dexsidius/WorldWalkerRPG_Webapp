@@ -207,8 +207,9 @@ class WorldwalkerV260Tests(unittest.TestCase):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         for marker in ('value="next_event"', 'id="modal-difficult-check"', 'id="modal-timing-challenge"',
-                       'id="modal-tactical-challenge"', 'data-tab="chapters"', 'data-tab="health"'):
+                       'id="modal-tactical-challenge"', 'data-tab="chapters"'):
             self.assertIn(marker, html)
+        self.assertNotIn('data-tab="health"', html)
         self.assertIn('event.target.id === "lore-import-form"', js)
         self.assertIn('.story-beat{ flex:0 0 auto; width:100%; min-width:0; min-height:max-content;', css)
         self.assertIn('.story-entry{ flex:0 0 auto; width:100%; min-width:0;', css)

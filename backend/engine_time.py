@@ -37,6 +37,7 @@ from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity
 from age_system import advance_character_age
 from campaign_features import downtime_surprise_prompt
+from campaign_reliability import reconcile_narrated_consequences, consolidate_long_campaign_memory
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -841,6 +842,7 @@ class TimeSkipMixin:
             ],
             "schema": {
                 "narrative": "brief overall summary used only as fallback", "updates": [{"sequence":"number", "type":"action|npc_reaction|faction_reaction|world_event|canon_event|interruption|consequence", "title":"specific short heading", "canon_day":"integer canon day this beat occurred on", "related_action":"queued action or empty", "narrative":"2-5 substantive sentences, proper nouns bolded with **double asterisks** on first mention", "why_it_matters":"one short plain sentence on the stakes, phrased the way a narrator would actually say it out loud, not a labeled report line", "player_knowledge":"one short plain sentence on what the character can verify, infer, or only heard as rumor, phrased the same natural way, or empty if nothing new", "next_pressure":"one short plain sentence naming the unresolved pressure, phrased the same natural way, or empty", "map_changes": "empty list unless this SPECIFIC beat changed who controls/holds a territory, settlement, or map node — then a short list of what changed, e.g. 'The Empire of the End gains control of the Rift Node'. Most beats have none.", "quote": "empty unless this beat naturally includes one short, genuinely quotable spoken line — then {\"text\": the line, \"speaker\": who said it}. Use sparingly, only when a line actually lands; never invent dialogue just to fill this in."}], "state_patch": "ALL persistent changes",
+                "consequence_manifest": [{"kind":"skill|title|item|quest|location|condition|reputation|affiliation|other", "target":"exact name", "change":"gained|lost|started|completed|changed", "evidence":"short sentence identifying the beat", "details":"complete skill mechanics only when kind is skill"}],
                 "events": "system notifications", "timeline_events": "list of major events",
                 "elapsed": {"amount": "number", "unit": "same or sensible normalized unit"},
                 "interrupted": "boolean", "interruption_kind": "canon_event|goal_complete|world_event|danger|other or empty", "interruption_reason": "string or empty",
@@ -866,6 +868,7 @@ class TimeSkipMixin:
             "Use the supplied assessment, travel plans, dice/minigame results, canon boundary, danger state and action goals exactly.",
             "Moment resolves one beat (maximum 24 hours); longer skips cover the whole allowed interval with dated chronological updates.",
             "Stop at the earliest achieved explicit goal, committed combat, significant personal decision, or supplied major/canon boundary.",
+            "List every lasting narrated gain, loss, condition, quest, title, item, skill, affiliation or location change in consequence_manifest even when state_patch also contains it.",
             "Next Major Event ignores routine conversations, errands, rumors and incremental growth; stop only for a real tier change, defining goal, lethal conflict, world-changing event or major canon event.",
             "Training gains scale with actual sessions, intensity, aptitude, instruction, resources and recovery; do not compress a month into one session.",
             "Return sparse JSON: omit empty optional fields, empty arrays and empty objects.",
@@ -1776,6 +1779,9 @@ class TimeSkipMixin:
                 self.state, before, context.get("actions", []), data.get("narrative", ""),
                 data.get("events", []), self.duration_minutes(elapsed_amount, elapsed_unit),
             )
+            consequence_report = reconcile_narrated_consequences(
+                before, self.state, data, context.get("actions", []), self.duration_minutes(elapsed_amount, elapsed_unit),
+            )
             for ev in data.get("timeline_events", []) or []:
                 self.state.setdefault("timeline", []).append(ev)
             for c in data.get("new_contacts", []) or []:
@@ -2009,6 +2015,7 @@ class TimeSkipMixin:
             chapter = update_chapter_memory(before, self.state, "Advance: " + "; ".join(context.get("actions", [])), data.get("narrative", ""))
             if chapter:
                 self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
+            consolidate_long_campaign_memory(self.state)
             self.archive_finished_quests()
             # A time skip can end the character's life just as surely as a
             # single action or a combat round can (a failed extreme-danger
@@ -2033,6 +2040,7 @@ class TimeSkipMixin:
                 "event_notice": copy.deepcopy(data.get("event_notice", {})) if isinstance(data.get("event_notice"), dict) else {},
                 "danger_notice_required": danger_notice_required,
                 "major_event_reached": bool(data.get("major_event_reached")),
+                "consequence_report": consequence_report,
                 "major_event_kind": data.get("major_event_kind", ""),
                 "major_event_title": data.get("major_event_title", ""),
                 "goal_status": data.get("goal_status", {}),

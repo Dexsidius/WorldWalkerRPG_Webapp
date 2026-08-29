@@ -489,6 +489,10 @@ def campaign_search(state, query, limit=30):
         if isinstance(row, dict): add("chronicle", row.get("action") or row.get("type"), row.get("outcome") or row.get("text"), row.get("turn"), row.get("canon_day"))
     for row in state.get("chapter_summaries", []):
         if isinstance(row, dict): add("chapter", row.get("title"), row.get("summary"), (row.get("turns") or [None])[-1])
+    for row in state.get("verified_memory_archive", []):
+        if isinstance(row, dict): add("verified_archive", row.get("title"), row.get("summary"), (row.get("turns") or [None])[-1], payload={"verified": True, "source_digest": row.get("source_digest")})
+    for row in state.get("consequence_ledger", []):
+        if isinstance(row, dict): add("consequence", row.get("target") or row.get("kind"), row.get("evidence") or row.get("change"), row.get("turn"), payload={"kind": row.get("kind"), "status": row.get("status")})
     for row in state.get("quests", []) + state.get("quest_archive", []):
         if isinstance(row, dict): add("quest", row.get("name") or row.get("title"), row.get("explanation") or row.get("description"), payload={"status": row.get("status")})
     for name, detail in (state.get("skills") or {}).items(): add("skill", name, detail if isinstance(detail, str) else detail.get("description") or detail.get("effect"), payload=detail if isinstance(detail, dict) else {})
@@ -498,7 +502,7 @@ def campaign_search(state, query, limit=30):
         if isinstance(row, dict): add("fact", row.get("type"), row.get("text"), row.get("turn"))
     for row in state.get("correction_log", []):
         if isinstance(row, dict): add("correction", row.get("target") or "Player correction", row.get("fact"), row.get("turn"), row.get("canon_day"))
-    kind_priority = {"correction": 0, "quest": 1, "chronicle": 2, "chapter": 3, "npc": 4, "skill": 5, "fact": 6}
+    kind_priority = {"correction": 0, "consequence": 1, "quest": 2, "chronicle": 3, "verified_archive": 4, "chapter": 5, "npc": 6, "skill": 7, "fact": 8}
     rows.sort(key=lambda row: (-row["score"], -(int(row.get("turn") or 0)), kind_priority.get(row["kind"], 9)))
     # Corrections are also copied into the continuity ledger so the GM sees
     # them as authoritative facts.  Search should show that record once, not

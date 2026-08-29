@@ -29,6 +29,7 @@ from jjk_system import advance_jjk_state
 from simulation_core import refresh_simulation_core, record_resolution_transaction
 from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity, normalize_world_activity
+from campaign_reliability import reconcile_narrated_consequences, consolidate_long_campaign_memory
 
 
 DEFAULT_SETTINGS = {
@@ -344,10 +345,11 @@ class TurnsMixin:
              "assessment": assessment, "dice_result": roll_result, "state_before": self.task_state_for_ai("moment", action),
              "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
                         "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
+                        "consequence_manifest": [{"kind":"skill|title|item|quest|location|condition|reputation|affiliation|other", "target":"exact name", "change":"gained|lost|started|completed|changed", "evidence":"short sentence from this result", "details":"complete skill mechanics only when kind is skill"}],
                         "danger_scenario_concluded": "boolean; true only when the current confrontation ended or the player left it",
                         "events": [{"type": "xp|level_up|skill|title|quest|hidden_quest|item|loot|reputation|companion|codex|location|training|combat|injury|death|discovery|world", "message": "notification"}],
                         "timeline_event": "major event or empty", "suggested_actions": ["exactly 3 optional contextual actions: strongest lead, growth/preparation, alternate hook. Each must name a real, specific person/place/faction/thread already in this campaign, not a generic template. Scale honestly — a longer-term lead can openly say so ('over the next few days...') rather than being forced into an instant."]}}
-        rules = self.task_context("moment", action) + " Resolve strictly from dice_result when present. Never hide progression in narration. Set danger_scenario_concluded=true only when the confrontation is truly over or the player leaves it."
+        rules = self.task_context("moment", action) + " Resolve strictly from dice_result when present. Never hide progression in narration. List every lasting narrated gain, loss, condition, quest, title, item, skill, affiliation or location change in consequence_manifest even when state_patch also contains it. Set danger_scenario_concluded=true only when the confrontation is truly over or the player leaves it."
         return self.request_with_narrative(rules, p, 1300)
 
     def take_turn(self, action, confirmed_lethal=False, cached_assessment=None):
@@ -647,6 +649,9 @@ Return ONLY valid JSON."""
                 self.state, before, turn_actions, data.get("narrative", ""), data.get("events", []),
                 context.get("elapsed_minutes", 5),
             )
+            consequence_report = {"checked": 0, "repairs": 0, "warnings": []} if is_opening else reconcile_narrated_consequences(
+                before, self.state, data, turn_actions, context.get("elapsed_minutes", 5),
+            )
             # "turn" is an app-controlled counter, never an AI-authored field —
             # a state_patch that happens to include one (models sometimes do)
             # must not be allowed to set it.
@@ -738,6 +743,7 @@ Return ONLY valid JSON."""
                 chapter = update_chapter_memory(before, self.state, pending_action, data.get("narrative", ""))
                 if chapter:
                     self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
+                consolidate_long_campaign_memory(self.state)
             self.autosave()
             died = False
             if self.state.get("hp", 1) <= 0 or not self.state.get("alive", True):
@@ -754,6 +760,7 @@ Return ONLY valid JSON."""
             "validation": validation,
             "integrity_report": integrity_report,
             "continuity_warnings": continuity_warnings,
+            "consequence_report": consequence_report,
         }
 
     def _suggestion_is_current(self, value):

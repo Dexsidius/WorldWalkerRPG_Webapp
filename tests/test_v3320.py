@@ -14,7 +14,7 @@ from worlds import APP_VERSION, BASE_STATE, WORLD_DATA
 
 class WorldwalkerV3320AtlasTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.38.0")
+        self.assertEqual(APP_VERSION, "3.39.0")
 
     def test_strategy_atlas_uses_one_partition_and_controller_boundaries(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")

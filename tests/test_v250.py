@@ -141,7 +141,7 @@ class WorldwalkerV250Tests(unittest.TestCase):
         old = copy.deepcopy(BASE_STATE)
         old.update(schema_version=4, world="Naruto", stats={"Taijutsu": 10, "Ninjutsu": 15, "Genjutsu": 8, "Chakra Control": 12, "Willpower": 11, "Intellect": 13}, hp=50, hp_max=100, resource=25, resource_max=100)
         migrated = migrate_state(old, "2.4.0")
-        self.assertEqual(migrated["schema_version"], 19)
+        self.assertEqual(migrated["schema_version"], 20)
         self.assertEqual(migrated["stats"]["Ninjutsu"], 45)
         self.assertAlmostEqual(migrated["hp"] / migrated["hp_max"], .5, delta=.02)
         self.assertAlmostEqual(migrated["resource"] / migrated["resource_max"], .25, delta=.02)

@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.38.0** (schema 19).
+Current app/save version: **3.39.0** (schema 20).
+
+Version 3.39.0 grounds every AI role in a small source-ranked set of current
+campaign facts, reconciles narrated consequences with mechanical state, gives
+factions persistent strategy and operations, and locally consolidates long
+campaign memory. The Journal's More menu now contains only Progress, Chapters,
+NPC Knowledge, and Timeline; maintenance and diagnostic internals no longer
+crowd normal play. Automated three-turn regression coverage now exercises all
+nine supported worlds.
 
 Version 3.38.0 adds persistent world-depth records, context-routed prompts,
 multi-factor JJK clashes, richer LitRPG floors/classes, and readable long-title

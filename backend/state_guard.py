@@ -48,6 +48,7 @@ APP_OWNED = {
     # local model burning its limited output budget re-typing these back
     # verbatim is a real contributor to truncated, invalid JSON.
     "campaign_canon", "continuity_ledger", "chapter_summaries", "chapter_buffer",
+    "verified_memory_archive", "memory_consolidation", "consequence_ledger",
     "canon_events_fired", "pending_minor_events",
     # Fixed once at campaign creation to whatever start_day this campaign
     # actually began on (a canon character's birth, a chosen starting era,
@@ -96,7 +97,7 @@ NESTED_DICT_FIELDS = {
     "reputation", "special", "contacts", "chat_threads", "combat", "portrait_identity",
     "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
     "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "jjk_system", "world_depth",
-    "polity_state", "downtime_surprise_state", "message_delivery_state", "world_activity",
+    "polity_state", "downtime_surprise_state", "message_delivery_state", "world_activity", "memory_consolidation",
 }
 NESTED_LIST_FIELDS = {
     "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
@@ -104,6 +105,7 @@ NESTED_LIST_FIELDS = {
     "active_encounters", "achievements", "travel_history", "loot_history", "queued_actions",
     "standing_orders", "suggested_actions", "prerequisite_tracks", "lore_sources",
     "political_regions", "companion_combinations", "trophy_proposals", "legacy_trophies", "dismissed_trophy_ids",
+    "verified_memory_archive", "consequence_ledger",
 }
 
 

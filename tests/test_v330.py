@@ -34,8 +34,8 @@ class WorldwalkerV330Tests(unittest.TestCase):
         return state
 
     def test_version_schema_and_simulation_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.38.0")
-        self.assertEqual(BASE_STATE["schema_version"], 19)
+        self.assertEqual(APP_VERSION, "3.39.0")
+        self.assertEqual(BASE_STATE["schema_version"], 20)
         for field in ("npc_intentions", "simulation_events", "local_background_turn"):
             self.assertIn(field, BASE_STATE)
 

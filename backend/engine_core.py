@@ -27,6 +27,7 @@ from overgeared_classes import canon_class_prompt_reference
 from ability_archive import GeneratedAbilityArchive
 from simulation_core import refresh_simulation_core, action_commits_violence
 from canon_integrity import canon_identity_context, repair_canon_payload
+from campaign_reliability import build_grounding_packet
 
 
 DEFAULT_SETTINGS = {
@@ -303,7 +304,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger")
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -761,6 +762,7 @@ CUSTOM SETTING: {self.state.get('custom_world', '')}
 {identity}
 
 CORE PRINCIPLES
+- Obey state.grounding_packet: current facts and player corrections outrank summaries and stock canon.
 - NPCs, factions and world events continue independently and know only what they could plausibly know.
 - Enforce information fog. Separate objective world changes from what the player can verify, infer, or hear as rumor. News requires a believable route — witness, messenger, broadcast, document, travel, surveillance, or ability — and distance and secrecy cause delay or uncertainty.
 - Contacts are not omnipresent. Distance, access, relationship, danger, technology, secrecy, and availability matter.
@@ -783,6 +785,10 @@ Return ONLY valid JSON. No markdown fences."""
         snapshot["mechanical_power_profile"] = power_profile_for(
             self.state.get("world", "Custom World"), self.state.get("stats", {}),
             self.state.get("special", {}).get("Archetype", ""),
+        )
+        snapshot["grounding_packet"] = build_grounding_packet(
+            self.state, query, purpose,
+            24 if str(purpose) == "advisor" else 14 if str(purpose) in {"moment", "time_skip", "major_event", "event"} else 10,
         )
         capability = self.state.get("capability_profile", {})
         snapshot["capability_summary"] = {
@@ -813,7 +819,7 @@ Return ONLY valid JSON. No markdown fences."""
             "canon_divergences", "campaign_direction", "active_action_goals", "prerequisite_tracks",
             "authoritative_player_corrections", "simulation_scale", "combat", "danger_scenario",
             "mechanical_power_profile", "standing_intents",
-            "capability_summary", "npc_role_flags", "active_story_threads",
+            "capability_summary", "npc_role_flags", "active_story_threads", "grounding_packet",
         }
         if purpose == "opening":
             opening = common | {"starting_power_band", "starting_power_notice", "appearance_desc", "portrait_traits"}
@@ -923,6 +929,7 @@ NARRATION: {narration}
 	CANON KNOWLEDGE MODE: {"Full canon foreknowledge enabled for the player UI; NPC knowledge still remains in-character." if self.settings.get("canon_foreknowledge") else "Spoiler-safe character knowledge; never reveal future secrets before this campaign discovers them."}
 
 AUTHORITATIVE CORE
+- Grounding packet: current facts and corrections beat history and canon.
 - Resolve what the player actually said. When the player also states the specific method or approach, carry out the action exactly as they described it — outcome and consequences come from how the world and its people actually respond, never from the GM quietly softening, downgrading, or overriding the stated action into mere preparation or a vaguer attempt.
 - When the player gives an order to a character genuinely under their command — a subordinate, companion, summon, or anyone who owes them obedience in this campaign — that character carries out the order as given. Do not have them refuse, hesitate, or fail through GM fiat. Afterward, in the narrative, they may voice a concern or suggest a better approach, but the order is already carried out. This does not extend to independent NPCs, canon characters acting on their own motives, or hostile/neutral parties, whose own agency remains absolute.
 - The player alone controls their character's choices and dialogue. NPCs, factions, travel, information and canon continue causally without making the player the automatic center.
@@ -949,7 +956,8 @@ AUTHORITATIVE CORE
 - Return one valid JSON object. Omit empty optional fields and empty arrays/objects instead of echoing the entire schema. Never write application-owned ledgers or diagnostics in state_patch.{self._scale_lock_rule()}
 """
         faction_trade_rule = (
-            "- faction_clocks and npc_clocks support optional fields — opponent (a rival faction/NPC), ally, power (1-100, rough current strength), "
+            "- faction_clocks are living strategic records. Respect their strategic_goal, immediate_goal, leadership, resources, operations, alliances, rivals and recent_outcomes. Advance or react to the current operation instead of inventing an unrelated faction move. Resources constrain pace; alliances and rivalries shape responses; leadership loss creates a succession pressure rather than making the faction forget its agenda. "
+            "faction_clocks and npc_clocks also support opponent (a rival faction/NPC), ally, power (1-100, rough current strength), "
             "and contested_location (a real place actually at stake). Once a clock with an opponent reaches its turning point, the application "
             "resolves a real strength-weighted outcome automatically — territory can change hands, and a side that loses badly enough is genuinely "
             "destroyed or lost — independent of whether the player is present. Only set these fields when the stake is meant to be real; a conflict "
