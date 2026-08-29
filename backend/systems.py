@@ -843,22 +843,44 @@ def pacing_guidance(state):
     last major beat, chapter count) rather than a new subsystem. Returns an
     instruction string to fold into gm_rules, or "" most turns, when pacing
     looks fine and there's nothing worth saying."""
+    recent = [row.get("kind") for row in (state.get("pacing_profile") or {}).get("recent_beats", [])
+              if isinstance(row, dict) and row.get("kind")]
+    if len(recent) >= 3 and len(set(recent[-3:])) == 1:
+        repeated = recent[-1]
+        alternatives = {
+            "combat": "let consequences, recovery, relationships, discovery, or strategy breathe before another unrelated fight",
+            "training": "turn accumulated growth into a test, relationship beat, discovery, or concrete opportunity",
+            "social": "let a decision produce action, travel, investigation, or a material consequence",
+            "exploration": "let a discovered place produce a person, conflict, choice, or reward rather than another arrival",
+            "politics": "show one policy or order changing ordinary lives before introducing another council decision",
+            "recovery": "introduce a specific voluntary lead without manufacturing danger",
+            "story": "shift the dramatic texture with a grounded social, growth, exploration, or consequence beat",
+        }
+        guidance = (f"\n- PACING RHYTHM: the last {min(3, len(recent))} resolved beats were all {repeated}. "
+                    f"Unless the player's current order explicitly continues that activity, {alternatives.get(repeated, alternatives['story'])}. "
+                    "Do not manufacture a genre change; vary the next meaningful beat through existing people, obligations, consequences, and locations.")
+        state.setdefault("pacing_profile", {})["last_guidance"] = guidance
+        return guidance
     if len(state.get("chapter_summaries") or []) < 1:
-        return ""  # too early in the campaign for "pacing" to mean anything yet
+        return ""  # early campaigns can still use repetition detection above
     last_beat_day = state.get("last_major_beat_day")
     if not isinstance(last_beat_day, (int, float)):
         return ""
     days_since_beat = int(state.get("canon_day", 0) or 0) - int(last_beat_day)
     label = tension_level(state)["label"]
     if days_since_beat >= 10 and label in ("Calm", "Uneasy"):
-        return (f"\n- PACING: it has been {days_since_beat} in-story days since the last major turning point, and the "
+        guidance = (f"\n- PACING: it has been {days_since_beat} in-story days since the last major turning point, and the "
                 "situation currently reads as low-stakes. Proactively introduce a concrete complication, opportunity, or "
                 "piece of rising pressure this turn rather than continuing routine, low-stakes narration — the player "
                 "should rarely go this long without something new to engage with.")
+        state.setdefault("pacing_profile", {})["last_guidance"] = guidance
+        return guidance
     if days_since_beat <= 1 and label in ("Tense", "Critical"):
-        return ("\n- PACING: multiple major beats have landed in very quick succession. Ease off for this turn or the "
+        guidance = ("\n- PACING: multiple major beats have landed in very quick succession. Ease off for this turn or the "
                 "next — let the player process, recover, and act on what just happened before introducing the next "
                 "major pressure or event.")
+        state.setdefault("pacing_profile", {})["last_guidance"] = guidance
+        return guidance
     return ""
 
 

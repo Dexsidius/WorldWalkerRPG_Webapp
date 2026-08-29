@@ -84,6 +84,9 @@ APP_OWNED = {
     "information_packets", "npc_schedules", "canon_event_states",
     "simulation_validation",
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
+    "scene_state", "scene_history", "last_outcome_scale", "outcome_scale_ledger",
+    "obligation_ledger", "delayed_consequences", "canon_divergence_impacts", "pacing_profile",
+    "player_style_profile", "lore_confidence_log",
     "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
     "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version", "world_activity",
@@ -98,6 +101,7 @@ NESTED_DICT_FIELDS = {
     "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
     "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "polity_state", "downtime_surprise_state", "message_delivery_state", "world_activity", "memory_consolidation",
+    "scene_state", "last_outcome_scale", "canon_divergence_impacts", "pacing_profile", "player_style_profile",
 }
 NESTED_LIST_FIELDS = {
     "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
@@ -106,6 +110,7 @@ NESTED_LIST_FIELDS = {
     "standing_orders", "suggested_actions", "prerequisite_tracks", "lore_sources",
     "political_regions", "companion_combinations", "trophy_proposals", "legacy_trophies", "dismissed_trophy_ids",
     "verified_memory_archive", "consequence_ledger",
+    "scene_history", "outcome_scale_ledger", "obligation_ledger", "delayed_consequences", "lore_confidence_log",
 }
 
 

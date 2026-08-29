@@ -159,7 +159,41 @@ const APP = {
   serverReachable: null,
   serverProbeTimer: null,
   trophyPrompted: new Set(),
+  versionInfo: null,
 };
+
+function patchNotesStorageKey(version) {
+  const account = APP.account?.id || APP.account?.username || APP.account?.name || "local-player";
+  return `worldwalker_patch_notes_seen:${account}:${version}`;
+}
+
+function dismissPatchNotes() {
+  const version = APP.versionInfo?.version;
+  if (version) {
+    try { window.localStorage.setItem(patchNotesStorageKey(version), "1"); } catch (_) {}
+  }
+  closeModal("modal-patch-notes");
+}
+
+async function maybeShowPatchNotes() {
+  try {
+    APP.versionInfo = await apiGet(`/api/version?patch_notes=${Date.now()}`);
+    const notes = APP.versionInfo.patch_notes || {};
+    if (!APP.versionInfo.version) return;
+    try { if (window.localStorage.getItem(patchNotesStorageKey(APP.versionInfo.version)) === "1") return; } catch (_) {}
+    $("#patch-notes-heading").textContent = notes.title || "Worldwalker Updated";
+    $("#patch-notes-version").textContent = `VERSION ${APP.versionInfo.version}`;
+    $("#patch-notes-summary").textContent = notes.summary || "A new version is ready.";
+    $("#patch-notes-list").innerHTML = (notes.highlights || []).map((row) => `<article><b>${escapeHtml(row.title || "Improvement")}</b><p>${escapeHtml(row.example || "")}</p></article>`).join("");
+    openModal("modal-patch-notes");
+  } catch (_) { /* Patch notes must never block the game boot. */ }
+}
+
+$("#btn-patch-notes-done").addEventListener("click", dismissPatchNotes);
+$("#modal-patch-notes .modal-close").addEventListener("click", () => {
+  const version = APP.versionInfo?.version;
+  if (version) try { window.localStorage.setItem(patchNotesStorageKey(version), "1"); } catch (_) {}
+});
 
 function setHostConnectionState(connected, message = "") {
   const wasUnavailable = APP.serverReachable === false;
@@ -3880,10 +3914,12 @@ function renderAdvisorMessage(m) {
   }
   const points = (m.points || []).map((p) => `<li>${escapeHtml(p)}</li>`).join("");
   const countdown = m.canon_countdown?.label ? `<div class="advisor-countdown">⏳ ${escapeHtml(m.canon_countdown.label)}</div>` : "";
+  const evidenceRows = (m.evidence || []).map((row) => `<li><b>${escapeHtml(row.label || "Evidence")}</b><span>${escapeHtml(row.detail || "")}</span><small>${escapeHtml(row.source || "campaign")}</small></li>`).join("");
+  const evidence = evidenceRows ? `<details class="advisor-evidence"><summary>Why the Advisor says this</summary><ul>${evidenceRows}</ul></details>` : "";
   return `<div class="chat-msg incoming advisor-msg"><div class="meta">Advisor${m.fourth_wall ? " · FOURTH-WALL" : ""}</div>
     <div class="advisor-msg-summary">${escapeHtml(m.summary || m.text || "...")}</div>
     ${renderAdvisorChart(m.chart)}
-    ${countdown}${points ? `<ul class="advisor-msg-points">${points}</ul>` : ""}
+    ${countdown}${points ? `<ul class="advisor-msg-points">${points}</ul>` : ""}${evidence}
   </div>`;
 }
 
@@ -5955,6 +5991,7 @@ async function finishGameBoot() {
     await refreshMultiplayerStatus(false);
     startMultiplayerPolling();
   }
+  await maybeShowPatchNotes();
 }
 
 $("#form-login").addEventListener("submit", async (event) => {

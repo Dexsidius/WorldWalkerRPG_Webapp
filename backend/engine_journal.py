@@ -17,6 +17,7 @@ from reliability import visible_class_profile, visible_skills
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks, tension_level, resolve_shop_purchase, resolve_purchase_offer)
 from simulation_integrity import integrity_snapshot
+from campaign_reliability import learn_player_style
 
 
 DEFAULT_SETTINGS = {
@@ -203,6 +204,7 @@ class JournalMixin:
         rated = [r for r in (self.state.get("rated_good_turns") or []) if r.get("turn") != last.get("turn")]
         rated.append({"turn": last.get("turn"), "action": str(last.get("action") or "")[:500], "outcome": str(last.get("outcome") or "")[:1200]})
         self.state["rated_good_turns"] = rated[-5:]
+        learn_player_style(self.state)
         self.autosave()
         return {"rated_turn": last.get("turn")}
 

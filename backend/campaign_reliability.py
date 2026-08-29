@@ -15,6 +15,217 @@ import re
 from util import ai_text
 
 
+_OUTCOME_SCALE_PATTERNS = (
+    ("transformative", re.compile(r"\b(?:transcend(?:ed|s)?|reality[- ]bending|godlike|ascend(?:ed|s)?|evol(?:ve|ved|ution)|awak(?:en|ened|ening)|bankai|domain expansion|became? vastly|overwhelming breakthrough)\b", re.I)),
+    ("major", re.compile(r"\b(?:master(?:ed|y)|major breakthrough|dramatic(?:ally)? stronger|huge(?:ly)? stronger|massive gain|new form|class evolution|tier breakthrough)\b", re.I)),
+    ("noticeable", re.compile(r"\b(?:noticeable|significant|substantial|improved|breakthrough|learned|unlocked|gained)\b", re.I)),
+)
+
+
+def _numeric_delta(before, state, field):
+    old = before.get(field) if isinstance(before.get(field), dict) else {}
+    new = state.get(field) if isinstance(state.get(field), dict) else {}
+    return {name: round(float(value) - float(old.get(name, value)), 3)
+            for name, value in new.items()
+            if isinstance(value, (int, float)) and not isinstance(value, bool)
+            and isinstance(old.get(name, value), (int, float))
+            and float(value) != float(old.get(name, value))}
+
+
+def refresh_scene_state(state, data=None, actions=None):
+    """Maintain one compact, authoritative description of the live scene."""
+    data = data if isinstance(data, dict) else {}
+    narrative = ai_text(data.get("narrative"))
+    updates = data.get("updates") if isinstance(data.get("updates"), list) else []
+    narrative_blob = " ".join([narrative, *[ai_text(row.get("narrative")) for row in updates if isinstance(row, dict)]])
+    location = ai_text(state.get("location")) or "Unknown"
+    details = (state.get("location_details") or {}).get(location, {})
+    details = details if isinstance(details, dict) else {}
+    present = []
+    for name, memory in (state.get("npc_memories") or {}).items():
+        if not isinstance(memory, dict) or str(memory.get("status", "active")).lower() == "deceased":
+            continue
+        same_place = ai_text(memory.get("last_known_location")).casefold() == location.casefold()
+        named_now = bool(name and re.search(rf"(?<!\w){re.escape(str(name))}(?!\w)", narrative_blob, re.I))
+        if same_place or named_now:
+            present.append(str(name))
+    for row in state.get("companions", []) or []:
+        name = ai_text(row.get("name") if isinstance(row, dict) else row)
+        if name and name not in present:
+            present.append(name)
+    combat = state.get("combat") if isinstance(state.get("combat"), dict) else {}
+    enemy = combat.get("enemy") if isinstance(combat.get("enemy"), dict) else {}
+    if combat.get("active") and ai_text(enemy.get("name")) and ai_text(enemy.get("name")) not in present:
+        present.append(ai_text(enemy.get("name")))
+    questions = re.findall(r"([^.!?]{3,220}\?)", narrative_blob)
+    direction = state.get("campaign_direction") if isinstance(state.get("campaign_direction"), dict) else {}
+    active_goals = [row for row in state.get("action_goals", [])
+                    if isinstance(row, dict) and row.get("status") == "active"]
+    objective = (ai_text(active_goals[-1].get("condition")) if active_goals else
+                 ai_text(direction.get("primary_goal") or direction.get("current_goal")))
+    row = {
+        "turn": int(state.get("turn", 0) or 0), "location": location,
+        "sublocation": ai_text(details.get("sublocation") or details.get("setting")),
+        "indoors": details.get("indoors"), "activity": ai_text(details.get("activity") or state.get("current_activity")),
+        "weather": ai_text(state.get("weather")), "present": present[:16],
+        "immediate_danger": (ai_text(enemy.get("name")) or "Active combat") if combat.get("active") else
+                            ai_text((state.get("danger_scenario") or {}).get("summary")),
+        "unresolved_question": ai_text(questions[-1]) if questions else "",
+        "current_objective": objective[:400],
+        "last_player_input": "; ".join(ai_text(item) for item in actions or [] if ai_text(item))[:700],
+    }
+    state["scene_state"] = _prune(row)
+    history = state.setdefault("scene_history", [])
+    signature = (row["location"], tuple(row["present"]), row.get("immediate_danger", ""), row.get("unresolved_question", ""))
+    previous = history[-1].get("signature") if history and isinstance(history[-1], dict) else None
+    if signature != tuple(previous) if isinstance(previous, list) else signature != previous:
+        history.append({"turn": row["turn"], "signature": list(signature), "scene": copy.deepcopy(state["scene_state"])})
+        state["scene_history"] = history[-40:]
+    return copy.deepcopy(state["scene_state"])
+
+
+def normalize_outcome_scale(before, state, data, elapsed_minutes=5):
+    """Record whether the prose's claimed magnitude matches durable mechanics."""
+    narrative = " ".join([ai_text((data or {}).get("narrative")), *[
+        ai_text(row.get("narrative")) for row in (data or {}).get("updates", []) if isinstance(row, dict)
+    ]])
+    claimed = "routine"
+    for label, pattern in _OUTCOME_SCALE_PATTERNS:
+        if pattern.search(narrative):
+            claimed = label
+            break
+    stat_delta = _numeric_delta(before, state, "stats")
+    level_delta = int(state.get("level", 0) or 0) - int(before.get("level", 0) or 0)
+    xp_delta = int(state.get("xp", 0) or 0) - int(before.get("xp", 0) or 0)
+    new_skills = sorted(set(state.get("skills", {})) - set(before.get("skills", {})))
+    old_titles = {_item_name(item).casefold() for item in before.get("titles", [])}
+    new_titles = [_item_name(item) for item in state.get("titles", []) if _item_name(item).casefold() not in old_titles]
+    form_changed = ((state.get("portrait_identity") or {}).get("active_form") !=
+                    (before.get("portrait_identity") or {}).get("active_form"))
+    magnitude = max([abs(value) for value in stat_delta.values()] or [0])
+    mechanical = ("transformative" if form_changed or level_delta >= 10 or magnitude >= 100 else
+                  "major" if level_delta >= 3 or magnitude >= 25 or len(new_skills) >= 2 else
+                  "noticeable" if level_delta or xp_delta or magnitude or new_skills or new_titles else "routine")
+    ranks = {"routine": 0, "noticeable": 1, "major": 2, "transformative": 3}
+    aligned = ranks[claimed] <= ranks[mechanical] + (1 if claimed == "noticeable" else 0)
+    result = {"turn": int(state.get("turn", 0) or 0), "claimed": claimed, "mechanical": mechanical,
+              "aligned": aligned, "elapsed_minutes": int(elapsed_minutes or 0),
+              "stat_changes": stat_delta, "level_change": level_delta, "xp_change": xp_delta,
+              "new_skills": new_skills[:12], "new_titles": new_titles[:12], "form_changed": bool(form_changed)}
+    state["last_outcome_scale"] = _prune(result)
+    ledger = state.setdefault("outcome_scale_ledger", [])
+    ledger.append(copy.deepcopy(state["last_outcome_scale"])); state["outcome_scale_ledger"] = ledger[-120:]
+    if not aligned:
+        state.setdefault("simulation_validation", []).append({
+            "turn": result["turn"], "area": "outcome_scale",
+            "warnings": [f"Narrative claimed a {claimed} result but durable mechanics recorded only a {mechanical} change."],
+        })
+        state["simulation_validation"] = state["simulation_validation"][-100:]
+    return result
+
+
+def reconcile_commitments_and_consequences(state, data, elapsed_minutes=0):
+    """Structure promises/debts and queue consequences without another model call."""
+    data = data if isinstance(data, dict) else {}
+    turn, day = int(state.get("turn", 0) or 0), int(state.get("canon_day", 0) or 0)
+    obligations = state.setdefault("obligation_ledger", [])
+    authored = data.get("commitment_updates") if isinstance(data.get("commitment_updates"), list) else []
+    for raw in authored[:24]:
+        if not isinstance(raw, dict) or not ai_text(raw.get("promise") or raw.get("text")):
+            continue
+        text_value = ai_text(raw.get("promise") or raw.get("text"))[:500]
+        key = hashlib.sha256("|".join((ai_text(raw.get("owner") or ""), ai_text(raw.get("owed_to") or ""), text_value)).casefold().encode("utf-8")).hexdigest()[:16]
+        existing = next((row for row in obligations if isinstance(row, dict) and row.get("id") == key), None)
+        row = existing or {"id": key, "created_turn": turn}
+        row.update({"owner": ai_text(raw.get("owner") or "") or "Unspecified", "owed_to": ai_text(raw.get("owed_to") or "") or "Unspecified",
+                    "text": text_value, "due_canon_day": raw.get("due_canon_day"),
+                    "trigger": ai_text(raw.get("trigger") or ""), "status": ai_text(raw.get("status") or "") or "active",
+                    "consequence": ai_text(raw.get("consequence") or ""), "last_updated_turn": turn})
+        if existing is None: obligations.append(row)
+    # Legacy promises remain useful; normalize them into the ledger once.
+    for raw in (state.get("narrative_memory") or {}).get("promises", [])[-30:]:
+        text_value = ai_text(raw.get("text") if isinstance(raw, dict) else raw)
+        if not text_value: continue
+        key = hashlib.sha256(("legacy|" + text_value.casefold()).encode("utf-8")).hexdigest()[:16]
+        if not any(isinstance(row, dict) and row.get("id") == key for row in obligations):
+            obligations.append({"id": key, "owner": "Unspecified", "owed_to": "Unspecified", "text": text_value[:500],
+                                "status": (raw.get("status", "active") if isinstance(raw, dict) else "active"),
+                                "created_turn": int(raw.get("turn", turn) if isinstance(raw, dict) else turn), "last_updated_turn": turn})
+    for row in obligations:
+        if not isinstance(row, dict) or row.get("status", "active") != "active": continue
+        try: due = int(row.get("due_canon_day"))
+        except (TypeError, ValueError): continue
+        if due <= day: row["status"] = "due"
+    state["obligation_ledger"] = obligations[-160:]
+
+    queue = state.setdefault("delayed_consequences", [])
+    authored_delayed = data.get("delayed_consequences") if isinstance(data.get("delayed_consequences"), list) else []
+    for raw in authored_delayed[:24]:
+        if not isinstance(raw, dict) or not ai_text(raw.get("effect") or raw.get("text")): continue
+        effect = ai_text(raw.get("effect") or raw.get("text"))[:600]
+        key = hashlib.sha256("|".join((effect, ai_text(raw.get("trigger") or ""), str(raw.get("due_canon_day") or ""))).casefold().encode("utf-8")).hexdigest()[:16]
+        if any(isinstance(row, dict) and row.get("id") == key for row in queue): continue
+        queue.append({"id": key, "effect": effect, "source": ai_text(raw.get("source") or "") or "Narrative consequence",
+                      "horizon": ai_text(raw.get("horizon") or "") or "later", "due_canon_day": raw.get("due_canon_day"),
+                      "trigger": ai_text(raw.get("trigger") or ""), "status": "pending", "created_turn": turn})
+    for row in queue:
+        if not isinstance(row, dict) or row.get("status", "pending") != "pending": continue
+        try: due = int(row.get("due_canon_day"))
+        except (TypeError, ValueError): continue
+        if due <= day: row["status"], row["became_due_turn"] = "due", turn
+    state["delayed_consequences"] = queue[-160:]
+    return {"active_obligations": sum(row.get("status") in {"active", "due"} for row in obligations if isinstance(row, dict)),
+            "pending_consequences": sum(row.get("status") in {"pending", "due"} for row in queue if isinstance(row, dict))}
+
+
+def refresh_canon_divergence_impacts(state):
+    from simulation_integrity import canon_dependency_graph
+    graph = canon_dependency_graph(state)
+    affected = [copy.deepcopy(row) for row in graph.get("events", [])
+                if row.get("status") in {"altered", "delayed", "impossible", "replaced"}]
+    state["canon_divergence_impacts"] = {"turn": int(state.get("turn", 0) or 0),
+                                          "counts": copy.deepcopy(graph.get("counts", {})),
+                                          "affected_events": affected[:80]}
+    return copy.deepcopy(state["canon_divergence_impacts"])
+
+
+def record_pacing_beat(state, data, actions=None):
+    text_value = " ".join([" ".join(ai_text(x) for x in actions or []), ai_text((data or {}).get("narrative")),
+                           " ".join(ai_text(row.get("narrative")) for row in (data or {}).get("updates", []) if isinstance(row, dict))]).lower()
+    categories = (("combat", r"\b(?:fight|attack|battle|combat|duel|wound|defeat)\b"),
+                  ("training", r"\b(?:train|practice|master|study|exercise)\b"),
+                  ("social", r"\b(?:talk|ask|negot|convince|relationship|promise|meeting)\b"),
+                  ("exploration", r"\b(?:travel|explore|discover|arrive|investigat|search)\b"),
+                  ("politics", r"\b(?:faction|treaty|alliance|ruler|council|policy|territory)\b"),
+                  ("recovery", r"\b(?:rest|recover|heal|downtime|relax)\b"))
+    kind = next((label for label, pattern in categories if re.search(pattern, text_value, re.I)), "story")
+    profile = state.setdefault("pacing_profile", {"recent_beats": [], "counts": {}, "last_guidance": ""})
+    profile.setdefault("recent_beats", []).append({"turn": int(state.get("turn", 0) or 0), "kind": kind})
+    profile["recent_beats"] = profile["recent_beats"][-16:]
+    profile["counts"] = {label: sum(row.get("kind") == label for row in profile["recent_beats"])
+                         for label in {row.get("kind") for row in profile["recent_beats"]}}
+    return kind
+
+
+def learn_player_style(state):
+    """Infer only from explicit positive ratings and chosen presentation settings."""
+    rated = state.get("rated_good_turns") or []
+    outcomes = [ai_text(row.get("outcome")) for row in rated if isinstance(row, dict)]
+    actions = [ai_text(row.get("action")) for row in rated if isinstance(row, dict)]
+    avg_words = round(sum(len(text.split()) for text in outcomes) / max(1, len(outcomes)))
+    blob = " ".join(actions).lower()
+    preferences = []
+    for label, pattern in (("combat", r"\b(?:fight|attack|battle|duel)\b"), ("growth", r"\b(?:train|learn|master|grow)\b"),
+                           ("social", r"\b(?:talk|ask|persuad|relationship)\b"), ("strategy", r"\b(?:plan|order|politic|faction|rule)\b"),
+                           ("exploration", r"\b(?:travel|explore|discover|search)\b")):
+        if re.search(pattern, blob): preferences.append(label)
+    profile = {"sample_count": len(rated), "preferred_detail": "detailed" if avg_words >= 110 else "balanced" if avg_words >= 45 else "concise",
+               "preferred_beats": preferences[:5], "approved_average_words": avg_words,
+               "rule": "A soft presentation preference only; never changes facts, difficulty, NPC autonomy, or outcomes."}
+    state["player_style_profile"] = profile
+    return copy.deepcopy(profile)
+
+
 _STOP = {
     "a", "an", "and", "are", "as", "at", "be", "did", "do", "does", "for", "from",
     "had", "has", "have", "how", "i", "in", "is", "it", "me", "my", "of", "on",
@@ -76,6 +287,14 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
             "If two facts truly conflict, name the conflict instead of silently choosing one."
         ),
     }
+    packet["live_scene"] = copy.deepcopy(state.get("scene_state", {}))
+    packet["due_obligations"] = [copy.deepcopy(row) for row in state.get("obligation_ledger", [])
+                                  if isinstance(row, dict) and row.get("status") in {"active", "due"}][-10:]
+    packet["due_consequences"] = [copy.deepcopy(row) for row in state.get("delayed_consequences", [])
+                                   if isinstance(row, dict) and row.get("status") == "due"][-8:]
+    packet["divergence_impacts"] = copy.deepcopy((state.get("canon_divergence_impacts") or {}).get("affected_events", []))[:8]
+    packet["outcome_scale"] = copy.deepcopy(state.get("last_outcome_scale", {}))
+    packet["player_style"] = copy.deepcopy(state.get("player_style_profile", {}))
 
     people = []
     companions = {ai_text(row.get("name") if isinstance(row, dict) else row).lower()

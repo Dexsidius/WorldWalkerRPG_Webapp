@@ -722,8 +722,45 @@ def retrieve_lore(world, query, state=None, limit=5):
         _LORE_CACHE.pop(next(iter(_LORE_CACHE)))
     return copy.deepcopy(selected)
 
-def format_lore_context(world, query, state=None, limit=5):
-    entries = retrieve_lore(world, query, state, limit=limit)
+_LORE_SENSITIVE = re.compile(
+    r"\b(?:canon|timeline|history|lore|rule|ability|technique|class|skill|power|haki|devil fruit|nen|hatsu|jutsu|chakra|kekkei|dojutsu|jinch|shikai|bankai|zanpak|kido|hado|bakudo|cursed technique|domain|binding vow|magicule|evolution|tower|floor|quest|faction|clan|division|village|island)\b",
+    re.I,
+)
+
+
+def lore_retrieval_decision(world, query, state=None, purpose=""):
+    """Estimate when source retrieval will add value instead of prompt bulk."""
+    text = str(query or "").strip()
+    score, reasons = 0, []
+    if purpose in {"opening", "major_event", "advisor", "creative"}:
+        score += 45; reasons.append(f"{purpose} task")
+    if _LORE_SENSITIVE.search(text):
+        score += 35; reasons.append("world-mechanics or canon language")
+    proper = [name for name in re.findall(r"(?<![.!?]\s)\b[A-Z][A-Za-z'’-]{2,}(?:\s+[A-Z][A-Za-z'’-]{2,})*", text)
+              if name not in {"The", "This", "That", "What", "When", "Where", "How", "Why", "Please"}]
+    if proper:
+        score += min(30, 10 + len(proper) * 5); reasons.append("named setting subject")
+    memories = (state or {}).get("npc_memories") if isinstance((state or {}).get("npc_memories"), dict) else {}
+    if any(str(name).casefold() in text.casefold() for name in memories):
+        score += 15; reasons.append("tracked named character")
+    if re.search(r"\b(?:create|invent|generate|awaken|learn|research|compare|explain)\b", text, re.I):
+        score += 10; reasons.append("authorship or explanation")
+    if not text:
+        score -= 35; reasons.append("empty query")
+    retrieve = score >= 35 or state is None
+    decision = {"score": max(0, min(100, score)), "retrieve": retrieve,
+                "confidence": "high" if score >= 70 else "medium" if score >= 35 else "campaign-state sufficient",
+                "reasons": reasons[:4], "purpose": purpose or "unspecified"}
+    if isinstance(state, dict):
+        log = state.setdefault("lore_confidence_log", [])
+        log.append({"turn": int(state.get("turn", 0) or 0), "query": text[:180], **decision})
+        state["lore_confidence_log"] = log[-80:]
+    return decision
+
+
+def format_lore_context(world, query, state=None, limit=5, purpose="", force=False):
+    decision = lore_retrieval_decision(world, query, state, purpose)
+    entries = retrieve_lore(world, query, state, limit=limit) if force or decision["retrieve"] else []
     identity = canon_identity_context(world, query, state, limit=max(5, limit * 2))
     if not entries and not identity:
         return ""

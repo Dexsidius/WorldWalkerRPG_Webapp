@@ -37,7 +37,11 @@ from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity
 from age_system import advance_character_age
 from campaign_features import downtime_surprise_prompt
-from campaign_reliability import reconcile_narrated_consequences, consolidate_long_campaign_memory
+from campaign_reliability import (
+    reconcile_narrated_consequences, consolidate_long_campaign_memory,
+    refresh_scene_state, normalize_outcome_scale, reconcile_commitments_and_consequences,
+    refresh_canon_divergence_impacts, record_pacing_beat,
+)
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -843,6 +847,8 @@ class TimeSkipMixin:
             "schema": {
                 "narrative": "brief overall summary used only as fallback", "updates": [{"sequence":"number", "type":"action|npc_reaction|faction_reaction|world_event|canon_event|interruption|consequence", "title":"specific short heading", "canon_day":"integer canon day this beat occurred on", "related_action":"queued action or empty", "narrative":"2-5 substantive sentences, proper nouns bolded with **double asterisks** on first mention", "why_it_matters":"one short plain sentence on the stakes, phrased the way a narrator would actually say it out loud, not a labeled report line", "player_knowledge":"one short plain sentence on what the character can verify, infer, or only heard as rumor, phrased the same natural way, or empty if nothing new", "next_pressure":"one short plain sentence naming the unresolved pressure, phrased the same natural way, or empty", "map_changes": "empty list unless this SPECIFIC beat changed who controls/holds a territory, settlement, or map node — then a short list of what changed, e.g. 'The Empire of the End gains control of the Rift Node'. Most beats have none.", "quote": "empty unless this beat naturally includes one short, genuinely quotable spoken line — then {\"text\": the line, \"speaker\": who said it}. Use sparingly, only when a line actually lands; never invent dialogue just to fill this in."}], "state_patch": "ALL persistent changes",
                 "consequence_manifest": [{"kind":"skill|title|item|quest|location|condition|reputation|affiliation|other", "target":"exact name", "change":"gained|lost|started|completed|changed", "evidence":"short sentence identifying the beat", "details":"complete skill mechanics only when kind is skill"}],
+                "commitment_updates": [{"owner":"who made the promise/debt", "owed_to":"who expects it", "promise":"specific commitment", "due_canon_day":"integer or empty", "trigger":"condition or empty", "status":"active|fulfilled|broken|cancelled", "consequence":"what follows if relevant"}],
+                "delayed_consequences": [{"effect":"specific later consequence", "source":"decision/event causing it", "horizon":"days|weeks|months|conditional", "due_canon_day":"integer or empty", "trigger":"condition or empty"}],
                 "events": "system notifications", "timeline_events": "list of major events",
                 "elapsed": {"amount": "number", "unit": "same or sensible normalized unit"},
                 "interrupted": "boolean", "interruption_kind": "canon_event|goal_complete|world_event|danger|other or empty", "interruption_reason": "string or empty",
@@ -869,6 +875,7 @@ class TimeSkipMixin:
             "Moment resolves one beat (maximum 24 hours); longer skips cover the whole allowed interval with dated chronological updates.",
             "Stop at the earliest achieved explicit goal, committed combat, significant personal decision, or supplied major/canon boundary.",
             "List every lasting narrated gain, loss, condition, quest, title, item, skill, affiliation or location change in consequence_manifest even when state_patch also contains it.",
+            "Resolve any due obligation or delayed consequence whose trigger/date falls inside this interval; return new or changed promises in commitment_updates and later echoes in delayed_consequences.",
             "Next Major Event ignores routine conversations, errands, rumors and incremental growth; stop only for a real tier change, defining goal, lethal conflict, world-changing event or major canon event.",
             "Training gains scale with actual sessions, intensity, aptitude, instruction, resources and recovery; do not compress a month into one session.",
             "Return sparse JSON: omit empty optional fields, empty arrays and empty objects.",
@@ -2000,6 +2007,11 @@ class TimeSkipMixin:
             if self.settings.get("developer_mode"):
                 self.append(f"[AI ROUTE]\n{self.state['last_ai_route']['role']}: {self.state['last_ai_route']['model']}", "meta")
             update_narrative_memory(before, self.state, action_summary, data.get("narrative", ""))
+            reconcile_commitments_and_consequences(self.state, data, elapsed_minutes)
+            refresh_canon_divergence_impacts(self.state)
+            refresh_scene_state(self.state, data, context.get("actions", []))
+            record_pacing_beat(self.state, data, context.get("actions", []))
+            normalize_outcome_scale(before, self.state, data, elapsed_minutes)
             refresh_simulation_core(self.state, context.get("actions", []), elapsed_minutes, action_summary)
             record_resolution_transaction(
                 self.state, before, context.get("actions", []), elapsed_minutes,

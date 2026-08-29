@@ -27,7 +27,10 @@ from overgeared_classes import canon_class_prompt_reference
 from ability_archive import GeneratedAbilityArchive
 from simulation_core import refresh_simulation_core, action_commits_violence
 from canon_integrity import canon_identity_context, repair_canon_payload
-from campaign_reliability import build_grounding_packet
+from campaign_reliability import (
+    build_grounding_packet, refresh_scene_state, learn_player_style,
+    refresh_canon_divergence_impacts, reconcile_commitments_and_consequences,
+)
 
 
 DEFAULT_SETTINGS = {
@@ -304,7 +307,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log")
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -447,7 +450,7 @@ class CoreMixin:
         which is a missed teaching moment, not a correctness bug — so it's
         safe to reuse loosely rather than plumbing a separate parameter."""
         lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
-                                   limit=self.simulation_profile()["lore_limit"])
+                                   limit=self.simulation_profile()["lore_limit"], purpose="moment")
         self.last_lore_context = lore
         return self.gm_rules(query) + (("\n\n" + lore) if lore else "") + self.satisfy_class_design_context(query) + self.rated_good_example_snippet()
 
@@ -681,6 +684,38 @@ class CoreMixin:
         warnings = update_continuity(self.state, scratch, str(payload.get("action") or ""), data.get("narrative", ""))
         return [w for w in warnings if any(marker in w for marker in self._RETRYABLE_WARNING_MARKERS)]
 
+    def _response_quality_issues(self, payload, data):
+        """Return only locally provable response failures worth one retry."""
+        if not isinstance(data, dict):
+            return ["The response was not a JSON object."]
+        task = str(payload.get("task") or "").lower()
+        narrative = str(data.get("narrative") or "").strip()
+        issues = []
+        if "narrator" not in task and task not in {"time_skip", "major_event", "event_turn"}:
+            return issues
+        schema = payload.get("schema") if isinstance(payload.get("schema"), dict) else {}
+        suggestions = [str(item).strip() for item in data.get("suggested_actions", [])
+                       if str(item).strip()] if isinstance(data.get("suggested_actions"), list) else []
+        if "suggested_actions" in schema and task != "combat_summary" and len(suggestions) < 2:
+            issues.append("The result did not provide at least two concrete next-action choices.")
+        patch = data.get("state_patch") if isinstance(data.get("state_patch"), dict) else {}
+        new_location = str(patch.get("location") or "").strip()
+        if new_location and new_location.lower() != str(self.state.get("location") or "").strip().lower() and new_location.lower() not in narrative.lower():
+            issues.append(f"The state moves to {new_location}, but the narrative never establishes that movement.")
+        claimed_breakthrough = re.search(
+            r"\b(?:master(?:ed|y)|awak(?:en|ened|ening)|evol(?:ve|ved|ution)|bankai|domain expansion|new form|class evolution)\b",
+            narrative, re.I,
+        )
+        manifest = data.get("consequence_manifest") if isinstance(data.get("consequence_manifest"), list) else []
+        durable_fields = {"skills", "special", "class_profile", "ability_progress", "portrait_identity", "portrait_traits", "level", "xp"}
+        durable_manifest = any(isinstance(row, dict) and str(row.get("kind", "")).lower() in
+                               {"skill", "title", "condition", "affiliation", "other"} for row in manifest)
+        if claimed_breakthrough and not (durable_fields & set(patch)) and not durable_manifest:
+            issues.append("The prose claims a mastery, awakening, evolution, or new form without recording any durable mechanical consequence.")
+        if "updates" in schema and task in {"time_skip", "major_event"} and not isinstance(data.get("updates"), list):
+            issues.append("A time-moving response omitted its chronological updates list.")
+        return issues[:4]
+
     def request_with_narrative(self, instructions, payload, max_output_tokens, client=None):
         """Some models (smaller/cheaper ones especially) occasionally fill in
         state_patch correctly but leave narrative blank under attention
@@ -694,12 +729,15 @@ class CoreMixin:
         data = client.request(instructions, payload, max_output_tokens=max_output_tokens)
         narrative_missing = not (data.get("narrative") or "").strip()
         violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
-        if narrative_missing or violations:
+        quality_issues = [] if narrative_missing else self._response_quality_issues(payload, data)
+        if narrative_missing or violations or quality_issues:
             reminder = ""
             if narrative_missing:
                 reminder += "\n\nREMINDER: your previous attempt left \"narrative\" empty. Write 2-5 sentences of narrative FIRST, then the rest."
             if violations:
                 reminder += "\n\nREMINDER: your previous attempt has a specific problem that must be fixed in this response: " + " ".join(violations)
+            if quality_issues:
+                reminder += "\n\nQUALITY REPAIR: keep every valid fact and outcome from the first attempt, but correct these locally verified omissions or contradictions: " + " ".join(quality_issues)
             data = client.request(instructions + reminder, payload, max_output_tokens=max_output_tokens)
         data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         if canon_repairs:
@@ -781,6 +819,11 @@ Return ONLY valid JSON. No markdown fences."""
         repeated tokens without deleting anything from the real save.
         """
         refresh_simulation_core(self.state)
+        if not self.state.get("scene_state"):
+            refresh_scene_state(self.state, {}, [])
+        learn_player_style(self.state)
+        reconcile_commitments_and_consequences(self.state, {}, 0)
+        refresh_canon_divergence_impacts(self.state)
         snapshot = self.trimmed_state_for_ai(query)
         snapshot["mechanical_power_profile"] = power_profile_for(
             self.state.get("world", "Custom World"), self.state.get("stats", {}),
@@ -969,6 +1012,14 @@ AUTHORITATIVE CORE
             "supplies (negotiate, pressure whoever is blockading it, seek an alternate source, or crack down), and its people's sentiment/standing "
             "shifts toward whoever is actually providing for them, not merely whoever claims to."
         )
+        reliability_rule = """
+GM CONTINUITY CONTRACT
+- live_scene is the authoritative present-tense scene ledger. Keep its location, present people, danger, unresolved question and objective coherent; never teleport absent people in or give them unheard information.
+- Match prose magnitude to durable mechanics in BOTH directions. Never call a routine increase transformative or describe a true awakening as minor.
+- canon_divergence_impacts are future canon dominoes already altered, delayed, replaced or impossible. Follow them instead of restoring stock canon.
+- due_obligations and due_consequences are live continuity. Resolve/update them when their condition falls inside this beat. Return new promises/debts in commitment_updates and later echoes in delayed_consequences.
+- player_style is only a soft presentation preference learned from explicitly liked turns. It never changes facts, difficulty, NPC autonomy or outcomes.
+"""
         modules = {
             "opening": """
 OPENING JOB
@@ -1011,6 +1062,8 @@ COMBAT-SUMMARY JOB
         # test_task_prompts_are_smaller_than_the_legacy_everything_prompt).
         modules["moment"] += "\n" + faction_trade_rule + "\n"
         modules["time_skip"] += "\n" + faction_trade_rule + "\n"
+        for job in ("moment", "time_skip", "major_event", "event"):
+            modules[job] += reliability_rule
         return shared + modules.get(purpose, modules["moment"])
 
     def task_context(self, purpose="moment", query=""):
@@ -1018,7 +1071,7 @@ COMBAT-SUMMARY JOB
         if purpose == "combat_summary":
             return rules
         lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
-                                   limit=self.simulation_profile()["lore_limit"])
+                                   limit=self.simulation_profile()["lore_limit"], purpose=purpose)
         self.last_lore_context = lore
         return rules + (("\n\n" + lore) if lore else "") + self.satisfy_class_design_context(query) + self.rated_good_example_snippet()
 

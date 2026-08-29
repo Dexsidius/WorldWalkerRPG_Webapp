@@ -153,6 +153,26 @@ WORLD_ABILITY_FORMS = {
 }
 
 class SocialMixin:
+    def _advisor_evidence(self, question, task_state=None, limit=5):
+        """Give every answer a short, inspectable local evidence trail."""
+        task_state = task_state if isinstance(task_state, dict) else self.task_state_for_ai("advisor", question)
+        rows = []
+        profile = task_state.get("mechanical_power_profile") if isinstance(task_state.get("mechanical_power_profile"), dict) else {}
+        combat = profile.get("world_combat") or profile.get("combat") or {}
+        if combat:
+            rows.append({"label": "Current character sheet", "detail": f"{combat.get('name', 'World-relative')} · balanced score {combat.get('score', 'unknown')}", "source": "live mechanics"})
+        for row in task_state.get("question_evidence", []) if isinstance(task_state.get("question_evidence"), list) else []:
+            if not isinstance(row, dict): continue
+            rows.append({"label": ai_text(row.get("title") or row.get("kind"))[:100],
+                         "detail": ai_text(row.get("text"))[:260],
+                         "source": f"{row.get('kind', 'campaign')} · turn {row.get('turn') if row.get('turn') is not None else 'unknown'}"})
+            if len(rows) >= limit: break
+        if len(rows) < 2:
+            scene = (task_state.get("grounding_packet") or {}).get("current_truth", {})
+            if scene:
+                rows.append({"label": "Current campaign state", "detail": f"{scene.get('location', 'Unknown location')} · {scene.get('time', 'current time')}", "source": "live save"})
+        return rows[:max(1, int(limit or 5))]
+
     def run_local_background(self):
         """Maintain recurring actors without a background-model request.
 
@@ -189,12 +209,14 @@ class SocialMixin:
             self.state.setdefault("advisor_thread", []).append({"role": "player", "text": question, "turn": self.state.get("turn", 0)})
         comparison_entry = self._local_power_comparison(question, fourth_wall)
         if comparison_entry:
+            comparison_entry.setdefault("evidence", self._advisor_evidence(question))
             with self.lock:
                 self.state["advisor_thread"].append(comparison_entry)
                 self.autosave()
             return {"entry": comparison_entry, "state": self.public_state(), "local_answer": True}
         local_entry = self._local_advisor_answer(question, fourth_wall) if isinstance(self.ai, AI) else None
         if local_entry:
+            local_entry.setdefault("evidence", self._advisor_evidence(question))
             with self.lock:
                 self.state["advisor_thread"].append(local_entry)
                 self.autosave()
@@ -216,8 +238,9 @@ class SocialMixin:
         named_character_power_question = bool(re.search(
             r"\b(how strong (?:is|was|are)|power (?:level|tier|of)|strength of|could .* beat|who (?:wins|is stronger))\b",
             str(question), re.I))
+        advisor_state = self.task_state_for_ai("advisor", question)
         payload = {
-            "task": "advisor_question", "question": question, "state": self.task_state_for_ai("advisor", question),
+            "task": "advisor_question", "question": question, "state": advisor_state,
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
             "canon_divergences": self.state.get("canon_divergences", []),
             "canon_identity_evidence": canon_identity_context(self.state.get("world", "Custom World"), question, self.state, limit=16),
@@ -288,6 +311,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             "points": [ai_text(p) for p in (data.get("points") or []) if ai_text(p)][:8],
             "follow_ups": [ai_text(q) for q in (data.get("follow_ups") or []) if ai_text(q)][:3],
             "chart": self._sanitize_advisor_chart(data.get("chart")),
+            "evidence": self._advisor_evidence(question, advisor_state),
             "fourth_wall": bool(fourth_wall), "canon_countdown": self.canon_countdown(),
             "turn": self.state.get("turn", 0),
         }

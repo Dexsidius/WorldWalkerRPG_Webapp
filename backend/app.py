@@ -9,6 +9,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.local import LocalProxy
 
 from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for, power_profile_for
+from release_notes import notes_for
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
 from portrait_generator import (PORTRAIT_CACHE_DIR, clear_active_portrait_form, generate_portrait,
@@ -655,7 +656,7 @@ def api_multiplayer_resolve():
 # ---------- world / campaign data ----------
 @app.route("/api/version")
 def api_version():
-    return jsonify({"version": APP_VERSION})
+    return jsonify({"version": APP_VERSION, "patch_notes": notes_for(APP_VERSION)})
 
 
 @app.route("/api/worlds")

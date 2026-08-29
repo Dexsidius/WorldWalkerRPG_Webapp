@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class WorldwalkerV3300SimulationCoreTests(unittest.TestCase):
     def test_release_and_owned_core_records(self):
-        self.assertEqual(APP_VERSION, "3.39.0")
+        self.assertEqual(APP_VERSION, "3.40.0")
         for field in ("capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
                       "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version"):
             self.assertIn(field, BASE_STATE)

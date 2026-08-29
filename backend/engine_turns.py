@@ -29,7 +29,11 @@ from jjk_system import advance_jjk_state
 from simulation_core import refresh_simulation_core, record_resolution_transaction
 from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity, normalize_world_activity
-from campaign_reliability import reconcile_narrated_consequences, consolidate_long_campaign_memory
+from campaign_reliability import (
+    reconcile_narrated_consequences, consolidate_long_campaign_memory,
+    refresh_scene_state, normalize_outcome_scale, reconcile_commitments_and_consequences,
+    refresh_canon_divergence_impacts, record_pacing_beat,
+)
 
 
 DEFAULT_SETTINGS = {
@@ -346,6 +350,8 @@ class TurnsMixin:
              "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
                         "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
                         "consequence_manifest": [{"kind":"skill|title|item|quest|location|condition|reputation|affiliation|other", "target":"exact name", "change":"gained|lost|started|completed|changed", "evidence":"short sentence from this result", "details":"complete skill mechanics only when kind is skill"}],
+                        "commitment_updates": [{"owner":"who made the promise/debt", "owed_to":"who expects it", "promise":"specific commitment", "due_canon_day":"integer or empty", "trigger":"condition or empty", "status":"active|fulfilled|broken|cancelled", "consequence":"what follows if relevant"}],
+                        "delayed_consequences": [{"effect":"specific later consequence", "source":"decision/event causing it", "horizon":"days|weeks|months|conditional", "due_canon_day":"integer or empty", "trigger":"condition or empty"}],
                         "danger_scenario_concluded": "boolean; true only when the current confrontation ended or the player left it",
                         "events": [{"type": "xp|level_up|skill|title|quest|hidden_quest|item|loot|reputation|companion|codex|location|training|combat|injury|death|discovery|world", "message": "notification"}],
                         "timeline_event": "major event or empty", "suggested_actions": ["exactly 3 optional contextual actions: strongest lead, growth/preparation, alternate hook. Each must name a real, specific person/place/faction/thread already in this campaign, not a generic template. Scale honestly — a longer-term lead can openly say so ('over the next few days...') rather than being forced into an instant."]}}
@@ -709,6 +715,14 @@ Return ONLY valid JSON."""
                 pending_action or ("Campaign opening" if is_opening else "Story development"),
                 data.get("narrative", ""),
             )
+            reconcile_commitments_and_consequences(
+                self.state, data, 0 if is_opening else int(context.get("elapsed_minutes", 5) or 5),
+            )
+            refresh_canon_divergence_impacts(self.state)
+            refresh_scene_state(self.state, data, turn_actions)
+            if not is_opening:
+                record_pacing_beat(self.state, data, turn_actions)
+                normalize_outcome_scale(before, self.state, data, int(context.get("elapsed_minutes", 5) or 5))
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, pending_action or ("campaign opening" if is_opening else ""), data.get("narrative", ""))
             for note in self.state.pop("_pending_chronicle_notes", []):
