@@ -6,7 +6,11 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.37.0** (schema 19).
+Current app/save version: **3.37.1** (schema 19).
+
+Version 3.37.1 restores Bleach Chronicle updates to the clean, readable panel
+layout used before v3.37.0. The Hell Butterfly artwork and Chronicle animation
+were removed; all other v3.37.0 systems remain intact.
 
 Version 3.37.0 gives each world a more native Chronicle presentation, including
 Naruto scroll turns, Bleach Hell Butterfly dispatches, One Piece Poneglyph

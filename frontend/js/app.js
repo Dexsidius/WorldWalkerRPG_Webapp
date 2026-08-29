@@ -616,11 +616,11 @@ function appendStoryEntries(entries) {
   const cleanEntries = (entries || []).filter((entry) => entry && String(entry.text || "").trim());
   if (!cleanEntries.length) return;
   const presentationWorld = APP.state?.world || document.body.dataset.world || "Custom World";
-  const themedChronicle = new Set(["Naruto", "Bleach", "One Piece"]).has(presentationWorld);
+  const themedChronicle = new Set(["Naruto", "One Piece"]).has(presentationWorld);
   const turnEnvelope = themedChronicle ? document.createElement("article") : null;
   if (turnEnvelope) {
     turnEnvelope.className = "world-turn-envelope";
-    turnEnvelope.dataset.presentation = presentationWorld === "Naruto" ? "scroll" : presentationWorld === "Bleach" ? "butterflies" : "poneglyph";
+    turnEnvelope.dataset.presentation = presentationWorld === "Naruto" ? "scroll" : "poneglyph";
     turnEnvelope.dataset.turn = APP.state?.turn || "";
   }
   triggerNarrativeVisuals(cleanEntries);
@@ -728,12 +728,6 @@ function appendStoryEntries(entries) {
       const body = document.createElement("div");
       body.className = "story-entry-copy";
       bodyWrap.appendChild(body);
-      if (presentationWorld === "Bleach") {
-        const butterfly = document.createElement("i");
-        butterfly.className = "hell-butterfly-perch";
-        butterfly.setAttribute("aria-hidden", "true");
-        div.appendChild(butterfly);
-      }
       div.append(label, bodyWrap);
       entriesWrap.appendChild(div);
       if (part.tag === "narrative" && APP.animationsEnabled && presentationWorld !== "Naruto") {
