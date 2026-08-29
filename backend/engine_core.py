@@ -13,7 +13,7 @@ from world_depth import world_depth_rules
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
-from state_guard import apply_guarded_patch, migrate_state
+from state_guard import apply_guarded_patch, migrate_state, normalize_combat_payload
 from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
@@ -581,6 +581,9 @@ class CoreMixin:
         patch = data.setdefault("state_patch", {}) if isinstance(data.get("state_patch", {}), dict) else {}
         data["state_patch"] = patch
         authored = patch.get("combat")
+        if isinstance(authored, dict):
+            authored = normalize_combat_payload(authored)
+            patch["combat"] = authored
         if isinstance(current, dict) and current.get("active"):
             return False
         action_text = " ".join(str(x) for x in (actions or []) if str(x).strip())

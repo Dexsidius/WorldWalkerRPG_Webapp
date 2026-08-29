@@ -493,25 +493,44 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
     def ensure_contact(self, name, kind="person", details=None):
         if not name:
             return
-        c = self.state.setdefault("contacts", {}).setdefault(name, {
-            "name": name, "kind": kind, "status": "Known", "relationship": 0, "last_known_location": "Unknown",
-            "notes": [], "can_contact": True, "first_met_turn": self.state.get("turn", 0)
-        })
+        contacts = self.state.setdefault("contacts", {})
+        if not isinstance(contacts, dict):
+            contacts = self.state["contacts"] = {}
+        if not isinstance(contacts.get(name), dict):
+            contacts[name] = {
+                "name": name, "kind": kind, "status": "Known", "relationship": 0, "last_known_location": "Unknown",
+                "notes": [], "can_contact": True, "first_met_turn": self.state.get("turn", 0)
+            }
+        c = contacts[name]
         if details and isinstance(details, dict):
             c.update(details)
-        self.state.setdefault("chat_threads", {}).setdefault(name, [])
+        threads = self.state.setdefault("chat_threads", {})
+        if not isinstance(threads, dict):
+            threads = self.state["chat_threads"] = {}
+        if not isinstance(threads.get(name), list):
+            threads[name] = []
 
     def add_chat_message(self, thread, sender, text, direction="incoming", metadata=None):
         self.ensure_contact(thread, "group" if thread in self.state.get("group_chats", {}) else "person")
         msg = {"time": self.state.get("world_time", "Unknown"), "turn": self.state.get("turn", 0),
                "sender": sender, "text": text, "direction": direction, "metadata": metadata or {}}
-        self.state.setdefault("chat_threads", {}).setdefault(thread, []).append(msg)
+        self.state["chat_threads"][thread].append(msg)
         if direction == "incoming":
             self.state.setdefault("unread_chats", []).append({"thread": thread, "turn": self.state.get("turn", 0)})
-            delivery = self.state.setdefault("message_delivery_state", {}).setdefault(thread, {})
+            deliveries = self.state.setdefault("message_delivery_state", {})
+            if not isinstance(deliveries, dict):
+                deliveries = self.state["message_delivery_state"] = {}
+            if not isinstance(deliveries.get(thread), dict):
+                deliveries[thread] = {}
+            delivery = deliveries[thread]
             delivery["last_incoming_turn"] = int(self.state.get("turn", 0) or 0)
         elif direction == "outgoing":
-            delivery = self.state.setdefault("message_delivery_state", {}).setdefault(thread, {})
+            deliveries = self.state.setdefault("message_delivery_state", {})
+            if not isinstance(deliveries, dict):
+                deliveries = self.state["message_delivery_state"] = {}
+            if not isinstance(deliveries.get(thread), dict):
+                deliveries[thread] = {}
+            delivery = deliveries[thread]
             delivery["last_outgoing_turn"] = int(self.state.get("turn", 0) or 0)
         return msg
 

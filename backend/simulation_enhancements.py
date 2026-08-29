@@ -107,7 +107,9 @@ def advance_companion_autonomy(state, elapsed_minutes):
         assigned = list(dict.fromkeys(item for item in assigned if item))
         if not assigned:
             continue
-        row = ledger.setdefault(name, {"progress": 0.0, "milestone": 0, "history": []})
+        if not isinstance(ledger.get(name), dict):
+            ledger[name] = {"progress": 0.0, "milestone": 0, "history": []}
+        row = ledger[name]
         previous = _number(row.get("progress"))
         loyalty = _number(companion.get("loyalty"), 50)
         health = ai_text(companion.get("condition") or "healthy").lower()
@@ -144,7 +146,9 @@ def advance_npc_development(state, elapsed_minutes):
         active = bool(memory.get("recurring") or memory.get("nemesis") or str(name).casefold() in companions)
         if not active:
             continue
-        row = registry.setdefault(str(name), {"progress": 0.0, "milestone": 0, "history": []})
+        if not isinstance(registry.get(str(name)), dict):
+            registry[str(name)] = {"progress": 0.0, "milestone": 0, "history": []}
+        row = registry[str(name)]
         training = bool(re.search(r"\b(train|practice|study|learn|master|mission|fight|hunt|research|prepare)\w*\b", goal, re.I))
         rate = .9 if training else .35
         if memory.get("nemesis"): rate *= .65
@@ -220,6 +224,8 @@ def world_downtime_events(state, elapsed_minutes, actions=None):
     world = state.get("world", "Custom World")
     title, narrative = WORLD_DOWNTIME.get(world, WORLD_DOWNTIME["Custom World"])
     row = state.setdefault("world_downtime_cycles", {})
+    if not isinstance(row, dict):
+        row = state["world_downtime_cycles"] = {}
     prior_cycle = int(row.get("cycle", 0) or 0)
     cycle = prior_cycle + max(1, int(days // 7))
     row.update({"cycle": cycle, "last_canon_day": state.get("canon_day"), "world": world,
@@ -241,7 +247,10 @@ def reactive_communication(state, events, elapsed_minutes, existing=None):
         contact = (state.get("contacts") or {}).get(name, {})
         if isinstance(contact, dict) and contact.get("can_contact", True) is False:
             continue
-        if turn - int((delivery.get(name) or {}).get("last_incoming_turn", -99) or -99) >= 3:
+        delivery_row = delivery.get(name)
+        if not isinstance(delivery_row, dict):
+            delivery_row = {}
+        if turn - int(delivery_row.get("last_incoming_turn", -99) or -99) >= 3:
             candidates.append(name)
     if not candidates:
         return []

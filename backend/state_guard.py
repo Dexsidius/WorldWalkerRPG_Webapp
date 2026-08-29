@@ -155,6 +155,60 @@ def _repair_nested_shapes(state):
     return repairs
 
 
+def normalize_combat_payload(raw):
+    """Return a safe structured combat object for saves and AI patches.
+
+    Smaller models sometimes use the convenient JSON shorthand
+    ``{"enemy": "Tunnel Guard"}``. That is meaningful input, but combat
+    consumers require an object. Normalize it at the trust boundary instead
+    of allowing a later ``enemy.get(...)`` call to strand the campaign.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    combat = copy.deepcopy(raw)
+    enemy = combat.get("enemy")
+    if isinstance(enemy, str):
+        combat["enemy"] = {"name": enemy.strip() or "Enemy", "alive": True}
+    elif isinstance(enemy, (int, float)) and not isinstance(enemy, bool):
+        combat["enemy"] = {"name": str(enemy), "alive": True}
+    elif isinstance(enemy, list):
+        valid = [copy.deepcopy(row) for row in enemy if isinstance(row, dict)]
+        labels = [ai_text(row).strip() for row in enemy if not isinstance(row, dict) and ai_text(row).strip()]
+        if valid:
+            combat["enemies"] = valid
+            combat.pop("enemy", None)
+        elif labels:
+            combat["enemy"] = {
+                "name": labels[0] if len(labels) == 1 else f"{labels[0]} and allies",
+                "is_group": len(labels) > 1, "group_size": len(labels), "alive": True,
+            }
+        else:
+            combat.pop("enemy", None)
+    elif enemy is not None and not isinstance(enemy, dict):
+        combat["enemy"] = {"name": ai_text(enemy).strip() or "Enemy", "alive": True}
+
+    for key in ("enemy_statuses", "player_statuses", "enemy_debuffs", "player_debuffs", "player_buffs", "summons"):
+        value = combat.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, list):
+            value = [value]
+        clean = []
+        for row in value:
+            if isinstance(row, dict):
+                clean.append(copy.deepcopy(row))
+            elif ai_text(row).strip():
+                clean.append({"name": ai_text(row).strip(), "rounds_left": 1})
+        combat[key] = clean
+    if "log" in combat and not isinstance(combat.get("log"), list):
+        combat["log"] = []
+    if "cooldowns" in combat and not isinstance(combat.get("cooldowns"), dict):
+        combat["cooldowns"] = {}
+    if "opening_check" in combat and not isinstance(combat.get("opening_check"), dict):
+        combat.pop("opening_check", None)
+    return combat
+
+
 def _type_ok(key, value):
     if key in FLEXIBLE_TYPES:
         return value is None or isinstance(value, (str, int, float, dict))
@@ -235,6 +289,8 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
         if key == "stats":
             allowed = set(abilities_for(before.get("world", "Custom World")))
             value = {str(k): max(1, int(v)) for k, v in value.items() if k in allowed and isinstance(v, (int, float))}
+        elif key == "combat":
+            value = normalize_combat_payload(value)
         elif key in {"quests", "hidden_quests", "quest_archive"}:
             cleaned = [_clean_quest(q, key == "hidden_quests") for q in value[:200]]
             value = [q for q in cleaned if q]
@@ -303,6 +359,10 @@ def _repair(state):
     if state.get("difficulty") not in DIFFICULTIES:
         state["difficulty"] = "Adventurer"; repairs.append("Unknown difficulty changed to Adventurer")
     repairs.extend(_repair_nested_shapes(state))
+    normalized_combat = normalize_combat_payload(state.get("combat"))
+    if normalized_combat != state.get("combat"):
+        state["combat"] = normalized_combat
+        repairs.append("Normalized malformed nested combat data")
     for current, maximum in (("hp", "hp_max"), ("resource", "resource_max")):
         try:
             state[maximum] = max(1, int(state.get(maximum, 100)))

@@ -694,10 +694,11 @@ class TimeSkipMixin:
                 "time_budget": budget}
 
     def run_time_skip(self, amount, unit, orders, intensity, assessment, confirmed_lethal=False, confirmed_power_goal=False, manual_rolls=None, challenge_modes=None, challenge_resolution_mode="continue", danger_warning_acknowledged=False):
+        assessment = assessment if isinstance(assessment, dict) else {}
         event_mode = unit == "next_event"
         if unit in {"moment", "next_event"}:
             amount = 1
-        checks = assessment.get("checks", [])
+        checks = [row for row in (assessment.get("checks", []) or []) if isinstance(row, dict)]
         canon_stop = assessment.get("canon_stop") if isinstance(assessment.get("canon_stop"), dict) else None
         moment_mode = unit == "moment"
         event_horizon = int(assessment.get("time_budget", {}).get("max_elapsed_minutes", 180 * 1440) or 180 * 1440)
@@ -1148,7 +1149,8 @@ class TimeSkipMixin:
         if combat_begins:
             data["interrupted"] = True
             data["interruption_kind"] = "danger"
-            enemy_name = str((combat_patch.get("enemy") or {}).get("name") or "the opposition")
+            enemy = combat_patch.get("enemy")
+            enemy_name = str(enemy.get("name") or "the opposition") if isinstance(enemy, dict) else str(enemy or "the opposition")
             data["interruption_reason"] = data.get("interruption_reason") or f"Combat has begun against {enemy_name}."
             data["interruption_context"] = data.get("interruption_context") or "Violence is already under way; there is no extra intervention decision between this opening clash and combat control."
             data["intervention_prompt"] = data.get("intervention_prompt") or f"How does {self.state.get('name') or 'the player'} handle the opening exchange with {enemy_name}?"

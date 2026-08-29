@@ -1,6 +1,20 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.41.1": {
+        "title": "Advance and Combat Hotfix",
+        "summary": "Advance now safely accepts compact or malformed combat data instead of trapping the campaign behind a string-object error.",
+        "highlights": [
+            {"title": "Advance no longer stalls", "example": "An AI response such as enemy: Tunnel Guard is converted into a complete combatant record before the turn continues."},
+            {"title": "Nested combat recovery", "example": "Malformed status, cooldown, log, contact, and message-delivery shapes are normalized before gameplay reads them."},
+            {"title": "Existing campaigns repair themselves", "example": "Loading and advancing an affected save preserves the opponent's name and repairs the combat structure automatically."},
+            {"title": "Opponent identity is preserved", "example": "A compact enemy name remains Tunnel Guard instead of becoming a generic Enemy during repair."},
+            {"title": "Status lists are hardened", "example": "A compact Paralyzed status becomes a usable timed status record rather than breaking combat."},
+            {"title": "Stale checks are harmless", "example": "Malformed legacy difficulty rows are ignored while valid actions still resolve."},
+            {"title": "Messages cannot break Advance", "example": "Old contact and message-delivery values are repaired before reactive messages are processed."},
+            {"title": "All v3.41.0 features retained", "example": "Autonomous companions, NPC development, ability history, downtime, recovery tools, and narrative Satisfy classes remain enabled."},
+        ],
+    },
     "3.41.0": {
         "title": "A World That Keeps Moving",
         "summary": "Long skips, companions, NPCs, abilities, messages, recovery, and Satisfy classes now develop through persistent local systems with less AI overhead.",
