@@ -27,6 +27,101 @@ CONCEPTS = (
     ("Mercy Debt", "Converts deliberately spared harm into cursed-energy credit", "The credit can reinforce protection or healing-like stabilization"),
 )
 
+# Generic JJK techniques are assembled from a governing subject, an operation,
+# and an activation condition.  The old eight-entry CONCEPTS table remains as
+# migration/reference material, but new original characters do not simply
+# cycle through it.  This gives the duplicate archive thousands of coherent
+# combinations to choose from before a technique ever reaches the player.
+TECHNIQUE_THEMES = (
+    {"key":"momentum", "keywords":("momentum", "kinetic", "impact", "motion"),
+     "names":("Kinetic", "Impulse", "Vector", "Falling Star"),
+     "subject":"momentum carried by movement and impact"},
+    {"key":"space", "keywords":("space", "spatial", "distance", "boundary"),
+     "names":("Threshold", "Parallax", "Nearside", "Horizon"),
+     "subject":"distance and adjacency between marked points"},
+    {"key":"sound", "keywords":("sound", "music", "voice", "vibration", "silence"),
+     "names":("Resonant", "Mute", "Echo", "Hushed"),
+     "subject":"sound and vibration inside the user's cursed-energy reach"},
+    {"key":"shadow", "keywords":("shadow", "dark", "eclipse", "night"),
+     "names":("Umbral", "Eclipsed", "Nightglass", "Black Lantern"),
+     "subject":"the relationship between a body and its cast shadow"},
+    {"key":"blood", "keywords":("blood", "wound", "scar", "vein"),
+     "names":("Scarlet", "Vein", "Red", "Sanguine"),
+     "subject":"cursed signatures carried by the user's willingly shed blood"},
+    {"key":"memory", "keywords":("memory", "remember", "forget", "witness"),
+     "names":("Witness", "Mnemonic", "Last Scene", "Recalled"),
+     "subject":"the sensory memory of actions the user directly witnesses"},
+    {"key":"heat", "keywords":("heat", "cold", "temperature", "flame", "ice"),
+     "names":("Thermal", "Ashen", "Winter", "Cinder"),
+     "subject":"heat transferred through cursed-energy contact"},
+    {"key":"friction", "keywords":("friction", "traction", "slip", "grip"),
+     "names":("Friction", "Slipstone", "Still Road", "Rough Current"),
+     "subject":"friction between marked surfaces, bodies, and cursed constructs"},
+    {"key":"weight", "keywords":("weight", "mass", "gravity", "heavy", "light"),
+     "names":("Graven", "Ballast", "Weightless", "Iron Scale"),
+     "subject":"effective weight borne by marked targets"},
+    {"key":"reflection", "keywords":("mirror", "reflection", "glass", "light"),
+     "names":("Mirror", "Glass", "Refraction", "Silver Image"),
+     "subject":"reflections that contain a complete image of a target"},
+    {"key":"direction", "keywords":("direction", "angle", "turn", "redirect"),
+     "names":("Compass", "Crooked", "Turning", "Northless"),
+     "subject":"direction carried by movement, force, and cursed-energy flow"},
+    {"key":"attention", "keywords":("attention", "notice", "gaze", "seen", "focus"),
+     "names":("Unseen", "Gaze", "Blind Audience", "Attention"),
+     "subject":"attention consciously directed toward a person or action"},
+)
+
+TECHNIQUE_OPERATIONS = (
+    {"title":("Ledger", "Archive", "Testament"),
+     "rule":"Records one instance of {subject} when {condition}; the record can be imposed once on a valid marked target.",
+     "application":"Spend a recorded instance of {subject} to repeat, redirect, or interrupt its original behavior."},
+    {"title":("Partition", "Bisection", "Twin Seal"),
+     "rule":"Divides {subject} into two linked portions when {condition}; a change applied to one portion is transferred to the other.",
+     "application":"Split {subject} across two marks, then transfer one compatible change between them."},
+    {"title":("Exchange", "Barter", "Equivalent Pact"),
+     "rule":"Exchanges equal measured amounts of {subject} between two marked targets after {condition}.",
+     "application":"Trade a measured amount of {subject} between two prepared targets without creating any from nothing."},
+    {"title":("Reversal", "Countercurrent", "Inverse Law"),
+     "rule":"Inverts the next valid change in {subject} after {condition}, turning increase into decrease or approach into separation.",
+     "application":"Reverse one compatible change in {subject}; the technique cannot invert an unrelated property."},
+    {"title":("Deferred Beat", "Afterclock", "Second Hand"),
+     "rule":"Delays one change in {subject} after {condition}, preserving it until the user releases it or the short limit expires.",
+     "application":"Suspend a compatible change in {subject}, then release it later with its original magnitude and direction intact."},
+    {"title":("Measure", "Calibration", "Known Quantity"),
+     "rule":"Measures {subject} when {condition} and declares that amount as a temporary cursed standard for later comparisons.",
+     "application":"Compare a target against the stored standard and reinforce or suppress only the measured difference."},
+    {"title":("Covenant", "Binding Script", "Rule Chain"),
+     "rule":"Binds {subject} to one plainly declared rule when {condition}; breaking that rule triggers the stored consequence.",
+     "application":"Write one narrow behavior for {subject} and trigger a proportional consequence if the marked target violates it."},
+    {"title":("Accrual", "Compound Interest", "Gathering"),
+     "rule":"Accumulates small changes in {subject} each time {condition}; the total may be released only through one compatible effect.",
+     "application":"Build a reserve from repeated valid changes in {subject}, then spend it on one amplified expression of the same property."},
+    {"title":("Compression", "Narrowing", "Singular Point"),
+     "rule":"Compresses a distributed amount of {subject} toward one marked point after {condition}, increasing intensity while reducing area.",
+     "application":"Concentrate existing {subject} into one smaller target or point; nothing unrelated is added to the effect."},
+    {"title":("Relay", "Passing Rite", "Successor Mark"),
+     "rule":"Passes an active change in {subject} from one marked target to the next when {condition}.",
+     "application":"Move one compatible ongoing effect involving {subject} to another prepared target instead of strengthening it."},
+)
+
+TECHNIQUE_CONDITIONS = (
+    "the user touches the target with cursed energy",
+    "a target crosses a boundary the user drew",
+    "the same action occurs twice within the user's sight",
+    "the user correctly predicts the target's next movement",
+    "a marked target breaks line of sight with the user",
+    "the user accepts the same effect on their own body first",
+    "the target acknowledges a short spoken condition",
+    "the user maintains an unbroken hand sign for one breath",
+    "two prepared marks enter the same cursed-energy field",
+    "the user deliberately withholds an immediate counterattack",
+)
+
+RESTRICTION_NAMES = (
+    "Iron Silence", "Narrow Gate", "Still Current", "Hollow Furnace",
+    "Sealed Horizon", "Quiet Pulse", "Empty Circuit", "Stone Nerve",
+)
+
 CURSE_SOURCES = (
     ("Fear of abandonment", "a long-limbed figure with empty doorways opening across its body", "isolates targets and turns distance between allies into cursed pressure"),
     ("Fear of public humiliation", "a masked humanoid covered in staring glass eyes", "weaponizes attention, exposure and remembered embarrassment"),
@@ -98,6 +193,60 @@ def _background_concept(background):
         if any(word in text for word in words):
             return concept
     return None
+
+
+def _procedural_technique(background, chooser):
+    """Build one coherent original technique instead of selecting a finished
+    ability from a short list.  Background words select a broad subject only;
+    operation and condition remain generative unless the player explicitly
+    authored the full governing rule (which CampaignMixin locks afterward)."""
+    text = str(background or "").lower()
+    matching = [theme for theme in TECHNIQUE_THEMES
+                if any(keyword in text for keyword in theme["keywords"])]
+    theme = chooser.choice(matching or list(TECHNIQUE_THEMES))
+    operation = chooser.choice(TECHNIQUE_OPERATIONS)
+    condition = chooser.choice(TECHNIQUE_CONDITIONS)
+    name = f"{chooser.choice(theme['names'])} {chooser.choice(operation['title'])}"
+    rule = operation["rule"].format(subject=theme["subject"], condition=condition)
+    application = operation["application"].format(subject=theme["subject"])
+    return name, rule, application
+
+
+def _procedural_restriction(text, chooser, guarantee_strong=False):
+    """Create a physical Heavenly Restriction with a real, variable exchange.
+    Explicit zero-cursed-energy backgrounds still receive the canon-comparable
+    complete exchange; vague starts vary in sacrifice, physical emphasis, and
+    sensory payoff so rerolls are not renamed copies."""
+    total_loss = bool(re.search(r"no cursed energy|zero cursed energy|complete heavenly restriction", text, re.I))
+    total_loss = total_loss or (guarantee_strong and chooser.random() < .62)
+    if total_loss:
+        name = "Heavenly Restriction: Liberated Body"
+        reserve_loss = output_loss = -999
+        physical, speed, soul = 95, 80, 35
+        sacrifice = "Cursed Energy Reserves and Output are effectively zero"
+        enhancement = "An overwhelmingly enhanced body with extreme strength, speed, resilience, perception, and freedom from ordinary cursed-energy detection."
+    else:
+        name = f"Heavenly Restriction: {chooser.choice(RESTRICTION_NAMES)}"
+        reserve_loss = -chooser.randint(24, 48)
+        output_loss = -chooser.randint(18, 42)
+        physical = chooser.randint(42, 72) + (18 if guarantee_strong else 0)
+        speed = chooser.randint(34, 66) + (14 if guarantee_strong else 0)
+        soul = chooser.randint(18, 42)
+        sacrifice = f"Severely reduced cursed-energy reserves ({abs(reserve_loss)}) and output ({abs(output_loss)})"
+        emphasis = chooser.choice(("explosive acceleration", "impact tolerance", "predatory perception", "fine motor precision", "sustained physical efficiency"))
+        enhancement = f"An exceptional body emphasizing {emphasis}, backed by strength, speed, resilience, and curse perception beyond sorcerers of similar experience."
+    return {
+        "slot_type":"Heavenly Restriction", "name":name,
+        "governing_rule":"Cursed-energy capacity is exchanged at birth for physical perception, strength, speed, resilience, and bodily efficiency.",
+        "sacrifice":sacrifice, "enhancement":enhancement,
+        "activation":"Always active; this is the body's condition, not a technique.", "applications":[],
+        "limitations":"Cannot use an innate cursed technique. Barriers and cursed-energy arts requiring personal output are unavailable or sharply limited by the exact sacrifice.",
+        "weaknesses":"No invented special weakness. Injury, exhaustion, superior force, and suitable enemy techniques still matter.",
+        "growth_path":"Condition the exchanged body, master cursed tools, sharpen perception, and develop tactics that exploit the restriction's exact physical advantages.",
+        "power_grade":"Exceptional" if guarantee_strong else "High potential", "overwhelming":bool(guarantee_strong), "no_inherent_weakness":False,
+        "stat_modifiers":{"Physical Ability":physical, "Speed & Reflexes":speed, "Soul Stability":soul,
+                          "Cursed Energy Reserves":reserve_loss, "Cursed Energy Output":output_loss},
+    }
 
 
 def _as_list(value):
@@ -228,20 +377,8 @@ def generate_birth_slot(background="", guarantee_strong=False, seed="", force_ki
     kind = str(force_kind or "").lower()
     heavenly = kind == "heavenly_restriction" or explicit_hr or (not explicit_technique and chooser.random() < .16)
     if heavenly:
-        total_loss = bool(re.search(r"no cursed energy|zero cursed energy|complete heavenly restriction", text, re.I)) or (guarantee_strong and chooser.random() < .62)
-        return {
-            "slot_type": "Heavenly Restriction", "name": "Heavenly Restriction — Liberated Body" if total_loss else "Heavenly Restriction — Bound Reservoir",
-            "governing_rule": "Cursed-energy capacity is exchanged at birth for physical perception, strength, speed, resilience and bodily efficiency.",
-            "sacrifice": "Cursed Energy Reserves and Output are effectively zero" if total_loss else "Severely reduced Cursed Energy Reserves and Output",
-            "enhancement": "An overwhelmingly enhanced body capable of perceiving and combating curses through sharpened senses and cursed tools." if total_loss else "Exceptional physical ability and senses far beyond sorcerers of similar experience.",
-            "activation": "Always active; this is the body's condition, not a technique.", "applications": [],
-            "limitations": "Cannot use an innate cursed technique. Barriers and cursed-energy arts requiring personal output are unavailable or extremely limited." if total_loss else "Has no innate technique and must ration a very small cursed-energy pool.",
-            "weaknesses": "No unique exploitable weakness beyond the sacrificed cursed-energy options; injury, exhaustion, superior force and suitable enemy techniques still matter.",
-            "growth_path": "Condition the body, master cursed tools, sharpen perception and develop tactics that exploit freedom from ordinary cursed-energy assumptions.",
-            "power_grade": "Exceptional" if guarantee_strong else "High potential", "overwhelming": bool(guarantee_strong), "no_inherent_weakness": False,
-            "stat_modifiers": {"Physical Ability": 95 if total_loss else 55, "Speed & Reflexes": 80 if total_loss else 45, "Soul Stability": 35, "Cursed Energy Reserves": -999 if total_loss else -28, "Cursed Energy Output": -999 if total_loss else -24},
-        }
-    name, rule, application_rule = _background_concept(text) or chooser.choice(CONCEPTS)
+        return _procedural_restriction(text, chooser, guarantee_strong)
+    name, rule, application_rule = _procedural_technique(text, chooser)
     overwhelming = bool(guarantee_strong or re.search(r"overwhelming|godlike|limitless|strongest|immeasurable", text, re.I))
     no_weakness = bool(re.search(r"no weakness|without weakness|unconditional", text, re.I))
     applications = [

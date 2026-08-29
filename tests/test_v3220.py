@@ -19,7 +19,7 @@ from worlds import (APP_VERSION, BASE_STATE, WORLD_DATA, abilities_for,
 
 class WorldwalkerV3220JujutsuKaisenTests(unittest.TestCase):
     def test_release_world_and_complete_start_matrix(self):
-        self.assertEqual(APP_VERSION, "3.36.1")
+        self.assertEqual(APP_VERSION, "3.36.2")
         self.assertEqual(BASE_STATE["schema_version"], 19)
         self.assertIn("Jujutsu Kaisen", WORLD_DATA)
         self.assertEqual(len(abilities_for("Jujutsu Kaisen")), 7)
@@ -74,7 +74,12 @@ class WorldwalkerV3220JujutsuKaisenTests(unittest.TestCase):
         self.assertNotRegex(profile["expanded_background"].lower(), r"home life|retired local|childhood mentor")
         self.assertEqual(profile["equipment"], {"Natural Weapon": "Manifested cursed body"})
         self.assertEqual(profile["jjk_curse_identity"]["source"].lower(), "the fear of abandonment")
-        self.assertTrue(profile["jjk_birth_slot"]["name"].startswith("Threshold"))
+        slot = profile["jjk_birth_slot"]
+        self.assertTrue(slot["name"])
+        self.assertRegex(
+            f"{slot.get('governing_rule', '')} {slot.get('limitations', '')}".lower(),
+            r"space|distance|boundary|interval|position|separation",
+        )
         self.assertGreaterEqual(profile["stats"]["Cursed Energy Reserves"], GRADE_BASELINES["Special Grade"])
 
     def test_preview_and_campaign_preserve_generated_birth_slot(self):

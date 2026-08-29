@@ -53,9 +53,43 @@ def ability_fingerprint(package):
     encoded = json.dumps(semantic, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
+def _semantic_core_text(package):
+    package = package if isinstance(package, dict) else {"value": package}
+    # Compare the governing mechanic, not the shared scaffolding added by the
+    # compiler (resource labels, mastery stages, generic counterplay, etc.).
+    # Shared boilerplate used to dominate the token score, which both hid real
+    # repeats and falsely rejected distinct powers from the same setting.
+    core = []
+    # Prefer the single authoritative rule.  Including the display name again
+    # through an "effect" sentence can make two identical rules appear
+    # different merely because their titles changed.
+    for key in ("governing_rule", "shikai_effect", "enhancement"):
+        value = package.get(key)
+        if isinstance(value, str) and value.strip():
+            core.append(value)
+            break
+    details = package.get("details")
+    if not core and isinstance(details, dict):
+        for key in ("effect", "description"):
+            value = details.get(key)
+            if isinstance(value, str) and value.strip():
+                core.append(value)
+                break
+    abilities = package.get("abilities")
+    if not core and isinstance(abilities, list):
+        core.extend(str(value) for value in abilities[:3] if str(value).strip())
+    if not core:
+        for key in ("effect", "description"):
+            value = package.get(key)
+            if isinstance(value, str) and value.strip():
+                core.append(value)
+                break
+    if not core:
+        core = [json.dumps(_semantic_value(package), sort_keys=True, ensure_ascii=False)]
+    return " ".join(core)
+
 def _semantic_tokens(package):
-    semantic = _semantic_value(package if isinstance(package, dict) else {"value": package})
-    text = json.dumps(semantic, sort_keys=True, ensure_ascii=False)
+    text = _semantic_core_text(package)
     stop = {"the", "and", "that", "with", "from", "into", "this", "when", "user", "ability", "effect", "their"}
     return {token for token in re.findall(r"[a-z0-9]+", text.lower()) if len(token) > 2 and token not in stop}
 
@@ -63,7 +97,9 @@ def semantic_similarity(left, right):
     left_tokens, right_tokens = _semantic_tokens(left), _semantic_tokens(right)
     jaccard = len(left_tokens & right_tokens) / max(1, len(left_tokens | right_tokens))
     sequence = SequenceMatcher(None, " ".join(sorted(left_tokens)), " ".join(sorted(right_tokens))).ratio()
-    return round(max(jaccard, sequence * .9), 4)
+    phrase_sequence = SequenceMatcher(None, _normalized_text(_semantic_core_text(left)),
+                                      _normalized_text(_semantic_core_text(right))).ratio()
+    return round(max(jaccard, sequence * .9, phrase_sequence * .95), 4)
 
 
 class GeneratedAbilityArchive:
@@ -120,8 +156,7 @@ class GeneratedAbilityArchive:
         result = []
         for row in rows:
             package = row.get("package") if isinstance(row.get("package"), dict) else {}
-            effect = (package.get("effect") or package.get("description") or package.get("governing_rule")
-                      or package.get("shikai_effect") or package.get("enhancement") or "")
+            effect = _semantic_core_text(package)
             result.append({"name": row.get("name", ""), "mechanic": str(effect)[:180]})
         return result
 

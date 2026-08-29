@@ -6,7 +6,16 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.36.1** (schema 19).
+Current app/save version: **3.36.2** (schema 19).
+
+Version 3.36.2 replaces renamed-template power rerolls with persistent,
+mechanic-level originality across every world that supports unique abilities.
+JJK techniques, Nen, Devil Fruits, Zanpakutō, hidden classes, bloodlines, and
+other original powers are compared against the account's permanent archive;
+canon abilities and player-authored creation facts remain authoritative. It
+also adds world-themed desktop cursors for Naruto, Bleach, and JJK, including a
+spinning Naruto shuriken while the game is working, and verifies the complete
+Naruto/Bleach music bundle in release tests.
 
 Version 3.36.1 makes explicit creation-background facts immutable across
 generation and rerolls, synchronizes named Zanpakutō throughout the character

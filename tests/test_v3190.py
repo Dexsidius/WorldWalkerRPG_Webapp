@@ -31,7 +31,7 @@ class WorldwalkerV3190SatisfyBreadthTests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.36.1")
+        self.assertEqual(APP_VERSION, "3.36.2")
 
     def test_full_canon_catalog_is_available_only_as_class_design_reference(self):
         self.assertGreaterEqual(len(CANON_CLASS_NAMES), 130)

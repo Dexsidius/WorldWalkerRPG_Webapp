@@ -2596,6 +2596,7 @@ $("#btn-event-window-replay").addEventListener("click", restartCanonCinematic);
 // ---------------------------------------------------------------------------
 function setBusy(b) {
   APP.busy = b;
+  document.body.classList.toggle("app-busy", Boolean(b));
   const pill = $("#hdr-ai");
   $("#btn-send").disabled = b;
   if (b) { pill.textContent = "AI: GENERATING..."; pill.classList.add("busy"); }

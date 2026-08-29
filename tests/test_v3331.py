@@ -14,7 +14,7 @@ from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 class WorldwalkerV3331AgeTrackingTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.36.1")
+        self.assertEqual(APP_VERSION, "3.36.2")
 
     def test_new_campaign_records_the_starting_age_anchor(self):
         game = GameSession()

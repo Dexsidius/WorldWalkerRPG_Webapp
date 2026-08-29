@@ -1,5 +1,9 @@
-const CACHE = "worldwalker-v3361-shell-1";
-const SHELL = ["/", "/css/style.css?v=3.36.1", "/js/app.js?v=3.36.1", "/manifest.webmanifest", "/assets/branding/worldwalker-emblem.png"];
+const CACHE = "worldwalker-v3362-shell-1";
+const SHELL = [
+  "/", "/css/style.css?v=3.36.2", "/js/app.js?v=3.36.2", "/manifest.webmanifest",
+  "/assets/branding/worldwalker-emblem.png", "/cursors/naruto-kunai.svg", "/cursors/naruto-shuriken.svg",
+  "/cursors/bleach-zanpakuto.svg", "/cursors/jjk-sukuna-finger.svg"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));

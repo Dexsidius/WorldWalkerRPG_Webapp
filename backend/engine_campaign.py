@@ -2,7 +2,7 @@
 logic (character creation, assess/roll/resolve turn loop, time skips, chat,
 world ticks, memory management, save/load) with all Tkinter UI code removed.
 Returns plain dicts so a Flask layer can serialize them straight to JSON."""
-import copy, json, random, re, secrets, threading
+import copy, hashlib, json, random, re, secrets, threading
 from datetime import datetime
 from pathlib import Path
 
@@ -524,6 +524,109 @@ GENERIC_COMPETENCY_NAME = re.compile(
     r"combat style|background expertise|system adaptation|professional access|senior curriculum)\b", re.I
 )
 
+# A mechanical fallback for original powers when an offline/model candidate
+# matches something already in the permanent archive.  These are ingredients,
+# not completed abilities: subject + operation + activation condition produces
+# a new governing rule, applications, counterplay, and progression package.
+WORLD_ORIGINAL_SUBJECTS = {
+    "Naruto": (
+        ("Sealspace", "chakra crossing prepared seals and formula boundaries"),
+        ("Pulse", "the rhythm and pressure of chakra moving through living pathways"),
+        ("Glasswind", "refracted light carried through wind-nature chakra"),
+        ("Ironroot", "mineral traces and magnetic force touched by the user's chakra"),
+        ("Afterflow", "residual chakra left behind by completed techniques"),
+        ("Nerve", "the user's own sensory and motor signals reinforced with chakra"),
+    ),
+    "One Piece": (
+        ("Tether", "tension stored in touched ropes, cloth, and flexible objects"),
+        ("Chime", "vibration traveling through solid objects and the air around them"),
+        ("Mosaic", "breakable surfaces divided into controllable fitted pieces"),
+        ("Drift", "buoyancy and directional pull acting on touched matter"),
+        ("Quill", "written marks made by the user's hands or tools"),
+        ("Velvet", "surface softness, drag, and impact absorption"),
+    ),
+    "Hunter x Hunter": (
+        ("Compass", "aura assigned to direction and chosen destinations"),
+        ("Witness", "aura records of actions the user directly observes"),
+        ("Lantern", "aura invested in revealing or concealing a declared target"),
+        ("Thread", "aura links created through voluntary promises and physical contact"),
+        ("Measure", "aura quantities the user has personally measured with Gyo"),
+        ("Orbit", "emitted aura anchored around selected people or objects"),
+    ),
+    "Solo Max-Level Newbie": (
+        ("Route", "Tower routes, room conditions, and verified alternate clears"),
+        ("Threshold", "System thresholds the player has personally approached or crossed"),
+        ("Echo", "recorded patterns from survived enemy skills"),
+        ("Key", "recognized locks, permissions, and hidden-stage conditions"),
+        ("Debt", "deferred costs accepted through explicit System conditions"),
+        ("Index", "confirmed information entered into the player's System record"),
+    ),
+    "Overgeared": (
+        ("Oath", "voluntary party agreements recognized by Satisfy's System"),
+        ("Relic", "traits earned by one bonded piece of equipment"),
+        ("Formation", "positions and roles maintained by willing party members"),
+        ("Questline", "hidden conditions proven through the player's actual choices"),
+        ("Counter", "patterns learned by surviving and studying named techniques"),
+        ("Domain", "territory, guild assets, and authority genuinely controlled by the player"),
+    ),
+    "Reincarnated as a Slime": (
+        ("Magicule", "compatible magicule patterns circulating through the user's body"),
+        ("Analysis", "properties the user has successfully observed and analyzed"),
+        ("Name", "authority and identity carried by names and recognized bonds"),
+        ("Synthesis", "compatible fragments of learned and intrinsic skills"),
+        ("Predation", "traits safely processed from absorbed material or defeated threats"),
+        ("Territory", "magicule conditions maintained inside a claimed local area"),
+    ),
+    "Bleach": (
+        ("Reishi", "reishi currents cut or marked by the Zanpakuto"),
+        ("Echo", "spiritual rhythms carried through blades, ground, and nearby souls"),
+        ("Shadow", "shadows cast by spiritually aware beings and constructs"),
+        ("Vow", "intent spoken honestly by wielder and blade spirit"),
+        ("Scar", "spiritual pressure left at the site of a blocked or survived attack"),
+        ("Path", "short routes traced by the Zanpakuto through surrounding reishi"),
+    ),
+    "Jujutsu Kaisen": (
+        ("Mark", "cursed marks placed through contact and acknowledged conditions"),
+        ("Interval", "distance and timing between two cursed-energy events"),
+        ("Witness", "cursed records of actions directly observed by the user"),
+        ("Vector", "direction and momentum carried by cursed energy"),
+        ("Measure", "quantities measured inside the user's cursed-energy field"),
+        ("Reflection", "complete reflections containing a target's cursed signature"),
+    ),
+    "Custom World": (
+        ("Threshold", "one measurable property established by the campaign's rules"),
+        ("Witness", "events the character directly observes and understands"),
+        ("Bond", "voluntary connections established between people or objects"),
+        ("Echo", "residual energy left by completed actions"),
+        ("Measure", "quantities the character can genuinely sense or measure"),
+        ("Path", "routes and boundaries the character has personally prepared"),
+    ),
+}
+
+ORIGINAL_MECHANICAL_OPERATIONS = (
+    ("Ledger", "records one valid instance of {subject}, then spends that record to repeat or redirect the same behavior once"),
+    ("Partition", "divides {subject} between two marks so one compatible change can be transferred from one mark to the other"),
+    ("Countercurrent", "inverts the next compatible change in {subject} without creating an unrelated effect"),
+    ("Relay", "moves one active effect involving {subject} from a prepared target to another prepared target"),
+    ("Accrual", "accumulates small valid changes in {subject}, then releases the total through one amplified expression of that same property"),
+    ("Narrowing", "compresses an existing amount of {subject} into a smaller area, increasing intensity while sacrificing coverage"),
+    ("Covenant", "binds {subject} to one declared behavior and triggers a proportional consequence when a marked target breaks it"),
+    ("Afterclock", "delays one change in {subject}, preserving its original strength and direction until release"),
+    ("Exchange", "trades equal measured amounts of {subject} between two valid prepared targets"),
+    ("Calibration", "stores a measured amount of {subject} as a temporary standard, then reinforces or suppresses only the difference from that standard"),
+)
+
+ORIGINAL_ACTIVATION_CONDITIONS = (
+    ("Marked", "after the user personally marks the target and maintains awareness of it"),
+    ("Witnessed", "after the user directly witnesses the complete triggering action"),
+    ("Declared", "after the user states a narrow condition that every affected target can hear"),
+    ("Reciprocal", "only after the user accepts the same initial effect or cost"),
+    ("Measured", "after an uninterrupted observation establishes a real baseline"),
+    ("Crossed", "when a prepared boundary is knowingly crossed"),
+    ("Repeated", "after the same compatible action occurs twice in the user's presence"),
+    ("Withheld", "only while the user gives up an immediate counterattack or equivalent advantage"),
+)
+
 # A hidden class is a real mechanical package, not a decorative title. Each
 # form supplies a setting-native identity and a signature technique; the
 # character's actual primary stats determine which attributes receive its
@@ -802,48 +905,141 @@ class CampaignMixin:
             result["background_locks"] = facts
         return result
 
+    @staticmethod
+    def _mechanically_distinct_special(world, category, package, salt=0):
+        """Replace a repeated non-canon design with a new governing rule.
+
+        This is deliberately stronger than renaming a stock power.  Every
+        returned package changes its subject, operation, activation, limits,
+        applications, and growth route while preserving the schema expected
+        by the world-specific UI.
+        """
+        result = copy.deepcopy(package) if isinstance(package, dict) else {}
+        subjects = WORLD_ORIGINAL_SUBJECTS.get(world, WORLD_ORIGINAL_SUBJECTS["Custom World"])
+        # Salted selection stays varied in production but is also guaranteed to
+        # progress when a test, accessibility tool, or deterministic replay
+        # pins Python's random chooser to one value.
+        identity = str(result.get("true_name") or result.get("name") or category)
+        digest = hashlib.sha256(f"{world}|{category}|{identity}|{int(salt)}".encode("utf-8")).digest()
+        code = int.from_bytes(digest, "big")
+        subject_name, subject = subjects[code % len(subjects)]
+        operation_name, operation = ORIGINAL_MECHANICAL_OPERATIONS[(code // len(subjects)) % len(ORIGINAL_MECHANICAL_OPERATIONS)]
+        condition_name, condition = ORIGINAL_ACTIVATION_CONDITIONS[(code // (len(subjects) * len(ORIGINAL_MECHANICAL_OPERATIONS))) % len(ORIGINAL_ACTIVATION_CONDITIONS)]
+        if condition_name.casefold() == subject_name.casefold():
+            alternatives = [row for row in ORIGINAL_ACTIVATION_CONDITIONS if row[0].casefold() != subject_name.casefold()]
+            condition_name, condition = alternatives[(code // 17) % len(alternatives)]
+        rule = f"{condition.capitalize()}, the ability {operation.format(subject=subject)}."
+        limitation = (
+            f"It affects only {subject}; breaking the activation condition ends the effect, and scale, duration, range, "
+            "precision, and simultaneous targets compete for the same setting-native resource."
+        )
+        growth = (
+            "Master the activation under pressure, develop a second application of the same governing rule, "
+            "then earn greater scale or efficiency without changing the power into an unrelated ability."
+        )
+        title = f"{condition_name} {subject_name} {operation_name}"
+
+        if category == "devil_fruit":
+            syllables = ("Aru", "Boro", "Cala", "Doro", "Eki", "Fura", "Gala", "Hiso", "Iro", "Jara",
+                         "Kivo", "Luma", "Mero", "Nagi", "Oru", "Pera", "Raku", "Sola", "Tavi", "Vero")
+            stem = syllables[(code // 29) % len(syllables)] + syllables[(code // 71) % len(syllables)].lower()
+            name = f"{stem}-{stem} Fruit"
+            result.update({
+                "name": name,
+                "abilities": [f"Core rule: {rule}",
+                              f"{subject_name} Shift: applies the rule to one movement, defense, or attack.",
+                              f"{operation_name} Field: applies the same rule across a prepared local area at much greater stamina cost."],
+                "limitations": ["Seawater and Sea-Prism Stone weaken the user and prevent reliable power use.", limitation],
+                "counters": ["Haki can strike or resist the user directly.",
+                             "An opponent who understands the activation can deny its marks, measurement, boundary, or repeated setup."],
+                "awakening_status": "Unawakened",
+                "awakening_requirements": [growth],
+            })
+            return result
+
+        if category == "zanpakuto":
+            prefixes = ("Kage", "Hoshi", "Sora", "Yoru", "Shiro", "Kuro", "Ame", "Tsuki", "Kiri", "Rin")
+            suffixes = ("hibiki", "nagare", "shibari", "meguri", "utsushi", "kizami", "watari", "tobari", "kagami", "michi")
+            name = prefixes[(code // 31) % len(prefixes)] + suffixes[(code // 79) % len(suffixes)]
+            result.update({
+                "name": name, "shikai_name": name,
+                "release_command": f"Reveal the {subject_name.lower()} rule",
+                "shikai_effect": rule, "shikai_limitation": limitation,
+                "shikai_counters": "Superior Reiatsu can resist it; disrupting its activation or forcing divided attention prevents reliable setup.",
+                "bankai_name": f"Bankai: {name} {operation_name}",
+                "bankai_manifestation": f"The inner world's {subject_name.lower()} motif manifests as a bounded field of prepared spiritual marks.",
+                "bankai_effect": f"The Shikai rule applies to multiple valid targets inside the manifested field. It still cannot affect anything outside {subject}.",
+                "bankai_cost": "Massive sustained Reiryoku and physical strain; early use is brief and unsafe to repeat.",
+                "bankai_counters": "Overwhelming Reiatsu, escaping the bounded field, or breaking its activation network can end the effect.",
+            })
+            return result
+
+        if category == "nen_ability":
+            name = f"{subject_name}: {condition_name} {operation_name}"
+            result.update({
+                "name": name, "governing_rule": rule, "effect": f"{name} {rule}",
+                "activation": condition.capitalize() + ".",
+                "vows": [f"The user forfeits all aura invested in the current setup if the {condition_name.lower()} condition is broken."],
+                "limitations": [limitation],
+                "counters": ["Interrupt the setup, force Zetsu, deny the declared condition, or overwhelm the user's available aura."],
+                "applications": [f"{subject_name} Mark: establishes the first valid target.",
+                                 f"{operation_name} Release: resolves the stored rule through one compatible effect."],
+                "growth_path": growth,
+            })
+            return result
+
+        if category == "birth_slot":
+            result.update({"name": title, "governing_rule": rule, "applications": [],
+                           "limitations": limitation, "weaknesses": limitation, "growth_path": growth})
+            return result
+
+        if category == "hidden_class":
+            anchor = re.sub(r"\s+Path$", "", identity, flags=re.I).strip()
+            name = f"{anchor} {operation_name} Path" if anchor else f"{title} Path"
+            signature = f"{subject_name} {operation_name}"
+            result.update({
+                "name": name, "true_name": name, "description": f"A rare setting-native path governed by one rule: {rule}",
+                "effect": rule, "limitation": limitation, "growth_path": growth,
+                "signature_skill": signature, "signature_effect": rule,
+                "rarity_reason": "Its exact activation and governing rule require an unusual history, affinity, and sequence of choices.",
+            })
+            if isinstance(result.get("skill"), dict):
+                result["skill"].update({"description":rule, "effect":rule, "limitation":limitation,
+                                        "growth_path":growth, "class_feature":name})
+            return result
+
+        # Keep a background-derived theme such as Ember, Hexed Relic, or Echo
+        # visible while changing the underlying mechanic.  This prevents the
+        # uniqueness guard from erasing the character premise it is protecting.
+        anchor = re.sub(r"\s+(?:Thread Technique|Pulse|Gift|Style|Affinity)$", "", identity, flags=re.I).strip()
+        name = f"{anchor} {operation_name}" if anchor else title
+        result["name"] = name
+        if isinstance(result.get("details"), dict):
+            result["details"].update({"description":rule, "effect":rule, "limitation":limitation, "growth_path":growth})
+            result["additional_skills"] = [
+                {"name":f"{subject_name} Mark", "effect":f"Establishes one valid target for {rule}", "limitation":limitation, "growth_path":growth},
+                {"name":f"{operation_name} Release", "effect":f"Resolves the prepared rule through one compatible use involving {subject}.", "limitation":limitation, "growth_path":growth},
+            ]
+        else:
+            result.update({"effect":rule, "limitation":limitation, "growth_path":growth})
+        return result
+
     def _finalize_original_special(self, world, category, package, source="generation"):
         """Guarantee a non-canon package has never appeared for this player."""
         candidate = copy.deepcopy(package)
-        if self.generated_ability_archive.is_duplicate(world, category, candidate):
-            adjectives = ("Veiled", "Glass", "Horizon", "Ashen", "Liminal", "Starless", "Spiral", "Sable", "Wild", "Silent")
-            nouns = ("Covenant", "Circuit", "Paradox", "Mandala", "Engine", "Thread", "Threshold", "Canticle", "Axis", "Garden")
-            triggers = ("a deliberately broken rhythm", "a witnessed promise", "stored momentum", "crossed boundaries",
-                        "a marked reflection", "suppressed intent", "shared damage", "reversed direction", "unspent force", "named distance")
-            outcomes = ("one delayed redirection", "a temporary rule-bound construct", "a controlled exchange of position",
-                        "a short-lived defensive inversion", "a focused sensory imprint", "a bounded amplification of the next compatible act")
-            base_name = str(candidate.get("name") or candidate.get("true_name") or "Original Ability").split(" — ", 1)[0]
-            for _ in range(240):
-                title = f"{random.choice(adjectives)} {random.choice(nouns)}"
-                trigger, outcome = random.choice(triggers), random.choice(outcomes)
-                variant = copy.deepcopy(candidate)
-                variant["name"] = f"{base_name} — {title}"
-                if "true_name" in variant:
-                    variant["true_name"] = variant["name"]
-                rule = f"Its unique signature converts {trigger} into {outcome}; this rule cannot be exchanged for an unrelated effect."
-                if isinstance(variant.get("details"), dict):
-                    variant["details"]["effect"] = f"{str(variant['details'].get('effect') or '').rstrip()} {rule}".strip()
-                    variant["details"]["description"] = variant["details"]["effect"]
-                elif "effect" in variant:
-                    variant["effect"] = f"{str(variant.get('effect') or '').rstrip()} {rule}".strip()
-                elif "governing_rule" in variant:
-                    variant["governing_rule"] = f"{str(variant.get('governing_rule') or '').rstrip()} {rule}".strip()
-                elif "shikai_effect" in variant:
-                    variant["shikai_effect"] = f"{str(variant.get('shikai_effect') or '').rstrip()} {rule}".strip()
-                    variant["shikai_name"] = variant["name"]
-                else:
-                    variant["description"] = f"{str(variant.get('description') or '').rstrip()} {rule}".strip()
-                if variant.get("signature_skill"):
-                    variant["signature_skill"] = f"{variant['signature_skill']} — {title}"
-                if not self.generated_ability_archive.is_duplicate(world, category, variant):
-                    candidate = variant
-                    break
         current = getattr(self, "state", {}) or {}
         profile = power_profile_for(world, current.get("stats", {}), current.get("archetype", ""))
         tier = int((profile.get("world_peak") or profile.get("peak") or {}).get("index", 3) or 3)
-        candidate = compile_ability_mechanics(world, candidate, tier)
-        self.generated_ability_archive.record(world, category, candidate, source=source)
-        return candidate
+        # Compare the compiled package, not the pre-compile draft.  The
+        # archive stores compiled mechanics, so comparing unlike shapes let
+        # semantically identical drafts slip through in earlier releases.
+        for attempt in range(640):
+            compiled = compile_ability_mechanics(world, candidate, tier)
+            if not self.generated_ability_archive.is_duplicate(world, category, compiled):
+                self.generated_ability_archive.record(world, category, compiled, source=source)
+                return compiled
+            candidate = self._mechanically_distinct_special(world, category, package, salt=attempt + 1)
+        raise RuntimeError(f"Could not create a mechanically unique {category} for {world}.")
 
     @staticmethod
     def combat_skill_metadata(name, effect=""):
@@ -1142,7 +1338,8 @@ Return JSON only, with no markdown."""
         weighted = [category for category, words in cues.items() for _ in range(1 + sum(word in text for word in words) * 3)]
         category = random.choice(weighted or list(NEN_CATEGORIES))
         aspects = [word.title() for word in re.findall(r"[a-zA-Z]{4,}", str(background or ""))
-                   if word.lower() not in {"with", "that", "have", "from", "their", "character", "hunter", "ability", "power"}]
+                   if word.lower() not in {"with", "that", "have", "from", "their", "character", "hunter",
+                                           "ability", "power", "unique", "random", "generated", "nen", "hatsu"}]
         aspect = random.choice(aspects[:24]) if aspects else random.choice(("Echo", "Compass", "Lantern", "Threshold", "Pulse", "Oath", "Mirror", "Orbit"))
         titles = ("Dead Reckoning", "Second Bell", "Quiet Meridian", "Borrowed Horizon", "Glass Testament",
                   "Last Witness", "Red Thread Atlas", "Zero Hour Garden", "Hollow Compass", "Unbroken Measure")
@@ -1229,7 +1426,8 @@ Return JSON only, with no markdown."""
         fruit_type = ("Mythical Zoan" if "mythical zoan" in lower else "Ancient Zoan" if "ancient zoan" in lower
                       else "Zoan" if "zoan" in lower or re.search(r"\b(animal|beast|creature|dragon|wolf|bird)\b", lower)
                       else "Logia" if "logia" in lower or re.search(r"\b(element|fire|flame|smoke|sand|lightning|ice|wind)\b", lower)
-                      else "Paramecia")
+                      else random.choices(("Paramecia", "Zoan", "Ancient Zoan", "Mythical Zoan", "Logia"),
+                                          weights=(64, 18, 6, 5, 7), k=1)[0])
         described = re.search(
             r"(?:devil\s+fruit|(?:paramecia|logia|zoan)\s+fruit|fruit)\s+(?:based\s+on|that\s+(?:controls?|creates?|turns?\s+me\s+into)|of)\s+([^,.;\n]+)",
             text, re.I,
@@ -1238,7 +1436,14 @@ Return JSON only, with no markdown."""
             aspect_words = re.findall(r"[A-Za-z]+", described.group(1))[:3]
             aspect = " ".join(aspect_words).title()
         else:
-            aspect = self.ability_aspect(text)
+            random_aspects = {
+                "Paramecia": ("Tether", "Chime", "Mosaic", "Fold", "Quill", "Velvet", "Latch", "Prism", "Compass", "Parchment", "Buoyancy", "Patina"),
+                "Logia": ("Aurora", "Pollen", "Mercury", "Salt", "Peat", "Obsidian Dust", "Monsoon", "Plasma"),
+                "Zoan": ("Mantis Shrimp", "Secretary Bird", "Pangolin", "Wolverine", "Gila Monster", "Albatross", "Mantis", "Mole"),
+                "Ancient Zoan": ("Terror Bird", "Glyptodon", "Arthropleura", "Megalania", "Entelodont", "Mosasaur"),
+                "Mythical Zoan": ("Qilin", "Baku", "Thunderbird", "Nuckelavee", "Wolpertinger", "Simurgh"),
+            }
+            aspect = random.choice(random_aspects[fruit_type])
         if not text.strip() or aspect.lower() in {"resolve", "ability", "power"}:
             aspect = random.choice(("Chime", "Fold", "Mosaic", "Tether", "Prism", "Quill", "Drift", "Latch", "Velvet", "Orbit"))
         forms = {

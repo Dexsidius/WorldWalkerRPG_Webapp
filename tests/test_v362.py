@@ -13,7 +13,7 @@ from worlds import APP_VERSION, BASE_STATE
 
 class WorldwalkerV362Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.36.1")
+        self.assertEqual(APP_VERSION, "3.36.2")
 
     def fresh(self):
         game = GameSession()
