@@ -29,7 +29,7 @@ class WorldwalkerV3250QuestCompletionTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.41.1")
+        self.assertEqual(APP_VERSION, "3.42.0")
 
     def test_gm_rules_require_a_completable_path_for_player_stated_goals(self):
         game = self.fresh()

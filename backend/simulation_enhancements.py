@@ -257,12 +257,37 @@ def reactive_communication(state, events, elapsed_minutes, existing=None):
     relevant_event = next((row for row in events if isinstance(row, dict) and _name(row.get("title")) and _number(row.get("importance"), 0) >= 40), None)
     if not relevant_event:
         return []
-    sender = candidates[0]
+    # Prefer someone actually named in or connected to the development; only
+    # fall back to the first eligible contact when the event is broad news.
+    event_blob = ai_text(relevant_event).lower()
+    sender = next((name for name in candidates if name.lower() in event_blob), candidates[0])
     subject = ai_text(relevant_event.get("title") or "recent developments")
     medium = WORLD_MESSAGE_MEDIUM.get(state.get("world"), WORLD_MESSAGE_MEDIUM["Custom World"])
+    detail = ai_text(relevant_event.get("narrative") or relevant_event.get("message"))
+    contact = (state.get("contacts") or {}).get(sender, {})
+    relationship = _number(contact.get("relationship") if isinstance(contact, dict) else 0, 0)
+    if re.search(r"\b(attack|danger|killed|death|injur|ambush|war|threat)\w*\b", event_blob, re.I):
+        message = f"A {medium} arrives from {sender}: “I heard about {subject}. Are you safe, and do you need help?”"
+        purpose = "warning_and_welfare"
+    elif re.search(r"\b(level|title|promotion|victory|awaken|master|achievement|clear)\w*\b", event_blob, re.I):
+        tone = "I knew you could do it" if relationship >= 25 else "That is going to change how people see you"
+        message = f"A {medium} arrives from {sender}: “{tone}. I heard about {subject}.”"
+        purpose = "recognition"
+    else:
+        message = f"A {medium} arrives from {sender}: “I heard about {subject}. What does this change for your next move?”"
+        purpose = "follow_up"
+    memories = state.setdefault("npc_memories", {})
+    memory = memories.setdefault(sender, {}) if isinstance(memories, dict) else {}
+    if isinstance(memory, dict):
+        known = memory.setdefault("confirmed_knowledge", [])
+        if not isinstance(known, list):
+            known = memory["confirmed_knowledge"] = []
+        fact = f"Learned through {medium}: {subject} — {detail[:220]}".strip(" —")
+        if fact not in known:
+            known.append(fact); memory["confirmed_knowledge"] = known[-30:]
     return [{"thread": sender, "sender": sender,
-             "message": f"A {medium} arrives from {sender}: they acknowledge {subject} and ask how you intend to respond.",
-             "metadata": {"generated_locally": True, "source_event": subject, "medium": medium}}]
+             "message": message,
+             "metadata": {"generated_locally": True, "source_event": subject, "medium": medium, "purpose": purpose}}]
 
 
 def apply_prompt_budget(snapshot, state, query="", purpose="moment", mode="balanced"):

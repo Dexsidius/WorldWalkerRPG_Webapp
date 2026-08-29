@@ -93,6 +93,29 @@ def _semantic_tokens(package):
     stop = {"the", "and", "that", "with", "from", "into", "this", "when", "user", "ability", "effect", "their"}
     return {token for token in re.findall(r"[a-z0-9]+", text.lower()) if len(token) > 2 and token not in stop}
 
+
+_CONCEPT_FAMILIES = {
+    "time": {"time", "temporal", "seconds", "future", "past", "rewind", "delay", "accelerate"},
+    "space": {"space", "spatial", "distance", "portal", "teleport", "dimension", "coordinate"},
+    "momentum": {"momentum", "motion", "kinetic", "velocity", "inertia", "impact", "stored", "accumulate"},
+    "shadow": {"shadow", "darkness", "shade", "silhouette", "umbra"},
+    "memory": {"memory", "remember", "forgotten", "recall", "knowledge", "thought"},
+    "contract": {"contract", "vow", "promise", "condition", "restriction", "exchange"},
+    "copy": {"copy", "replicate", "imitate", "steal", "borrow", "reproduce"},
+    "gravity": {"gravity", "weight", "mass", "attract", "repel", "density"},
+    "soul": {"soul", "spirit", "essence", "reiatsu", "aura"},
+    "creation": {"create", "construct", "forge", "manifest", "generate", "shape"},
+}
+
+
+def mechanic_signature(package):
+    tokens = _semantic_tokens(package)
+    concepts = sorted(name for name, family in _CONCEPT_FAMILIES.items() if tokens & family)
+    ordered = re.findall(r"[a-z0-9]+", _normalized_text(_semantic_core_text(package)))
+    pairs = sorted({f"{ordered[i]}:{ordered[i + 1]}" for i in range(max(0, len(ordered) - 1))
+                    if ordered[i] not in {"the", "and", "with", "into", "from"}})
+    return {"concepts": concepts, "pairs": pairs[:80]}
+
 def semantic_similarity(left, right):
     left_tokens, right_tokens = _semantic_tokens(left), _semantic_tokens(right)
     jaccard = len(left_tokens & right_tokens) / max(1, len(left_tokens | right_tokens))
@@ -117,7 +140,7 @@ class GeneratedAbilityArchive:
             return []
 
     def _write(self, entries):
-        payload = {"schema_version": 1, "entries": entries}
+        payload = {"schema_version": 2, "entries": entries}
         temporary = self.path.with_suffix(self.path.suffix + ".tmp")
         temporary.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
         temporary.replace(self.path)
@@ -139,7 +162,11 @@ class GeneratedAbilityArchive:
                 return True
             if fingerprint and fingerprint == row.get("fingerprint"):
                 return True
-            if semantic_similarity(package, row.get("package") or {}) >= 0.78:
+            similarity = semantic_similarity(package, row.get("package") or {})
+            left, right = mechanic_signature(package), mechanic_signature(row.get("package") or {})
+            shared_concepts = set(left["concepts"]) & set(right["concepts"])
+            pair_overlap = len(set(left["pairs"]) & set(right["pairs"])) / max(1, min(len(left["pairs"]), len(right["pairs"])))
+            if similarity >= 0.72 or (shared_concepts and similarity >= 0.62):
                 return True
         return False
 
@@ -148,8 +175,10 @@ class GeneratedAbilityArchive:
         for row in self.entries(world, category):
             score = semantic_similarity(package, row.get("package") or {})
             if best is None or score > best["similarity"]:
-                best = {"similarity": score, "name": row.get("name", ""), "id": row.get("id", "")}
-        return best or {"similarity": 0.0, "name": "", "id": ""}
+                left, right = mechanic_signature(package), mechanic_signature(row.get("package") or {})
+                best = {"similarity": score, "name": row.get("name", ""), "id": row.get("id", ""),
+                        "shared_concepts": sorted(set(left["concepts"]) & set(right["concepts"]))}
+        return best or {"similarity": 0.0, "name": "", "id": "", "shared_concepts": []}
 
     def exclusions(self, world, category, limit=40):
         rows = self.entries(world, category)[-max(1, int(limit)):]
@@ -183,7 +212,7 @@ class GeneratedAbilityArchive:
                 "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "world": str(world), "category": str(category), "name": name,
                 "fingerprint": fingerprint, "source": str(source), "canon": False,
-                "package": package,
+                "mechanic_signature": mechanic_signature(package), "package": package,
             }
             entries.append(entry)
             self._write(entries)

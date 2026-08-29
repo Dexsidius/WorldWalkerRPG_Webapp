@@ -19,6 +19,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
 from simulation import refresh_npc_intentions, background_ai_due
 from power_benchmarks import benchmark_context
 from canon_integrity import canon_identity_context, repair_canon_payload
+from response_guard import normalize_object_response
 
 
 LOCAL_CANON_POWER_ESTIMATES = {
@@ -303,7 +304,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         # increase normal per-turn call count.
         routed = bool(self.settings.get("advisor_model") or self.settings.get("advisor_provider") in {"local", "cloud"})
         advisor_client = self.ai_advisor if routed else self.ai
-        data = advisor_client.request(rules, payload, max_output_tokens=200 if concise else 1000)
+        data = normalize_object_response(advisor_client.request(rules, payload, max_output_tokens=200 if concise else 1000), "summary")
         data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         entry = {
             "role": "advisor",
@@ -565,7 +566,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                        "state_patch": "contacts, npc_memories, relationships, quests, scheduled_events, npc_clocks, faction_clocks or other side-chat consequences",
                        "events": "system notifications if needed"}
         }
-        data = self.ai.request(self.core_rules(), payload, max_output_tokens=150 if concise else 500)
+        data = normalize_object_response(self.ai.request(self.core_rules(), payload, max_output_tokens=150 if concise else 500), "reply")
         data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         with self.lock:
             before = copy.deepcopy(self.state)
@@ -605,7 +606,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                                       "Messages are asynchronous side communications. Preserve lore, technology, communication methods, distance, and world rules.\n"
                                       "If the world has no modern phones, interpret 'chat' as the nearest lore-appropriate medium: Den Den Mushi, messenger, letter, radio, courier, system message, guild chat, etc.")
         try:
-            data = self.ai_bg.request(rules, payload, max_output_tokens=350)
+            data = normalize_object_response(self.ai_bg.request(rules, payload, max_output_tokens=350), "message")
             data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         except Exception as e:
             self.log("Background chat check failed: " + str(e))
@@ -683,7 +684,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                    "schema": {"state_patch": "world_events, npc_memories, factions, canon_divergences or other justified world-state changes", "heard_event": "brief rumor/news/observation or empty"}}
         rules = self.core_rules(extra="This is a background simulation tick. Preserve geography, travel time, NPC knowledge and causality. Do not resolve a player action.")
         try:
-            data = self.ai_bg.request(rules, payload, max_output_tokens=450)
+            data = normalize_object_response(self.ai_bg.request(rules, payload, max_output_tokens=450), "heard_event")
             data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         except Exception as e:
             self.log("World tick failed: " + str(e))
@@ -758,7 +759,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         }
         rules = self.core_rules(extra="This is a reentry recap, not a scene and not a time skip. Do not resolve a player action. Do not advance time.")
         try:
-            data = self.ai_bg.request(rules, payload, max_output_tokens=350)
+            data = normalize_object_response(self.ai_bg.request(rules, payload, max_output_tokens=350), "recap")
         except Exception as e:
             self.log("Reentry recap failed: " + str(e))
             return None
@@ -789,7 +790,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                    "schema": {"state_patch": "npc_memories, contacts, chat_threads metadata, relationships, codex, location_details, ability_progress or other memory-oriented changes only", "memory_note": "brief maintenance note or empty"}}
         rules = self.core_rules(extra="You are the MEMORY MANAGER. Be conservative. Never invent player actions, secret knowledge, or relationship changes unsupported by the state.")
         try:
-            data = self.ai_bg.request(rules, payload, max_output_tokens=450)
+            data = normalize_object_response(self.ai_bg.request(rules, payload, max_output_tokens=450), "memory_note")
         except Exception as e:
             self.log("Memory manager failed: " + str(e))
             return None

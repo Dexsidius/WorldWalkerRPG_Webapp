@@ -47,6 +47,8 @@ from campaign_reliability import (
     refresh_scene_state, normalize_outcome_scale, reconcile_commitments_and_consequences,
     refresh_canon_divergence_impacts, record_pacing_beat,
 )
+from response_guard import normalize_assessment_response
+from experience_systems import record_world_milestones, update_scenario_memory
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -629,8 +631,10 @@ class TimeSkipMixin:
         # Advance spends one model call on the actual story, not a second
         # planning prompt. ``use_model=True`` remains for direct/legacy
         # engine integrations and comparison tests.
-        assessment = (self.ai.request(rules, payload, max_output_tokens=700) if use_model
-                      else deterministic_assessment(self.state, clean_orders, budget, self.simulation_mode()))
+        assessment = normalize_assessment_response(
+            self.ai.request(rules, payload, max_output_tokens=700) if use_model
+            else deterministic_assessment(self.state, clean_orders, budget, self.simulation_mode())
+        )
         assessment.setdefault("time_budget", budget)
         if canon_stop:
             assessment["canon_stop"] = canon_stop
@@ -2024,7 +2028,8 @@ class TimeSkipMixin:
             record_canon_ripples(self.state, updates + local_world_events)
             cause_effect = build_cause_effect(before, self.state, context.get("actions", []), context.get("rolls", []))
             self.state["last_ai_route"] = {"role": "Major Event GM" if context.get("model_used") and context.get("model_used") == self.settings.get("major_event_model") else "Main GM",
-                                           "model": context.get("model_used") or self.settings.get("model", ""), "turn": self.state.get("turn", 0)}
+                                           "model": context.get("model_used") or self.settings.get("model", ""), "turn": self.state.get("turn", 0),
+                                           **copy.deepcopy(getattr(self, "_last_request_usage", {}))}
             if self.settings.get("developer_mode"):
                 self.append(f"[AI ROUTE]\n{self.state['last_ai_route']['role']}: {self.state['last_ai_route']['model']}", "meta")
             update_narrative_memory(before, self.state, action_summary, data.get("narrative", ""))
@@ -2034,6 +2039,9 @@ class TimeSkipMixin:
             record_pacing_beat(self.state, data, context.get("actions", []))
             normalize_outcome_scale(before, self.state, data, elapsed_minutes)
             refresh_simulation_core(self.state, context.get("actions", []), elapsed_minutes, action_summary)
+            update_scenario_memory(before, self.state, context.get("actions", []), data)
+            for milestone in record_world_milestones(self.state, data):
+                self.append(f"[{milestone['heading']}]\n{milestone['title']}: {milestone['detail']}", "system")
             record_resolution_transaction(
                 self.state, before, context.get("actions", []), elapsed_minutes,
                 data.get("narrative", ""), context.get("rolls", []),

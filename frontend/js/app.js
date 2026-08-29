@@ -2972,6 +2972,14 @@ function renderCombatPanel(s) {
   const bonusTurn = $("#combat-bonus-turn");
   bonusTurn.hidden = !combat.bonus_turn_pending;
   if (combat.bonus_turn_pending) bonusTurn.querySelector("span").textContent = `${combat.bonus_turn_reason || "Your speed advantage"} — choose any combat action before the enemy responds.`;
+  const combatBrief = $("#combat-brief");
+  const briefRows = [
+    combat.cause ? `<span><b>WHY IT STARTED</b>${escapeHtml(combat.cause)}</span>` : "",
+    combat.victory_condition ? `<span><b>OBJECTIVE</b>${escapeHtml(combat.victory_condition)}</span>` : "",
+    combat.defeat_risk ? `<span><b>AT RISK</b>${escapeHtml(combat.defeat_risk)}</span>` : "",
+  ].filter(Boolean);
+  combatBrief.hidden = !briefRows.length;
+  combatBrief.innerHTML = briefRows.join("");
   $("#combat-mode-badge").hidden = !combat.non_lethal;
   // The mercy toggle only means anything for a real, lethal-by-default fight
   // — a spar/test (non_lethal) already floors both sides, so the choice is
@@ -5454,7 +5462,7 @@ async function refreshUsagePill() {
     const taskLabel = taskRows.slice(0, 5).map(([task, row]) => `${humanLabel(task)}: ${row.calls} call(s), ~$${Number(row.cost_usd || 0).toFixed(3)}`).join(" · ");
     if (u.provider !== "cloud") {
       pill.hidden = true;
-      if (summary) summary.textContent = "Local mode: text inference is free. Portrait counts still track below.";
+      if (summary) summary.innerHTML = `<div class="usage-total"><b>LOCAL TEXT MODE</b><span>No per-call text charge · ${escapeHtml(u.total_calls)} call(s) this session</span></div>`;
     } else {
       const prefix = u.cost_estimate_complete ? "~$" : "$";
       pill.hidden = false;
@@ -5467,14 +5475,8 @@ async function refreshUsagePill() {
         + (u.cost_estimate_complete ? "" : " (one or more models are unpriced; total is a floor, not exact.)");
     }
     if (summary && u.provider === "cloud") {
-      summary.textContent = `${u.over_session_budget ? "SESSION WARNING — " : ""}This session so far: ~$${u.total_cost_usd.toFixed(2)} across ${u.total_calls} AI call(s) `
-        + `(${u.main.input_tokens + u.main.output_tokens} main-model tokens, ${u.background.input_tokens + u.background.output_tokens} background-model tokens) `
-        + `${u.major_is_separate ? `${u.major.input_tokens + u.major.output_tokens} major-event tokens, ` : ""}`
-        + `and ${u.portraits.generated} portrait(s).`
-        + (u.cached_input_tokens ? ` Cached input reported: ${u.cached_input_tokens.toLocaleString()} tokens.` : "")
-        + (u.cost_is_conservative ? " The dollar estimate keeps cached input at full rate, so actual provider billing may be lower." : "")
-        + (u.cost_estimate_complete ? "" : " Some pricing is unknown for the selected model(s), so this is a floor, not an exact total.");
-      if (taskLabel) summary.textContent += ` Task breakdown: ${taskLabel}.`;
+      const rows = taskRows.length ? taskRows.map(([task, row]) => `<div class="usage-task"><b>${escapeHtml(humanLabel(task))}</b><span>${escapeHtml(row.calls)} call(s)</span><span>${Number(row.input_tokens || 0).toLocaleString()} in · ${Number(row.output_tokens || 0).toLocaleString()} out</span><strong>~$${Number(row.cost_usd || 0).toFixed(4)}</strong></div>`).join("") : `<div class="hint">No model calls yet.</div>`;
+      summary.innerHTML = `<div class="usage-total ${u.over_session_budget ? "over-budget" : ""}"><b>${u.over_session_budget ? "SESSION WARNING" : "SESSION TOTAL"}</b><strong>~$${Number(u.total_cost_usd || 0).toFixed(4)}</strong><span>${escapeHtml(u.total_calls)} AI call(s) · ${escapeHtml(u.portraits.generated)} portrait(s)</span></div><div class="usage-task-list">${rows}</div><small>${u.cost_is_conservative ? "Conservative estimate: cached-input discounts are not subtracted. " : ""}${u.cost_estimate_complete ? "" : "Some selected model pricing is unknown, so this total is a floor."}</small>`;
     }
   } catch (e) { /* usage is a convenience readout, never block on it */ }
 }
@@ -5535,7 +5537,9 @@ async function runMenuAction(action) {
   }
   else if (action === "diagnostics") {
     const r = await apiGet("/api/diagnostics");
-    $("#diagnostics-summary").innerHTML = `<div class="preview-grid"><div><b>Version</b><span>${escapeHtml(r.app_version || APP.state?._app_version || "?")}</span></div><div><b>Campaign</b><span>${escapeHtml(APP.state?.name || "None")}</span></div><div><b>Scene match</b><span>${escapeHtml(r.scene?.reason || "Unknown")}</span></div><div><b>Validation issues</b><span>${escapeHtml((r.validation_log || []).length)}</span></div></div>`;
+    const recoveryRows = (r.turn_recovery?.timeline || []).slice().reverse().map((row) => `<span><b>${escapeHtml(humanLabel(row.status || "checkpoint"))}</b>Turn ${escapeHtml(row.turn ?? "?")} · ${escapeHtml(humanLabel(row.route || "turn"))}</span>`).join("");
+    $("#diagnostics-summary").innerHTML = `<div class="preview-grid"><div><b>Version</b><span>${escapeHtml(r.app_version || APP.state?._app_version || "?")}</span></div><div><b>Campaign</b><span>${escapeHtml(APP.state?.name || "None")}</span></div><div><b>Scene match</b><span>${escapeHtml(r.scene?.reason || "Unknown")}</span></div><div><b>Validation issues</b><span>${escapeHtml((r.validation_log || []).length)}</span></div></div>${recoveryRows ? `<details class="recovery-timeline"><summary>Recent safe turn checkpoints</summary>${recoveryRows}</details>` : ""}`;
+    $("#btn-retry-failed-turn").hidden = !r.turn_recovery?.last_failed?.route;
     $("#diagnostics-json").textContent = JSON.stringify(r, null, 2); openModal("modal-diagnostics");
   }
   else if (action === "asset-folder") showToast("Scene art lives under assets/generated_scenes; custom overrides live under assets/user/<World>.", "system");
@@ -5544,6 +5548,17 @@ async function runMenuAction(action) {
 
 $("#btn-diagnostics-export").addEventListener("click", () => downloadEndpoint("/api/diagnostics/export"));
 $("#btn-diagnostics-bundle").addEventListener("click", () => downloadEndpoint("/api/diagnostics/bundle"));
+$("#btn-retry-failed-turn").addEventListener("click", async () => {
+  const button = $("#btn-retry-failed-turn"); button.disabled = true;
+  try {
+    const result = await apiPost("/api/action/retry_failed", {});
+    if (result.story) appendStoryEntries(result.story);
+    if (result.state) renderState(result.state);
+    button.hidden = true;
+    showToast("The failed turn completed from its clean checkpoint.", "notify");
+  } catch (error) { showToast(error.message, "danger"); }
+  finally { button.disabled = false; }
+});
 $("#diagnostics-recovery-actions").addEventListener("click", async (event) => {
   const button = event.target.closest("[data-diagnostic-repair]");
   if (!button) return;

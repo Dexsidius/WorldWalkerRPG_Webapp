@@ -28,7 +28,7 @@ class WorldwalkerV3240PlayerAgencyTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.41.1")
+        self.assertEqual(APP_VERSION, "3.42.0")
 
     def test_commanded_characters_obey_without_gm_pushback(self):
         game = self.fresh()

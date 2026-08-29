@@ -291,6 +291,23 @@ def err(e, code=500):
     return jsonify({"error": str(e)}), code
 
 
+def atomic_game_call(route, payload, callback):
+    """Resolve a mutation as all-or-nothing and preserve a retry payload."""
+    transaction = game.begin_turn_transaction(route, payload)
+    try:
+        result = callback()
+        game.complete_turn_transaction(transaction)
+        # Callbacks usually build their response before the transaction is
+        # finalized. Refresh the returned state so a successful retry cannot
+        # leave the client showing the now-cleared failure marker.
+        if isinstance(result, dict) and "state" in result:
+            result["state"] = game.public_state()
+        return result
+    except Exception as exc:
+        game.rollback_turn_transaction(transaction, exc)
+        raise
+
+
 # ---------- shared two-player campaign coordinator ----------
 _multiplayer_worker_lock = threading.Lock()
 _multiplayer_worker_started = False
@@ -801,7 +818,7 @@ def api_event_respond():
     if not game.campaign_active:
         return jsonify({"error": "Start or load a campaign first."}), 400
     try:
-        return jsonify(game.respond_to_event(action))
+        return jsonify(atomic_game_call("event_respond", {"action": action}, lambda: game.respond_to_event(action)))
     except Exception as e:
         return err(e, 400)
 
@@ -872,7 +889,8 @@ def api_combat_action():
     if action not in ("attack", "defend", "flee", "overwhelm"):
         action = "attack"
     try:
-        result = game.resolve_combat_round(action, ability_name=d.get("ability"))
+        result = atomic_game_call("combat_action", {"action": action, "ability": d.get("ability")},
+                                  lambda: game.resolve_combat_round(action, ability_name=d.get("ability")))
         return jsonify(result)
     except Exception as e:
         return err(e, 400)
@@ -885,7 +903,7 @@ def api_combat_narrate():
     if not acquire_busy():
         return busy_error()
     try:
-        result = game.narrate_combat()
+        result = atomic_game_call("combat_narrate", {}, lambda: game.narrate_combat())
         return jsonify(result)
     except Exception as e:
         return err(e)
@@ -979,17 +997,50 @@ def api_time_resolve():
     if not acquire_busy():
         return busy_error()
     try:
-        result = game.run_time_skip(d.get("amount", 1), d.get("unit", "moment"), d.get("orders", []),
+        result = atomic_game_call("time_resolve", d, lambda: game.run_time_skip(
+                                     d.get("amount", 1), d.get("unit", "moment"), d.get("orders", []),
                                      d.get("intensity", "normal"), d.get("assessment", {}),
                                      confirmed_lethal=bool(d.get("confirmed_lethal")),
                                      confirmed_power_goal=bool(d.get("confirmed_power_goal")),
                                      manual_rolls=d.get("manual_rolls", {}),
                                      challenge_modes=d.get("challenge_modes", {}),
                                      challenge_resolution_mode=d.get("challenge_resolution_mode", "continue"),
-                                     danger_warning_acknowledged=bool(d.get("danger_warning_acknowledged")))
+                                     danger_warning_acknowledged=bool(d.get("danger_warning_acknowledged"))))
         return jsonify(result)
     except Exception as e:
         return err(e)
+    finally:
+        release_busy()
+
+
+@app.route("/api/action/retry_failed", methods=["POST"])
+def api_retry_failed_turn():
+    failed = game.state.get("last_failed_turn") if isinstance(game.state.get("last_failed_turn"), dict) else {}
+    route, payload = failed.get("route"), failed.get("payload")
+    if not route or not isinstance(payload, dict):
+        return jsonify({"error": "There is no failed turn waiting to retry."}), 400
+    if not acquire_busy():
+        return busy_error()
+    try:
+        if route == "time_resolve":
+            d = payload
+            result = atomic_game_call(route, d, lambda: game.run_time_skip(
+                d.get("amount", 1), d.get("unit", "moment"), d.get("orders", []), d.get("intensity", "normal"),
+                d.get("assessment", {}), confirmed_lethal=bool(d.get("confirmed_lethal")),
+                confirmed_power_goal=bool(d.get("confirmed_power_goal")), manual_rolls=d.get("manual_rolls", {}),
+                challenge_modes=d.get("challenge_modes", {}), challenge_resolution_mode=d.get("challenge_resolution_mode", "continue"),
+                danger_warning_acknowledged=bool(d.get("danger_warning_acknowledged"))))
+        elif route == "event_respond":
+            result = atomic_game_call(route, payload, lambda: game.respond_to_event(payload.get("action", "")))
+        elif route == "combat_action":
+            result = atomic_game_call(route, payload, lambda: game.resolve_combat_round(payload.get("action", "attack"), ability_name=payload.get("ability")))
+        elif route == "combat_narrate":
+            result = atomic_game_call(route, payload, lambda: game.narrate_combat())
+        else:
+            return jsonify({"error": "That older failed operation cannot be retried automatically."}), 400
+        return jsonify(result)
+    except Exception as exc:
+        return err(exc)
     finally:
         release_busy()
 

@@ -1,6 +1,22 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.42.0": {
+        "title": "Resilient Turns and Deeper Campaign Continuity",
+        "summary": "Turns now recover atomically from malformed AI output while active scenarios, combat stakes, milestones, messages, generated powers, costs, and long-campaign testing receive stronger local support.",
+        "highlights": [
+            {"title": "Failed turns cannot half-apply", "example": "If an Advance response crashes during processing, the campaign returns to the exact clean pre-turn state and keeps a safe Retry Failed Turn option."},
+            {"title": "Broader AI-response repair", "example": "Compact events, updates, chats, assessment rows, and combatants are converted into usable structures before gameplay reads them."},
+            {"title": "Active scenario memory", "example": "A continuing fight or major situation carries its cause, objective, stakes, location, and latest development into later GM and Advisor context."},
+            {"title": "Smarter original-power uniqueness", "example": "Renaming a momentum-storage technique no longer makes it count as a different generated power."},
+            {"title": "Long-campaign stability", "example": "The bounded Chronicle and prompt budgets keep old campaigns responsive without deleting their saved history."},
+            {"title": "Clear combat context", "example": "Combat shows why it began, what ends it, and what is at risk above the action controls."},
+            {"title": "More grounded messages", "example": "Known contacts can warn, check on, congratulate, or follow up based on the actual event and their relationship."},
+            {"title": "World-native milestones", "example": "Shikai, bounties, Haki, Nen, grades, floor clears, Satisfy classes, and evolutions receive deduplicated setting-specific records."},
+            {"title": "Per-turn AI cost visibility", "example": "Diagnostics now records the model, task, token use, and estimated cost of the latest narrated turn alongside session totals."},
+            {"title": "Expanded free playtest matrix", "example": "Every built-in world is automatically checked for capability, progression, NPC, scenario, malformed-response, and transaction contracts without spending AI credits."},
+        ],
+    },
     "3.41.1": {
         "title": "Advance and Combat Hotfix",
         "summary": "Advance now safely accepts compact or malformed combat data instead of trapping the campaign behind a string-object error.",

@@ -35,6 +35,7 @@ from campaign_reliability import (
     refresh_canon_divergence_impacts, record_pacing_beat,
 )
 from simulation_enhancements import record_ability_evolution
+from experience_systems import record_world_milestones, update_scenario_memory
 
 
 DEFAULT_SETTINGS = {
@@ -749,6 +750,12 @@ Return ONLY valid JSON."""
                 pending_action or "",
             )
             if not is_opening:
+                usage = copy.deepcopy(getattr(self, "_last_request_usage", {}))
+                self.state["last_ai_route"] = {"role": "Main GM", "model": usage.get("model") or self.settings.get("model", ""),
+                                               "turn": self.state.get("turn", 0), **usage}
+                update_scenario_memory(before, self.state, turn_actions, data)
+                for milestone in record_world_milestones(self.state, data):
+                    self.append(f"[{milestone['heading']}]\n{milestone['title']}: {milestone['detail']}", "system")
                 record_resolution_transaction(
                     self.state, before, turn_actions,
                     int(context.get("elapsed_minutes", 5) or 5),

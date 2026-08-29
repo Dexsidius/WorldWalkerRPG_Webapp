@@ -11,7 +11,7 @@ from worlds import APP_VERSION
 
 class WorldwalkerV3371Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.41.1")
+        self.assertEqual(APP_VERSION, "3.42.0")
 
     def test_bleach_uses_standard_chronicle_panels(self):
         app_js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")

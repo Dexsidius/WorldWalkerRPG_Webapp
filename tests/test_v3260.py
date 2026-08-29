@@ -29,7 +29,7 @@ class WorldwalkerV3260RecurringFinancePersistenceTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.41.1")
+        self.assertEqual(APP_VERSION, "3.42.0")
 
     def test_unmentioned_income_survives_an_unrelated_recurring_finances_patch(self):
         """The real bug: establishing a second income source later, without

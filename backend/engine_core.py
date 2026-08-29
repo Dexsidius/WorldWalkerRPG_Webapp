@@ -32,6 +32,7 @@ from campaign_reliability import (
     build_grounding_packet, refresh_scene_state, learn_player_style,
     refresh_canon_divergence_impacts, reconcile_commitments_and_consequences,
 )
+from response_guard import normalize_turn_response
 
 
 DEFAULT_SETTINGS = {
@@ -231,6 +232,55 @@ class CoreMixin:
         # deliberately transient: room membership/readiness lives in SQLite,
         # not inside a portable single-player campaign export.
         self.multiplayer_context = None
+
+    def begin_turn_transaction(self, route, payload=None):
+        """Capture every mutable campaign surface before a resolving action.
+
+        Checkpoints support intentional Undo.  This snapshot is different: it
+        exists only so an exception can never leave half of a failed turn in
+        the active campaign.
+        """
+        return {
+            "route": str(route or "turn"), "payload": copy.deepcopy(payload or {}),
+            "state": copy.deepcopy(self.state), "history_count": len(self.history),
+            "checkpoints_count": len(self.checkpoints), "story_count": len(self.story_log),
+            "system_count": len(self.system_log),
+        }
+
+    def rollback_turn_transaction(self, transaction, error):
+        if not isinstance(transaction, dict):
+            return {}
+        self.state = transaction["state"]
+        self.history = self.history[:int(transaction.get("history_count", 0))]
+        self.checkpoints = self.checkpoints[:int(transaction.get("checkpoints_count", 0))]
+        self.story_log = self.story_log[:int(transaction.get("story_count", 0))]
+        self.system_log = self.system_log[:int(transaction.get("system_count", 0))]
+        row = {
+            "route": transaction.get("route", "turn"),
+            "payload": copy.deepcopy(transaction.get("payload", {})),
+            "error": str(error)[:500], "turn": int(self.state.get("turn", 0) or 0),
+            "time": datetime.now().isoformat(timespec="seconds"), "status": "ready_to_retry",
+        }
+        self.state["last_failed_turn"] = row
+        timeline = self.state.setdefault("recovery_timeline", [])
+        timeline.append({key: copy.deepcopy(value) for key, value in row.items() if key != "payload"})
+        self.state["recovery_timeline"] = timeline[-24:]
+        try:
+            self.autosave()
+        except Exception:
+            pass
+        return row
+
+    def complete_turn_transaction(self, transaction):
+        self.state["last_failed_turn"] = {}
+        timeline = self.state.setdefault("recovery_timeline", [])
+        timeline.append({"route": transaction.get("route", "turn"), "turn": int(self.state.get("turn", 0) or 0),
+                         "time": datetime.now().isoformat(timespec="seconds"), "status": "completed"})
+        self.state["recovery_timeline"] = timeline[-24:]
+        try:
+            self.autosave()
+        except Exception:
+            pass
 
     def load_settings(self):
         try:
@@ -620,6 +670,14 @@ class CoreMixin:
             if not (initiated or unavoidable):
                 patch.pop("combat", None)
                 data["combat_start_rejected"] = "No concrete hostile act or unavoidable attack established combat."
+            else:
+                enemy = authored.get("enemy") if isinstance(authored.get("enemy"), dict) else {}
+                enemy_name = enemy.get("name") or "the opposition"
+                authored.setdefault("cause", action_text if initiated else "The opposition committed an unavoidable attack.")
+                authored.setdefault("initiator", self.state.get("name", "Player") if initiated else enemy_name)
+                authored.setdefault("negotiation_possible", False)
+                authored.setdefault("victory_condition", f"Defeat, drive off, escape, or deliberately spare {enemy_name}.")
+                authored.setdefault("defeat_risk", "Injury, capture, incapacitation, or death according to the established scene.")
             return False
         if not (initiated or unavoidable):
             return False
@@ -648,6 +706,11 @@ class CoreMixin:
         patch["combat"] = {
             "active": True, "round": 1, "non_lethal": non_lethal,
             "location": self.state.get("location") or "the current scene",
+            "cause": action_text if initiated else "The opposition committed an unavoidable attack.",
+            "initiator": self.state.get("name", "Player") if initiated else opponent,
+            "negotiation_possible": False,
+            "victory_condition": f"Defeat, drive off, escape, or deliberately spare {opponent}.",
+            "defeat_risk": "Injury, capture, incapacitation, or death according to the established scene.",
             "enemy": {"name": opponent, "is_group": group, "group_size": None, "alive": True},
         }
         if not str(data.get("narrative") or "").strip():
@@ -732,7 +795,8 @@ class CoreMixin:
         specifically so the model isn't just asked to "try again" blind."""
         max_output_tokens = output_budget(max_output_tokens, self.simulation_mode())
         client = client or self.ai
-        data = client.request(instructions, payload, max_output_tokens=max_output_tokens)
+        usage_before = copy.deepcopy(getattr(client, "usage", {}))
+        data = normalize_turn_response(client.request(instructions, payload, max_output_tokens=max_output_tokens), payload.get("task"))
         narrative_missing = not (data.get("narrative") or "").strip()
         violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
         quality_issues = [] if narrative_missing else self._response_quality_issues(payload, data)
@@ -744,11 +808,19 @@ class CoreMixin:
                 reminder += "\n\nREMINDER: your previous attempt has a specific problem that must be fixed in this response: " + " ".join(violations)
             if quality_issues:
                 reminder += "\n\nQUALITY REPAIR: keep every valid fact and outcome from the first attempt, but correct these locally verified omissions or contradictions: " + " ".join(quality_issues)
-            data = client.request(instructions + reminder, payload, max_output_tokens=max_output_tokens)
+            data = normalize_turn_response(client.request(instructions + reminder, payload, max_output_tokens=max_output_tokens), payload.get("task"))
         data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         if canon_repairs:
             data["canon_integrity_repairs"] = canon_repairs
         self._last_narrator_model = getattr(client, "model", self.settings.get("model", ""))
+        usage_after = getattr(client, "usage", {})
+        self._last_request_usage = {
+            "task": str(payload.get("task") or "narration"), "model": self._last_narrator_model,
+            "calls": max(0, int(usage_after.get("calls", 0) or 0) - int(usage_before.get("calls", 0) or 0)),
+            "input_tokens": max(0, int(usage_after.get("input_tokens", 0) or 0) - int(usage_before.get("input_tokens", 0) or 0)),
+            "output_tokens": max(0, int(usage_after.get("output_tokens", 0) or 0) - int(usage_before.get("output_tokens", 0) or 0)),
+            "cost_usd": round(max(0.0, float(usage_after.get("cost_usd", 0) or 0) - float(usage_before.get("cost_usd", 0) or 0)), 6),
+        }
         return data
 
     def _scale_lock_rule(self):
@@ -856,6 +928,9 @@ Return ONLY valid JSON. No markdown fences."""
             {k: row.get(k) for k in ("id", "title", "kind", "status", "detail")}
             for row in self.state.get("story_threads", {}).values() if row.get("status") in {"active", "turning_point", "blocked"}
         ][:24]
+        active_scenario = (self.state.get("scenario_memory") or {}).get("active", {})
+        if isinstance(active_scenario, dict) and active_scenario:
+            snapshot["active_scenario"] = copy.deepcopy(active_scenario)
         purpose = str(purpose or "moment")
         if purpose in {"moment", "time_skip", "major_event", "event"}:
             return snapshot
@@ -868,7 +943,7 @@ Return ONLY valid JSON. No markdown fences."""
             "canon_divergences", "campaign_direction", "active_action_goals", "prerequisite_tracks",
             "authoritative_player_corrections", "simulation_scale", "combat", "danger_scenario",
             "mechanical_power_profile", "standing_intents",
-            "capability_summary", "npc_role_flags", "active_story_threads", "grounding_packet",
+            "capability_summary", "npc_role_flags", "active_story_threads", "active_scenario", "grounding_packet",
         }
         if purpose == "opening":
             opening = common | {"starting_power_band", "starting_power_notice", "appearance_desc", "portrait_traits"}

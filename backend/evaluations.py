@@ -12,6 +12,8 @@ from worlds import BASE_STATE, WORLD_DATA, abilities_for
 from simulation_core import (refresh_simulation_core, record_resolution_transaction,
                              companion_support_for_combat)
 from util import DATA_DIR
+from response_guard import normalize_turn_response
+from experience_systems import record_world_milestones, update_scenario_memory
 
 
 EVAL_DIR = DATA_DIR / "evaluations"
@@ -132,6 +134,19 @@ def run_local_simulation_evaluation():
         state["stats"][next(iter(state["stats"]))] += 2
         tx = record_resolution_transaction(state, before, ["Train the Signature Test Art"], 60, "Training produces a visible gain.", [])
         checks["resolution_pipeline"] = bool(tx.get("phases", {}).get("mechanics", {}).get("stat_changes"))
+        malformed = normalize_turn_response({"narrative": "A valid beat.", "events": "A compact event",
+                                             "updates": "A compact update", "state_patch": {"combat": {"enemy": "Test Rival"}}})
+        checks["response_recovery"] = bool(malformed["events"] and malformed["updates"] and malformed["state_patch"]["combat"]["enemy"]["name"] == "Test Rival")
+        combat_data = {"narrative": "The Test Rival attacks and combat begins.", "state_patch": {}, "events": []}
+        state["combat"] = {"active": True, "enemy": {"name": "Test Rival"}, "cause": "Test Rival attacked",
+                           "victory_condition": "End the attack", "defeat_risk": "Injury"}
+        refresh_simulation_core(state, ["Defend against Test Rival"], 5, "Defend against Test Rival")
+        update_scenario_memory(before, state, ["Defend against Test Rival"], combat_data)
+        checks["scenario_memory"] = (state.get("scenario_memory") or {}).get("active", {}).get("kind") == "combat"
+        # The detector must always be safe; worlds only record a milestone
+        # when the phrasing is setting-relevant.
+        record_world_milestones(state, {"narrative": "A meaningful campaign development is recorded.", "events": []})
+        checks["milestone_detector"] = isinstance(state.get("world_milestones"), list)
         results.append({"world": world, "passed": sum(bool(v) for v in checks.values()),
                         "total": len(checks), "checks": checks})
     passed = sum(row["passed"] for row in results)
