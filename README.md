@@ -6,7 +6,14 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.37.1** (schema 19).
+Current app/save version: **3.37.2** (schema 19).
+
+Version 3.37.2 stops requests to arrange a duel from prematurely starting
+combat, including the reported case where “with a deep bow” was misread as an
+opponent named Deep Bow. It also adds local canon identity/role locks across
+all supported canon worlds, repairs unambiguous Bleach division swaps, and
+rejects placeholder labels such as “hidden flash-related class” before they
+can become an actual class name.
 
 Version 3.37.1 restores Bleach Chronicle updates to the clean, readable panel
 layout used before v3.37.0. The Hell Butterfly artwork and Chronicle animation

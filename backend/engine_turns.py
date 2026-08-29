@@ -27,6 +27,7 @@ from lit_systems import initialize_lit_systems, process_lit_turn
 from overgeared_classes import starter_kit_for, class_action_bonus
 from jjk_system import advance_jjk_state
 from simulation_core import refresh_simulation_core, record_resolution_transaction
+from canon_integrity import repair_canon_payload
 
 
 DEFAULT_SETTINGS = {
@@ -577,6 +578,7 @@ Return ONLY valid JSON."""
 
     def apply_resolution(self, data, is_opening=False, pending_action=None, progression_context=None):
         with self.lock:
+            data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
             before = copy.deepcopy(self.state)
             danger_was_active = self.danger_scenario_active(before)
             context = progression_context if isinstance(progression_context, dict) else {}
@@ -660,6 +662,8 @@ Return ONLY valid JSON."""
             advance_npc_intentions(self.state, 5, self.simulation_mode())
             refresh_npc_schedules(self.state, 5)
             transmit_information(self.state, data, 5)
+            if canon_repairs:
+                integrity_report.setdefault("repairs", []).extend(canon_repairs)
             if integrity_report:
                 self.state.setdefault("simulation_validation", []).append(copy.deepcopy(integrity_report))
                 self.state["simulation_validation"] = self.state["simulation_validation"][-100:]

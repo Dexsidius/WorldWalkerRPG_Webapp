@@ -32,7 +32,8 @@ from lit_systems import process_lit_turn
 from jjk_system import advance_jjk_state
 from standing_intents import (advance_standing_intents, player_training_directives,
                               register_standing_intents, standing_intent_context)
-from simulation_core import refresh_simulation_core, record_resolution_transaction
+from simulation_core import refresh_simulation_core, record_resolution_transaction, action_commits_violence
+from canon_integrity import repair_canon_payload
 from age_system import advance_character_age
 from campaign_features import downtime_surprise_prompt
 
@@ -1135,7 +1136,9 @@ class TimeSkipMixin:
             data["interruption_context"] = data.get("interruption_context") or "Violence is already under way; there is no extra intervention decision between this opening clash and combat control."
             data["intervention_prompt"] = data.get("intervention_prompt") or f"How does {self.state.get('name') or 'the player'} handle the opening exchange with {enemy_name}?"
             fight_index = next((index for index, order in enumerate(orders)
-                                if self._FIGHT_START_RE.search(str(order)) and not self._FIGHT_NEGATION_RE.search(str(order))), None)
+                                if self._FIGHT_START_RE.search(str(order))
+                                and action_commits_violence(order)
+                                and not self._FIGHT_NEGATION_RE.search(str(order))), None)
             if fight_index is not None:
                 opening_result = next((row for row in results if isinstance(row, dict)
                                        and (row.get("action_index") == fight_index
@@ -1736,6 +1739,7 @@ class TimeSkipMixin:
 
     def apply_time_skip(self, data, requested_amount, requested_unit, progression_context=None):
         with self.lock:
+            data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
             before = copy.deepcopy(self.state)
             context = progression_context if isinstance(progression_context, dict) else {}
             danger_was_active = self.danger_scenario_active(before)
@@ -1910,6 +1914,8 @@ class TimeSkipMixin:
                                                    if ai_text(row).lower() not in adopted_directives]
             self.append_training_summary(before, context.get("progression_actions", context.get("actions", [])), elapsed_minutes, context.get("rolls", []))
             integrity_report = data.get("integrity_report") if isinstance(data.get("integrity_report"), dict) else {}
+            if canon_repairs:
+                integrity_report.setdefault("repairs", []).extend(canon_repairs)
             if integrity_report:
                 self.state.setdefault("simulation_validation", []).append(copy.deepcopy(integrity_report))
                 self.state["simulation_validation"] = self.state["simulation_validation"][-100:]

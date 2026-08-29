@@ -22,6 +22,7 @@ from power_benchmarks import benchmark_tier
 from politics import normalize_political_state
 from simulation_core import refresh_simulation_core
 from campaign_features import normalize_companion_combinations, normalize_trophy_state
+from canon_integrity import normalize_canon_integrity
 
 def _compile_skill_mechanics(state):
     skills = normalize_skill_map(state.get("skills", {}))
@@ -66,7 +67,7 @@ APP_OWNED = {
     # The permanent, app-owned purchase-offer ledger (systems.py) — the GM
     # supplies a one-turn purchase_offer, but never authors the resolved
     # flag or ids in purchase_offers directly.
-    "purchase_offers",
+    "purchase_offers", "canon_integrity_repairs",
     # Only the player's own rating action (engine_journal.rate_last_turn_good)
     # writes this — never the GM.
     "rated_good_turns", "narrative_memory", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs",
@@ -383,6 +384,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     repairs.extend(normalize_world_depth(state, before))
     repairs.extend(initialize_lit_systems(state))
     repairs.extend(normalize_political_state(state, before))
+    repairs.extend(normalize_canon_integrity(state))
     normalize_companion_combinations(state, before)
     normalize_trophy_state(state, before)
     refresh_simulation_core(state)
@@ -434,6 +436,7 @@ def migrate_state(state, from_version="unknown"):
     repairs.extend(normalize_world_depth(migrated))
     repairs.extend(initialize_lit_systems(migrated))
     repairs.extend(normalize_political_state(migrated))
+    repairs.extend(normalize_canon_integrity(migrated, scan_chronicle=True))
     normalize_companion_combinations(migrated)
     normalize_trophy_state(migrated)
     refresh_simulation_core(migrated)

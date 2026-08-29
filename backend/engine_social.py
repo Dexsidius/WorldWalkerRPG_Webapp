@@ -18,6 +18,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
                      update_chapter_memory, tick_world_clocks)
 from simulation import refresh_npc_intentions, background_ai_due
 from power_benchmarks import benchmark_context
+from canon_integrity import canon_identity_context, repair_canon_payload
 
 
 LOCAL_CANON_POWER_ESTIMATES = {
@@ -219,6 +220,7 @@ class SocialMixin:
             "task": "advisor_question", "question": question, "state": self.task_state_for_ai("advisor", question),
             "advisor_mode": "fourth_wall" if fourth_wall else "strategic", "next_canon_event": self.canon_countdown(),
             "canon_divergences": self.state.get("canon_divergences", []),
+            "canon_identity_evidence": canon_identity_context(self.state.get("world", "Custom World"), question, self.state, limit=16),
             "comparison_requested": comparison_requested,
             "named_character_power_question": named_character_power_question,
             "power_comparison_guardrail": {
@@ -247,6 +249,7 @@ class SocialMixin:
 Voice: talk TO the player, like a DM answering a question at the table — direct, plain, second person ("you're", "they've"), a real opinion when asked for one. Not a report, not a wiki article. This applies to every kind of question, not just rules questions — a strategy or world-state answer should still sound like a person talking, just with more to say.
 ANSWER THE QUESTION FIRST: the opening sentence must directly answer the player's actual question. Do not substitute a nearby topic, repeat a generic campaign briefing, or lead with a disclaimer. Use prior thread messages only to resolve references such as "that," "he," or "why"; the newest payload.question always controls what you answer.
 EVIDENCE ORDER: authoritative player corrections and current state override recent campaign records; recent records override chapter summaries; recorded divergences override stock canon. question_evidence contains local search matches from the full campaign, not guesses. Before answering, silently check the proposed answer against current stats/status/location, campaign_canon, continuity_facts, NPC/faction chains, and relevant question_evidence. If two records genuinely conflict, state the conflict instead of choosing whichever is convenient.
+CANON IDENTITY DISCIPLINE: treat canon_identity_evidence as opening-era identity/office grounding. Apply the current campaign date and every recorded succession, death, defection, promotion, or divergence before answering; never swap similarly placed characters or silently assign one character another's office.
 TIME DISCIPLINE: distinguish what is true now from what used to be true. Never describe a completed, prevented, or diverged event as pending. Never erase something merely because it falls outside the recent-turn tail; use question_evidence and chapter summaries for older events.
 AMBIGUITY: if the question cannot be resolved because two tracked people/events share the reference, ask one precise clarifying question. Do not invent a target or answer a different question.
 You may freely:
@@ -277,6 +280,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         routed = bool(self.settings.get("advisor_model") or self.settings.get("advisor_provider") in {"local", "cloud"})
         advisor_client = self.ai_advisor if routed else self.ai
         data = advisor_client.request(rules, payload, max_output_tokens=200 if concise else 1000)
+        data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         entry = {
             "role": "advisor",
             "summary": (data.get("summary") or "").strip() or "...",
@@ -518,6 +522,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                        "events": "system notifications if needed"}
         }
         data = self.ai.request(self.core_rules(), payload, max_output_tokens=150 if concise else 500)
+        data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         with self.lock:
             before = copy.deepcopy(self.state)
             apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="side_chat")
@@ -557,6 +562,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                                       "If the world has no modern phones, interpret 'chat' as the nearest lore-appropriate medium: Den Den Mushi, messenger, letter, radio, courier, system message, guild chat, etc.")
         try:
             data = self.ai_bg.request(rules, payload, max_output_tokens=350)
+            data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         except Exception as e:
             self.log("Background chat check failed: " + str(e))
             return None
@@ -634,6 +640,7 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         rules = self.core_rules(extra="This is a background simulation tick. Preserve geography, travel time, NPC knowledge and causality. Do not resolve a player action.")
         try:
             data = self.ai_bg.request(rules, payload, max_output_tokens=450)
+            data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         except Exception as e:
             self.log("World tick failed: " + str(e))
             return None

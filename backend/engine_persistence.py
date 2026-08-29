@@ -11,6 +11,7 @@ from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
 from state_guard import apply_guarded_patch, migrate_state
+from canon_integrity import repair_canon_text
 from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
@@ -325,6 +326,25 @@ class PersistenceMixin:
             self.checkpoints = b.get("checkpoints", [])
             self.story_log = b.get("story_log", [])
             self.system_log = b.get("system_log", [])
+            # Visible Chronicle rows live outside state in the save bundle.
+            # Scan them after state migration, retain the historical text,
+            # and surface one transparent correction immediately on load.
+            known_repairs = set(self.state.setdefault("canon_integrity_repairs", []))
+            external_repairs = []
+            for row in self.story_log[-250:]:
+                if not isinstance(row, dict):
+                    continue
+                _, notes = repair_canon_text(self.state.get("world", "Custom World"), row.get("text", ""), self.state)
+                external_repairs.extend(note for note in notes if note not in known_repairs)
+            if external_repairs:
+                self.state.setdefault("_pending_chronicle_notes", []).append(
+                    "[CANON CORRECTION]\n" + "; ".join(dict.fromkeys(external_repairs)) +
+                    ". Future narration will use the corrected assignment."
+                )
+                known_repairs.update(external_repairs)
+                self.state["canon_integrity_repairs"] = sorted(known_repairs)[-100:]
+            for note in self.state.pop("_pending_chronicle_notes", []):
+                self.append(note, "meta")
             if not had_canon_clock:
                 canon = timeline_for(self.state.get("world", "Custom World"))
                 day = int(canon.get("start_day", -7))

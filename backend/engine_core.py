@@ -24,7 +24,8 @@ from simulation import (compile_context_snapshot, normalize_simulation_mode,
 from simulation_integrity import canon_dependency_graph, campaign_search
 from overgeared_classes import canon_class_prompt_reference
 from ability_archive import GeneratedAbilityArchive
-from simulation_core import refresh_simulation_core
+from simulation_core import refresh_simulation_core, action_commits_violence
+from canon_integrity import canon_identity_context, repair_canon_payload
 
 
 DEFAULT_SETTINGS = {
@@ -301,7 +302,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs")
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -552,7 +553,11 @@ class CoreMixin:
         action_text = " ".join(str(x) for x in (actions or []) if str(x).strip())
         risky_check = any(str(row.get("lethal_risk") or "none").lower() in {"moderate", "high", "extreme"}
                           for row in (checks or []) if isinstance(row, dict))
-        return risky_check or bool(self._DANGER_SCENE_RE.search(action_text))
+        proposal_only = bool(re.search(
+            r"\b(?:ask|request|propose|offer|arrange|schedule|seek|petition|invite|challenge)\b.{0,90}"
+            r"\b(?:duel|spar|bout|match|fight|battle|combat)\b", action_text, re.I,
+        )) and not action_commits_violence(action_text)
+        return risky_check or (bool(self._DANGER_SCENE_RE.search(action_text)) and not proposal_only)
 
     def ensure_immediate_combat_patch(self, data, actions=None):
         """Last-resort structured-combat backstop.
@@ -572,6 +577,7 @@ class CoreMixin:
             return False
         action_text = " ".join(str(x) for x in (actions or []) if str(x).strip())
         initiated = (bool(self._FIGHT_START_RE.search(action_text))
+                     and action_commits_violence(action_text)
                      and not bool(self._FIGHT_NEGATION_RE.search(action_text))
                      and not bool(self._FIGURATIVE_FIGHT_RE.search(action_text)))
         if re.search(r"\b(?:until|till|through)\b.{0,45}\b(?:attack|fight|battle|combat)\b.{0,20}\b(?:over|ends?|ended|finished|resolved)\b", action_text, re.I):
@@ -613,7 +619,10 @@ class CoreMixin:
             match = re.search(r"\b(?:attack|fight|strike|stab|slash|shoot|punch|kick|hit|tackle|grapple|ambush|kill|duel|spar)(?:\s+with)?\s+(?:the\s+|a\s+|an\s+)?([A-Za-z][A-Za-z'’-]*(?:\s+[A-Za-z][A-Za-z'’-]*){0,2})", action_text, re.I)
             if match:
                 candidate = re.split(r"\b(?:with|using|at|in|until|before|after|while|as|because|and|but|who|that|threatening|near|beside)\b", match.group(1), maxsplit=1, flags=re.I)[0].strip(" .,!?")
-                if candidate and candidate.lower() not in {"training dummy", "practice target", "door", "wall"}:
+                if candidate and candidate.lower() not in {
+                    "training dummy", "practice target", "door", "wall", "bow", "deep bow",
+                    "respectful bow", "formal bow", "nod", "salute", "handshake",
+                }:
                     opponent = candidate.title()
         if opponent == "Hostile opponent":
             known = [str(name) for name in (self.state.get("npc_memories") or {}).keys() if str(name).strip()]
@@ -690,6 +699,9 @@ class CoreMixin:
             if violations:
                 reminder += "\n\nREMINDER: your previous attempt has a specific problem that must be fixed in this response: " + " ".join(violations)
             data = client.request(instructions + reminder, payload, max_output_tokens=max_output_tokens)
+        data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
+        if canon_repairs:
+            data["canon_integrity_repairs"] = canon_repairs
         self._last_narrator_model = getattr(client, "model", self.settings.get("model", ""))
         return data
 
@@ -740,10 +752,12 @@ class CoreMixin:
         alone fires every other turn), so the savings compound."""
         wd = WORLD_DATA[self.state["world"]]
         mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "") + NARRATIVE_CRAFTING_RULE
+        identity = canon_identity_context(self.state.get("world", "Custom World"), extra, self.state, limit=4)
         return f"""You are the world-consistency layer for Worldwalker RPG's "{self.state['world']}" campaign — not narrating a full scene, just keeping one small piece of the simulation honest.
 WORLD RULES: {wd['rules']}
 {mechanics}
 CUSTOM SETTING: {self.state.get('custom_world', '')}
+{identity}
 
 CORE PRINCIPLES
 - NPCs, factions and world events continue independently and know only what they could plausibly know.

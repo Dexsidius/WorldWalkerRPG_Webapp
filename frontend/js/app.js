@@ -1072,7 +1072,9 @@ function renderClassCard(rawClass) {
   const cls = rawClass && typeof rawClass === "object" ? { ...rawClass } : {};
   const rawDiscovery = cls.discovery && typeof cls.discovery === "object" ? cls.discovery : null;
   if (rawDiscovery?.concealed) {
-    cls.name = rawDiscovery.public_name || "Unidentified Class Signature";
+    const publicName = rawDiscovery.public_name || "Unidentified Class Signature";
+    const legacyAffinity = publicName.match(/^Unidentified (.+) Class$/i);
+    cls.name = legacyAffinity ? `Unidentified Hidden Class — ${legacyAffinity[1]} affinity` : publicName;
     cls.description = rawDiscovery.clue || "A dormant class-shaped power is present, but its nature is not yet understood.";
     cls.effect = Number(rawDiscovery.progress || 0) < 70 ? "Some bonuses are already active; their exact source remains unclear." : cls.effect;
     if (Number(rawDiscovery.progress || 0) < 50) cls.signature_skill = "";

@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.37.1"
+APP_VERSION = "3.37.2"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1475,7 +1475,7 @@ BASE_STATE = {
     "tower_floor":1,"tower_floor_deadline_day":None,"tower_over":False,"canon_event_engagement_count":0,"background_world_feed":[],
     "last_major_beat_day":None,"director_notes":"","simulation_scale":"Individual",
     "world_time":"Day 1 — Morning","status":[],"alive":True,"turn":0,"timeline":[],"special":{},
-    "canon_divergences":[],"campaign_canon":[],"world_events":[],"currency":{"name":"Currency","amount":250},"currencies":{},"npc_memories":{},"npc_relationships":{},"shops":[],
+    "canon_divergences":[],"canon_integrity_repairs":[],"campaign_canon":[],"world_events":[],"currency":{"name":"Currency","amount":250},"currencies":{},"npc_memories":{},"npc_relationships":{},"shops":[],
     # purchase_offer is the transient AI-facing input (one narrative buy
     # opportunity per turn: {item, price, vendor}); purchase_offers is the
     # permanent, app-owned list systems.record_purchase_offer builds from

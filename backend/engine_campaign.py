@@ -822,6 +822,19 @@ class CampaignMixin:
         return self.generated_ability_archive.exclusions(world, category, limit=40)
 
     @staticmethod
+    def special_name_is_placeholder(value):
+        """Reject generator planning labels before they become fiction."""
+        name = str(value or "").strip()
+        if not name:
+            return True
+        return bool(re.search(
+            r"\b(?:generated|placeholder|unnamed|unknown|tbd|to be determined)\b|"
+            r"\b(?:hidden|secret|special|custom)\b.{0,35}\b(?:related|themed)\b.{0,20}\b(?:class|ability|power|skill)\b|"
+            r"\b(?:class|ability|power|skill)\b.{0,35}\b(?:related|themed)\b",
+            name, re.I,
+        ))
+
+    @staticmethod
     def background_locked_facts(world, background):
         """Extract player-authored creation facts that generation may expand
         but may never replace.  This intentionally favors a small set of
@@ -995,6 +1008,8 @@ class CampaignMixin:
 
         if category == "hidden_class":
             anchor = re.sub(r"\s+Path$", "", identity, flags=re.I).strip()
+            if CampaignMixin.special_name_is_placeholder(anchor):
+                anchor = ""
             name = f"{anchor} {operation_name} Path" if anchor else f"{title} Path"
             signature = f"{subject_name} {operation_name}"
             result.update({
@@ -1027,6 +1042,8 @@ class CampaignMixin:
     def _finalize_original_special(self, world, category, package, source="generation"):
         """Guarantee a non-canon package has never appeared for this player."""
         candidate = copy.deepcopy(package)
+        if self.special_name_is_placeholder(candidate.get("name") or candidate.get("true_name")):
+            candidate = self._mechanically_distinct_special(world, category, candidate, salt=997)
         current = getattr(self, "state", {}) or {}
         profile = power_profile_for(world, current.get("stats", {}), current.get("archetype", ""))
         tier = int((profile.get("world_peak") or profile.get("peak") or {}).get("index", 3) or 3)
@@ -1238,7 +1255,8 @@ Return JSON only, with no markdown."""
         try:
             client = self.ai_bg if self.ai_bg_ready() else self.ai
             authored = client.request(instructions, payload, max_output_tokens=650 if is_class else 525)
-            if not isinstance(authored, dict) or not str(authored.get("name") or "").strip():
+            if (not isinstance(authored, dict)
+                    or self.special_name_is_placeholder(authored.get("name"))):
                 return fallback
             merged = copy.deepcopy(fallback)
             allowed = set(payload["schema"])
@@ -1641,8 +1659,9 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 "concealed": bool(concealed),
                 "progress": 20 if concealed else 100,
                 "stage": "dormant" if concealed else "understood",
-                "public_name": (f"Unidentified {aspect} Class" if world in {"Overgeared", "Solo Max-Level Newbie"} else f"Unidentified {aspect} Potential"),
-                "clue": f"A {aspect.lower()}-aligned class feature answers instinctively when pressure or focused practice calls on it.",
+                "public_name": (f"Unidentified Hidden Class — {aspect} affinity" if world in {"Overgeared", "Solo Max-Level Newbie"} else f"Unidentified {aspect} Potential"),
+                "affinity_clue": aspect,
+                "clue": f"A dormant class feature reacts to {aspect.lower()}-aligned actions, but its true name and complete rules are not identified yet.",
                 "reveal_requirements": ["Use the unusual class feature", "Seek appraisal or specialist knowledge", "Train along the class's natural affinity"],
             },
             "description": description,

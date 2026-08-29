@@ -22,6 +22,7 @@ from urllib.parse import urlparse, urljoin, urldefrag, unquote, urlencode
 from urllib.request import Request, urlopen
 from util import DATA_DIR, safe_filename
 from bleach_data import CANON_HADO, CANON_BAKUDO
+from canon_integrity import canon_identity_context
 
 LORE_DIR = Path(__file__).resolve().parent.parent / "assets" / "lore"
 USER_LORE_DIR = DATA_DIR / "lore"
@@ -723,11 +724,14 @@ def retrieve_lore(world, query, state=None, limit=5):
 
 def format_lore_context(world, query, state=None, limit=5):
     entries = retrieve_lore(world, query, state, limit=limit)
-    if not entries:
+    identity = canon_identity_context(world, query, state, limit=max(5, limit * 2))
+    if not entries and not identity:
         return ""
     conflicts = detect_lore_conflicts(entries)
-    lines = ["RETRIEVED LORE EVIDENCE (ranked by source authority; preserve uncertainty and never blend incompatible claims):"]
-    lines.extend(f"- {entry.get('title','Lore')} [{entry.get('source_type','unknown')} {entry.get('authority',0)}/100 · {entry.get('source','Source not recorded')}{' · ' + entry.get('citation') if entry.get('citation') else ''}]: {entry.get('text','')}" for entry in entries)
+    lines = [identity] if identity else []
+    if entries:
+        lines.append("RETRIEVED LORE EVIDENCE (ranked by source authority; preserve uncertainty and never blend incompatible claims):")
+        lines.extend(f"- {entry.get('title','Lore')} [{entry.get('source_type','unknown')} {entry.get('authority',0)}/100 · {entry.get('source','Source not recorded')}{' · ' + entry.get('citation') if entry.get('citation') else ''}]: {entry.get('text','')}" for entry in entries)
     if conflicts:
         lines.append("SOURCE CONFLICTS — use the authoritative resolution below and treat alternatives as disputed:")
         lines.extend(f"- {row['claim']}: {row['resolution']} ({row['source']}); disputed by " + ", ".join(x['source'] for x in row['alternatives']) for row in conflicts)

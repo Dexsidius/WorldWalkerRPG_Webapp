@@ -23,7 +23,7 @@ class WorldwalkerV3370Tests(unittest.TestCase):
         return state
 
     def test_version_and_new_persistent_fields(self):
-        self.assertEqual(APP_VERSION, "3.37.1")
+        self.assertEqual(APP_VERSION, "3.37.2")
         for key in ("companion_combinations", "trophy_proposals", "legacy_trophies",
                     "dismissed_trophy_ids", "downtime_surprise_state", "message_delivery_state"):
             self.assertIn(key, BASE_STATE)

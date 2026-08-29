@@ -19,6 +19,20 @@ from worlds import power_profile_for, uses_xp_for
 CORE_VERSION = 1
 _TRAINING_RE = re.compile(r"\b(train|practice|study|meditat|drill|condition|master|learn|refine)\w*\b", re.I)
 _VIOLENCE_RE = re.compile(r"\b(attack|strike|fight|kill|stab|shoot|ambush|assault|duel|battle)\w*\b", re.I)
+_COMMITTED_VIOLENCE_RE = re.compile(
+    r"\b(?:attack|strike|fight|kill|stab|shoot|ambush|assault|duel|spar|battle|slash|punch|kick|hit|tackle|grapple|choke)\w*\b|"
+    r"\b(?:cast|throw|unleash|fire|blast|launch)\b.{1,45}\b(?:at|on|toward|into)\b|"
+    r"\b(?:charge|lunge|swing)\b.{0,35}\b(?:at|on|toward|into)\b",
+    re.I,
+)
+_VIOLENCE_PROPOSAL_RE = re.compile(
+    r"\b(?:ask|request|propose|offer|arrange|schedule|seek|petition|invite|challenge)\b.{0,90}"
+    r"\b(?:duel|spar|bout|match|fight|battle|combat)\b", re.I,
+)
+_COMMITTED_AFTER_PROPOSAL_RE = re.compile(
+    r"\b(?:then|and then|immediately|once (?:he|she|they) (?:accepts?|agrees?))\b.{0,60}"
+    r"\b(?:attack|strike|stab|slash|shoot|punch|kick|ambush|kill|charge|lunge)\b", re.I,
+)
 _ESCAPE_RE = re.compile(r"\b(flee|escape|retreat|withdraw|surrender|yield)\w*\b", re.I)
 _SOCIAL_RE = re.compile(r"\b(negotiate|persuade|ask|convince|bargain|diploma|speech|meet|propose)\w*\b", re.I)
 
@@ -127,13 +141,24 @@ def classify_action(action):
     text = str(action or "").strip()
     kinds = []
     if _TRAINING_RE.search(text): kinds.append("training")
-    if _VIOLENCE_RE.search(text): kinds.append("violence")
+    if action_commits_violence(text): kinds.append("violence")
     if _ESCAPE_RE.search(text): kinds.append("escape")
-    if _SOCIAL_RE.search(text): kinds.append("social")
+    if _SOCIAL_RE.search(text) or _VIOLENCE_PROPOSAL_RE.search(text): kinds.append("social")
     if not kinds: kinds.append("general")
     return {"text": text[:500], "kinds": kinds,
             "has_method": bool(re.search(r"\b(by|using|through|with|via|because)\b", text, re.I)),
             "has_goal": bool(re.search(r"\b(to|until|so that|in order to)\b", text, re.I))}
+
+
+def action_commits_violence(action):
+    """Distinguish an actual hostile act from asking to arrange a fight."""
+    text = str(action or "")
+    if not _COMMITTED_VIOLENCE_RE.search(text):
+        return False
+    proposal = _VIOLENCE_PROPOSAL_RE.search(text)
+    if proposal and not _COMMITTED_AFTER_PROPOSAL_RE.search(text[proposal.start():]):
+        return False
+    return True
 
 
 def progression_calibration(state, actions=None, elapsed_minutes=0):
@@ -221,7 +246,7 @@ def normalize_encounter_state(state, action=""):
         phase = "aftermath"
     elif _ESCAPE_RE.search(str(action or "")):
         phase = "escape_or_surrender"
-    elif _VIOLENCE_RE.search(str(action or "")):
+    elif action_commits_violence(action):
         phase = "committed_violence"
     elif state.get("danger_scenario"):
         phase = "confrontation"
