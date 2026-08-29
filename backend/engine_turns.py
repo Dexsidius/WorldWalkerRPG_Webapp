@@ -28,6 +28,7 @@ from overgeared_classes import starter_kit_for, class_action_bonus
 from jjk_system import advance_jjk_state
 from simulation_core import refresh_simulation_core, record_resolution_transaction
 from canon_integrity import repair_canon_payload
+from world_activity import advance_world_activity, normalize_world_activity
 
 
 DEFAULT_SETTINGS = {
@@ -635,12 +636,17 @@ Return ONLY valid JSON."""
             self.sync_derived_pools(before)
             if is_opening:
                 initialize_lit_systems(self.state)
+                normalize_world_activity(self.state)
                 lit_notes = []
             else:
                 lit_notes = process_lit_turn(
                     before, self.state, turn_actions, data.get("narrative", ""),
                     context.get("elapsed_minutes", 5),
                 )
+            activity_notes = [] if is_opening else advance_world_activity(
+                self.state, before, turn_actions, data.get("narrative", ""), data.get("events", []),
+                context.get("elapsed_minutes", 5),
+            )
             # "turn" is an app-controlled counter, never an AI-authored field —
             # a state_patch that happens to include one (models sometimes do)
             # must not be allowed to set it.
@@ -656,6 +662,8 @@ Return ONLY valid JSON."""
             if lit_notes:
                 heading = "SATISFY SYSTEM" if self.state.get("world") == "Overgeared" else "TOWER SYSTEM"
                 self.append(f"[{heading}]\n" + "\n".join(lit_notes), "system")
+            if activity_notes:
+                self.append("[WORLD DEVELOPMENT]\n" + "\n".join(activity_notes), "system")
             record_simulation_events(self.state,
                                      [{"type": "action", "narrative": data.get("narrative", "")}]
                                      + list(data.get("events", []) or []), "narrator")

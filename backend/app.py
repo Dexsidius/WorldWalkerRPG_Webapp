@@ -1168,6 +1168,7 @@ def api_panels():
         "class_encyclopedia": class_encyclopedia() if world == "Overgeared" else {},
         "solo_system": s.get("solo_system", {}),
         "jjk_system": s.get("jjk_system", {}),
+        "world_activity": s.get("world_activity", {}),
         "world_depth": s.get("world_depth", {}),
         "class_profile": visible_class_profile(s),
         "combat": s.get("combat", {}),

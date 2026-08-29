@@ -34,6 +34,7 @@ from standing_intents import (advance_standing_intents, player_training_directiv
                               register_standing_intents, standing_intent_context)
 from simulation_core import refresh_simulation_core, record_resolution_transaction, action_commits_violence
 from canon_integrity import repair_canon_payload
+from world_activity import advance_world_activity
 from age_system import advance_character_age
 from campaign_features import downtime_surprise_prompt
 
@@ -1771,6 +1772,10 @@ class TimeSkipMixin:
                 before, self.state, context.get("actions", []), data.get("narrative", ""),
                 self.duration_minutes(elapsed_amount, elapsed_unit),
             )
+            activity_notes = advance_world_activity(
+                self.state, before, context.get("actions", []), data.get("narrative", ""),
+                data.get("events", []), self.duration_minutes(elapsed_amount, elapsed_unit),
+            )
             for ev in data.get("timeline_events", []) or []:
                 self.state.setdefault("timeline", []).append(ev)
             for c in data.get("new_contacts", []) or []:
@@ -1842,6 +1847,8 @@ class TimeSkipMixin:
             if lit_notes:
                 heading = "SATISFY SYSTEM" if self.state.get("world") == "Overgeared" else "TOWER SYSTEM"
                 self.append(f"[{heading}]\n" + "\n".join(lit_notes), "system")
+            if activity_notes:
+                self.append("[WORLD DEVELOPMENT]\n" + "\n".join(activity_notes), "system")
             if jjk_notes:
                 self.append("[JUJUTSU RECORD]\n" + "\n".join(jjk_notes), "system")
             self.append_growth_deltas(before)

@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.37.2"
+APP_VERSION = "3.38.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1514,7 +1514,7 @@ BASE_STATE = {
     "trophy_proposals":[],"legacy_trophies":[],"dismissed_trophy_ids":[],"downtime_surprise_state":{},"message_delivery_state":{},
     "capability_profile":{},"ability_registry":{},"progression_calibration":{},"npc_continuity":{},
     "encounter_state":{"version":1,"phase":"idle","negotiation_possible":True,"violence_committed":False},
-    "story_threads":{},"resolution_ledger":[],"simulation_core_version":1
+    "story_threads":{},"resolution_ledger":[],"simulation_core_version":1,"world_activity":{}
 }
 
 WORLD_EXPANSIONS = {

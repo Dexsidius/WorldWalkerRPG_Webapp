@@ -6,9 +6,11 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.37.2** (schema 19).
+Current app/save version: **3.38.0** (schema 19).
 
-Version 3.37.2 stops requests to arrange a duel from prematurely starting
+Version 3.38.0 adds persistent world-depth records, context-routed prompts,
+multi-factor JJK clashes, richer LitRPG floors/classes, and readable long-title
+major-event cinematics. It retains the 3.37.2 fixes that stop duel arrangements from prematurely starting
 combat, including the reported case where “with a deep bow” was misread as an
 opponent named Deep Bow. It also adds local canon identity/role locks across
 all supported canon worlds, repairs unambiguous Bleach division swaps, and

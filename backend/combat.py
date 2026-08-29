@@ -255,7 +255,14 @@ class CombatMixin:
         stat_bonus = int(round((stat - benchmark) / 4.0))
         sb = self.skill_bonus(skill) if skill else 0
         tb = self.title_bonus()
-        return stat_bonus + sb + tb, sb
+        disclosure_bonus = 0
+        if self.state.get("world") == "Jujutsu Kaisen" and skill:
+            detail = (self.state.get("skills") or {}).get(skill, {})
+            system = self.state.get("jjk_system") or {}
+            technique = (system.get("birth_slot") or {}).get("name")
+            if isinstance(detail, dict) and detail.get("parent_technique") == technique:
+                disclosure_bonus = int((system.get("technique_disclosure") or {}).get("active_bonus", 0) or 0)
+        return stat_bonus + sb + tb + disclosure_bonus, sb
 
     def _player_defense_bonus(self, combat):
         ability = combat.get("player_defense_ability") or abilities_for(self.state.get("world", "Custom World"))[0]

@@ -454,12 +454,14 @@ def initialize_jjk_state(state, slot, origin, curse_grade="", curse_identity=Non
         "application_mastery":{str(row.get("name")):{"mastery":year_floor, "uses":0, "evidence":[]}
                                for row in slot.get("applications", []) if isinstance(row, dict) and row.get("name")},
         "unlocks":[], "technique_intel":{}, "technique_exposure":{"public_facts":[], "witnesses":{}, "rumors":[]},
+        "technique_disclosure":{"opponents":{}, "active_bonus":0, "active_opponent":"None"},
         "grade_record":{"missions_completed":0, "confirmed_exorcisms":0, "difficult_exorcisms":0,
+                        "mission_reliability":0, "political_support":[], "headquarters_recognition":"Unassessed",
                         "promotion_recommendation":"No recommendation yet", "review_progress":0, "evidence":[]},
         "curse_identity":copy.deepcopy(curse_identity or {}), "humans_killed":0, "feeding_growth":0,
         "curse_development":{"fear_resonance":0, "territory":"None", "infamy":0, "public_assessment":"Unregistered", "evidence":[]},
         "black_flash_count":0, "black_flash":{"eligible_attempts":0, "confirmed":0, "in_the_zone_turns":0, "last_result":"None"},
-        "binding_vows":[], "barrier_mastery":"Foundational", "domain_status":"Unachieved",
+        "binding_vows":[], "mission_dossiers":[], "domain_clashes":[], "barrier_mastery":"Foundational", "domain_status":"Unachieved",
         "domain":domain_profile_for(slot), "reverse_cursed_technique":"Unachieved", "maximum_technique":"Unachieved",
         "heavenly_restriction_mastery":{"body":year_floor if slot.get("slot_type") == "Heavenly Restriction" else 0,
                                          "perception":year_floor if slot.get("slot_type") == "Heavenly Restriction" else 0,
@@ -608,13 +610,22 @@ def normalize_jjk_state(state, before=None):
                     clean[key] = clean[key][-20:]
     system.setdefault("technique_intel", {})
     system.setdefault("technique_exposure", {"public_facts":[], "witnesses":{}, "rumors":[]})
+    system.setdefault("technique_disclosure", {"opponents":{}, "active_bonus":0, "active_opponent":"None"})
+    system["technique_disclosure"].setdefault("opponents", {})
+    system["technique_disclosure"].setdefault("active_bonus", 0)
+    system["technique_disclosure"].setdefault("active_opponent", "None")
     system.setdefault("grade_record", {"missions_completed":0, "confirmed_exorcisms":0, "difficult_exorcisms":0, "promotion_recommendation":"No recommendation yet", "review_progress":0, "evidence":[]})
+    system["grade_record"].setdefault("mission_reliability", 0)
+    system["grade_record"].setdefault("political_support", [])
+    system["grade_record"].setdefault("headquarters_recognition", "Unassessed")
     system.setdefault("curse_identity", copy.deepcopy(special.get("Cursed Spirit Nature") or {}))
     system.setdefault("humans_killed", 0); system.setdefault("feeding_growth", 0)
     system.setdefault("curse_development", {"fear_resonance":0, "territory":"None", "infamy":0, "public_assessment":"Unregistered", "evidence":[]})
     system.setdefault("black_flash_count", int(special.get("Black Flashes", 0) or 0))
     system.setdefault("black_flash", {"eligible_attempts":0, "confirmed":system["black_flash_count"], "in_the_zone_turns":0, "last_result":"None"})
     system.setdefault("binding_vows", [])
+    system.setdefault("mission_dossiers", [])
+    system.setdefault("domain_clashes", [])
     authored_vows = special.get("Binding Vows")
     if isinstance(authored_vows, list):
         for vow in authored_vows:
@@ -698,6 +709,29 @@ def _promotion_recommendation(state, record):
     return "Build a verified mission and exorcism record"
 
 
+def resolve_domain_clash(player, enemy):
+    """Compare the five parts that decide a domain contest in the setting."""
+    def score(domain):
+        return (
+            _safe_number(domain.get("refinement"), domain.get("mastery", 0)) * .34
+            + _safe_number(domain.get("barrier_integrity"), domain.get("barrier", 0)) * .24
+            + _safe_number(domain.get("output"), 0) * .22
+            + min(100, _safe_number(domain.get("range"), 10)) * .10
+            + _safe_number(domain.get("compatibility"), 50) * .10
+        )
+    player_score, enemy_score = score(player), score(enemy)
+    interaction = "Closed barriers contest normally"
+    if player.get("open_barrier") and not enemy.get("open_barrier"):
+        player_score += 12; interaction = "The player's open barrier attacks the opposing shell from outside"
+    elif enemy.get("open_barrier") and not player.get("open_barrier"):
+        enemy_score += 12; interaction = "The enemy's open barrier attacks the player's shell from outside"
+    margin = round(player_score - enemy_score, 1)
+    outcome = "Player domain prevails" if margin >= 8 else "Enemy domain prevails" if margin <= -8 else "Domains remain contested"
+    return {"player_score":round(player_score, 1), "enemy_score":round(enemy_score, 1), "margin":margin, "outcome":outcome,
+            "factors":{"refinement":"34%", "barrier":"24%", "output":"22%", "range":"10%", "compatibility":"10%"},
+            "barrier_interaction":interaction}
+
+
 def advance_jjk_state(state, before, actions, narrative, events, elapsed_minutes=5):
     """Apply deterministic JJK consequences after a narrator result.
 
@@ -750,6 +784,32 @@ def advance_jjk_state(state, before, actions, narrative, events, elapsed_minutes
             fact = f"Observed {skill_name} in use; effect witnessed, full governing rule not automatically known"
             if fact not in observed: observed.append(fact)
 
+    # Revealing one's hand creates a real, named matchup modifier. Correct
+    # inference grants a smaller version; merely seeing an effect is not the
+    # same as understanding its governing rule.
+    combat = state.get("combat") if isinstance(state.get("combat"), dict) else {}
+    enemy = combat.get("enemy") if isinstance(combat.get("enemy"), dict) else {}
+    opponent = str(enemy.get("name") or "").strip()
+    disclosure = system.setdefault("technique_disclosure", {"opponents":{}, "active_bonus":0, "active_opponent":"None"})
+    if opponent:
+        row = disclosure.setdefault("opponents", {}).setdefault(opponent, {"known":False, "source":"Unknown", "bonus":0, "evidence":[]})
+        deliberate = bool(re.search(r"\b(?:explain|reveal|tell|declare|disclose)\w*\b.{0,80}\b(?:technique|ability|rule|how it works)\b", " ".join(actions), re.I))
+        intel = system.get("technique_intel", {}).get(opponent, {})
+        inferred = bool((intel.get("confirmed") if isinstance(intel, dict) else []) or re.search(r"\b(?:understood|figured out|deduced|learned)\b.{0,80}\b(?:technique|rule|ability)\b", result_text, re.I))
+        if deliberate or inferred:
+            row["known"] = True
+            row["source"] = "Deliberately revealed" if deliberate else "Correctly inferred"
+            row["bonus"] = 10 if deliberate else 5
+            evidence = (next((x for x in actions if deliberate and re.search(r"explain|reveal|tell|declare|disclose", x, re.I)), "") or result_text)[:260]
+            if evidence and evidence not in row.setdefault("evidence", []): row["evidence"].append(evidence)
+        disclosure["active_opponent"] = opponent
+        disclosure["active_bonus"] = int(row.get("bonus", 0) or 0) if row.get("known") else 0
+        if disclosure["active_bonus"]:
+            notes.append(f"REVEALING ONE'S HAND — {opponent} knows the rule; +{disclosure['active_bonus']} technique bonus")
+    else:
+        disclosure["active_opponent"] = "None"
+        disclosure["active_bonus"] = 0
+
     barrier = _track(system, "Barrier Arts")["mastery"]
     if barrier >= 25 and _add_unlock(system, "Curtain"):
         _add_skill(state, "Curtain", "Barrier Art", "Raises a configurable barrier that conceals or controls entry according to established conditions.", category="control", effect_type="control")
@@ -800,6 +860,18 @@ def advance_jjk_state(state, before, actions, narrative, events, elapsed_minutes
     if vow and not any(old.get("promise") == vow["promise"] for old in system.get("binding_vows", []) if isinstance(old, dict)):
         system.setdefault("binding_vows", []).append(vow)
         notes.append(f"BINDING VOW FORMED — {vow['name']}")
+    for existing in system.get("binding_vows", []):
+        if not isinstance(existing, dict) or existing.get("status", "Active") != "Active":
+            continue
+        if re.search(r"\b(?:break|broke|breach|violat|betray)\w*\b.{0,100}\b(?:vow|promise|restriction)\b", all_text, re.I):
+            existing["status"] = "Breached"
+            existing["breached_turn"] = state.get("turn", 0)
+            existing.setdefault("evidence", []).append(result_text[:260] or "Violation declared in the player's action")
+            conditions = state.setdefault("conditions", [])
+            if not any(isinstance(c, dict) and c.get("name") == "Binding Vow Backlash" for c in conditions):
+                conditions.append({"name":"Binding Vow Backlash", "duration_rounds":3, "effect":"The vow's benefit is removed and its recorded consequence applies."})
+            notes.append(f"BINDING VOW BREACHED — {existing.get('name', 'Recorded vow')}")
+            break
 
     # Black Flash requires both a confirmed outcome and a physically eligible
     # cursed-energy impact. Merely typing its name or receiving decorative
@@ -827,6 +899,19 @@ def advance_jjk_state(state, before, actions, narrative, events, elapsed_minutes
     newly_completed = [q for q in (state.get("quests") or []) if isinstance(q, dict) and str(q.get("status", "")).lower() in {"complete", "completed", "resolved"} and old_quests.get(str(q.get("name"))) not in {"complete", "completed", "resolved"}]
     record = system.setdefault("grade_record", {})
     record["missions_completed"] = int(record.get("missions_completed", 0) or 0) + len(newly_completed)
+    if newly_completed:
+        record["mission_reliability"] = min(100, int(record.get("mission_reliability", 0) or 0) + 5 * len(newly_completed))
+        record["headquarters_recognition"] = "Established" if record["missions_completed"] >= 5 else "Documented"
+        for quest in newly_completed:
+            system.setdefault("mission_dossiers", []).append({
+                "name":quest.get("name", "Jujutsu mission"),
+                "human_cause":quest.get("human_cause", "The human source of the curse remains part of the case"),
+                "manifestations":quest.get("manifestations", ["Initial anomaly", "Escalation", "Resolved manifestation"]),
+                "unknowns":quest.get("unknowns", []),
+                "civilians":quest.get("civilians", "Civilians affected or placed at risk"),
+                "outcome":quest.get("outcome", "Resolved with consequences beyond exorcism"), "status":"Resolved",
+            })
+        system["mission_dossiers"] = system["mission_dossiers"][-30:]
     exorcisms = len(re.findall(r"\b(?:exorcis(?:e|ed)|destroy(?:ed)?|defeat(?:ed)?)\b[^.]{0,60}\bcurse(?:d spirit)?\b", result_text, re.I))
     if exorcisms:
         record["confirmed_exorcisms"] = int(record.get("confirmed_exorcisms", 0) or 0) + exorcisms
@@ -836,6 +921,23 @@ def advance_jjk_state(state, before, actions, narrative, events, elapsed_minutes
     if recommendation != record.get("promotion_recommendation"):
         record["promotion_recommendation"] = recommendation
         notes.append(f"GRADE RECORD — {recommendation}")
+
+    if re.search(r"\bdomain expansion\b", " ".join(actions), re.I) and re.search(r"\b(?:enemy|opponent|curse|sorcerer).{0,100}\bdomain\b|\bdomain clash\b", result_text, re.I):
+        player_domain = copy.deepcopy(system.get("domain") or {})
+        player_domain.setdefault("refinement", _track(system, "Domain Expansion")["mastery"])
+        player_domain.setdefault("barrier_integrity", _track(system, "Barrier Arts")["mastery"])
+        player_domain.setdefault("output", _safe_number((state.get("stats") or {}).get("Cursed Energy Output", 0)))
+        player_domain.setdefault("range", 20)
+        enemy_domain = enemy.get("domain") if isinstance(enemy.get("domain"), dict) else {
+            "name":f"{opponent or 'Enemy'} Domain", "refinement":enemy.get("domain_refinement", enemy.get("power", 50)),
+            "barrier_integrity":enemy.get("domain_barrier", enemy.get("power", 50)),
+            "output":enemy.get("power", 50), "range":enemy.get("domain_range", 20),
+        }
+        clash = resolve_domain_clash(player_domain, enemy_domain)
+        clash.update({"turn":state.get("turn", 0), "player_domain":player_domain.get("name", "Player Domain"), "enemy_domain":enemy_domain.get("name", "Enemy Domain")})
+        system.setdefault("domain_clashes", []).append(clash)
+        system["domain_clashes"] = system["domain_clashes"][-20:]
+        notes.append(f"DOMAIN CLASH — {clash['outcome']} ({clash['player_score']} vs {clash['enemy_score']})")
 
     # Sentient curses gain exponentially more from high-energy prey, accrue
     # infamy, and become formally assessed only once witnesses know enough.

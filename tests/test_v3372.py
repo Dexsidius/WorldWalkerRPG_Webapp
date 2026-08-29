@@ -30,7 +30,7 @@ class WorldwalkerV3372Tests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.37.2")
+        self.assertEqual(APP_VERSION, "3.38.0")
 
     def test_duel_request_with_a_deep_bow_is_not_combat(self):
         action = "Take Tosens test then again request a witnessed duel with a deep bow"

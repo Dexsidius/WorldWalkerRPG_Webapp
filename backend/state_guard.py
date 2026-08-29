@@ -23,6 +23,7 @@ from politics import normalize_political_state
 from simulation_core import refresh_simulation_core
 from campaign_features import normalize_companion_combinations, normalize_trophy_state
 from canon_integrity import normalize_canon_integrity
+from world_activity import normalize_world_activity
 
 def _compile_skill_mechanics(state):
     skills = normalize_skill_map(state.get("skills", {}))
@@ -84,7 +85,7 @@ APP_OWNED = {
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
     "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
-    "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version",
+    "encounter_state", "story_threads", "resolution_ledger", "simulation_core_version", "world_activity",
     "legacy_trophies", "dismissed_trophy_ids", "downtime_surprise_state", "message_delivery_state",
 }
 TIME_OWNED = {"world_time", "world_clock_minutes", "calendar", "canon_time_minutes", "canon_day"}
@@ -95,7 +96,7 @@ NESTED_DICT_FIELDS = {
     "reputation", "special", "contacts", "chat_threads", "combat", "portrait_identity",
     "growth_profile", "background_details", "npc_memories", "npc_clocks", "faction_clocks",
     "difficulty_controls", "progression_preset", "overgeared_system", "solo_system", "jjk_system", "world_depth",
-    "polity_state", "downtime_surprise_state", "message_delivery_state",
+    "polity_state", "downtime_surprise_state", "message_delivery_state", "world_activity",
 }
 NESTED_LIST_FIELDS = {
     "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
@@ -382,6 +383,7 @@ def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     repairs.extend(_repair_bleach_mechanics(state, before))
     repairs.extend(normalize_world_progression(state, before))
     repairs.extend(normalize_world_depth(state, before))
+    repairs.extend(normalize_world_activity(state, before))
     repairs.extend(initialize_lit_systems(state))
     repairs.extend(normalize_political_state(state, before))
     repairs.extend(normalize_canon_integrity(state))
@@ -434,6 +436,7 @@ def migrate_state(state, from_version="unknown"):
     _compile_skill_mechanics(migrated)
     repairs.extend(normalize_world_progression(migrated))
     repairs.extend(normalize_world_depth(migrated))
+    repairs.extend(normalize_world_activity(migrated))
     repairs.extend(initialize_lit_systems(migrated))
     repairs.extend(normalize_political_state(migrated))
     repairs.extend(normalize_canon_integrity(migrated, scan_chronicle=True))

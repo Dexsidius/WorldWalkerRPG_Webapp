@@ -814,6 +814,28 @@ body[data-time="dusk"] .scene-img{ filter:saturate(1.08) contrast(1.05) brightne
 .canon-cinematic .event-window-actions button{ min-height:44px; border-radius:8px; font-weight:900; letter-spacing:.055em; }
 .canon-cinematic .event-window-actions .btn-primary{ min-width:238px; border-color:var(--event-accent-soft); background:var(--event-accent); color:#090706; }
 .canon-cinematic .event-window-guidance{ position:absolute; left:clamp(28px,6vw,92px); bottom:37px; max-width:48ch; margin:0; text-align:left; color:#bdb2a7; font-size:10.5px; letter-spacing:.025em; opacity:0; }
+/* Keep the cinematic copy in normal document flow. Long canon-event titles
+   used to occupy a fixed absolute box and could paint directly over the
+   description beneath it. The right-side facts/actions remain anchored. */
+@media(min-width:721px){
+  .canon-cinematic .event-window-notice{
+    display:flex; flex-direction:column; align-items:flex-start; justify-content:center;
+    gap:0; padding:72px clamp(390px,39vw,540px) 104px clamp(28px,6vw,92px);
+  }
+  .canon-cinematic .event-window-kicker,
+  .canon-cinematic .event-window-rule,
+  .canon-cinematic .event-window-notice h3,
+  .canon-cinematic .event-window-meta,
+  .canon-cinematic #event-window-context{ position:static; left:auto; top:auto; }
+  .canon-cinematic .event-window-kicker{ margin:0 0 18px; }
+  .canon-cinematic .event-window-rule{ flex:0 0 3px; margin:0 0 22px; }
+  .canon-cinematic .event-window-notice h3{
+    width:min(720px,54vw); max-width:18ch; max-height:min(48dvh,6em); margin:0;
+    overflow-y:auto; font-size:clamp(30px,4vw,60px); line-height:.94; overflow-wrap:anywhere;
+  }
+  .canon-cinematic .event-window-meta{ width:min(620px,52vw); margin:22px 0 0; }
+  .canon-cinematic #event-window-context{ width:min(610px,52vw); min-height:3em; max-height:min(24dvh,10.5em); margin:12px 0 0; flex:0 1 auto; }
+}
 .canon-cinematic .event-window-modal[data-event-world="naruto"]{ --event-accent:#e96f33; --event-accent-soft:#ffc07b; }
 .canon-cinematic .event-window-modal[data-event-world="one-piece"]{ --event-accent:#df3e36; --event-accent-soft:#ffd35c; }
 .canon-cinematic .event-window-modal[data-event-world="bleach"]{ --event-accent:#dce7ef; --event-accent-soft:#8ed9ff; }
