@@ -122,7 +122,7 @@ APP_OWNED = {
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
     "scene_state", "scene_history", "last_outcome_scale", "outcome_scale_ledger",
     "obligation_ledger", "delayed_consequences", "canon_divergence_impacts", "pacing_profile",
-    "player_style_profile", "lore_confidence_log",
+    "player_style_profile", "lore_confidence_log", "fact_history",
     "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
     "encounter_state", "story_threads", "scenario_memory", "world_milestones", "resolution_ledger", "simulation_core_version", "world_activity",

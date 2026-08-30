@@ -70,7 +70,7 @@ def validate_nested_campaign_state(state):
         "quests", "hidden_quests", "quest_archive", "companions", "conditions",
         "scheduled_events", "campaign_canon", "chapter_summaries", "scene_history",
         "verified_memory_archive", "resolution_ledger", "progression_ledger",
-        "consequence_ledger", "obligation_ledger", "delayed_consequences",
+        "consequence_ledger", "obligation_ledger", "delayed_consequences", "fact_history",
     )
     dict_fields = (
         "scene_state", "combat", "danger_scenario", "npc_memories", "contacts",

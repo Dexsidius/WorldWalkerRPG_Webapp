@@ -6,7 +6,15 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.44.3** (schema 20).
+Current app/save version: **3.45.0** (schema 20).
+
+Version 3.45.0 strengthens conditional/negative intent, evidence-linked NPC reactions,
+faithful subordinate commands, current-versus-historical facts, individual NPC dialogue,
+routine time-skip grouping, and narrative/outcome validation. Repairs receive the original
+draft, and a still-contradictory result is rejected before application. New multi-turn
+regressions exercise hidden abilities, real save export/import/load, and combat availability
+across all nine worlds. Existing saves work without starting over; old Chronicle text is
+preserved. Ordinary successful turns do not require an additional model call.
 
 Version 3.44.3 adds locally parsed player intent, causal complication limits, NPC knowledge and temporal boundaries, deterministic progression guidance, relevant liked-turn examples, stronger named-character estimates, narrative Dōjutsu recovery, and first-update Chronicle anchoring. Version 3.44.2 made named applications inside umbrella abilities usable in combat, grounded incoming messages in sender knowledge, and removed repeated agenda boilerplate. Version 3.44.1 adds reliable money accounting, payable obligations, exact
 fractional currencies, and the approved One Piece Poneglyph Chronicle. Version 3.44.0 adds causal outcome resolution, smaller task-specific AI prompts,

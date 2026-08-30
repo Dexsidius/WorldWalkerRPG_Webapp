@@ -21,7 +21,7 @@ _ACTION_PATTERNS = {
     "communication": r"\b(?:message|write|call|contact|send word|report|letter)\b",
     "travel": r"\b(?:travel|go to|head to|sail|fly to|walk to|return to|leave for|journey)\b",
     "crafting": r"\b(?:craft|forge|build|cook|brew|make|repair|invent|design)\b",
-    "investigation": r"\b(?:investigate|search|research|track|inspect|question|scout|analyze)\b",
+    "investigation": r"\b(?:investigate|search|research|track|inspect|question|scout|analyze|watch|observe|check)\b",
     "governance": r"\b(?:rule|govern|order|command|policy|territory|land|faction|guild|village|nation|army)\b",
     "finance": r"(?:[$£¥₩]|\b(?:buy|sell|pay|price|money|currency|gold|bel[iy]|ryo|wage|rent|income|expense|shop)\b)",
     "quest": r"\b(?:quest|mission|job|contract|objective|goal|assignment|agenda|promise)\b",
@@ -67,7 +67,9 @@ def parse_player_intent(action, state=None):
     """Turn free-form input into a compact, non-authoritative control packet."""
     text = re.sub(r"\s+", " ", ai_text(action)).strip()
     lower = text.lower()
-    kinds = [name for name, pattern in _ACTION_PATTERNS.items() if re.search(pattern, text, re.I)]
+    clauses = intent_clauses(text)
+    immediate = " ; ".join(row["text"] for row in clauses if row["mode"] == "immediate")
+    kinds = [name for name, pattern in _ACTION_PATTERNS.items() if re.search(pattern, immediate, re.I)]
     if not kinds:
         kinds = ["general"]
     duration = {}
@@ -78,11 +80,22 @@ def parse_player_intent(action, state=None):
     desired = _RESULT_RE.search(text)
     targets = [name for name in sorted(_known_targets(state), key=len, reverse=True)
                if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.I)][:8]
-    nonlethal = bool(re.search(r"\b(?:spare|capture|subdue|knock out|non[- ]?lethal|do not kill|don't kill)\b", lower))
-    lethal = bool(re.search(r"\b(?:kill|execute|slay|assassinate|to the death|lethal)\b", lower)) and not nonlethal
+    nonlethal = bool(re.search(r"\b(?:spare|capture|subdue|knock out|non[- ]?lethal)\b", immediate, re.I)
+                    or re.search(r"\b(?:do not|don't|never) kill\b", lower))
+    lethal = bool(re.search(r"\b(?:kill|execute|slay|assassinate|to the death|lethal)\b", immediate, re.I)) and not nonlethal
+    scene = (state or {}).get("scene_state") if isinstance(state, dict) else {}
+    scene = scene if isinstance(scene, dict) else {}
+    present = [ai_text(row.get("name") if isinstance(row, dict) else row)
+               for row in scene.get("present", []) if row] if isinstance(scene.get("present"), list) else []
     return {
         "raw": text[:1200],
         "activity": kinds,
+        "clauses": clauses,
+        "immediate_text": immediate,
+        "prohibited": [row["text"] for row in clauses if row["mode"] == "prohibited"],
+        "conditional": [row for row in clauses if row["mode"] == "conditional"],
+        "reference_candidates": present[:8] if re.search(r"\b(?:him|her|them|he|she|they)\b", text, re.I) else [],
+        "reference_rule": "Resolve pronouns from this scene and preceding clauses, never guess among ambiguous people.",
         "targets": targets,
         "desired_result": (desired.group(1).strip()[:220] if desired else ""),
         "method": (method.group(1).strip()[:220] if method else ""),
@@ -92,6 +105,38 @@ def parse_player_intent(action, state=None):
         "player_controls": "the stated character action and method",
         "world_controls": "other characters' informed reactions and consequences caused by established facts",
     }
+
+
+def intent_clauses(text):
+    """Conservative scope hints, not a replacement for understanding free text.
+
+    Keep conditions attached to their governed action, including negated-unless
+    clauses. Never assert that an unobserved condition has been satisfied.
+    """
+    text = ai_text(text).replace("’", "'")
+    # Split action boundaries but not a leading 'if X, do Y' condition.
+    pieces = re.split(r"[;\n]|(?<=[.!?])\s+|\bbut\b|\b(?:and|or)\s+(?=(?:I\s+)?(?:don't|do not|never|avoid)\b)", text, flags=re.I)
+    rows = []
+    for piece in pieces:
+        piece = piece.strip(" ,.")
+        if not piece:
+            continue
+        condition = re.search(r"\b(?:only if|unless|if|once|when|provided that)\b", piece, re.I)
+        if condition:
+            rows.append({"text": piece[:500], "mode": "conditional", "condition": piece[condition.start():][:300]})
+            continue
+        # 'Inspect the door without touching it' retains inspection, excludes contact.
+        # Explicit sequencing is retained inside immediate text so existing
+        # fight-proposal logic can distinguish 'ask to spar' from 'then attack'.
+        bits = re.split(r"\b(without|don't|do not|never|avoid|refrain from)\b", piece, maxsplit=1, flags=re.I)
+        if len(bits) > 1:
+            prefix = bits[0].strip(" ,")
+            if prefix and prefix.lower() not in {"i", "we", "please", "i will", "we will"}:
+                rows.append({"text": prefix[:500], "mode": "immediate"})
+            rows.append({"text": (bits[1] + " " + bits[2]).strip()[:500], "mode": "prohibited"})
+        else:
+            rows.append({"text": piece[:500], "mode": "immediate"})
+    return rows[:20]
 
 
 def prompt_modules(purpose, query, state=None):
@@ -143,6 +188,9 @@ def intent_prompt(contract):
         f"Desired result: {contract.get('desired_result') or 'the direct ordinary result of the action'}.\n"
         f"- Standing instruction: {'yes' if contract.get('standing') else 'no'}. "
         f"Lethality: {contract.get('lethality', 'unspecified')}.\n"
+        f"- Ordered clauses: {contract.get('clauses', [])}. Prohibited actions are never performed. "
+        "Conditional actions wait until their trigger actually occurs; mentioning a threat is not committing violence.\n"
+        f"- Pronoun candidates: {contract.get('reference_candidates', [])}. {contract.get('reference_rule', '')}\n"
         "Resolve the player-controlled act first. Keep independent NPC choice in their subsequent informed reaction; do not turn that reaction into retroactive failure."
     )
 
@@ -255,6 +303,13 @@ def enforce_response_policy(data, payload, state):
     for event in result.get("events") or []:
         if isinstance(event, dict) and event.get("message"):
             event["message"] = clean_model_text(event.get("message"), False)
+
+    # The prepared request uses stronger provenance validation before this
+    # cleanup; do not erase referenced rows just because legacy text is absent.
+    if "turn_evidence" in (payload or {}):
+        if repairs:
+            result["gm_policy_repairs"] = repairs
+        return result
 
     causal = result.get("causal_outcome") if isinstance(result.get("causal_outcome"), dict) else {}
     complications = causal.get("complications") if isinstance(causal.get("complications"), list) else []

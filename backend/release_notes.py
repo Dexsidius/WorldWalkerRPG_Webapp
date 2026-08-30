@@ -1,6 +1,21 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.45.0": {
+        "title": "A More Consistent GM",
+        "summary": "Better command fidelity, evidence-backed reactions, current campaign memory and outcome checks, including existing saves.",
+        "highlights": [
+            {"title": "Conditional actions stay conditional", "example": "Watch him, but do not attack unless he threatens Konan no longer counts as immediately committing violence."},
+            {"title": "Subordinates follow the actual order", "example": "A loyal subordinate delivers your sealed invitation without replacing your goal; refusal or deviation needs established supporting evidence."},
+            {"title": "Reactions need an information path", "example": "A distant ruler cannot react using an invented messenger, and a report must arrive before its recipient responds."},
+            {"title": "Narration agrees with rewards", "example": "A learned technique needs recorded mechanics; a refused purchase cannot award its item. Explicit recovery removes a condition instead of adding it again."},
+            {"title": "Current facts override old summaries", "example": "A former captain keeps their history without regaining their old authority; a changed relationship informs the next conversation."},
+            {"title": "More individual NPC conversations", "example": "Dialogue receives the contact's goals, loyalties, experiences and knowledge. Thanks or uncomplicated support are valid responses."},
+            {"title": "Quieter long-skip routine", "example": "Routine training can share one progress section, while breakthroughs and real decisions retain their own updates."},
+            {"title": "Repairs preserve valid outcomes", "example": "When a check finds a contradiction, one repair receives the original draft. A still-invalid result is not applied; ordinary valid turns need no extra call."},
+            {"title": "Existing-save and multi-turn checks", "example": "The same rules apply after loading an older campaign. Tests follow a hidden skill through acquisition, export/import/load, conversation and use across every world."},
+        ],
+    },
     "3.44.3": {
         "title": "A More Causal and Efficient Game Master",
         "summary": "The GM now interprets intent locally, limits unsupported complications, respects information and time boundaries, chooses relevant examples, and reliably mirrors narratively earned Dōjutsu into Naruto's dedicated panel.",

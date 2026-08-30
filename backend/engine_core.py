@@ -34,6 +34,7 @@ from campaign_reliability import (
 )
 from response_guard import normalize_turn_response
 from long_campaign import pre_advance_health_check, record_runtime_error
+from gm_consistency import CONSISTENCY_RULE, prepare_request, semantic_issues
 from gm_policy import (
     enforce_response_policy, intent_prompt, parse_player_intent, prompt_modules,
     select_approved_example, temporal_budget,
@@ -373,7 +374,7 @@ class CoreMixin:
     # budget re-typing it and raising the odds of getting cut off mid-JSON
     # before the response ever closes. The fix is to not show it the
     # temptation at all rather than trust it to resist one it can see.
-    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log", "prompt_budget_log")
+    AI_HIDDEN_FIELDS = ("continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log", "prompt_budget_log", "fact_history")
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -812,12 +813,15 @@ class CoreMixin:
         specifically so the model isn't just asked to "try again" blind."""
         max_output_tokens = output_budget(max_output_tokens, self.simulation_mode())
         client = client or self.ai
+        payload = prepare_request(self.state, payload)
+        instructions += CONSISTENCY_RULE
         usage_before = copy.deepcopy(getattr(client, "usage", {}))
         data = normalize_turn_response(client.request(instructions, payload, max_output_tokens=max_output_tokens), payload.get("task"))
-        data = enforce_response_policy(data, payload, self.state)
         narrative_missing = not (data.get("narrative") or "").strip()
         violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
         quality_issues = [] if narrative_missing else self._response_quality_issues(payload, data)
+        consistency_issues = semantic_issues(self.state, data, payload)
+        quality_issues.extend(consistency_issues)
         if narrative_missing or violations or quality_issues:
             reminder = ""
             if narrative_missing:
@@ -826,9 +830,12 @@ class CoreMixin:
                 reminder += "\n\nREMINDER: your previous attempt has a specific problem that must be fixed in this response: " + " ".join(violations)
             if quality_issues:
                 reminder += "\n\nQUALITY REPAIR: keep every valid fact and outcome from the first attempt, but correct these locally verified omissions or contradictions: " + " ".join(quality_issues)
-            data = normalize_turn_response(client.request(instructions + reminder, payload, max_output_tokens=max_output_tokens), payload.get("task"))
-            data = enforce_response_policy(data, payload, self.state)
+            repair_payload = {**payload, "repair_draft": copy.deepcopy(data), "repair_issues": quality_issues + violations}
+            data = normalize_turn_response(client.request(instructions + reminder, repair_payload, max_output_tokens=max_output_tokens), payload.get("task"))
         data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
+        remaining = semantic_issues(self.state, data, payload)
+        if remaining:
+            raise ValueError("The GM returned a contradictory result after one repair. This result was not applied; your previous save remains usable. Retry Advance. Details: " + " ".join(remaining[:2]))
         data = enforce_response_policy(data, payload, self.state)
         if canon_repairs:
             data["canon_integrity_repairs"] = canon_repairs

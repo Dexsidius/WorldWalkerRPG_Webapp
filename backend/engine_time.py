@@ -1847,7 +1847,8 @@ class TimeSkipMixin:
             autonomy_events = advance_companion_autonomy(self.state, elapsed_minutes)
             npc_growth_events = advance_npc_development(self.state, elapsed_minutes)
             downtime_events = world_downtime_events(self.state, elapsed_minutes, context.get("actions", []))
-            updates = data.get("updates", []) if isinstance(data.get("updates"), list) else []
+            from gm_consistency import coalesce_routine_updates
+            updates = coalesce_routine_updates(data.get("updates", []))
             updates = prioritize_updates(
                 [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events]
                  if isinstance(u, dict) and str(u.get("narrative", "")).strip()],

@@ -152,7 +152,8 @@ def classify_action(action):
 
 def action_commits_violence(action):
     """Distinguish an actual hostile act from asking to arrange a fight."""
-    text = str(action or "")
+    from gm_policy import intent_clauses
+    text = "; ".join(row["text"] for row in intent_clauses(action) if row["mode"] == "immediate")
     if not _COMMITTED_VIOLENCE_RE.search(text):
         return False
     proposal = _VIOLENCE_PROPOSAL_RE.search(text)

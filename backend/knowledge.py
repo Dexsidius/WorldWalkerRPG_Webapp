@@ -31,7 +31,13 @@ def _fact_record(value, default_source="unknown", turn=0):
         confidence = max(0, min(100, int(confidence))) if confidence is not None else None
     except (TypeError, ValueError):
         confidence = None
-    return {"fact": text[:500], "source": source[:80] or "unknown", "turn": int(turn or 0),
+    provenance = {key: copy.deepcopy(value[key]) for key in ("id", "canon_day", "available_at_minutes", "delivered_at_minutes") if key in value} if isinstance(value, dict) else {}
+    recorded_turn = value.get("turn", turn) if isinstance(value, dict) else turn
+    try:
+        recorded_turn = int(recorded_turn or 0)
+    except (ValueError, TypeError, OverflowError):
+        recorded_turn = int(turn or 0)
+    return {**provenance, "fact": text[:500], "source": source[:80] or "unknown", "turn": recorded_turn,
             **({"confidence": confidence} if confidence is not None else {})}
 
 

@@ -13,6 +13,7 @@ import json
 import re
 
 from util import ai_text
+from gm_consistency import current_fact_view, decision_profiles, record_fact_changes
 
 
 _OUTCOME_SCALE_PATTERNS = (
@@ -42,15 +43,26 @@ def refresh_scene_state(state, data=None, actions=None):
     details = (state.get("location_details") or {}).get(location, {})
     details = details if isinstance(details, dict) else {}
     present = []
+    previous_scene = state.get("scene_state") if isinstance(state.get("scene_state"), dict) else {}
+    previous_present = previous_scene.get("present", []) if previous_scene.get("location") == location else []
+    nearby = []
     for name, memory in (state.get("npc_memories") or {}).items():
-        if not isinstance(memory, dict) or str(memory.get("status", "active")).lower() == "deceased":
+        if not isinstance(memory, dict) or str(memory.get("status", "active")).lower() in {"dead", "deceased", "missing", "absent"}:
             continue
         same_place = ai_text(memory.get("last_known_location")).casefold() == location.casefold()
         named_now = bool(name and re.search(rf"(?<!\w){re.escape(str(name))}(?!\w)", narrative_blob, re.I))
-        if same_place or named_now:
+        # Discussing a distant person, or sharing a whole city, is not witnessing
+        # this scene. Keep nearby people available without granting them secrets.
+        reported = bool(re.search(rf"\b(?:about|of|from|regarding)\s+{re.escape(str(name))}\b", narrative_blob, re.I))
+        if same_place:
+            nearby.append(str(name))
+        if (same_place and named_now and not reported) or (str(name) in previous_present and same_place):
             present.append(str(name))
     for row in state.get("companions", []) or []:
         name = ai_text(row.get("name") if isinstance(row, dict) else row)
+        if isinstance(row, dict) and (row.get("status") in {"dead", "deceased", "away", "absent"} or
+                                     (row.get("location") and row.get("location") != location)):
+            continue
         if name and name not in present:
             present.append(name)
     combat = state.get("combat") if isinstance(state.get("combat"), dict) else {}
@@ -68,6 +80,7 @@ def refresh_scene_state(state, data=None, actions=None):
         "sublocation": ai_text(details.get("sublocation") or details.get("setting")),
         "indoors": details.get("indoors"), "activity": ai_text(details.get("activity") or state.get("current_activity")),
         "weather": ai_text(state.get("weather")), "present": present[:16],
+        "nearby_not_confirmed_present": [name for name in nearby if name not in present][:16],
         "immediate_danger": (ai_text(enemy.get("name")) or "Active combat") if combat.get("active") else
                             ai_text((state.get("danger_scenario") or {}).get("summary")),
         "unresolved_question": ai_text(questions[-1]) if questions else "",
@@ -348,6 +361,9 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
             }))
     people.sort(key=lambda pair: (-pair[0], pair[1]["name"].lower()))
     packet["relevant_people"] = [row for _, row in people[:8]]
+    names = [row["name"] for row in packet["relevant_people"]]
+    packet["current_fact_view"] = current_fact_view(state, names)
+    packet["npc_decision_profiles"] = decision_profiles(state, names)
 
     affiliation_names = _affiliation_names(state)
     factions = state.get("factions") if isinstance(state.get("factions"), dict) else {}
@@ -422,6 +438,10 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
 
 def _prune(value):
     if isinstance(value, dict):
+        if {"subject", "field", "value"}.issubset(value):
+            # An empty current affiliation or removed role is meaningful;
+            # dropping its value would let an old summary fill it back in.
+            return copy.deepcopy(value)
         return {key: _prune(item) for key, item in value.items() if item not in (None, "", [], {})}
     if isinstance(value, list):
         return [_prune(item) for item in value if item not in (None, "", [], {})]
@@ -455,7 +475,7 @@ def reconcile_narrated_consequences(before, state, data, actions=None, elapsed_m
     claims are flagged rather than guessed.
     """
     data = data if isinstance(data, dict) else {}
-    manifest = data.get("consequence_manifest") if isinstance(data.get("consequence_manifest"), list) else []
+    manifest = copy.deepcopy(data.get("consequence_manifest")) if isinstance(data.get("consequence_manifest"), list) else []
     for event in data.get("events", []) if isinstance(data.get("events"), list) else []:
         if not isinstance(event, dict): continue
         kind = ai_text(event.get("type")).lower()
@@ -472,15 +492,28 @@ def reconcile_narrated_consequences(before, state, data, actions=None, elapsed_m
         kind = ai_text(raw.get("kind") or raw.get("type")).lower().replace(" ", "_")
         target = ai_text(raw.get("target") or raw.get("name") or raw.get("subject"))[:180]
         change = ai_text(raw.get("change") or raw.get("status") or raw.get("result"))[:120]
+        # Attempting/planning a gain is not ownership. Reconciliation must never
+        # turn a refused purchase or failed lesson into a reward.
+        if change.lower() in {"attempted", "failed", "refused", "planned", "possible", "rumored"}:
+            continue
         evidence = ai_text(raw.get("evidence") or raw.get("reason") or data.get("narrative"))[:500]
         applied, status, reason = False, "verified", "Already reflected in state"
-        if kind == "title" and target:
+        removing = change.lower() in {"lost", "removed", "spent", "consumed", "destroyed", "gave away", "forgotten", "cured", "healed", "cleared"}
+        if removing and target and kind in {"skill", "title", "condition", "injury"}:
+            collection = {"skill": "skills", "title": "titles", "condition": "conditions", "injury": "conditions"}[kind]
+            values = state.get(collection, {} if collection == "skills" else [])
+            if isinstance(values, dict):
+                state[collection] = {name: value for name, value in values.items() if str(name).casefold() != target.casefold()}
+            else:
+                state[collection] = [value for value in values or [] if _item_name(value).casefold() != target.casefold()]
+            applied = values != state[collection]; reason = "Applied explicit loss or recovery"
+        elif kind == "title" and target:
             names = {ai_text(item.get("name") or item.get("title") if isinstance(item, dict) else item).casefold() for item in state.get("titles", [])}
             if target.casefold() not in names:
                 state.setdefault("titles", []).append(target); applied = True; reason = "Added omitted earned title"
         elif kind in {"item", "loot"} and target:
             names = {_item_name(item).casefold() for item in state.get("inventory", [])}
-            removing = re.search(r"\b(?:lost|removed|spent|consumed|destroyed|gave away)\b", change + " " + evidence, re.I)
+            removing = re.search(r"\b(?:lost|removed|spent|consumed|destroyed|gave away)\b", change, re.I)
             if removing:
                 old_len = len(state.get("inventory", [])); state["inventory"] = [item for item in state.get("inventory", []) if _item_name(item).casefold() != target.casefold()]
                 applied = len(state["inventory"]) != old_len; reason = "Removed narrated item" if applied else "Item was not present"
@@ -548,6 +581,7 @@ def reconcile_narrated_consequences(before, state, data, actions=None, elapsed_m
         if key in seen: continue
         seen.add(key); ledger.append(row)
     state["consequence_ledger"] = ledger[-240:]
+    record_fact_changes(before, state)
     if notes:
         state.setdefault("simulation_validation", []).append({"turn": turn, "area": "consequence_reconciliation", "warnings": notes[:12]})
         state["simulation_validation"] = state["simulation_validation"][-100:]

@@ -590,6 +590,8 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         return msg
 
     def resolve_side_chat(self, thread, message):
+        from campaign_reliability import build_grounding_packet
+        from gm_consistency import CHAT_CONSISTENCY_RULE, prepare_request, semantic_issues, record_fact_changes
         with self.lock:
             self.add_chat_message(thread, self.state.get("name", "You"), message, "outgoing")
         if not self.ai_ready():
@@ -602,11 +604,12 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         concise = len(str(message).split()) <= 6
         payload = {
             "task": "side_chat_reply", "role": "Narrator + NPC dialogue", "thread": thread, "player_message": message,
-            "state": self.trimmed_state_for_ai(), "thread_history": self.state.get("chat_threads", {}).get(thread, [])[-20:],
+            "state": self.trimmed_state_for_ai(f"{thread}: {message}", "chat"), "thread_history": self.state.get("chat_threads", {}).get(thread, [])[-20:],
+            "grounding_packet": build_grounding_packet(self.state, f"{thread}: {message}", "chat", 8),
             "contact": contact, "reputation": self.state.get("reputation", {}), "affiliations": self.state.get("affiliations", []),
             "requirements": [
                 "Respond naturally as the contacted NPC/group if they are able and willing to respond — this is real-time back-and-forth, not a narrated summary of the conversation.",
-                "They may ignore, delay, refuse, lie, misunderstand, ask questions, or end the conversation.",
+                "Independent people may refuse, delay, disagree or end the conversation when their actual motives support it. Loyal subordinates follow clear feasible orders under recognized authority; do not rewrite their objective or invent reluctance. Advice may accompany compliance.",
                 "Base tone, willingness to help, and honesty on the player's actual reputation/standing with this specific person or group and any relevant affiliation/rank — a hostile or unfamiliar faction should be curt, guarded, or refuse outright; a trusted contact or fellow member should be warmer and more forthcoming. Never treat the player as automatically trusted or important.",
                 "Text the player wrote in [brackets] is a physical action attempted during the conversation (a gesture, handing something over, drawing a weapon, leaving), not something said aloud — react to it as an action with real in-fiction weight, not as dialogue.",
                 "Use lore-appropriate communication methods for this contact — an individual might text/message/scry/etc., but a large faction/polity typically replies through a representative, herald, official channel, or delay appropriate to their scale, not as if the whole organization is one person instantly texting back.",
@@ -620,11 +623,21 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                        "state_patch": "contacts, npc_memories, relationships, quests, scheduled_events, npc_clocks, faction_clocks or other side-chat consequences",
                        "events": "system notifications if needed"}
         }
-        data = normalize_object_response(self.ai.request(self.core_rules(), payload, max_output_tokens=150 if concise else 500), "reply")
+        payload = prepare_request(self.state, payload)
+        rules = self.core_rules() + CHAT_CONSISTENCY_RULE
+        budget = (250 if concise else 600) if payload.get("command_contracts") else (150 if concise else 500)
+        data = normalize_object_response(self.ai.request(rules, payload, max_output_tokens=budget), "reply")
+        issues = semantic_issues(self.state, {**data, "narrative": f"{thread} {data.get('reply', '')}"}, payload)
+        if issues:
+            data = normalize_object_response(self.ai.request(rules + "\nRepair only the listed contradictions; preserve all valid content.",
+                {**payload, "repair_draft": data, "repair_issues": issues}, max_output_tokens=budget), "reply")
+            if semantic_issues(self.state, {**data, "narrative": f"{thread} {data.get('reply', '')}"}, payload):
+                raise ValueError("The NPC reply contradicted established campaign facts and was not applied. Retry the message.")
         data, _ = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
         with self.lock:
             before = copy.deepcopy(self.state)
             apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="side_chat")
+            record_fact_changes(before, self.state)
             reply = data.get("reply", "").strip()
             if reply:
                 sender = data.get("sender") or thread

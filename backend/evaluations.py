@@ -13,6 +13,7 @@ from simulation_core import (refresh_simulation_core, record_resolution_transact
                              companion_support_for_combat)
 from util import DATA_DIR
 from response_guard import normalize_turn_response
+from gm_consistency import CONSISTENCY_RULE, prepare_request, outcome_assertions
 from experience_systems import record_world_milestones, update_scenario_memory
 
 
@@ -32,6 +33,20 @@ def _evaluation_dir():
         return fallback
 
 EVALUATION_SCENARIOS = [
+    {"id": "conditional_watch", "name": "Conditional action does not start combat", "world": "Naruto",
+     "action": "Watch the guard, but do not attack unless he threatens Konan. He has not threatened anyone.",
+     "state": {"name": "Tester", "world": "Naruto", "location": "Gate", "combat": {"active": False}},
+     "must_address": ["watch"], "outcome_assertions": [{"kind": "no_combat"}]},
+    {"id": "failed_purchase", "name": "Refused purchase cannot award an item", "world": "One Piece",
+     "action": "The seller has refused to sell the compass. Accept the refusal and leave without it.",
+     "state": {"name": "Tester", "world": "One Piece", "inventory": []},
+     "must_address": ["leave"], "outcome_assertions": [{"kind": "no_award", "field": "inventory", "name": "Compass"}]},
+    {"id": "obedient_subordinate", "name": "Established subordinate follows the actual order", "world": "Reincarnated as a Slime",
+     "action": "Order Rina to deliver this sealed invitation, without opening it or changing the terms.",
+     "state": {"name": "Tester", "world": "Reincarnated as a Slime", "location": "Hall",
+               "npc_memories": {"Rina": {"subordinate": True, "attitude": "Loyal"}},
+               "scene_state": {"location": "Hall", "present": ["Rina"]}},
+     "must_address": ["invitation"], "outcome_assertions": [{"kind": "no_unsupported_reaction"}]},
     {"id": "queued_actions", "name": "Multiple queued actions", "world": "Naruto",
      "action": "Travel to the training ground; ask Iruka about chakra control; practice until sunset.",
      "state": {"location": "Konohagakure", "world_time": "Morning", "stats": {"Chakra Control": 38}, "skills": {}},
@@ -178,7 +193,7 @@ def score_evaluation(scenario, response):
                      "detail": f"Addressed {len(addressed)} of {len(scenario.get('must_address', []))} required action elements."})
     patch = response.get("state_patch") if isinstance(response.get("state_patch"), dict) else {}
     fields = scenario.get("expected_fields", [])
-    present = [field for field in fields if field in patch or field in blob]
+    present = [field for field in fields if field in patch]
     state_score = round(20 * len(present) / max(1, len(fields)))
     forbidden_owned = {"turn", "campaign_canon", "continuity_ledger", "narrative_memory", "progression_ledger"}.intersection(patch)
     if forbidden_owned: state_score = max(0, state_score - 8)
@@ -190,10 +205,17 @@ def score_evaluation(scenario, response):
     criteria.append({"name": "Lore and secrecy", "score": lore_score, "max": 15,
                      "detail": ("No forbidden reveal or lore violation detected." if not forbidden else "Revealed or used forbidden information: " + ", ".join(forbidden))})
     suggestions = response.get("suggested_actions") if isinstance(response.get("suggested_actions"), list) else []
-    causal = bool(response.get("events") or patch) and len([x for x in suggestions if str(x).strip()]) >= 2
+    causal = bool(narrative.strip()) and len([x for x in suggestions if str(x).strip()]) >= 2
     criteria.append({"name": "Causality and continuation", "score": 15 if causal else 7 if patch else 0, "max": 15,
-                     "detail": "Outcome changes state and offers grounded next actions." if causal else "Outcome lacks a persistent consequence or usable continuation."})
-    return {"score": sum(row["score"] for row in criteria), "criteria": criteria}
+                     "detail": "Outcome offers usable continuation; quiet success need not mutate state." if causal else "Outcome lacks usable continuation."})
+    checks = outcome_assertions(scenario, response)
+    for check in checks:
+        criteria.append({"name": "Outcome contract: " + check["name"], "score": 0, "max": 0,
+                         "detail": "Passed" if check["passed"] else "FAILED: actual outcome contradicts scenario", "passed": check["passed"]})
+    score = sum(row["score"] for row in criteria)
+    if any(not check["passed"] for check in checks):
+        score = min(49, score)
+    return {"score": score, "criteria": criteria}
 
 
 def run_model_evaluation(game, scenario_ids=None, client=None):
@@ -213,8 +235,10 @@ def run_model_evaluation(game, scenario_ids=None, client=None):
             "respect what NPCs can personally know, and never write application-owned bookkeeping fields.\n\n" +
             format_lore_context(scenario["world"], scenario["action"], scenario["state"])
         )
+        instructions += CONSISTENCY_RULE
         payload = {"evaluation": scenario["name"], "world": scenario["world"], "action": scenario["action"],
                    "state": scenario["state"], "required_output": {"narrative": "string", "state_patch": {}, "events": [], "suggested_actions": []}}
+        payload = prepare_request(scenario["state"], payload)
         started = time.perf_counter()
         try:
             response = client.request(instructions, payload, timeout=240, max_output_tokens=900)
