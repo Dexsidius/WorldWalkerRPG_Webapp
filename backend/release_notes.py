@@ -1,6 +1,20 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.44.0": {
+        "title": "Causal GM and World-Native Character Sheets",
+        "summary": "Actions resolve more directly, AI jobs use smaller focused prompts, oversized campaigns recover automatically, and every world receives its approved Attributes design plus bundled canon portrait art.",
+        "highlights": [
+            {"title": "Causal outcomes", "example": "A successful private action can simply work; setbacks now require a concrete cause, believable awareness, a motive, and proportional scale."},
+            {"title": "No manufactured drama", "example": "Solved problems stay solved, quiet victories are valid, and canon no longer bends an original campaign back toward the source plot."},
+            {"title": "Focused AI jobs", "example": "Assessment, time planning, combat summaries, and continuity repair receive only the rules and context needed for their specific task."},
+            {"title": "Long-campaign request recovery", "example": "Cloud requests are compacted to about 80k tokens and automatically retry near 60k if the provider rejects an oversized request."},
+            {"title": "World-specific Attributes", "example": "Naruto uses a shinobi scroll, One Piece a bounty record, Overgeared a Satisfy window, Bleach a monochrome dossier, and every other world has its approved native treatment."},
+            {"title": "Bundled canon portraits", "example": "Approved canon starts and supported transformations load from local art instead of spending an image-generation request."},
+            {"title": "Cleaner Naruto pointers", "example": "The Naruto kunai cursor and spinning shuriken loading indicator now better match their source-world silhouettes."},
+            {"title": "Full regression coverage", "example": "The patch passes 785 automated checks covering campaigns, worlds, combat, saves, mobile behavior, prompts, and UI contracts."},
+        ],
+    },
     "3.43.0": {
         "title": "Long Campaign Stability",
         "summary": "Long-running campaigns now repair stale bookkeeping before Advance, preserve complete standing plans, recover partial AI replies, and store history far more efficiently.",

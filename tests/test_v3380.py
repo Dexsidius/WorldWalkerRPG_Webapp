@@ -24,7 +24,7 @@ def state_for(world):
 
 class WorldwalkerV3380DepthTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.43.0")
+        self.assertEqual(APP_VERSION, "3.44.0")
 
     def test_prompt_router_includes_only_relevant_one_piece_rule(self):
         compact = activity_rules_for("One Piece", "message", "incoming crew message")

@@ -194,7 +194,7 @@ class TurnsMixin:
                         "major_reason": "short reason or empty",
                         "lethal_risk": "none|low|moderate|high|extreme", "lethal_warning": "specific warning or empty, under 20 words",
                         "stakes": "success/failure stakes, under 25 words total"}}
-        extra = self.gm_context(action) + " Assess only. Do not narrate or roll. Set requires_check=true ONLY for an extremely difficult or seemingly impossible attempt, a lethal undertaking, or a major power-tier leap. Ordinary political, strategic, social, investigative, crafting, travel, and focused training actions automatically resolve without dice. On every difficulty below Nightmare, a diplomatic action or a specific setting-valid method is resolved through consequences and NPC reactions, not an arbitrary failure check. Set hard_rule_block=true only for a literal rule/state contradiction; NPC refusal or canon reluctance is a reaction, not impossibility. This is d100, never d20/D&D. Difficulty reflects the average relevant character, never player scaling. Mark major_event for power leaps, evolutions, transformations, and climactic confrontations. Keep fields terse."
+        extra = self.task_context("assessment", action)
         assessment = normalize_assessment_for_agency(
             self.state, action, self.ai.request(extra, p, max_output_tokens=700)
         )

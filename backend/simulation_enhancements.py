@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+import json
 import re
 
 from util import ai_text
@@ -325,11 +326,105 @@ def apply_prompt_budget(snapshot, state, query="", purpose="moment", mode="balan
             old = len(out[key]); out[key] = out[key][-cap:]; trimmed[key] = old - len(out[key])
     if isinstance(out.get("chat_threads"), dict) and len(out["chat_threads"]) > limits["threads"]:
         old = len(out["chat_threads"]); out["chat_threads"] = dict(list(out["chat_threads"].items())[-limits["threads"]:]); trimmed["chat_threads"] = old - len(out["chat_threads"])
-    # The selected fields above dominate long-save growth. The remaining
-    # estimate is recorded so later tuning can be evidence-based.
-    estimated = len(repr(out))
+
+    # Enforce the advertised budget instead of merely reporting it. Long
+    # campaigns can accumulate a few extremely large NPC dossiers, chat
+    # histories, chapter archives, and ledgers even after the obvious skill
+    # and inventory caps above. The save remains untouched; only this request
+    # snapshot is reduced. Current scene/mechanics and query-matched records
+    # are protected, while old tails are represented by their newest entries.
+    list_caps = {
+        "campaign_canon": 15, "chapter_summaries": 8, "world_feed": 16,
+        "background_world_feed": 12, "progression_log": 16, "story_log": 12,
+        "events": 16, "scheduled_events": 16, "information_packets": 12,
+        "standing_orders": 12, "standing_intents": 16, "action_goals": 12,
+        "consequences": 12, "history": 10, "messages": 12,
+        "confirmed_knowledge": 12, "heard_knowledge": 10, "suspected_knowledge": 10,
+        "false_beliefs": 8, "recent_outcomes": 8,
+    }
+    map_caps = {
+        "npc_memories": 18 if mode == "deep" else 12,
+        "contacts": 18, "relationships": 18, "npc_relationships": 18,
+        "factions": 16, "faction_clocks": 14, "npc_clocks": 14,
+        "story_threads": 14, "quests": 14, "chat_threads": limits["threads"],
+        "codex": limits["codex"], "shops": 10, "location_details": 14,
+    }
+
+    def encoded_size(value):
+        try:
+            return len(json.dumps(value, ensure_ascii=False, default=str, separators=(",", ":")))
+        except Exception:
+            return len(repr(value))
+
+    def compact_nested(value, parent="", depth=0, aggressive=False):
+        if isinstance(value, str):
+            cap = (650 if aggressive else 1200) if depth > 1 else (1200 if aggressive else 2400)
+            return value if len(value) <= cap else value[:cap].rstrip() + "…"
+        if isinstance(value, list):
+            cap = list_caps.get(parent, 10 if aggressive else 20)
+            source = value[-cap:] if len(value) > cap else value
+            if len(source) < len(value):
+                trimmed[parent or "nested_lists"] = trimmed.get(parent or "nested_lists", 0) + len(value) - len(source)
+            return [compact_nested(item, parent, depth + 1, aggressive) for item in source]
+        if isinstance(value, dict):
+            items = list(value.items())
+            cap = map_caps.get(parent, 20 if aggressive else 36)
+            if len(items) > cap:
+                ranked = []
+                for index, (key, detail) in enumerate(items):
+                    blob = f"{key} {detail}".lower()
+                    score = sum(term in blob for term in terms) * 100 - index / 1000
+                    ranked.append((score, index, key, detail))
+                ranked.sort(key=lambda row: (-row[0], row[1]))
+                items = [(key, detail) for _, _, key, detail in sorted(ranked[:cap], key=lambda row: row[1])]
+                trimmed[parent or "nested_maps"] = trimmed.get(parent or "nested_maps", 0) + len(value) - len(items)
+            return {str(key): compact_nested(detail, str(key), depth + 1, aggressive) for key, detail in items}
+        return value
+
+    for key in list(out):
+        if key in list_caps or key in map_caps:
+            out[key] = compact_nested(out[key], key, 0, False)
+
+    estimated = encoded_size(out)
+    if estimated > limits["chars"]:
+        protected = {
+            "name", "world", "difficulty", "location", "world_time", "canon_day", "canon_anchor",
+            "stats", "hidden_stats", "hp", "hp_max", "resource", "resource_max", "resource_name",
+            "skills", "special", "class_profile", "equipment", "combat", "danger_scenario",
+            "live_scene", "scene_state", "grounding_packet", "mechanical_power_profile",
+            "capability_summary", "active_scenario", "simulation_context", "prompt_budget",
+        }
+        candidates = sorted(
+            (encoded_size(value), key) for key, value in out.items()
+            if key not in protected and isinstance(value, (dict, list, str))
+        )
+        for _, key in reversed(candidates):
+            out[key] = compact_nested(out[key], key, 0, True)
+            estimated = encoded_size(out)
+            if estimated <= limits["chars"]:
+                break
+        # A pathological single field must not defeat the limit. Drop only
+        # the largest non-protected request-only sections, leaving an audit
+        # marker so the model knows older unrelated material was omitted.
+        omitted = []
+        if estimated > limits["chars"]:
+            candidates = sorted(
+                (encoded_size(value), key) for key, value in out.items()
+                if key not in protected and key != "prompt_budget"
+            )
+            for _, key in reversed(candidates):
+                if estimated <= limits["chars"]:
+                    break
+                omitted.append(key)
+                out.pop(key, None)
+                estimated = encoded_size(out)
+            if omitted:
+                trimmed["omitted_sections"] = omitted
+
+    visible_trimmed = {k: v for k, v in trimmed.items()
+                       if (isinstance(v, (int, float)) and v > 0) or (isinstance(v, (list, dict)) and v)}
     manifest = {"purpose": str(purpose), "mode": str(mode), "character_budget": limits["chars"],
-                "estimated_characters": estimated, "trimmed": {k: v for k, v in trimmed.items() if v > 0},
+                "estimated_characters": estimated, "trimmed": visible_trimmed,
                 "rule": "Current mechanics, the live scene, named subjects, corrections, and recent consequences outrank old unrelated detail."}
     out["prompt_budget"] = manifest
     logs = state.setdefault("prompt_budget_log", [])

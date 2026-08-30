@@ -13,7 +13,7 @@ from worlds import APP_VERSION, WORLD_DATA, abilities_for, playable_characters_f
 
 class WorldwalkerV381Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.43.0")
+        self.assertEqual(APP_VERSION, "3.44.0")
 
     def test_pain_birth_is_a_complete_canon_start(self):
         scenario = next(row for row in playable_characters_for("Naruto") if row["id"] == "pain_birth")

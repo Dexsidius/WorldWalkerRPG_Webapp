@@ -2767,5 +2767,535 @@ body[data-world="Solo Max-Level Newbie"] .panel-head{ color:#fff;border-color:#6
 body[data-world="Overgeared"] .world-system-popup{ border-color:#9bb5ff; background:linear-gradient(155deg,#27386f,#101a42); }
 body[data-world="Overgeared"] .world-system-popup>b{ color:#f2bd42; }
 body[data-world="Solo Max-Level Newbie"] .world-system-popup{ border-color:#76c7ff; box-shadow:0 20px 60px rgba(0,0,0,.62),0 0 22px rgba(54,153,255,.28),inset 0 0 36px rgba(42,104,255,.28); }
+
+/* Approved world-specific attribute records.
+   The component stays in its existing sidebar position and retains the same
+   data IDs. These rules only change material, typography and internal rhythm. */
+#attributes-panel{
+  --attribute-paper:#17130f;
+  position:relative;
+  isolation:isolate;
+}
+#attributes-panel .panel-body{ position:relative; z-index:2; }
+#attributes-panel .attr-grid{ gap:0; }
+#attributes-panel .attr-cell{ min-width:0; }
+#attributes-panel .attr-name{ min-width:0; line-height:1.22; }
+#attributes-panel .attr-val{ font-variant-numeric:tabular-nums; }
+#attributes-panel .attr-progress{ max-width:96px; overflow:hidden; text-overflow:ellipsis; }
+#attributes-panel .hidden-stats-label{ text-transform:uppercase; }
+
+/* Naruto: a compact shinobi record written across an unfurled mission scroll. */
+body[data-world="Naruto"] #attributes-panel{
+  margin-block:12px;
+  overflow:visible;
+  border:1px solid #725036;
+  border-radius:2px;
+  color:#2b1d15;
+  background:
+    repeating-linear-gradient(7deg,rgba(84,53,29,.035) 0 2px,transparent 2px 10px),
+    linear-gradient(90deg,#aa7c4c,#d7b77f 7%,#dfc58f 50%,#ba8d59 94%,#93673f);
+  box-shadow:0 12px 24px rgba(0,0,0,.34),inset 0 0 18px rgba(93,55,26,.2);
+}
+body[data-world="Naruto"] #attributes-panel::before,
+body[data-world="Naruto"] #attributes-panel::after{
+  content:"";
+  position:absolute;
+  z-index:4;
+  left:-7px;
+  right:-7px;
+  height:12px;
+  border:1px solid #45291b;
+  border-radius:8px;
+  background:linear-gradient(#8a5632,#3e2418 45%,#22140f 55%,#754329);
+  box-shadow:0 3px 5px rgba(0,0,0,.38);
+  pointer-events:none;
+}
+body[data-world="Naruto"] #attributes-panel::before{ top:-7px; }
+body[data-world="Naruto"] #attributes-panel::after{ top:auto; bottom:-7px; }
+body[data-world="Naruto"] #attributes-panel .panel-head{
+  min-height:44px;
+  border:0;
+  border-bottom:2px solid rgba(87,46,26,.62);
+  background:transparent;
+  color:#6f2c24;
+  font-family:'Yuji Syuku',Georgia,serif;
+  letter-spacing:.11em;
+}
+body[data-world="Naruto"] #attributes-panel .panel-head::after{
+  content:"SHINOBI RECORD";
+  margin-left:auto;
+  color:#6d4a33;
+  font:800 7px/1 var(--font-ui);
+  letter-spacing:.13em;
+}
+body[data-world="Naruto"] #attributes-panel .panel-head-icon{ color:#6f2c24; }
+body[data-world="Naruto"] #attributes-panel .panel-body{ padding:8px 12px 11px; }
+body[data-world="Naruto"] #attributes-panel .attr-cell{
+  min-height:40px;
+  padding:7px 4px;
+  border-color:rgba(78,47,28,.21);
+}
+body[data-world="Naruto"] #attributes-panel .attr-cell:hover{ background:rgba(113,54,36,.06); }
+body[data-world="Naruto"] #attributes-panel .attr-name{ color:#39271d; font-weight:800; }
+body[data-world="Naruto"] #attributes-panel .a-icon{ color:#6f2c24; }
+body[data-world="Naruto"] #attributes-panel .attr-val{ color:#40271c; font:900 17px/1 Georgia,serif; }
+body[data-world="Naruto"] #attributes-panel .attr-progress{ color:#7d4433; }
+body[data-world="Naruto"] #attributes-panel .hidden-stats-wrap{ border-color:rgba(78,47,28,.38); }
+body[data-world="Naruto"] #attributes-panel .hidden-stats-label{ color:#6f2c24; }
+
+/* One Piece: the attributes panel itself becomes a weathered bounty notice. */
+body[data-world="One Piece"] #attributes-panel{
+  overflow:hidden;
+  border:3px double #5a3822;
+  border-radius:1px;
+  color:#24150c;
+  background:
+    radial-gradient(circle at 15% 20%,rgba(88,49,23,.1),transparent 23%),
+    repeating-linear-gradient(2deg,rgba(66,37,17,.025) 0 2px,transparent 2px 7px),
+    linear-gradient(110deg,#b9915c,#dbc18a 9%,#d7b878 72%,#b2824e);
+  box-shadow:0 13px 27px rgba(0,0,0,.42),inset 0 0 24px rgba(73,40,18,.22);
+  transform:rotate(-.15deg);
+}
+body[data-world="One Piece"] #attributes-panel::before{
+  content:"WANTED";
+  position:absolute;
+  z-index:1;
+  top:7px;
+  left:0;
+  right:0;
+  color:#2b180d;
+  text-align:center;
+  font:900 25px/1 Georgia,serif;
+  letter-spacing:.12em;
+  opacity:.92;
+}
+body[data-world="One Piece"] #attributes-panel::after{
+  content:"DEAD OR ALIVE   •   WORLD GOVERNMENT";
+  position:absolute;
+  z-index:3;
+  left:0;
+  right:0;
+  bottom:8px;
+  color:#3a2112;
+  text-align:center;
+  font:900 6.5px/1 Georgia,serif;
+  letter-spacing:.11em;
+}
+body[data-world="One Piece"] #attributes-panel .panel-head{
+  min-height:65px;
+  padding-top:34px;
+  border:0;
+  border-bottom:3px double rgba(62,34,17,.7);
+  background:transparent;
+  color:#2b180d;
+  justify-content:center;
+  font:900 11px/1 Georgia,serif;
+  letter-spacing:.18em;
+}
+body[data-world="One Piece"] #attributes-panel .panel-head-icon{ display:none; }
+body[data-world="One Piece"] #attributes-panel .panel-body{ padding:7px 13px 25px; }
+body[data-world="One Piece"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 11px; }
+body[data-world="One Piece"] #attributes-panel .attr-cell{
+  min-height:54px;
+  display:block;
+  padding:8px 2px;
+  border-color:rgba(55,30,14,.28);
+}
+body[data-world="One Piece"] #attributes-panel .attr-cell:hover{ background:rgba(75,41,20,.05); }
+body[data-world="One Piece"] #attributes-panel .attr-name{ color:#3a2112; font:900 8px/1.2 Georgia,serif; text-transform:uppercase; letter-spacing:.05em; }
+body[data-world="One Piece"] #attributes-panel .a-icon{ color:#6c3420; }
+body[data-world="One Piece"] #attributes-panel .attr-right{ margin:6px 0 0 22px; justify-content:flex-start; }
+body[data-world="One Piece"] #attributes-panel .attr-val{ color:#2a170c; font:900 20px/1 Georgia,serif; }
+body[data-world="One Piece"] #attributes-panel .attr-progress{ color:#713b25; }
+body[data-world="One Piece"] #attributes-panel .hidden-stats-wrap{ border-color:rgba(55,30,14,.38); }
+body[data-world="One Piece"] #attributes-panel .hidden-stats-label{ color:#562d1d; }
+
+/* Hunter x Hunter: compact Hunter License with registration geometry. */
+body[data-world="Hunter x Hunter"] #attributes-panel{
+  overflow:hidden;
+  border:2px solid #171b1d;
+  border-radius:2px;
+  clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+  background:linear-gradient(125deg,#e8ece8,#cfd6d3 57%,#aebdb9);
+  box-shadow:0 14px 30px rgba(0,0,0,.48),inset 0 0 0 4px #f2f5f1;
+}
+body[data-world="Hunter x Hunter"] #attributes-panel::before{
+  content:"HUNTER LICENSE";
+  position:absolute;
+  z-index:3;
+  top:8px;
+  right:12px;
+  color:#171a1c;
+  font:900 6.5px/1 Arial,sans-serif;
+  letter-spacing:.15em;
+}
+body[data-world="Hunter x Hunter"] #attributes-panel::after{
+  content:"▰ ▰▰ ▰ ▰▰▰ ▰▰ ▰ ▰▰▰";
+  position:absolute;
+  z-index:3;
+  right:12px;
+  bottom:8px;
+  color:#1d2224;
+  font:900 7px/1 monospace;
+  letter-spacing:.06em;
+}
+body[data-world="Hunter x Hunter"] #attributes-panel .panel-head{
+  min-height:45px;
+  margin:7px 7px 0;
+  border:0;
+  border-left:11px solid #b6222d;
+  background:linear-gradient(90deg,#202529 0 62%,#5593a5 62%);
+  color:#fff;
+  font:900 10px/1 Arial,sans-serif;
+  letter-spacing:.12em;
+}
+body[data-world="Hunter x Hunter"] #attributes-panel .panel-head-icon{ color:#d4323e; }
+body[data-world="Hunter x Hunter"] #attributes-panel .panel-body{ padding:7px 13px 24px; }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 10px; }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-cell{ min-height:54px; display:block; padding:7px 1px; border-color:rgba(22,31,32,.22); }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-cell:hover{ background:rgba(40,77,81,.06); }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-name{ color:#263034; font-size:8px; font-weight:900; text-transform:uppercase; }
+body[data-world="Hunter x Hunter"] #attributes-panel .a-icon{ color:#a51d2a; }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-right{ display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:4px; margin:7px 0 0 22px; }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-progress{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-val{ color:#111719; font:900 18px/1 Arial,sans-serif; }
+body[data-world="Hunter x Hunter"] #attributes-panel .attr-progress{ color:#376f7e; }
+body[data-world="Hunter x Hunter"] #attributes-panel .hidden-stats-wrap{ border-color:rgba(22,31,32,.35); }
+body[data-world="Hunter x Hunter"] #attributes-panel .hidden-stats-label{ color:#8e1e28; }
+
+/* Solo Max-Level Newbie: canonical cobalt Tower status window. */
+body[data-world="Solo Max-Level Newbie"] #attributes-panel{
+  overflow:hidden;
+  border:2px solid #7bbcff;
+  border-radius:0;
+  clip-path:polygon(10px 0,calc(100% - 10px) 0,100% 10px,100% calc(100% - 10px),calc(100% - 10px) 100%,10px 100%,0 calc(100% - 10px),0 10px);
+  background:linear-gradient(150deg,#092291,#020947 72%,#020426);
+  box-shadow:0 0 0 1px #dff4ff,inset 0 0 38px rgba(76,136,255,.24),0 15px 34px rgba(0,0,0,.55);
+}
+body[data-world="Solo Max-Level Newbie"] #attributes-panel::before,
+body[data-world="Solo Max-Level Newbie"] #attributes-panel::after{
+  content:"◆";
+  position:absolute;
+  z-index:4;
+  top:5px;
+  color:#fff;
+  font-size:10px;
+  text-shadow:0 0 8px #66bfff;
+}
+body[data-world="Solo Max-Level Newbie"] #attributes-panel::before{ left:6px; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel::after{ right:6px; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .panel-head{
+  min-height:45px;
+  justify-content:center;
+  border:0;
+  border-bottom:1px solid #79bfff;
+  background:transparent;
+  color:#fff;
+  font-family:Bahnschrift,'Arial Narrow',sans-serif;
+  font-size:13px;
+}
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .panel-head-icon{ display:none; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .panel-body{ padding:8px 12px 13px; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .attr-cell{ min-height:50px; display:block; padding:7px 1px; border-color:rgba(137,200,255,.22); }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .attr-name{ color:#edf7ff; font:800 8px/1.25 Bahnschrift,'Arial Narrow',sans-serif; text-transform:uppercase; letter-spacing:.04em; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .a-icon{ display:none; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .attr-right{ margin-top:6px; justify-content:flex-start; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .attr-val{ color:#fff; font:900 19px/1 'Share Tech Mono',monospace; text-shadow:0 0 8px rgba(93,195,255,.5); }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .attr-progress{ color:#70eaff; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .hidden-stats-wrap{ border-color:#4e9ce7; }
+body[data-world="Solo Max-Level Newbie"] #attributes-panel .hidden-stats-label{ color:#b9edff; }
+
+/* Overgeared: Satisfy's flat navy status window and approved crest. */
+body[data-world="Overgeared"] #attributes-panel{
+  margin-top:16px;
+  overflow:visible;
+  border:2px solid #7190d7;
+  border-radius:0;
+  background:linear-gradient(180deg,#202950,#182142 55%,#131a35);
+  box-shadow:0 0 0 1px rgba(190,218,255,.36),inset 0 0 24px rgba(94,128,211,.16),0 16px 34px rgba(0,0,0,.5);
+}
+body[data-world="Overgeared"] #attributes-panel::before{
+  content:"";
+  position:absolute;
+  z-index:5;
+  top:-23px;
+  left:50%;
+  width:150px;
+  height:46px;
+  border:0;
+  border-radius:0;
+  background:url('/assets/ui/overgeared-satisfy-crest.png') center/contain no-repeat;
+  box-shadow:none;
+  transform:translateX(-50%);
+  pointer-events:none;
+}
+body[data-world="Overgeared"] #attributes-panel::after{ display:none; }
+body[data-world="Overgeared"] #attributes-panel .panel-head{
+  min-height:51px;
+  justify-content:center;
+  border:0;
+  border-bottom:2px solid #7896df;
+  background:transparent;
+  color:#fff;
+  font:900 14px/1 Bahnschrift,'Arial Narrow',sans-serif;
+  letter-spacing:.04em;
+}
+body[data-world="Overgeared"] #attributes-panel .panel-head-icon{ display:none; }
+body[data-world="Overgeared"] #attributes-panel .panel-body{ padding:8px 14px 13px; }
+body[data-world="Overgeared"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
+body[data-world="Overgeared"] #attributes-panel .attr-cell{ min-height:47px; display:block; padding:7px 0; border-color:rgba(134,161,231,.28); }
+body[data-world="Overgeared"] #attributes-panel .attr-name{ color:#f4f6ff; font:800 8px/1.25 Bahnschrift,'Arial Narrow',sans-serif; text-transform:uppercase; }
+body[data-world="Overgeared"] #attributes-panel .a-icon{ display:none; }
+body[data-world="Overgeared"] #attributes-panel .attr-right{ margin-top:5px; justify-content:flex-start; }
+body[data-world="Overgeared"] #attributes-panel .attr-val{ color:#f2bd42; font:900 19px/1 Bahnschrift,'Arial Narrow',sans-serif; }
+body[data-world="Overgeared"] #attributes-panel .attr-progress{ color:#a8c4ff; }
+body[data-world="Overgeared"] #attributes-panel .hidden-stats-wrap{ border-color:#718fe0; }
+body[data-world="Overgeared"] #attributes-panel .hidden-stats-label{ color:#f2bd42; }
+
+/* Slime: a translucent Great Sage analysis manifest. */
+body[data-world="Reincarnated as a Slime"] #attributes-panel{
+  overflow:hidden;
+  border:1px solid #72ddd6;
+  border-radius:24px 9px 24px 9px;
+  background:
+    radial-gradient(circle at 82% 17%,rgba(102,176,255,.16),transparent 25%),
+    radial-gradient(circle at 15% 86%,rgba(65,234,189,.12),transparent 28%),
+    linear-gradient(145deg,rgba(13,52,64,.96),rgba(7,29,44,.97));
+  box-shadow:0 0 0 1px rgba(160,246,238,.15),inset 0 0 35px rgba(84,209,217,.12),0 16px 38px rgba(0,0,0,.48);
+}
+body[data-world="Reincarnated as a Slime"] #attributes-panel::before{
+  content:"";
+  position:absolute;
+  z-index:1;
+  right:-26px;
+  top:48px;
+  width:135px;
+  height:135px;
+  border:1px solid rgba(119,230,226,.12);
+  border-radius:50%;
+  box-shadow:0 0 0 11px rgba(119,230,226,.035),0 0 0 26px rgba(119,230,226,.02);
+}
+body[data-world="Reincarnated as a Slime"] #attributes-panel::after{
+  content:"ANALYSIS COMPLETE";
+  position:absolute;
+  z-index:3;
+  right:12px;
+  top:19px;
+  color:#8ce7df;
+  font:800 6.5px/1 var(--font-ui);
+  letter-spacing:.14em;
+}
+body[data-world="Reincarnated as a Slime"] #attributes-panel .panel-head{
+  min-height:48px;
+  padding-right:118px;
+  justify-content:flex-start;
+  border:0;
+  border-bottom:1px solid rgba(113,226,220,.5);
+  background:linear-gradient(90deg,rgba(95,222,210,.14),transparent 75%);
+  color:#e9ffff;
+  font-family:var(--font-display);
+}
+body[data-world="Reincarnated as a Slime"] #attributes-panel .panel-head-icon{ color:#76e8dd; }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .panel-body{ padding:8px 13px 13px; }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 11px; }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .attr-cell{ min-height:52px; display:block; padding:8px 2px; border-color:rgba(112,224,219,.18); }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .attr-name{ color:#b8e5df; font-size:8px; font-weight:800; text-transform:uppercase; }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .a-icon{ color:#72ded8; }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .attr-right{ margin:6px 0 0 22px; justify-content:flex-start; }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .attr-val{ color:#dffeff; font:900 19px/1 var(--font-mono); text-shadow:0 0 8px rgba(104,239,231,.35); }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .attr-progress{ color:#7aead4; }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .hidden-stats-wrap{ border-color:rgba(112,224,219,.4); }
+body[data-world="Reincarnated as a Slime"] #attributes-panel .hidden-stats-label{ color:#85ebe1; }
+
+/* Bleach: an almost monochrome official Soul Society assessment page. */
+body[data-world="Bleach"] #attributes-panel{
+  overflow:hidden;
+  border:1px solid #a5a8a8;
+  border-left:5px solid #f1f1ed;
+  border-radius:0;
+  color:#171718;
+  background:
+    radial-gradient(circle at 85% 22%,rgba(0,0,0,.07) 0 1px,transparent 1.5px) 0 0/5px 5px,
+    linear-gradient(105deg,#d7d7d1,#f2f2ee 17%,#dadbd7 77%,#bdbfbd);
+  box-shadow:0 16px 35px rgba(0,0,0,.52),inset 0 0 0 4px #ecece7;
+}
+body[data-world="Bleach"] #attributes-panel::before{
+  content:"魂";
+  position:absolute;
+  z-index:3;
+  right:10px;
+  top:8px;
+  display:grid;
+  place-items:center;
+  width:30px;
+  height:30px;
+  border:2px solid #f5e4dc;
+  background:#a92b32;
+  color:#fff4ee;
+  font:900 13px/1 serif;
+  transform:rotate(6deg);
+}
+body[data-world="Bleach"] #attributes-panel::after{
+  content:"SOUL SOCIETY • CAPABILITY RECORD";
+  position:absolute;
+  z-index:3;
+  right:49px;
+  top:14px;
+  color:#424446;
+  font:900 6px/1 var(--font-label);
+  letter-spacing:.1em;
+}
+body[data-world="Bleach"] #attributes-panel .panel-head{
+  min-height:47px;
+  padding-right:128px;
+  border:0;
+  background:#151617;
+  color:#f4f4f1;
+  font-family:var(--font-label);
+  font-size:10px;
+  letter-spacing:.12em;
+}
+body[data-world="Bleach"] #attributes-panel .panel-head-icon{ color:#fff; }
+body[data-world="Bleach"] #attributes-panel .panel-body{ margin:8px; padding:5px 10px 10px; border-top:5px solid #191a1a; }
+body[data-world="Bleach"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 12px; }
+body[data-world="Bleach"] #attributes-panel .attr-cell{ min-height:53px; display:block; padding:8px 1px; border-color:rgba(22,23,23,.24); }
+body[data-world="Bleach"] #attributes-panel .attr-cell:hover{ background:rgba(0,0,0,.04); }
+body[data-world="Bleach"] #attributes-panel .attr-name{ color:#303233; font:900 8px/1.2 var(--font-label); text-transform:uppercase; }
+body[data-world="Bleach"] #attributes-panel .a-icon{ color:#161718; }
+body[data-world="Bleach"] #attributes-panel .attr-right{ margin:6px 0 0 22px; justify-content:flex-start; }
+body[data-world="Bleach"] #attributes-panel .attr-val{ color:#121313; font:900 20px/1 Georgia,serif; }
+body[data-world="Bleach"] #attributes-panel .attr-progress{ color:#8e252c; }
+body[data-world="Bleach"] #attributes-panel .hidden-stats-wrap{ border-color:#595b5b; }
+body[data-world="Bleach"] #attributes-panel .hidden-stats-label{ color:#9b272e; }
+
+/* Jujutsu Kaisen: a restricted assessment dossier with a talisman insert. */
+body[data-world="Jujutsu Kaisen"] #attributes-panel{
+  overflow:hidden;
+  border:1px solid #4a424f;
+  border-left:8px solid #77242a;
+  border-radius:2px;
+  background:linear-gradient(145deg,#1c1920,#111116);
+  box-shadow:0 18px 42px rgba(0,0,0,.57),inset 0 0 0 3px rgba(255,255,255,.018);
+}
+body[data-world="Jujutsu Kaisen"] #attributes-panel::before{
+  content:"呪";
+  position:absolute;
+  z-index:1;
+  right:-10px;
+  bottom:-23px;
+  color:rgba(121,78,151,.08);
+  font:900 105px/1 Georgia,serif;
+  transform:rotate(-8deg);
+}
+body[data-world="Jujutsu Kaisen"] #attributes-panel::after{
+  content:"GRADE PENDING";
+  position:absolute;
+  z-index:4;
+  right:11px;
+  top:39px;
+  padding:4px 6px;
+  border:1px solid #b23b43;
+  color:#ec858a;
+  font:900 6px/1 var(--font-ui);
+  letter-spacing:.1em;
+  transform:rotate(-2deg);
+}
+body[data-world="Jujutsu Kaisen"] #attributes-panel .panel-head{
+  min-height:62px;
+  padding:9px 10px 25px;
+  border-color:#716878;
+  background:transparent;
+  color:#f1eef2;
+  font-size:10px;
+}
+body[data-world="Jujutsu Kaisen"] #attributes-panel .panel-head-icon{ color:#c55760; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .panel-body{
+  margin:8px 10px 10px;
+  padding:7px 10px 10px;
+  color:#1d1c20;
+  background:
+    repeating-linear-gradient(0deg,rgba(37,32,40,.025) 0 1px,transparent 1px 4px),
+    linear-gradient(95deg,#c2bcaf,#e4dfd3 10%,#ebe6dc 54%,#c8c1b3);
+  clip-path:polygon(0 1%,9% 0,18% .7%,29% 0,40% .6%,51% 0,62% .7%,74% 0,86% .7%,100% 0,99% 99%,88% 100%,76% 99.2%,64% 100%,52% 99%,40% 100%,28% 99%,16% 100%,6% 99%,0 100%);
+}
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 11px; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-cell{ min-height:54px; display:block; padding:8px 1px; border-color:rgba(32,29,34,.31); }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-cell:last-child:nth-child(odd){ grid-column:1/-1; display:flex; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-cell:hover{ background:rgba(70,48,73,.05); }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-name{ color:#343037; font-size:8px; font-weight:900; text-transform:uppercase; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .a-icon{ color:#8f3037; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-right{ margin:6px 0 0 22px; justify-content:flex-start; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-val{ color:#1d1c20; font:900 20px/1 Georgia,serif; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-progress{ color:#87414b; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-cell:last-child:nth-child(odd) .attr-right{ margin:0 0 0 auto; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .attr-cell:last-child:nth-child(odd) .attr-val{ color:#a52e36; font-size:23px; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .hidden-stats-wrap{ border-color:#6a606b; }
+body[data-world="Jujutsu Kaisen"] #attributes-panel .hidden-stats-label{ color:#a52e36; }
+
+/* Custom World: Worldwalker's own adaptable traveler ledger. */
+body[data-world="Custom World"] #attributes-panel{
+  overflow:hidden;
+  border:1px solid #6d553a;
+  border-radius:4px;
+  background:linear-gradient(145deg,#1c1b19,#111315);
+  box-shadow:0 18px 42px rgba(0,0,0,.52),inset 0 0 0 3px #0e1011;
+}
+body[data-world="Custom World"] #attributes-panel::before{
+  content:"✦";
+  position:absolute;
+  z-index:1;
+  right:-9px;
+  bottom:-22px;
+  color:rgba(189,120,63,.08);
+  font:900 105px/1 Georgia,serif;
+  transform:rotate(14deg);
+}
+body[data-world="Custom World"] #attributes-panel::after{
+  content:"FIELD RECORD";
+  position:absolute;
+  z-index:4;
+  left:auto;
+  right:11px;
+  top:15px;
+  color:#a5947e;
+  font:900 6px/1 var(--font-ui);
+  letter-spacing:.12em;
+}
+body[data-world="Custom World"] #attributes-panel .panel-head{
+  min-height:48px;
+  padding:8px 92px 8px 10px;
+  border-color:#6b563d;
+  background:transparent;
+  color:#f0ece4;
+  font:800 11px/1 Georgia,serif;
+  letter-spacing:.08em;
+}
+body[data-world="Custom World"] #attributes-panel .panel-head-icon{ color:#d69a5d; }
+body[data-world="Custom World"] #attributes-panel .panel-body{
+  margin:8px 10px 10px;
+  padding:7px 10px 10px;
+  color:#24221d;
+  background:
+    repeating-linear-gradient(0deg,transparent 0 22px,rgba(59,52,39,.1) 22px 23px),
+    linear-gradient(100deg,#ad9f80,#d2c7ac 8%,#ded3bb 53%,#b8aa8c);
+  clip-path:polygon(0 0,96% 0,100% 5%,99% 97%,94% 100%,3% 99%,0 94%);
+}
+body[data-world="Custom World"] #attributes-panel .attr-grid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 11px; }
+body[data-world="Custom World"] #attributes-panel .attr-cell{ min-height:54px; display:block; padding:8px 1px; border-color:rgba(47,42,33,.26); }
+body[data-world="Custom World"] #attributes-panel .attr-cell:hover{ background:rgba(65,48,30,.05); }
+body[data-world="Custom World"] #attributes-panel .attr-name{ color:#423b30; font-size:8px; font-weight:900; text-transform:uppercase; }
+body[data-world="Custom World"] #attributes-panel .a-icon{ color:#8a5030; }
+body[data-world="Custom World"] #attributes-panel .attr-right{ margin:6px 0 0 22px; justify-content:flex-start; }
+body[data-world="Custom World"] #attributes-panel .attr-val{ color:#6f4931; font:900 20px/1 Georgia,serif; }
+body[data-world="Custom World"] #attributes-panel .attr-progress{ color:#4a7773; }
+body[data-world="Custom World"] #attributes-panel .hidden-stats-wrap{ border-color:#6f614b; }
+body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a5030; }
+
+@media(max-width:720px){
+  #attributes-panel .attr-progress{ max-width:78px; }
+  body[data-world="One Piece"] #attributes-panel,
+  body[data-world="Naruto"] #attributes-panel{ transform:none; }
+}
 @keyframes systemNoticeOpen{ from{ opacity:0; transform:translate(-50%,-26px) scale(.9); } to{ opacity:1; transform:translateX(-50%) scale(1); } }
 @media(prefers-reduced-motion:reduce){.world-system-popup{animation:none}}

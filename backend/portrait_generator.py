@@ -31,6 +31,47 @@ PORTRAIT_COST_ESTIMATE_USD = {"low": 0.02, "medium": 0.07, "high": 0.19, "auto":
 
 _portrait_usage = {"generated": 0, "cost_usd": 0.0}
 
+# Approved canon-start portraits ship with the game so selecting one of these
+# characters never needs an image-model request.  Transformation portraits
+# remain separate: once a special form is active the normal cache/generation
+# path takes over until that form receives its own approved bundled asset.
+CANON_START_PORTRAITS = {
+    "luffy_departure": "luffy_departure.webp",
+    "zoro_shells": "zoro_shells.webp",
+    "gon_departure": "gon_departure.webp",
+    "kurapika_exam": "kurapika_exam.webp",
+    "naruto_birth": "naruto_birth.webp",
+    "yahiko_akatsuki": "yahiko_akatsuki.webp",
+    "pain_birth": "pain_birth.webp",
+    "naruto_graduation": "naruto_graduation.webp",
+    "jinhyeok_tower": "jinhyeok_tower.webp",
+    "grid_pagma": "grid_pagma.webp",
+    "rimuru_awakens": "rimuru_awakens.webp",
+    "ichigo_series_start": "ichigo_series_start.webp",
+    "yuji_finger": "yuji_finger.webp",
+    "gojo_inventory": "gojo_inventory.webp",
+    "yuta_enrolls": "yuta_enrolls.webp",
+    "megumi_finger": "megumi_finger.webp",
+    "maki_second_year": "maki_second_year.webp",
+}
+
+# Approved alternate-form art is deliberately narrow: each asset is tied to
+# a canon identity and an explicit form family. Original characters using the
+# same technique still keep their own appearance through the normal cached
+# generation path instead of turning into the canon character pictured here.
+CANON_FORM_PORTRAITS = {
+    "naruto_birth": (
+        (re.compile(r"\b(?:eighth|8th|death)\s+gate\b|\bgate\s+of\s+death\b", re.I), "forms/naruto/naruto_eighth_gate_death.png"),
+        (re.compile(r"\b(?:sixth|6th|seventh|7th)\s+gate\b|\bgate\s+(?:six|6|seven|7)\b", re.I), "forms/naruto/naruto_eight_gates_6_to_7.png"),
+        (re.compile(r"\b(?:first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th)\s+gate\b|\bgate\s+(?:one|1|two|2|three|3|four|4|five|5)\b|\beight\s+gates?\b", re.I), "forms/naruto/naruto_eight_gates_1_to_5.png"),
+    ),
+    "naruto_graduation": (
+        (re.compile(r"\b(?:eighth|8th|death)\s+gate\b|\bgate\s+of\s+death\b", re.I), "forms/naruto/naruto_eighth_gate_death.png"),
+        (re.compile(r"\b(?:sixth|6th|seventh|7th)\s+gate\b|\bgate\s+(?:six|6|seven|7)\b", re.I), "forms/naruto/naruto_eight_gates_6_to_7.png"),
+        (re.compile(r"\b(?:first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th)\s+gate\b|\bgate\s+(?:one|1|two|2|three|3|four|4|five|5)\b|\beight\s+gates?\b", re.I), "forms/naruto/naruto_eight_gates_1_to_5.png"),
+    ),
+}
+
 
 def portrait_usage():
     return dict(_portrait_usage)
@@ -354,6 +395,35 @@ def fallback_url(state):
     return None
 
 
+def canon_start_portrait_url(state):
+    identity = state.get("player_identity") if isinstance(state.get("player_identity"), dict) else {}
+    canon_id = identity.get("canon_character_id") or state.get("canon_character_id")
+    filename = CANON_START_PORTRAITS.get(str(canon_id or ""))
+    if not filename:
+        return None
+    path = ASSET_ROOT / "canon_portraits" / filename
+    return f"/assets/canon_portraits/{filename}" if path.exists() else None
+
+
+def canon_form_portrait_url(state, active_form=None):
+    identity = state.get("player_identity") if isinstance(state.get("player_identity"), dict) else {}
+    canon_id = str(identity.get("canon_character_id") or state.get("canon_character_id") or "")
+    if active_form is None:
+        portrait_identity = state.get("portrait_identity") if isinstance(state.get("portrait_identity"), dict) else {}
+        form = portrait_identity.get("active_form") if isinstance(portrait_identity.get("active_form"), dict) else {}
+    else:
+        form = active_form if isinstance(active_form, dict) else {}
+    form_text = " ".join(str(form.get(key) or "") for key in ("name", "kind", "details"))
+    if not form_text.strip():
+        return None
+    for pattern, filename in CANON_FORM_PORTRAITS.get(canon_id, ()):
+        if pattern.search(form_text):
+            path = ASSET_ROOT / "canon_portraits" / Path(filename)
+            if path.exists():
+                return f"/assets/canon_portraits/{filename}"
+    return None
+
+
 def cached_path(state):
     p = PORTRAIT_CACHE_DIR / f"{campaign_portrait_id(state)}-{portrait_signature(state)}.png"
     return p if p.exists() else None
@@ -392,16 +462,30 @@ def portrait_view(state, settings):
     # screen during that period instead of returning only generic art (or
     # None) and making the character vanish between turns.
     previous = latest_path(state) if not cached and not reference else None
+    active_form = copy.deepcopy((state.get("portrait_identity") or {}).get("active_form", {})) if isinstance(state.get("portrait_identity"), dict) else {}
+    # A user-provided reference remains authoritative.  Otherwise the
+    # approved base portrait outranks old generated cache files for canon
+    # starts, giving every new and existing save the same correct likeness.
+    canon_url = canon_form_portrait_url(state, active_form) if active_form else canon_start_portrait_url(state)
     image = cached or reference or previous
+    if reference:
+        image_url = f"/portrait-cache/{reference.name}"
+    elif canon_url:
+        image_url = canon_url
+    elif image:
+        image_url = f"/portrait-cache/{image.name}"
+    else:
+        image_url = fallback_url(state)
     return {
         "_portrait_signature": signature,
-        "_portrait_image": f"/portrait-cache/{image.name}" if image else fallback_url(state),
-        "_portrait_generated": bool(cached),
-        "_portrait_reference": bool(reference and not cached),
-        "_portrait_previous": bool(previous),
-        "_portrait_active_form": copy.deepcopy((state.get("portrait_identity") or {}).get("active_form", {})) if isinstance(state.get("portrait_identity"), dict) else {},
+        "_portrait_image": image_url,
+        "_portrait_generated": bool(cached and not canon_url and not reference),
+        "_portrait_reference": bool(reference),
+        "_portrait_canon": bool(canon_url and not reference),
+        "_portrait_previous": bool(previous and not canon_url and not reference),
+        "_portrait_active_form": active_form,
         "_portrait_generation_enabled": bool(settings.get("portrait_generation_enabled", True)),
-        "_portrait_auto_generate": bool(settings.get("portrait_auto_generate", False)),
+        "_portrait_auto_generate": bool(settings.get("portrait_auto_generate", False) and not canon_url),
         "_portrait_generation_ready": portrait_ready(settings),
         "_portrait_regeneration_policy": "Only significant visible appearance, equipment, affiliation clothing, or transformation changes create a new cache key; the last valid portrait remains visible until its replacement loads.",
     }

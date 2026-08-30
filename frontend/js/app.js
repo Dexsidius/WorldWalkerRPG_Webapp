@@ -1383,15 +1383,16 @@ function renderAiPortrait(s) {
     if (!img.getAttribute("src")) img.classList.remove("loaded");
   }
   const status = $("#portrait-status");
-  status.classList.toggle("generated", !!s._portrait_generated);
-  if (s._portrait_generated) status.textContent = formName ? `${formName.toUpperCase()} · ACTIVE PORTRAIT` : "AI PORTRAIT · CACHED";
+  status.classList.toggle("generated", !!(s._portrait_generated || s._portrait_canon));
+  if (s._portrait_canon) status.textContent = "CANON PORTRAIT · BUNDLED";
+  else if (s._portrait_generated) status.textContent = formName ? `${formName.toUpperCase()} · ACTIVE PORTRAIT` : "AI PORTRAIT · CACHED";
   else if (s._portrait_previous) status.textContent = "UPDATING · PREVIOUS PORTRAIT SHOWN";
   else if (s._portrait_reference) status.textContent = "REFERENCE PORTRAIT";
   else if (!s._portrait_generation_enabled) status.textContent = "PORTRAITS OFF";
   else if (!s._portrait_generation_ready) status.textContent = "SET UP IMAGE AI FOR ART";
   else status.textContent = s._portrait_auto_generate ? "AI PORTRAIT QUEUED" : "AI PORTRAIT · GENERATE WHEN READY";
   $("#btn-portrait-regenerate").disabled = APP.portraitInFlight || !APP.campaignActive;
-  if (!APP.deferPortraitGeneration && (s._portrait_auto_generate || formName)) ensureAiPortrait(s);
+  if (!APP.deferPortraitGeneration && !s._portrait_canon && (s._portrait_auto_generate || formName)) ensureAiPortrait(s);
 }
 
 function renderActiveFormPanel(s) {

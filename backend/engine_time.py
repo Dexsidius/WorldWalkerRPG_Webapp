@@ -630,7 +630,7 @@ class TimeSkipMixin:
                 "power_jump_warning": "one in-character sentence per the requirement above, or empty if nothing planned reaches for a new power/ability"
             }
         }
-        rules = self.gm_context(" ".join(clean_orders)) + " Keep every field extremely terse — this is a mechanical planning pass, not prose."
+        rules = self.task_context("time_plan", " ".join(clean_orders))
         # Production UI requests use the deterministic planner so a normal
         # Advance spends one model call on the actual story, not a second
         # planning prompt. ``use_model=True`` remains for direct/legacy
@@ -821,7 +821,7 @@ class TimeSkipMixin:
                 "When information reaches named NPCs, add a concise information_events record with its fact, source, channel, recipients, delay, and confidence. Do not teach an NPC a fact merely because the narrator knows it.",
                 "Treat the player as one actor inside an independently moving world, not as its automatic protagonist. Keep the current simulation scale grounded in the character's actual reach while still advancing distant NPC and faction agendas.",
                 "The player's planned actions are an ordered itinerary: attempt each in sequence and distribute the available time sensibly.",
-                "Below Nightmare, accomplish every logically possible player-controlled action. For diplomacy and strategy, put difficulty in the NPC/faction response—conditions, counteroffers, obligations, suspicion, countermoves or betrayal—not in a vague claim that the player failed to act or persuade. NPCs retain their canon motives and may still reject an ultimate demand in character after the player's move meaningfully lands.",
+                "Below Nightmare, accomplish every logically possible player-controlled action. Diplomacy and strategy may end in straightforward agreement, cooperation or progress. Use conditions, counteroffers, obligations, suspicion, countermoves or betrayal only when a specific informed NPC/faction motive or established conflict causes them. NPCs retain their canon motives and may still reject an ultimate demand in character after the player's move meaningfully lands.",
                 "Never complete a deferred action. If time expires during an action, describe partial progress and keep the unfinished or unstarted action in deferred_actions.",
                 "Training intensity must affect gains, fatigue, injury risk, resources, and sustainability.",
                 ("Respect travel times, sleep, recovery, food, healing, social obligations, faction responses, lore, and world chronology. Bleach uses narrative supply access—rank, authorization, favors, requisitions and availability—instead of tracking money." if self.state.get("world") == "Bleach" else "Respect travel times, sleep, recovery, money, food, healing, social obligations, faction responses, lore, and world chronology."),
@@ -851,7 +851,7 @@ class TimeSkipMixin:
                 "Every breakthrough result requires a concrete lore-based cause and a substantially larger but world-valid gain.",
                 "Record all meaningful changes mechanically."
                 ,"Return separate chronological updates for every queued action that begins, every major reaction by an NPC/faction/world system, every interruption, and every major consequence. Do not combine unrelated reactions into one paragraph.",
-                "Each update should be decently detailed: normally 2-5 sentences with cause, immediate reaction, consequence, and any unresolved pressure.",
+                "Each update should be decently detailed: normally 2-5 sentences covering the action and its direct result. Include a reaction, consequence or unresolved pressure only when it actually exists and has a concrete causal basis; never add one merely to fill an update template.",
                 "Give every update its own canon_day so multi-day skips read as a dated sequence of beats, not one undated blob — like a history feed, not a single diary entry. A single day may reasonably contain more than one update when multiple things happen.",
                 "Bold the proper names of every character, faction, and named location the first time each appears within an update's narrative (e.g. **Kaito Moriyama**, **Hueco Mundo**), the way a wiki or timeline entry would — this is for readability, not emphasis of importance.",
                 "Fill in each update's map_changes only on the rare beat that actually shifts who controls a territory/settlement/map node, and quote only on the rare beat with a real, attributable spoken line worth surfacing on its own — both are empty on most updates, and forcing either in when nothing warrants it is worse than leaving them empty.",
@@ -1722,7 +1722,7 @@ class TimeSkipMixin:
                             "misremembering) — never rewrite or repeat the original scene.",
             "schema": {"state_patch": "corrected fields only, or {}", "addendum": "1-3 sentences reconciling the conflict, or empty"},
         }
-        rules = self.gm_rules() + " You are the CONTINUITY AUDITOR. Be conservative and minimal. Fix only what was flagged; change nothing else."
+        rules = self.task_rules("continuity_audit")
         try:
             data = self.ai_bg.request(rules, payload, max_output_tokens=350)
         except Exception as e:

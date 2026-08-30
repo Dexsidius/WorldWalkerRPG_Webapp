@@ -1,7 +1,7 @@
 """AI client: ported 1:1 from the original Tkinter build. Talks to a local
 OpenAI-compatible server (LM Studio, etc.) or OpenAI cloud, preferring the
 Responses API and falling back to Chat Completions."""
-import json, re, urllib.request, urllib.error
+import copy, json, re, urllib.request, urllib.error
 from worlds import DEFAULT_MODEL
 
 # $ per 1M tokens, (input, output). Anything not listed just shows token
@@ -15,6 +15,11 @@ MODEL_PRICING_PER_1M = {
     "gpt-5.5-pro": (30.00, 180.00), "gpt-5.6-luna": (0.20, 1.20), "gpt-5.6-terra": (2.00, 12.00),
     "gpt-5.6-sol": (4.00, 20.00), "gpt-4o": (2.50, 10.00), "gpt-4o-mini": (0.15, 0.60),
 }
+
+# This is intentionally below common cloud TPM ceilings. A single enormous
+# long-campaign request should never consume an account's whole rolling-minute
+# allowance or strand the save with a 429 before generation begins.
+CLOUD_REQUEST_SOFT_TOKEN_CAP = 80_000
 
 
 def estimate_cost_usd(model, input_tokens, output_tokens):
@@ -122,6 +127,67 @@ class AI:
         raw = str(instructions or "") + json.dumps(payload or {}, ensure_ascii=False, default=str)
         estimated_input = max(1, len(raw) // 4)
         return (estimated_input / 1_000_000) * price[0] + (max(1, int(max_output_tokens or 700)) / 1_000_000) * price[1]
+
+    @staticmethod
+    def _request_token_estimate(instructions, payload, max_output_tokens=700):
+        raw = str(instructions or "") + json.dumps(payload or {}, ensure_ascii=False, default=str)
+        return max(1, len(raw) // 4) + max(1, int(max_output_tokens or 700))
+
+    def _bounded_cloud_payload(self, instructions, payload, max_output_tokens=700, token_cap=None):
+        """Last-resort transport cap for any caller that missed local trimming.
+
+        Normal game turns are already relevance-budgeted before they reach the
+        client. This defensive layer handles old saves and unusual routes by
+        reducing only request copies, never the real campaign state.
+        """
+        cap = max(20_000, int(token_cap or CLOUD_REQUEST_SOFT_TOKEN_CAP))
+        estimate = self._request_token_estimate(instructions, payload, max_output_tokens)
+        if estimate <= cap or not isinstance(payload, dict):
+            return payload
+        bounded = copy.deepcopy(payload)
+        state = bounded.get("state_before") if isinstance(bounded.get("state_before"), dict) else None
+        target = state if state is not None else bounded
+        protected = {
+            "name", "world", "difficulty", "location", "world_time", "canon_day", "canon_anchor",
+            "stats", "hidden_stats", "hp", "hp_max", "resource", "resource_max", "resource_name",
+            "skills", "special", "class_profile", "equipment", "combat", "danger_scenario",
+            "live_scene", "scene_state", "grounding_packet", "mechanical_power_profile",
+            "capability_summary", "active_scenario", "simulation_context", "prompt_budget",
+        }
+
+        def compact(value, depth=0):
+            if isinstance(value, str):
+                limit = 900 if depth > 1 else 1800
+                return value if len(value) <= limit else value[:limit].rstrip() + "…"
+            if isinstance(value, list):
+                source = value[-(8 if depth > 1 else 14):]
+                return [compact(item, depth + 1) for item in source]
+            if isinstance(value, dict):
+                items = list(value.items())
+                if len(items) > (18 if depth > 1 else 30):
+                    items = items[-(18 if depth > 1 else 30):]
+                return {str(key): compact(item, depth + 1) for key, item in items}
+            return value
+
+        for key in list(target):
+            if key not in protected and isinstance(target[key], (dict, list, str)):
+                target[key] = compact(target[key])
+        estimate = self._request_token_estimate(instructions, bounded, max_output_tokens)
+        if estimate > cap:
+            def size(item):
+                try:
+                    return len(json.dumps(item, ensure_ascii=False, default=str))
+                except Exception:
+                    return len(repr(item))
+            for _, key in sorted(((size(value), key) for key, value in target.items()
+                                  if key not in protected), reverse=True):
+                if estimate <= cap:
+                    break
+                target.pop(key, None)
+                estimate = self._request_token_estimate(instructions, bounded, max_output_tokens)
+        self.usage["request_compactions"] = int(self.usage.get("request_compactions", 0) or 0) + 1
+        self.usage["last_request_token_estimate"] = estimate
+        return bounded
 
     def _record_usage(self, data):
         """Tallies tokens from a raw API response, before any JSON-content
@@ -334,6 +400,8 @@ class AI:
 
     def request(self, instructions, payload, timeout=240, max_output_tokens=700):
         self._active_task = str((payload or {}).get("task") or "general") if isinstance(payload, dict) else "general"
+        if self.provider == "cloud":
+            payload = self._bounded_cloud_payload(instructions, payload, max_output_tokens)
         projected = self.estimate_request_cost(instructions, payload, max_output_tokens)
         self.usage["last_projected_cost_usd"] = round(projected, 6) if projected is not None else None
         if self.max_estimated_cost_usd and projected is not None and projected > self.max_estimated_cost_usd:
@@ -360,7 +428,24 @@ class AI:
                 raise RuntimeError(f"/responses HTTP {e.code}: {details[:350]}")
             except urllib.error.URLError as e:
                 raise RuntimeError("Could not contact OpenAI: " + str(e))
-            except RuntimeError:
+            except RuntimeError as error:
+                detail = str(error)
+                if "HTTP 429" in detail and re.search(r"request too large|tokens per min|\bTPM\b|input or output tokens", detail, re.I):
+                    smaller_payload = self._bounded_cloud_payload(
+                        instructions, payload, min(int(max_output_tokens), 1000), token_cap=60_000)
+                    recovery = (
+                        "Return ONLY a compact valid JSON object. No reasoning, no markdown, no preamble. "
+                        "Use only the supplied current facts and finish within the reduced token budget.\n\n" + instructions
+                    )
+                    try:
+                        return self._responses_request(recovery, smaller_payload, timeout, min(int(max_output_tokens), 1000))
+                    except RuntimeError as retry_error:
+                        if "HTTP 429" in str(retry_error):
+                            raise RuntimeError(
+                                "The AI account's rolling token limit is temporarily full. Your campaign and queued actions are safe. "
+                                "Wait about one minute, then choose Retry Failed Turn; Worldwalker has already reduced the request size."
+                            ) from retry_error
+                        raise
                 # Malformed JSON is usually a one-off sampling slip, not a
                 # systemic problem — cloud calls are fast, so just retry once
                 # before surfacing an error to the player. Reinforce the JSON

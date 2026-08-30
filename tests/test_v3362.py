@@ -18,7 +18,7 @@ class WorldwalkerV3362Tests(unittest.TestCase):
         return game
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.43.0")
+        self.assertEqual(APP_VERSION, "3.44.0")
 
     def test_world_cursors_and_naruto_loading_shuriken_are_local_and_accessible(self):
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")

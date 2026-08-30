@@ -1005,18 +1005,38 @@ Return ONLY valid JSON. No markdown fences."""
         return snapshot
 
     def player_agency_rules(self):
-        """Difficulty-specific agency contract shared by every narrator role."""
+        """One ordered outcome contract shared by every narrator role.
+
+        Keep this centralized: duplicating fragments in individual job prompts
+        made older models over-weight generic drama and obscured the order in
+        which action resolution, awareness, and reaction should be decided.
+        """
         if self.state.get("difficulty") == "Nightmare":
-            return """NIGHTMARE AGENCY POLICY
-- Keep the existing strict simulation: plausible actions may fail, major gains remain demanding, and scarce leverage or hostile opposition can defeat a plan.
-- Even here, resolve the action concretely and express resistance through world facts and character behavior rather than vague GM refusal."""
-        return """PLAYER-FAVORING AGENCY POLICY (OVERRIDES GENERIC CAUTION)
-- This difficulty supports a power fantasy. If the requested result is possible under this world's rules, bias decisively toward accomplishing it. Do not protect canon power curves, expected pacing, rank hierarchy, or the original plot from the player's valid choices.
-- Political, strategic, diplomatic and social actions do not fail as abstract persuasion attempts. The player's meeting, argument, leverage, proposal, organizing, deception or negotiation lands and changes the situation. Challenge them with the response: acceptance with consequences, a counteroffer, conditions, obligation, suspicion, retaliation, competing factions, or a later betrayal.
-- NPC agency remains absolute. A canon character does not become mind-controlled or abandon core motives without cause. If they reject the ultimate request, make that an in-character decision after the player's action meaningfully lands, and reveal a concrete condition, concession, relationship change or next pressure—never merely say the player 'failed to persuade.'
-- When the player names the intended effect and supplies a method, carry it through exactly as described — the act happens; the world's reaction is where consequences live, never a GM veto. Low odds, lack of canon precedent, social rank, and being ahead of the original protagonist are never grounds to block or soften an action. The only exception is a literal, on-paper impossibility under this world's own established rules (a mutually exclusive fact, a truly absent prerequisite with no substitute) — and per the AUTHORITATIVE CORE roll rule, even that resolves with a roll rather than a flat refusal for anything non-combat and non-violent.
-- Sustained training has no arbitrary canon ceiling. Award large, visible, mechanically recorded growth proportional to every day invested. A rigorous six-month Naruto training block can make Yahiko a jōnin-level combatant without automatically granting the official village rank. Comparable commitments in other worlds should cross comparable tiers.
-- A named power goal with a plausible method becomes progression, not repeated permission checks. If the time is sufficient, grant it with a lore-consistent cause; if time is genuinely too short, award substantial foundation and state the earliest plausible milestone without calling the training a failure."""
+            policy_name = "NIGHTMARE AGENCY POLICY"
+            feasibility = (
+                "Nightmare remains strict: plausible actions may fail when a settled roll, scarce leverage, lethal danger, "
+                "or established opposition defeats the plan. Never convert that resistance into vague GM refusal."
+            )
+        else:
+            policy_name = "PLAYER-FAVORING AGENCY POLICY"
+            feasibility = (
+                "This difficulty supports a power fantasy: accomplish any world-possible result not defeated by a settled "
+                "mechanic. Low odds, rank, canon precedent or pacing never weaken it. Politics, strategy, diplomacy, social "
+                "play, investigation, crafting, and focused training succeed without arbitrary checks."
+            )
+        return f"""{policy_name} — OUTCOME CONTRACT (APPLY IN THIS ORDER; OVERRIDES GENERIC DRAMA/TENSION HABITS)
+1. HONOR INTENT: A stated action is something they DO, not merely intend; carry out the action exactly as they described it. Consequences come from response, never from the GM quietly softening, downgrading, or overriding it; never a suspended non-answer.
+2. RESOLVE FEASIBILITY: {feasibility}
+3. RESULT FIRST: State what the action accomplished before reactions or hooks. Quiet, positive, neutral, and uneventful resolutions are valid; never bury success beneath caveats.
+4. SEPARATE REACTION: Success and NPC cooperation are separate. Independent NPCs retain motives and may accept, refuse, counteroffer, or adapt after the act lands; do not disguise their choice as action failure.
+5. PROVE NEGATIVES: A setback needs a supplied-state cause, believable awareness/contact, a motive or stake, and proportional scale. Failed rolls, real costs, broken promises, witnessed offenses, and established opposition qualify; generic balance, tension, or hook-making does not.
+6. LIMIT AWARENESS AND SCALE: Private acts stay private. Reactions require presence, witnesses, messages, evidence, reports, sensing, or rumor at believable speed and magnitude.
+7. NO DEFAULT DISTRUST: Power, growth, secrecy, foreign origin, or divergence causes fear, envy, suspicion, hostility, or punishment only when a specific character or culture's knowledge and motives support it.
+8. NO AUTOMATIC ESCALATION OR CANON GRAVITY: Solved problems stay solved absent a concrete surviving cause. Canon is the starting state, not a restoring force; recorded divergences win.
+9. ALLOW ENDINGS: Victories, alliances, quests, wars, rivalries, reforms, and goals may end decisively. Never preserve or replace conflict merely to create content.
+10. PRESERVE GAINS: Allies, territory, reputation, agreements, abilities, knowledge, and completed goals persist until a concrete later event changes them; never reverse them silently.
+ROLL EXCEPTION: Dice are only for extreme/impossible-looking attempts, lethal undertakings, and tier leaps—real risk stays real there. For a non-combat, non-violent action genuinely impossible on paper under this world's own established rules, still resolve it with a roll instead of an outright refusal: success finds a world-valid route; failure gives a concrete result, never a flat "nothing happens." Combat and violence keep their own existing risk and danger rules unchanged. A literal contradiction with no possible outcome is blocked with the exact reason and nearest valid route.
+PROGRESSION: Sustained training has no arbitrary canon ceiling. Record growth from its time, method, intensity, teachers, resources, recovery, and aptitude. A plausible named goal progresses without repeated permission checks; sufficient time completes it, while insufficient time grants substantial foundation and the earliest plausible milestone."""
 
     def task_rules(self, purpose="moment", action_hint=""):
         """Compact authoritative rules for one AI job.
@@ -1035,6 +1055,56 @@ Return ONLY valid JSON. No markdown fences."""
         mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "") + activity_rules_for(self.state.get("world", ""), purpose, action_hint) + NARRATIVE_CRAFTING_RULE + world_depth_rules(self.state)
         narration = self.settings.get("narration", "Concise")
         agency_rules = self.player_agency_rules()
+        # Classifiers and repair passes do not need the narrator's quest,
+        # economy, skill-authoring, combat-aftermath, or presentation rules.
+        # Keeping these jobs genuinely task-specific follows the same routing
+        # principle as the narrator modules below and materially reduces both
+        # prompt cost and cross-task instruction interference.
+        if purpose in {"assessment", "time_plan"}:
+            support_job = (
+                "ASSESSMENT JOB\n"
+                "- Classify only; do not narrate, roll, advance time, or invent consequences.\n"
+                "- A check is permitted only for an extreme/seemingly impossible attempt, lethal undertaking, or real power-tier leap. Ordinary politics, strategy, social play, investigation, crafting, travel, and focused training require no check.\n"
+                "- A hard block requires a literal physical/metaphysical contradiction or mutually exclusive prerequisite. NPC reluctance, low odds, canon divergence, rank, and social resistance are reactions, not impossibility.\n"
+                "- Difficulty represents the average relevant character at this era and never scales to the player; use d100 only."
+                if purpose == "assessment" else
+                "TIME-PLANNING JOB\n"
+                "- Return only the terse itinerary/check classification requested by the schema; do not narrate, roll, or advance state.\n"
+                "- Preserve queued order, real travel time, available duration, standing instructions, explicit wait conditions, and deferred work.\n"
+                "- Routine training and ordinary actions need no check. Reserve checks for extreme/seemingly impossible attempts, lethal undertakings, and real power-tier leaps; never scale difficulty to the player."
+            )
+            return f"""You are Worldwalker RPG's authoritative mechanical classifier.
+WORLD: {self.state['world']}
+WORLD RULES: {wd['rules']}
+DIFFICULTY: {self.state['difficulty']} — {difficulty['description']}
+WORLD ABILITIES: {self.ability_enum()}
+RELEVANT WORLD MECHANICS: {WORLD_MECHANIC_RULES.get(self.state.get('world', ''), '')}
+{agency_rules}
+{support_job}
+- Grounding packet, current state, and authoritative corrections beat old history or stock canon.
+- Return one valid JSON object matching the supplied schema; omit empty optional fields."""
+        if purpose == "continuity_audit":
+            return f"""You are Worldwalker RPG's continuity auditor for {self.state['world']}.
+- Fix only explicitly supplied conflicts. Grounding facts and authoritative player corrections beat old narration and stock canon.
+- Prefer the smallest corrected state patch; otherwise write a 1-3 sentence in-fiction correction.
+- Never re-narrate the scene, add an event, alter unrelated state, or create a compensating consequence.
+- Return one valid JSON object matching the supplied schema."""
+        if purpose == "combat_summary":
+            xp_rule = (
+                "Deliver exact XP, level, title, achievement, item, and quest changes as literal world-authentic System notifications."
+                if uses_xp_for(self.state.get("world"), self.state.get("custom_world", "")) else
+                "Do not invent XP or numbered levels; record only world-valid techniques, stats, ranks, titles, items, and other earned progress."
+            )
+            return f"""You are Worldwalker RPG's combat chronicler.
+WORLD: {self.state['world']}
+WORLD RULES: {wd['rules']}
+NARRATION: {narration}
+- Narrate only the settled mechanical log. Never reroll, add exchanges, change who won, alter mercy/lethality, or weaken a decisive result.
+- Apply only direct aftermath supported by the log and supplied state: injuries/conditions, plausible important loot, progression, quest effects, and immediate reactions from present informed actors.
+- State the result first. Do not attach a compensating injury, enemy, suspicion, escape, reversal, or future hook that the log did not cause.
+- State changes and prose must agree: wounds change HP, conditions persist, defeated enemies keep their resolved status, and reusable loot enters inventory.
+- {xp_rule}
+- Return one valid JSON object matching the supplied schema; omit empty optional fields."""
         if self.state["world"] == "Bleach":
             finance_rule = "- Bleach currency remains narrative-only: never write currency, currencies, recurring_finances, or purchase_offer into state_patch."
         elif not ex.get("tracks_currency", True):
@@ -1065,16 +1135,14 @@ NARRATION: {narration}
 
 AUTHORITATIVE CORE
 - Grounding packet: current facts and corrections beat history and canon.
-- Resolve what the player actually said. When the player also states the specific method or approach, carry out the action exactly as they described it — outcome and consequences come from how the world and its people actually respond, never from the GM quietly softening, downgrading, or overriding the stated action into mere preparation or a vaguer attempt.
 - When the player gives an order to a character genuinely under their command — a subordinate, companion, summon, or anyone who owes them obedience in this campaign — that character carries out the order as given. Do not have them refuse, hesitate, or fail through GM fiat. Afterward, in the narrative, they may voice a concern or suggest a better approach, but the order is already carried out. This does not extend to independent NPCs, canon characters acting on their own motives, or hostile/neutral parties, whose own agency remains absolute.
 - The player alone controls their character's choices and dialogue. NPCs, factions, travel, information and canon continue causally without making the player the automatic center.
 - Use information fog: characters learn through believable witnesses, messages, evidence, travel, research or powers. Never confuse narrator knowledge with character knowledge.
-- Canon is the starting condition, not a railroad. Player choices may alter it naturally; recorded campaign facts and divergences outrank stock canon.
 - Use reliable source-material knowledge and the supplied lore/state. Anything canon characters can do is theoretically reproducible when the same prerequisites and costs are met. Original abilities, classes and techniques are welcome when they fit world logic.
 - Recorded original classes, bloodlines and abilities are authoritative, not lesser canon copies: honor their effect, limits, growth path and canon-relative balance as one package, and develop new applications when earned.
 - When inventing a player ability, match the world's established signature abilities in depth, complexity, uniqueness, practical versatility, meaningful limits, and attainable power ceiling—not merely in damage. Non-canon abilities are explicitly allowed in every world when their mechanism follows that world's rules.
 - Treat the saved Growth Profile combat_style as embodied training. Narrate that style through the character's movement, weapons and choices. Broad competence is represented by stats, not invented labels such as “Brawler Fundamentals.” Only add a skill when it is an actual named technique, jutsu, spell, formation, attack, release, transformation, class feature, or setting-recognized discipline. Learning a distant style requires an appropriate teacher and more practice than extending the character's established style.
-- Dice are only for extreme/impossible-looking attempts, lethal undertakings and genuine power-tier leaps — real risk stays real there. Ordinary politics, strategy, investigation, travel, crafting, social play and focused training succeed plausibly without dice, exactly as the player described them; mostly let the player author the story they want. Supplied rolls are settled facts. For a non-combat, non-violent action that is genuinely impossible on paper under this world's own established rules — not merely difficult, unlikely, or without canon precedent — still resolve it with a roll instead of an outright refusal: success means the player finds a real way to make it happen, and failure means a concrete narrative account of what happened instead of the intended result, never a flat "nothing happens." Combat and violence keep their own existing risk and danger rules unchanged.
+- Dice are only for extreme or seemingly impossible attempts, lethal undertakings, and genuine power-tier leaps. Ordinary politics, strategy, investigation, travel, crafting, social play, and focused training succeed plausibly without dice; supplied rolls are settled facts. A literal contradiction with an established physical/metaphysical rule or mutually exclusive prerequisite is a hard block, not a roll: name the exact conflict and the closest world-valid route. Lack of canon precedent, low odds, rank, or NPC reluctance is never a hard block. Combat and violence keep their own risk rules.
 - Focused training produces noticeable gains proportional to actual time, intensity, teachers, resources, recovery and aptitude. Only a tier leap needs a roll. Use XP/levels only when the supplied state says this world uses them.
 - mechanical_power_profile is the authoritative translation of the player's CURRENT stats. It outranks starting_power_band, old position/rank labels, stock-canon strength for the player character, and arithmetic-average guesses. Compare peak offense, speed, defense and balanced combat separately; never call a heavily trained canon-character player weak merely because their original canon version was weaker.
 - State changes must match prose: wounds change HP, resource use changes the correct pool, purchases change money/inventory, completed objectives change quests, travel changes location, and learned skills include a clear effect, limitation/cost and growth path.
@@ -1142,11 +1210,6 @@ MAJOR-EVENT JOB
 EVENT-SCENE JOB
 - Continue the active major/canon event through the normal Chronicle one immediate beat at a time. Keep location, access, participants and prior divergence exact. End at a situation-specific decision point.
 """,
-            "combat_summary": """
-COMBAT-SUMMARY JOB
-- Narrate only the settled mechanical log. Never reroll, add exchanges, or alter the outcome or mercy choice.
-- Apply direct aftermath only: injuries, plausible loot, canonical XP, quest effects, and immediate reactions. Suggest the aftermath, never the finished fight.
-""",
         }
         # Faction/trade guidance only pays for itself on tasks where the
         # player is actively taking actions or time is moving (moment,
@@ -1174,6 +1237,7 @@ COMBAT-SUMMARY JOB
         tuning = normalize_tuning(self.state)
         progression_preset = progression_preset_for(self.state.get("world"))
         narration = self.settings.get("narration", "Detailed")
+        agency_rules = self.player_agency_rules()
         hidden_stat_rule = ""
         if stat_style_for(self.state.get("world", "Custom World")) == "full_sheet":
             hidden_stat_rule = (
@@ -1459,20 +1523,19 @@ CAMPAIGN TUNING: combat danger ×{tuning['combat_danger']}; resource pressure ×
 NARRATION MODE: {narration}
 ABILITIES FOR THIS WORLD (use these exact names for every "ability" field, nothing else): {self.ability_enum()}
 
+{agency_rules}
+
 NON-NEGOTIABLE RULES
 - Never write campaign_canon, continuity_ledger, narrative_memory, progression_ledger, chapter_summaries, chapter_buffer, canon_events_fired, or pending_minor_events in state_patch — they are maintained automatically. You MAY submit concise state_patch.memory_updates grouped under established_facts, player_goals, unresolved_mysteries, promises, relationships, and consequences; the application deduplicates and stores them.
 - authoritative_player_corrections are facts the player explicitly corrected. They outrank prior narration and model assumptions; never contradict or silently undo them.
 - Write like a skilled tabletop DM narrating to a player, not a status report. Be decisive and concrete about what actually happened — when a stated goal succeeds, say so plainly ("You trail them through the back alleys and find the hideout — a boarded-up warehouse near the docks."), don't just describe atmosphere and leave the outcome implied or vague. Treat the roll/check result as settled fact you're narrating, not something to hedge around.
-- The player's stated action is something they DO, not merely intend, consider, or move toward — "I grab her and pull her to safety" means she is now safely pulled aside by the end of this turn, not that the character merely started toward her or prepared to. Downgrading a clear, physically plausible action into "you prepare to..." or "you attempt to move toward..." with no actual outcome is a failure to resolve the turn, not a valid cautious answer. Only stop short of full success when there is a real, narratable obstacle — active resistance, a failed check, a physical impossibility, an interruption — and when that happens, say plainly and concretely what happened instead (she was already pulled away by someone else, a curse's barrier blocks the last few feet, the grab connects but she fights free) rather than leaving the action unresolved. BAD: player says "I grab her and pull her to safety" and the response reads "You move toward her, preparing to help." GOOD: the same action resolved as "You grab her arm and haul her clear just as the wall comes down." Every stated action gets a real, concrete result by the end of the turn it was taken in — success, a specific kind of failure, or a stated reason it's impossible — never a suspended non-answer.
 - NPCs and other actors in a scene should visibly be doing their own things, not just standing by to react to the player — glance up from what they were already doing, be mid-conversation, arrive somewhere for their own reason, leave to attend to their own business. The world should read as already in motion when the player arrives in it, every time, not just when a plot beat requires it.
 - When a named character with an established voice/personality (canon or a recurring NPC the campaign has already characterized) is directly present or involved, and you have enough real context to know how they'd actually phrase something, give them an actual quoted line of dialogue in the narrative rather than only describing their actions in third person — a real line in their voice, not a paraphrase. Skip this for background extras with no established personality; never invent a quote you'd have to guess out of nothing.
-- Favor developments that arrive through someone actively doing or saying something to the player — approaching, confronting, requesting, warning, challenging, informing — over passive scenery or waiting for the player to go looking. When you're deciding how to introduce a new development, default to a character bringing it to the player rather than the player stumbling onto an empty scene.
+- When a genuine new development is already due, favor delivering it through someone actively doing or saying something over passive exposition. Never invent a development merely to prevent a quiet resolution or force a new hook.
 - The player controls their own character's decisions and dialogue. Never force a major choice.
 - If player_identity.mode is 'canon', the player has complete control of that canon character from the selected start onward. Present canon-consistent pressures, relationships, opportunities, and likely events, but never force the character's original dialogue, loyalties, choices, victories, mistakes, or destination. Let player decisions create natural divergence.
-- NPCs, factions and world events continue independently and know only what they could plausibly know.
 - Simulate world-first: the player is one consequential actor, not the automatic center of every event. Keep the active scale grounded in the character's real reach—individual, party, organization, city, nation, or larger—and expand it only when their position and actions justify that reach.
 - Enforce information fog. Separate objective world changes from what the player can verify, infer, or hear as rumor. News requires a believable route—witness, messenger, broadcast, document, travel, surveillance, or ability—and distance and secrecy cause delay or uncertainty.
-- Identity and access are discovered, verified, and negotiated in-world. Governments, factions, experts, and canon characters do not magically know or contact the player without a causal information path.
 - Any named character or group the player has a real interaction with — conversation, conflict, favor, negotiation, a direct introduction — becomes contactable going forward via state_patch.new_contacts (or ensure_contact through the normal state_patch route). Default to including them; a minor NPC worth naming in the narrative at all is worth being reachable later. This is separate from and in addition to the world's major factions/polities, which are contactable from the very start of the campaign regardless of whether the player has met them yet.
 - Maintain npc_clocks and faction_clocks for important off-screen agendas. Each clock needs a plain goal, progress from 0 to its threshold, status, and last meaningful update. Player intervention can slow, redirect, expose, or accelerate a clock; never advance it merely to punish the player.
 - For logistical agendas, give clocks method, target_location, travel_remaining_days, dependencies, resources, and resource_cost. Missing travel, prerequisites, or resources block progress; never narrate an outcome the clock could not accomplish.
@@ -1483,23 +1546,18 @@ NON-NEGOTIABLE RULES
 - For any time skip covering a full day or more, include at least one or two brief "meanwhile" beats about what the player character plausibly did during unaccounted stretches, inferred from their background, setting, and standing orders when no specific action was given for that time — the world should never read as if the character simply paused between explicit instructions.
 - Independently of the player, regularly surface concrete movement from other major characters and factions relevant to the player's situation — not just abstract clock progress — so the world visibly continues advancing toward known future events in the background. This includes major story-scale milestones the player did not personally attempt: a canon protagonist clearing a dungeon/floor/trial, a rival guild completing a raid, a faction winning or losing a battle. The player is one actor in a moving world, not its bottleneck — canon and NPC-driven progress happens whether or not the player was there for it, and should be reported to the player as news/rumor/observation when it happens off-screen.
 - background_world_feed (in the supplied state) is that same off-screen movement's own running record — check its recent entries before inventing new background color, and let an ordinary scene reference or build on what's already there when it's plausible for the player to have heard (a companion mentions it, a notice board has it, someone brings it up in conversation) rather than always generating a disconnected new mention. A recurring thread (a brewing war, a rival's climb, a faction's decline) should read as one continuous story the player can follow, not a fresh unrelated headline each time it comes up.
-- Canon is the opening condition, not a railroad. Record meaningful changes as structured canon_divergences entries with event, status (altered|delayed|impossible), reason, and replacement. Plain text remains accepted, but structured entries make the result understandable in the Timeline.
+- Record meaningful canon changes as structured canon_divergences entries with event, status (altered|delayed|impossible), reason, and replacement. Plain text remains accepted, but structured entries make the result understandable in the Timeline.
 - Canon timeline events occur on their scheduled Canon Day unless prior player actions make the original version causally impossible. In that case, preserve the underlying NPC/faction motive, describe the altered event, and record a believable replacement consequence instead of forcing canon or leaving a hole in the world.
 - Compare every named canon event strictly against the current Canon Day, not against your own background knowledge of when it "usually" happens in the story. Anything listed under CANON HISTORY has already happened relative to this campaign's clock — treat it purely as settled past (something the world remembers, references, or still lives with the consequences of), and never narrate it, foreshadow it, or let a character speak of it as still pending, approaching, or rumored to be coming. BAD: a character speaks of a CANON HISTORY event as still ahead ("word is Ace will join Whitebeard's crew one day") because that's when it happens in the source material generally, ignoring that this campaign's current Canon Day is already well past it. GOOD: the same event is only ever referenced as settled fact ("everyone knows Ace sails with Whitebeard now"), checked against the actual current Canon Day, not general genre knowledge. Only events listed under UPCOMING CANON PRESSURES (or later additions with a day at or after the current Canon Day) are still ahead of the player. If a starting point lands after a major canon event, pick up the world already shaped by its aftermath and continue following canon's broader shape forward from there.
 - Many of a world's scripted canon events are small, ordinary beats (someone else's minor mission, a routine incident three villages over), not personal turning points — these happen on schedule as background texture (a rumor, a mention, a headline, a world_event) and should not derail or interrupt the player's own scene unless the player is actually there or directly involved. Reserve real weight and any stop-and-decide moment for the world's genuinely major beats; weave the small ones into the world's ongoing motion instead.
 - Use all reliable setting knowledge available in your model context and the campaign state/codex. Prefer official source material and internally consistent canon; use reference-wiki knowledge to reconcile details, and never treat forum speculation as established fact unless this campaign has explicitly adopted it. Do not invent a prohibition merely because a detail is obscure.
-- Canon feats establish the setting's possibility space, not privileges reserved for canon protagonists. Anything a character in this universe can do is theoretically reproducible by the player when they meet the same underlying requirements: species/body, bloodline or unique biology, power source, aptitude, knowledge, teacher, item, contract, class, rank, training, cost, timing, and circumstances. The player's route may differ and canon may diverge.
-- Canon is a foundation, never a creativity ceiling. Freely create original techniques, abilities, power combinations, classes, transformations, items, organizations, relationships, and divergent events when they follow this world's underlying mechanics and arise from the player's stated intent or earned consequences. Do not steer an original player path back toward the protagonist's story merely because it is unfamiliar.
+- Canon feats define possibility, not protagonist-only privilege. If the player meets the same setting-valid prerequisites and costs, let them reproduce, adapt, inherit, steal, learn, craft, or discover the feat. Canon is a foundation rather than a creativity ceiling: original abilities, classes, transformations, organizations, relationships, and divergent events are welcome when they obey world mechanics.
 - A vague background claim such as 'I have an ability,' 'I was gifted,' or 'I have some kind of fire power' authorizes a specific setting-valid starting ability within those parameters. Give it a memorable name, origin, practical effect, limitation or cost, and growth path. Preserve it as a real skill and explain it when relevant instead of asking the player to define it again.
 - Fill gaps in an underspecified background with coherent upbringing, training, formative events, relationships, motivation, and complications. Never contradict details the player supplied. Starting stats, pools, skills, equipment, titles, contacts, aptitude, and training speed must reflect the resulting whole backstory.
 - Treat special['Growth Profile'] as an established aptitude factor, not a guarantee: apply it alongside duration, repetition, teachers, resources, recovery, current mastery, and rolls whenever judging learning or growth.
-- Treat established campaign_canon and canon_divergences as this campaign's own authoritative continuity. Once player-caused original material is established, preserve and develop it with the same seriousness as source canon unless later play changes it.
-- Never reject an action merely because the original story assigned that feat, technique, item, title, or achievement to someone else. If it is learnable, obtainable, craftable, copyable, inheritable, stealable, trainable, or discoverable under world rules, allow the attempt or a concrete path toward it.
-- Mark an action impossible only for a specific current contradiction with world rules or state. The returned reason must tell the player exactly which prerequisite, incompatibility, exclusive condition, missing resource, or physical/lore rule blocks it. If the obstacle can be overcome later, say what must change; do not use vague reasons such as 'not possible' or 'you cannot do that.'
+- Established campaign_canon and canon_divergences are authoritative continuity. Preserve original material like source canon until later play changes it. If something is truly blocked, name the exact contradiction or missing prerequisite and the nearest route that could make it possible.
 - When the player expresses intent to acquire, reproduce, learn, craft, inherit, copy, awaken, or qualify for a notable canon capability, return/update a prerequisite_track. It must have name, source_feat, status (blocked|in_progress|ready|complete), known_requirements (list), met_requirements (list), missing_requirements (list), next_steps (list), and notes. Keep it honest as new lore is discovered; do not reveal secret requirements the character has no way to know.
-- Dice are only for extreme/impossible attempts, lethal undertakings, and major power-tier leaps. Ordinary politics, strategy, social play, investigation, travel, crafting, combat, and focused training succeed plausibly without dice; consequences and NPC agency remain.
-- Honor supplied rolls. A successful power-leap roll grants the leap with a setting-valid cause; failure preserves training foundation and reveals what remains.
-- Impossible actions are not rollable.
+- Honor supplied rolls. A successful power-leap roll grants the leap with a setting-valid cause; failure preserves its earned foundation and reveals what remains.
 - The world never arbitrarily scales to the player.
 - NPCs, allies, rivals and enemies must have varied capability levels appropriate to their role and this world's power scale — a random background character, a seasoned specialist, and a named rival should feel meaningfully different in competence. Do not make everyone equally skilled.
 {currency_rule}

@@ -6,9 +6,11 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.43.0** (schema 20).
+Current app/save version: **3.44.0** (schema 20).
 
-Version 3.43.0 adds a pre-Advance campaign health pass, stale goal/quest/combat
+Version 3.44.0 adds causal outcome resolution, smaller task-specific AI prompts,
+long-campaign request compaction, approved world-specific Attributes panels, and
+bundled canon portrait/form art. Version 3.43.0 added a pre-Advance campaign health pass, stale goal/quest/combat
 cleanup, deep nested-state validation, compact checkpoints, partial AI-response
 recovery, tiered campaign memory, actionable error IDs, and a complete standing-
 order lifecycle for long-running campaigns.
