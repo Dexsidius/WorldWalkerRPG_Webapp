@@ -16,7 +16,7 @@ from worlds import APP_VERSION, BASE_STATE, WORLD_DATA
 
 class WorldwalkerV3140Tests(unittest.TestCase):
     def test_version_and_schema(self):
-        self.assertEqual(APP_VERSION, "3.45.0")
+        self.assertEqual(APP_VERSION, "3.45.1")
         self.assertEqual(BASE_STATE["schema_version"], 20)
 
     def test_player_founded_land_becomes_a_first_class_faction_and_region(self):

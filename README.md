@@ -6,7 +6,10 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.45.0** (schema 20).
+Current app/save version: **3.45.1** (schema 20).
+
+Version 3.45.1 adds **More → NPC Chat** to the mobile layout, opening the existing
+Chats & Contacts screen without changing desktop navigation or chat behavior.
 
 Version 3.45.0 strengthens conditional/negative intent, evidence-linked NPC reactions,
 faithful subordinate commands, current-versus-historical facts, individual NPC dialogue,

@@ -1,6 +1,13 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.45.1": {
+        "title": "NPC Chat on Mobile",
+        "summary": "Reach your NPC conversations directly from the phone's More menu.",
+        "highlights": [
+            {"title": "More → NPC Chat", "example": "Tap More, then NPC Chat to read messages, choose a contact, and reply using the existing Chats & Contacts screen."},
+        ],
+    },
     "3.45.0": {
         "title": "A More Consistent GM",
         "summary": "Better command fidelity, evidence-backed reactions, current campaign memory and outcome checks, including existing saves.",

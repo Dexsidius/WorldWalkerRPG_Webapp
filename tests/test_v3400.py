@@ -27,10 +27,11 @@ def fresh_state(world="Naruto"):
 
 class WorldwalkerV3400GMTests(unittest.TestCase):
     def test_version_and_patch_notes_contract(self):
-        self.assertEqual(APP_VERSION, "3.45.0")
+        self.assertEqual(APP_VERSION, "3.45.1")
         notes = notes_for(APP_VERSION)
         self.assertEqual(notes["version"], APP_VERSION)
-        self.assertGreaterEqual(len(notes["highlights"]), 8)
+        # A hotfix may have one change; it still needs useful player-facing notes.
+        self.assertGreaterEqual(len(notes["highlights"]), 1)
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
         self.assertIn('id="modal-patch-notes"', html)

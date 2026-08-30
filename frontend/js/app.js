@@ -3800,7 +3800,16 @@ function handleTimeSkipResult(result, payload) {
 // ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
-$("#btn-open-chat").addEventListener("click", async () => { await refreshChat(); openModal("modal-chat"); });
+async function openNpcChat() {
+  try {
+    await refreshChat();
+    openModal("modal-chat");
+  } catch (error) {
+    showToast(error.message || "Could not load NPC chat. Please try again.", "danger");
+  }
+}
+
+$("#btn-open-chat").addEventListener("click", openNpcChat);
 
 async function refreshChat() {
   const data = await apiGet("/api/chats");
@@ -5829,7 +5838,8 @@ function initMobileExperience() {
       return;
     }
     closeModal("modal-mobile-more");
-    if (target === "advisor") $("#btn-open-advisor").click();
+    if (target === "chat") openNpcChat();
+    else if (target === "advisor") $("#btn-open-advisor").click();
     else if (target === "settings") $("#btn-settings-gear").click();
     else openJournal(target);
   });
