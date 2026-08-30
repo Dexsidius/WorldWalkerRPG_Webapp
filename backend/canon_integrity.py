@@ -172,7 +172,13 @@ def canon_identity_context(world, query="", state=None, limit=12):
     known = " ".join([
         str(query or ""), str(state.get("active_canon_event") or ""), str(state.get("active_major_event") or ""),
         " ".join((state.get("npc_memories") or {}).keys()), " ".join((state.get("contacts") or {}).keys()),
-        " ".join(str(row.get("name") or row) for row in state.get("companions", []) if isinstance(row, (dict, str))),
+        # Companions intentionally support both the original compact string
+        # form and newer structured records.  Never call ``.get`` on the
+        # compact form: old and long-running campaigns commonly contain it.
+        " ".join(
+            str((row.get("name") or "") if isinstance(row, dict) else row)
+            for row in state.get("companions", []) if isinstance(row, (dict, str))
+        ),
     ])
     folded = _fold(known)
     ranked = []

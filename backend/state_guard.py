@@ -132,6 +132,37 @@ def _safe_number(value, default=0, minimum=None):
     return int(result) if float(result).is_integer() else float(result)
 
 
+_NPC_MEMORY_RESPONSE_KEYS = {
+    "elapsed", "goal_status", "memory_updates", "new_contacts", "information_events",
+    "completed_actions", "deferred_actions", "suggested_actions", "interrupted",
+    "interruption_kind", "interruption_reason", "interruption_context", "intervention_prompt",
+    "danger_scenario_concluded", "major_event_reached", "major_event_kind",
+    "major_event_title", "active_major_event", "incoming_chats", "simulation_scale",
+}
+
+
+def normalize_npc_memory_map(raw):
+    """Keep only named NPC/group dossiers in the NPC-memory namespace.
+
+    A truncated model response can accidentally place the rest of its response
+    object inside ``npc_memories``.  Those keys are valid JSON and therefore
+    survived older type checks, bloating context and eventually exposing
+    consumers to unrelated strings/lists.  Real entries are always objects;
+    app-state and response-envelope labels can be removed deterministically.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    reserved = {str(key).casefold() for key in BASE_STATE}
+    reserved.update(key.casefold() for key in _NPC_MEMORY_RESPONSE_KEYS)
+    clean = {}
+    for name, detail in raw.items():
+        label = str(name or "").strip()
+        if not label or label.casefold() in reserved or not isinstance(detail, dict):
+            continue
+        clean[label] = copy.deepcopy(detail)
+    return clean
+
+
 def _repair_nested_shapes(state):
     """Repair common malformed nested AI/save values before consumers read them."""
     repairs = []
@@ -143,6 +174,11 @@ def _repair_nested_shapes(state):
         if not isinstance(state.get(key), list):
             state[key] = copy.deepcopy(BASE_STATE.get(key, [])) if isinstance(BASE_STATE.get(key), list) else []
             repairs.append(f"Repaired invalid {key} list")
+    cleaned_memories = normalize_npc_memory_map(state.get("npc_memories"))
+    if cleaned_memories != state.get("npc_memories"):
+        removed = max(0, len(state.get("npc_memories", {})) - len(cleaned_memories))
+        state["npc_memories"] = cleaned_memories
+        repairs.append(f"Removed {removed} misplaced value(s) from NPC memories")
     allowed_stats = set(abilities_for(state.get("world", "Custom World")))
     state["stats"] = {
         str(name): _safe_number(value, 1, 1)
@@ -292,6 +328,8 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
             value = {str(k): max(1, int(v)) for k, v in value.items() if k in allowed and isinstance(v, (int, float))}
         elif key == "combat":
             value = normalize_combat_payload(value)
+        elif key == "npc_memories":
+            value = normalize_npc_memory_map(value)
         elif key in {"quests", "hidden_quests", "quest_archive"}:
             cleaned = [_clean_quest(q, key == "hidden_quests") for q in value[:200]]
             value = [q for q in cleaned if q]

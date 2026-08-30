@@ -1,6 +1,20 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.42.1": {
+        "title": "Long-Campaign Advance Recovery",
+        "summary": "Advance now accepts compact companion names correctly and automatically removes misplaced response-envelope data from NPC memories.",
+        "highlights": [
+            {"title": "String companions no longer block Advance", "example": "Campaigns with companions stored as names such as Emi Kuroda can prepare canon context and advance normally."},
+            {"title": "NPC-memory namespace repaired", "example": "Misplaced fields such as elapsed time, quests, and completed actions are removed during import/load without deleting real NPC dossiers."},
+            {"title": "Future corruption blocked", "example": "Malformed AI patches are filtered at the state boundary before unrelated response fields can enter NPC memories."},
+            {"title": "Existing campaigns recover on load", "example": "Loading or importing the campaign applies the repair automatically; a new character is not required."},
+            {"title": "Standing plans remain intact", "example": "A queued multi-action plan continues in its original order after the campaign is repaired."},
+            {"title": "Real NPC histories are preserved", "example": "Relationships, knowledge, goals, and memories belonging to named characters survive the cleanup."},
+            {"title": "Compact and structured companions coexist", "example": "Older name-only companions and newer detailed companion records can safely appear in the same campaign."},
+            {"title": "Reported save shape is regression-tested", "example": "Automated coverage now prepares and resolves Advance from the same companion and standing-order layout as the affected turn-311 save."},
+        ],
+    },
     "3.42.0": {
         "title": "Resilient Turns and Deeper Campaign Continuity",
         "summary": "Turns now recover atomically from malformed AI output while active scenarios, combat stakes, milestones, messages, generated powers, costs, and long-campaign testing receive stronger local support.",

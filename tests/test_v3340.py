@@ -15,7 +15,7 @@ from worlds import APP_VERSION, BASE_STATE
 
 class WorldwalkerV3340PresentationTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.42.0")
+        self.assertEqual(APP_VERSION, "3.42.1")
 
     def test_native_event_sheet_and_world_dice_ship(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
