@@ -1,6 +1,25 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.44.3": {
+        "title": "A More Causal and Efficient Game Master",
+        "summary": "The GM now interprets intent locally, limits unsupported complications, respects information and time boundaries, chooses relevant examples, and reliably mirrors narratively earned Dōjutsu into Naruto's dedicated panel.",
+        "highlights": [
+            {"title": "Actions resolve before reactions", "example": "A successful diplomatic or strategic action lands first; independent characters respond afterward from their own motives instead of retroactively making the action fail."},
+            {"title": "Complications need a cause", "example": "Ordinary success can stay positive, while a setback must point to a witnessed offense, real cost, failed roll, existing enemy, or another established reason."},
+            {"title": "One ordinary complication at most", "example": "A routine turn no longer piles suspicion, a new enemy, a random cost, and a future threat onto the same successful action."},
+            {"title": "Local intent and timing controls", "example": "Targets, methods, duration, standing instructions, and lethality are extracted before the GM writes, and a Moment stops at the next meaningful decision."},
+            {"title": "Visible sustained training", "example": "A month of focused practice arrives with a local progression expectation, while the existing deterministic growth engine still calculates the actual gains."},
+            {"title": "NPC knowledge is enforced", "example": "A reaction must identify how that person learned the fact—witness, conversation, message, report, rumor, research, or an ability."},
+            {"title": "Better Advisor estimates", "example": "Named campaign characters without numeric sheets receive a current world-role estimate rather than a refusal or a generic low benchmark."},
+            {"title": "Relevant liked-turn examples", "example": "A liked social scene teaches a later negotiation; it is no longer randomly inserted into an unrelated battle or training turn."},
+            {"title": "Distinct next moves", "example": "Suggestions are locally deduplicated, use different approaches, reject unknown contacts, and do not tell you to resume a finished fight or travel where you already are."},
+            {"title": "Narrative Sharingan recovery", "example": "If a Sharingan was gained or used during play but only existed in the Chronicle or skill list, the Dōjutsu panel repairs itself with its stage, applications, limits, counters, and growth path."},
+            {"title": "Read new turns from the beginning", "example": "After Advance, the Chronicle lands on the first new update instead of auto-scrolling past the whole result to the bottom."},
+            {"title": "Readable Naruto rolls", "example": "Success and failure pills on the parchment scroll now use dark ink, solid fills, and clear borders instead of pale mint text."},
+            {"title": "Safer malformed-response handling", "example": "String recipients and malformed causal or knowledge fields are normalized before they can trigger another object-has-no-attribute error."},
+        ],
+    },
     "3.44.2": {
         "title": "Combat Applications and Clearer Campaign Updates",
         "summary": "Named moves inside broader abilities now work in combat, incoming messages stay grounded in what the sender could know, and narrative assignments no longer repeat empty boilerplate.",

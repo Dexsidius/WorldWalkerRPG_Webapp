@@ -11,7 +11,11 @@ from util import ai_text
 
 
 KNOWLEDGE_BUCKETS = ("confirmed", "heard", "suspected", "false_beliefs")
-SUPPORTED_SOURCES = {"witnessed", "told", "evidence", "report", "research", "public", "canon", "inference"}
+SUPPORTED_SOURCES = {
+    "witnessed", "witness", "told", "conversation", "message", "letter",
+    "evidence", "report", "rumor", "broadcast", "research", "ability",
+    "public", "canon", "inference",
+}
 
 
 def _fact_record(value, default_source="unknown", turn=0):
@@ -48,16 +52,19 @@ def _records(value, default_source="unknown", turn=0):
 
 def concealed_player_facts(state):
     """Facts the narrator may use but NPCs need a believable route to know."""
+    state = state if isinstance(state, dict) else {}
     facts = []
     profile = state.get("class_profile") if isinstance(state.get("class_profile"), dict) else {}
     discovery = profile.get("discovery") if isinstance(profile.get("discovery"), dict) else {}
     if discovery.get("concealed") and int(discovery.get("progress", 0) or 0) < 100:
         for value in (profile.get("true_name"), profile.get("name"), profile.get("signature_skill")):
             if ai_text(value): facts.append(ai_text(value))
-    for name, value in (state.get("skills") or {}).items():
+    skills = state.get("skills") if isinstance(state.get("skills"), dict) else {}
+    for name, value in skills.items():
         if isinstance(value, dict) and (value.get("secret") or value.get("hidden")):
             facts.append(str(name))
-    for name in (state.get("hidden_stats") or {}):
+    hidden_stats = state.get("hidden_stats") if isinstance(state.get("hidden_stats"), dict) else {}
+    for name in hidden_stats:
         facts.append(str(name))
     return list(dict.fromkeys(x for x in facts if x))
 
@@ -117,7 +124,9 @@ def normalize_npc_knowledge(state, before=None, source="state_patch"):
 
 def npc_knowledge_boundaries(state):
     out = {}
-    for name, memory in (state.get("npc_memories") or {}).items():
+    state = state if isinstance(state, dict) else {}
+    memories = state.get("npc_memories") if isinstance(state.get("npc_memories"), dict) else {}
+    for name, memory in memories.items():
         if not isinstance(memory, dict):
             continue
         knowledge = memory.get("knowledge") if isinstance(memory.get("knowledge"), dict) else {}
@@ -129,11 +138,14 @@ def npc_knowledge_boundaries(state):
 
 def knowledge_snapshot(state):
     rows = []
-    for name, memory in (state.get("npc_memories") or {}).items():
+    state = state if isinstance(state, dict) else {}
+    memories = state.get("npc_memories") if isinstance(state.get("npc_memories"), dict) else {}
+    for name, memory in memories.items():
         if not isinstance(memory, dict):
             continue
         knowledge = copy.deepcopy(memory.get("knowledge")) if isinstance(memory.get("knowledge"), dict) else {}
         if any(knowledge.get(bucket) for bucket in KNOWLEDGE_BUCKETS):
             rows.append({"name": name, "knowledge": knowledge, "last_known_location": memory.get("last_known_location", "Unknown")})
-    return {"people": rows, "recent_audit": copy.deepcopy((state.get("knowledge_audit") or [])[-30:]),
+    audit = state.get("knowledge_audit") if isinstance(state.get("knowledge_audit"), list) else []
+    return {"people": rows, "recent_audit": copy.deepcopy(audit[-30:]),
             "concealed_fact_count": len(concealed_player_facts(state))}

@@ -13,7 +13,7 @@ from worlds import APP_VERSION, BASE_STATE
 
 class ResponseGuardTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.44.2")
+        self.assertEqual(APP_VERSION, "3.44.3")
 
     def test_compact_response_is_recovered(self):
         data = normalize_turn_response({

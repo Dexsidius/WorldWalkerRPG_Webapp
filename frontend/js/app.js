@@ -672,13 +672,14 @@ function pruneStoryFeed(feed, maxEntries = STORY_FEED_MAX_ENTRIES) {
   }
 }
 
-function appendStoryEntries(entries) {
+function appendStoryEntries(entries, options = {}) {
   const feed = $("#story-feed");
   const cleanEntries = (entries || []).filter((entry) => entry && String(entry.text || "").trim());
   if (!cleanEntries.length) return;
   const presentationWorld = APP.state?.world || document.body.dataset.world || "Custom World";
   const themedChronicle = new Set(["Naruto", "One Piece"]).has(presentationWorld);
   const turnEnvelope = themedChronicle ? document.createElement("article") : null;
+  let firstNewBeat = null;
   if (turnEnvelope) {
     turnEnvelope.className = "world-turn-envelope";
     turnEnvelope.dataset.presentation = presentationWorld === "Naruto" ? "scroll" : "poneglyph";
@@ -701,6 +702,7 @@ function appendStoryEntries(entries) {
     const beatTags = new Set(run.entries.map((entry) => entry.tag || "narrative"));
     const beatKind = beatTags.has("canon_event") ? "canon" : beatTags.has("danger") ? "danger" : beatTags.has("growth") ? "growth" : beatTags.has("roll") ? "combat" : "story";
     beat.className = `story-beat story-beat-${beatKind}`;
+    if (!firstNewBeat) firstNewBeat = beat;
     beat.dataset.beatKind = beatKind;
     const worldTime = String(run.entries.find((entry) => entry.world_time)?.world_time || "");
     const worldParts = worldTime.split(/\s+[—-]\s+/);
@@ -852,7 +854,22 @@ function appendStoryEntries(entries) {
   if (turnEnvelope) feed.appendChild(turnEnvelope);
   pruneStoryFeed(feed);
   applyMobileStoryFilter(APP.mobileStoryFilter || "all");
-  feed.scrollTop = feed.scrollHeight + 400;
+  if (options.focusNew && firstNewBeat) {
+    // A completed turn can contain several dated updates. Start at the first
+    // one so the player reads downward instead of landing after the ending.
+    // Desktop scrolls inside the Chronicle; mobile lets the Chronicle expand
+    // and scrolls the page itself, so each layout needs its own scroll owner.
+    requestAnimationFrame(() => {
+      if (feed.scrollHeight > feed.clientHeight + 2) {
+        feed.scrollTo({ top: Math.max(0, firstNewBeat.offsetTop - feed.offsetTop - 8), behavior: "auto" });
+      } else {
+        const pageTop = firstNewBeat.getBoundingClientRect().top + window.scrollY;
+        window.scrollTo({ top: Math.max(0, pageTop - 12), behavior: "auto" });
+      }
+    });
+  } else {
+    feed.scrollTop = feed.scrollHeight + 400;
+  }
 }
 
 function promptForTrophy(proposal) {
@@ -923,8 +940,6 @@ function typeText(el, text) {
     i += speed;
     renderBoldedText(el, text.slice(0, i));
     el.appendChild(caret);
-    const feed = $("#story-feed");
-    feed.scrollTop = feed.scrollHeight;
     if (i < text.length) requestAnimationFrame(tick);
     else caret.remove();
   }
@@ -2799,7 +2814,7 @@ async function handleTurnResult(result, action) {
     return;
   }
   const previousState = APP.state;
-  appendStoryEntries(result.story);
+  appendStoryEntries(result.story, { focusNew: true });
   if (result.roll) {
     playSfx("dice");
     if (result.roll.breakthrough) flashScreen("success");
@@ -3748,7 +3763,7 @@ function clientDurationMinutes(amount, unit) {
 
 function handleTimeSkipResult(result, payload) {
   const previousState = APP.state;
-  appendStoryEntries(result.story);
+  appendStoryEntries(result.story, { focusNew: true });
   renderState(result.state);
   playNewCanonEventCues(previousState, result.state);
   // A resolved skip always returns the backend to moment mode. Mirror that

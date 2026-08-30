@@ -37,6 +37,7 @@ from standing_intents import (advance_standing_intents, player_training_directiv
 from simulation_core import refresh_simulation_core, record_resolution_transaction, action_commits_violence
 from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity
+from world_progression import normalize_world_progression
 from age_system import advance_character_age
 from campaign_features import downtime_surprise_prompt
 from simulation_enhancements import (
@@ -53,6 +54,10 @@ from response_guard import normalize_assessment_response
 from experience_systems import record_world_milestones, update_scenario_memory
 from long_campaign import (compact_checkpoint_state, pre_advance_health_check,
                            sync_standing_order_lifecycle)
+from gm_policy import (
+    parse_player_intent, progression_plan, record_causal_outcome,
+    temporal_budget,
+)
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -788,6 +793,11 @@ class TimeSkipMixin:
         payload = {
             "task": "resolve_time_skip", "duration": {"amount": simulation_amount, "unit": simulation_unit},
             "original_requested_duration": {"amount": amount, "unit": unit}, "planned_actions": orders,
+            "intent_contracts": [parse_player_intent(row, self.state) for row in orders],
+            "temporal_budget": temporal_budget("time_skip", simulation_amount, simulation_unit),
+            "progression_plan": progression_plan(
+                self.state, orders, self.duration_minutes(simulation_amount, simulation_unit), intensity,
+            ),
             "standing_plan": assessment.get("standing_plan", orders),
             "continuing_previous_orders": bool(assessment.get("continuing_previous_orders")),
             "intensity": intensity, "assessment": assessment, "dice_results": results,
@@ -865,6 +875,7 @@ class TimeSkipMixin:
                 "consequence_manifest": [{"kind":"skill|title|item|quest|location|condition|reputation|affiliation|other", "target":"exact name", "change":"gained|lost|started|completed|changed", "evidence":"short sentence identifying the beat", "details":"complete skill mechanics only when kind is skill"}],
                 "commitment_updates": [{"owner":"who made the promise/debt", "owed_to":"who expects it", "promise":"specific commitment", "due_canon_day":"integer or empty", "trigger":"condition or empty", "status":"active|fulfilled|broken|cancelled", "consequence":"what follows if relevant"}],
                 "delayed_consequences": [{"effect":"specific later consequence", "source":"decision/event causing it", "horizon":"days|weeks|months|conditional", "due_canon_day":"integer or empty", "trigger":"condition or empty"}],
+                "causal_outcome": {"direct_result":"overall accomplishment before reactions", "witnesses":["actual witnesses or information channels"], "reactions":[{"actor":"named informed person/faction", "response":"causal response", "knowledge_source":"witness|conversation|message|report|rumor|research|ability"}], "costs":[{"cost":"real cost", "cause":"why it was paid"}], "complications":[{"effect":"supported setback", "cause":"specific established cause"}]},
                 "events": "system notifications", "timeline_events": "list of major events",
                 "elapsed": {"amount": "number", "unit": "same or sensible normalized unit"},
                 "interrupted": "boolean", "interruption_kind": "canon_event|goal_complete|world_event|danger|other or empty", "interruption_reason": "string or empty",
@@ -1989,6 +2000,7 @@ class TimeSkipMixin:
                 self.state["simulation_validation"] = self.state["simulation_validation"][-100:]
             reconcile_action_goals(self.state, [], data, elapsed_minutes)
             transmit_information(self.state, data, elapsed_minutes)
+            record_causal_outcome(self.state, data, context.get("actions", []), elapsed_minutes)
             self.check_tower_deadline(before, elapsed_minutes)
             if data.get("major_event_reached"):
                 self.state["last_major_beat_day"] = int(self.state.get("canon_day", 0) or 0)
@@ -2072,6 +2084,7 @@ class TimeSkipMixin:
             )
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, action_summary, data.get("narrative", ""))
+            normalize_world_progression(self.state, before)
             for note in self.state.pop("_pending_chronicle_notes", []):
                 self.append(note, "meta")
             new_warnings = [w for w in continuity_warnings if w not in prior_warnings]

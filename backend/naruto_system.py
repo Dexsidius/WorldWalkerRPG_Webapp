@@ -355,6 +355,115 @@ def jinchuriki_story_evidence(state):
     }
 
 
+_DOJUTSU_NAME_RE = re.compile(
+    r"\b(eternal mangeky[ōo] sharingan|mangeky[ōo] sharingan|sharingan|byakugan|rinnegan|tenseigan|"
+    r"[A-Z][A-Za-z'’ -]{1,45}(?:eye|eyes|d[ōo]jutsu))\b", re.I,
+)
+_DOJUTSU_ACQUIRE_RE = re.compile(
+    r"\b(?:awaken(?:s|ed|ing)?|unlock(?:s|ed|ing)?|gain(?:s|ed|ing)?|receive(?:s|d|ing)?|"
+    r"obtain(?:s|ed|ing)?|inherit(?:s|ed|ing)?|transplant(?:s|ed|ing)?|manifest(?:s|ed|ing)?|"
+    r"activate(?:s|d|ing)?|open(?:s|ed|ing)?|use(?:s|d|ing)?|possess(?:es|ed|ing)?|has|have)\b",
+    re.I,
+)
+
+
+def dojutsu_story_evidence(state):
+    """Find an ocular power the player has actually acquired during play.
+
+    A mere lore mention is insufficient.  Evidence must be a player-owned
+    skill/special field, the player's submitted action using the eye, or prose
+    explicitly tying an acquisition/activation to the player.
+    """
+    if not isinstance(state, dict) or state.get("world") != "Naruto":
+        return {}
+    player = str(state.get("name") or "").strip()
+    skills = state.get("skills") if isinstance(state.get("skills"), dict) else {}
+    for name, detail in skills.items():
+        match = _DOJUTSU_NAME_RE.search(str(name))
+        if match:
+            return {"name": match.group(1), "text": f"{name}: {detail}", "turn": int(state.get("turn", 0) or 0), "source": "skills", "details": copy.deepcopy(detail)}
+
+    identity = rf"(?:you|your|the player|{re.escape(player)})" if player else r"(?:you|your|the player)"
+    rows = state.get("campaign_canon") if isinstance(state.get("campaign_canon"), list) else []
+    for row in reversed(rows):
+        if not isinstance(row, dict):
+            continue
+        action = str(row.get("action") or "")
+        outcome = " ".join(str(row.get(key) or "") for key in ("outcome", "summary", "text"))
+        action_match = _DOJUTSU_NAME_RE.search(action)
+        outcome_match = _DOJUTSU_NAME_RE.search(outcome)
+        owned_action = bool(action_match and _DOJUTSU_ACQUIRE_RE.search(action))
+        owned_outcome = bool(outcome_match and _DOJUTSU_ACQUIRE_RE.search(outcome)
+                             and re.search(identity, outcome, re.I))
+        if owned_action or owned_outcome:
+            match = action_match if owned_action else outcome_match
+            return {"name": match.group(1), "text": f"{action} {outcome}"[-8000:],
+                    "turn": int(row.get("turn", state.get("turn", 0)) or 0), "source": "campaign_canon"}
+    summaries = state.get("chapter_summaries") if isinstance(state.get("chapter_summaries"), list) else []
+    for row in reversed(summaries):
+        text = str(row.get("summary") or "") if isinstance(row, dict) else str(row or "")
+        match = _DOJUTSU_NAME_RE.search(text)
+        if match and _DOJUTSU_ACQUIRE_RE.search(text) and re.search(identity, text, re.I):
+            return {"name": match.group(1), "text": text[-8000:], "turn": int(state.get("turn", 0) or 0), "source": "chapter_summaries"}
+    return {}
+
+
+def dojutsu_profile_from_evidence(evidence):
+    """Create a truthful panel record from a narratively earned ocular power."""
+    if not isinstance(evidence, dict) or not evidence.get("name"):
+        return {}
+    raw_name = str(evidence.get("name") or "Dōjutsu").strip()
+    lowered = raw_name.lower()
+    if "eternal" in lowered and "sharingan" in lowered:
+        name, stage = "Eternal Mangekyō Sharingan", "Eternal Mangekyō"
+    elif "mangeky" in lowered and "sharingan" in lowered:
+        name, stage = "Mangekyō Sharingan", "Mangekyō"
+    elif "sharingan" in lowered:
+        name = "Sharingan"
+        text = str(evidence.get("text") or "")
+        tomoe = re.search(r"\b([123]|one|two|three)[ -]?tomoe\b", text, re.I)
+        stage = f"{tomoe.group(1).title()}-Tomoe" if tomoe else "Awakened"
+    elif "byakugan" in lowered:
+        name, stage = "Byakugan", "Awakened"
+    elif "rinnegan" in lowered:
+        name, stage = "Rinnegan", "Awakened"
+    elif "tenseigan" in lowered:
+        name, stage = "Tenseigan", "Awakened"
+    else:
+        name, stage = raw_name, "Awakened"
+
+    if "sharingan" in name.lower():
+        abilities = ["Reads chakra flow and visually perceives fine movement", "Predicts motion from visible muscle and chakra cues", "Copies compatible observed techniques after understanding their execution", "Supports ocular genjutsu that scales with mastery"]
+        limits = ["Continuous use consumes chakra and strains the eyes", "It cannot copy bloodline, body, species, or prerequisite-locked abilities", "Prediction can be overwhelmed by speed, obscured vision, or unfamiliar mechanics"]
+        counters = ["Break line of sight", "Overwhelm perception with speed or simultaneous threats", "Exploit high chakra cost or physical incompatibility"]
+        growth = "Develop tomoe and ocular control through meaningful use; Mangekyō requires a story-valid awakening and introduces unique abilities plus severe eye strain unless later overcome canonically."
+    elif name == "Byakugan":
+        abilities = ["Near-panoramic vision", "Long-range focus", "Direct perception of chakra pathways and tenketsu"]
+        limits = ["Has a small blind spot", "Range and detail depend on training", "Extended focus consumes chakra and concentration"]
+        counters = ["Exploit the blind spot", "Use barriers or concealment that specifically disrupt chakra sight"]
+        growth = "Extend range, precision, battlefield coverage, and Gentle Fist applications through training."
+    elif name == "Rinnegan":
+        abilities = ["Perceives chakra at an exceptional level", "Can develop the Six Paths Techniques and other bearer-specific applications"]
+        limits = ["Its highest techniques demand enormous chakra and mastery", "Possession does not grant instant command of every path"]
+        counters = ["Pressure the bearer before complex techniques are prepared", "Exploit individual path limitations and chakra expenditure"]
+        growth = "Master each path separately and discover any bearer-specific applications through world-valid experience."
+    else:
+        detail = evidence.get("details") if isinstance(evidence.get("details"), dict) else {}
+        effect = str(detail.get("effect") or detail.get("description") or "The established ocular effect remains exactly as gained in the campaign.")
+        abilities = [effect]
+        limits = [str(detail.get("limitation") or "Use follows the chakra cost, bodily strain, and counters established when the eye was gained.")]
+        counters = ["Use the established limits of the eye rather than granting an automatic counter."]
+        growth = str(detail.get("growth_path") or "Develop new applications without changing the eye's established governing rule.")
+    return {
+        "name": name, "category": "Dōjutsu", "canon_status": "Canon ocular ability" if name in {"Sharingan", "Mangekyō Sharingan", "Eternal Mangekyō Sharingan", "Byakugan", "Rinnegan", "Tenseigan"} else "Campaign-original world-valid ocular ability",
+        "stage": stage, "origin": f"Gained during campaign play; recovered from {evidence.get('source', 'established narrative')}.",
+        "abilities": abilities, "limitations": limits, "counters": counters, "growth_path": growth,
+        "canon_balance": "Uses the same prerequisites, applications, limits, and attainable ceiling as comparable Naruto ocular abilities.",
+        "development_evidence": [str(evidence.get("text") or "Narratively established acquisition")[:1200]],
+        "acquired_turn": int(evidence.get("turn", 0) or 0), "non_canon_allowed": True,
+    }
+
+
 def _tails_from_text(text, seed=""):
     lowered = str(text or "").lower().replace("-", " ")
     for token, tails in sorted(NAME_TO_TAILS.items(), key=lambda row: len(row[0]), reverse=True):

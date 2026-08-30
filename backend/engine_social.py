@@ -18,7 +18,7 @@ from systems import (progression_preset_for, normalize_tuning, normalize_quest_s
                      update_chapter_memory, tick_world_clocks)
 from simulation import refresh_npc_intentions, background_ai_due
 from power_benchmarks import benchmark_context
-from canon_integrity import canon_identity_context, repair_canon_payload
+from canon_integrity import active_canon_identities, canon_identity_context, repair_canon_payload
 from response_guard import normalize_object_response
 
 
@@ -41,6 +41,35 @@ LOCAL_CANON_POWER_ESTIMATES = {
     "Solo Max-Level Newbie": {"kang jinhyeok": 210, "alice": 200, "average player": 50, "high-rank player": 90},
     "Reincarnated as a Slime": {"rimuru": 350, "veldora": 650, "shion": 200, "benimaru": 210, "average majin": 90},
 }
+
+WORLD_ROLE_POWER_ESTIMATES = {
+    "Naruto": ((r"six paths|otsutsuki|ōtsutsuki", 1000), (r"hokage|major kage|kage class", 620),
+               (r"akatsuki|s[- ]?rank|elite jonin|elite jōnin", 300), (r"jonin|jōnin", 140),
+               (r"chunin|chūnin", 65), (r"genin", 45), (r"academy", 20)),
+    "One Piece": ((r"emperor|yonko|admiral", 700), (r"commander|warlord", 400),
+                  (r"vice admiral", 250), (r"supernova|notorious captain", 180),
+                  (r"marine captain|officer", 90), (r"rookie|crew member", 65)),
+    "Hunter x Hunter": ((r"chairman", 610), (r"royal guard", 600), (r"zodiac|phantom troupe|master nen", 240),
+                        (r"veteran hunter|professional assassin", 150), (r"hunter|nen user", 90), (r"applicant", 35)),
+    "Bleach": ((r"captain.commander|transcendent", 650), (r"captain", 350), (r"lieutenant", 130),
+               (r"seated officer|substitute soul reaper", 90), (r"unseated|academy", 45)),
+    "Jujutsu Kaisen": ((r"king of curses|special.grade", 650), (r"elite grade 1", 220),
+                       (r"grade 1", 140), (r"grade 2", 65), (r"grade 3", 45), (r"grade 4|student", 25)),
+    "Overgeared": ((r"absolute|transcendent", 650), (r"legendary", 350), (r"top.rank", 220),
+                   (r"national rank", 140), (r"ranker", 90), (r"beginner", 25)),
+    "Solo Max-Level Newbie": ((r"administrator", 700), (r"transcendent", 600), (r"named power", 220),
+                              (r"high.rank", 90), (r"player", 50)),
+    "Reincarnated as a Slime": ((r"true dragon", 700), (r"true demon lord|oldest demon lord", 600),
+                                (r"demon lord seed", 250), (r"majin|kijin commander", 140), (r"named monster", 65)),
+}
+
+
+def _role_power_estimate(world, role):
+    text = str(role or "").lower()
+    for pattern, score in WORLD_ROLE_POWER_ESTIMATES.get(world, ()):
+        if re.search(pattern, text, re.I):
+            return float(score)
+    return None
 
 
 DEFAULT_SETTINGS = {
@@ -349,9 +378,12 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             score = memory.get("power_score", memory.get("power"))
             if not isinstance(score, (int, float)) and isinstance(memory.get("stats"), dict):
                 score = (power_profile_for(world, memory["stats"], memory.get("archetype", "")).get("world_combat") or {}).get("score")
+            if not isinstance(score, (int, float)):
+                role_text = " ".join(str(memory.get(key) or "") for key in ("role", "position", "rank", "status", "affiliation", "goal"))
+                score = _role_power_estimate(world, role_text)
             if isinstance(score, (int, float)):
                 candidates[str(name)] = float(score)
-                evidence[str(name)] = "tracked campaign estimate"
+                evidence[str(name)] = "tracked campaign estimate" if memory.get("power_score") is not None or memory.get("stats") else "tracked world-role estimate"
 
         canon = LOCAL_CANON_POWER_ESTIMATES.get(world, {})
         for key in sorted(canon, key=len, reverse=True):
@@ -359,6 +391,24 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
                 label = " ".join(part.capitalize() for part in key.split())
                 candidates[label] = float(canon[key])
                 evidence[label] = "canon/role estimate at this story scale"
+
+        # The identity registry is much broader than the hand-tuned headline
+        # score table.  A named canon figure therefore falls back to their
+        # current-era office/role, not a generic Chūnin/Officer midpoint.
+        for record in active_canon_identities(world, self.state):
+            aliases = [record.get("name"), *(record.get("aliases") or [])]
+            if not any(alias and re.search(rf"(?<!\w){re.escape(str(alias).lower())}(?!\w)", text)
+                       for alias in aliases):
+                continue
+            record_names = [str(alias).lower() for alias in aliases if alias]
+            if any(any(alias == existing.lower() or alias in existing.lower() or existing.lower() in alias
+                       for alias in record_names) for existing in candidates):
+                continue
+            score = _role_power_estimate(world, " ".join(str(record.get(key) or "") for key in ("role", "affiliation", "duty_title")))
+            if score is not None:
+                label = str(record.get("name") or aliases[0])
+                candidates[label] = score
+                evidence[label] = "current-era canon role estimate"
 
         if "akatsuki" in text and world == "Naruto":
             for key in ("pain", "itachi", "kisame", "kakuzu", "sasori", "deidara", "konan", "hidan"):

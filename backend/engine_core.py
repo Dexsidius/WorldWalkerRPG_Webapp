@@ -34,6 +34,10 @@ from campaign_reliability import (
 )
 from response_guard import normalize_turn_response
 from long_campaign import pre_advance_health_check, record_runtime_error
+from gm_policy import (
+    enforce_response_policy, intent_prompt, parse_player_intent, prompt_modules,
+    select_approved_example, temporal_budget,
+)
 
 
 DEFAULT_SETTINGS = {
@@ -728,7 +732,7 @@ class CoreMixin:
             data["narrative"] = f"The confrontation with **{opponent}** turns physical. Combat begins immediately."
         return True
 
-    def rated_good_example_snippet(self):
+    def rated_good_example_snippet(self, query="", purpose="moment"):
         """A real, player-approved turn from THIS campaign (see
         engine_journal.rate_last_turn_good), shown as a genuine few-shot
         example instead of — or alongside — the hand-written ones baked
@@ -737,7 +741,9 @@ class CoreMixin:
         rated = self.state.get("rated_good_turns") or []
         if not rated:
             return ""
-        pick = random.choice(rated)
+        pick = select_approved_example(rated, query, purpose)
+        if not pick:
+            return ""
         return (f"\n\nPLAYER-APPROVED EXAMPLE FROM THIS CAMPAIGN (the player explicitly marked this exchange as good — "
                 f"match its tone and quality, not its specific content or events):\nAction: {pick.get('action', '')}\n"
                 f"Result: {pick.get('outcome', '')}")
@@ -808,6 +814,7 @@ class CoreMixin:
         client = client or self.ai
         usage_before = copy.deepcopy(getattr(client, "usage", {}))
         data = normalize_turn_response(client.request(instructions, payload, max_output_tokens=max_output_tokens), payload.get("task"))
+        data = enforce_response_policy(data, payload, self.state)
         narrative_missing = not (data.get("narrative") or "").strip()
         violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
         quality_issues = [] if narrative_missing else self._response_quality_issues(payload, data)
@@ -820,7 +827,9 @@ class CoreMixin:
             if quality_issues:
                 reminder += "\n\nQUALITY REPAIR: keep every valid fact and outcome from the first attempt, but correct these locally verified omissions or contradictions: " + " ".join(quality_issues)
             data = normalize_turn_response(client.request(instructions + reminder, payload, max_output_tokens=max_output_tokens), payload.get("task"))
+            data = enforce_response_policy(data, payload, self.state)
         data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
+        data = enforce_response_policy(data, payload, self.state)
         if canon_repairs:
             data["canon_integrity_repairs"] = canon_repairs
         self._last_narrator_model = getattr(client, "model", self.settings.get("model", ""))
@@ -922,6 +931,8 @@ Return ONLY valid JSON. No markdown fences."""
             self.state, query, purpose,
             24 if str(purpose) == "advisor" else 14 if str(purpose) in {"moment", "time_skip", "major_event", "event"} else 10,
         )
+        snapshot["npc_knowledge_boundaries"] = npc_knowledge_boundaries(self.state)
+        snapshot["concealed_player_facts"] = concealed_player_facts(self.state)[:30]
         capability = self.state.get("capability_profile", {})
         snapshot["capability_summary"] = {
             "tier": capability.get("tier", {}), "power": capability.get("power", {}),
@@ -1055,6 +1066,7 @@ PROGRESSION: Sustained training has no arbitrary canon ceiling. Record growth fr
         mechanics = WORLD_MECHANIC_RULES.get(self.state.get("world", ""), "") + activity_rules_for(self.state.get("world", ""), purpose, action_hint) + NARRATIVE_CRAFTING_RULE + world_depth_rules(self.state)
         narration = self.settings.get("narration", "Concise")
         agency_rules = self.player_agency_rules()
+        routed = prompt_modules(purpose, action_hint, self.state)
         # Classifiers and repair passes do not need the narrator's quest,
         # economy, skill-authoring, combat-aftermath, or presentation rules.
         # Keeping these jobs genuinely task-specific follows the same routing
@@ -1107,7 +1119,7 @@ NARRATION: {narration}
 - Return one valid JSON object matching the supplied schema; omit empty optional fields."""
         if not ex.get("tracks_currency", True):
             finance_rule = "- This world does not track a numeric currency: never write currency, currencies, recurring_finances, or purchase_offer into state_patch."
-        else:
+        elif routed["finance"]:
             finance_rule = (
                 "- A REPEATING income or expense the player establishes (a job, a shop's regular take, rent, staff wages, a stipend, tribute, upkeep) "
                 "must be recorded as a state_patch.recurring_finances entry: {label, kind:\"income\"|\"expense\", amount (positive number), "
@@ -1120,6 +1132,23 @@ NARRATION: {narration}
                 "one — but keep using the SAME label for a given source every time you reference it, so it's recognized as the same entry rather than "
                 "a duplicate. A one-off purchase or payment (not repeating) still just changes currency.amount directly, as always."
             )
+        else:
+            finance_rule = ""
+        skill_rule = (
+            "- Every authored skill must use the shared taxonomy when its function is known: category "
+            "(offense|defense|healing|support|control|mobility|detection|stealth|summon|transformation|crafting|knowledge|social|utility), "
+            "combat_usable (boolean), effect_type (damage|heal|buff|debuff|shield|cleanse|control|summon|movement|detect|stealth|transform|utility), "
+            "target_type (enemy|enemies|self|ally|allies|area|environment), and duration_rounds for lasting effects. "
+            "Optional status_effect is a short player-facing condition name. Profession, knowledge, navigation and crafting skills are "
+            "combat_usable=false unless they have a specific combat application."
+            if routed["ability"] else ""
+        )
+        quest_rule = ""
+        if routed["quest"]:
+            quest_rule = """- Starting a quest requires a readable briefing with objective, cause/giver, known location, risks, first step, current knowledge and clear completion conditions. A player-stated goal (e.g. "I want to prepare for [event]") becomes a real quest or narrative Agenda the same way, even without rigid built-in objectives — it must stay genuinely completable through the player's own effort, never sit permanently vague with no path to finishing it.
+  - If the goal is specific enough to have concrete requirements, set quest objectives to those exact things and actively create narrative opportunities for the player to attempt them.
+  - If the goal is ambiguous, credit real, felt progress toward it, paced so consistent honest effort actually reaches completion by its due date rather than stalling indefinitely.
+  - When requirements are met, or accumulated effort reasonably supports it, resolve the quest as complete in that turn's state_patch. A completable goal must actually be able to complete. Never force one mandatory route."""
         shared = f"""You are the authoritative Game Master for a persistent Worldwalker RPG campaign.
 WORLD: {self.state['world']}
 WORLD RULES: {wd['rules']}
@@ -1130,6 +1159,7 @@ PROGRESSION: {profile['label']}; training x{tuning['training_rate']}, breakthrou
 NARRATION: {narration}
 	WORLD ABILITIES: {self.ability_enum()}
 	CANON KNOWLEDGE MODE: {"Full canon foreknowledge enabled for the player UI; NPC knowledge still remains in-character." if self.settings.get("canon_foreknowledge") else "Spoiler-safe character knowledge; never reveal future secrets before this campaign discovers them."}
+ACTIVE GM MODULES: {', '.join(routed['active']) or 'general scene resolution'}
 
 AUTHORITATIVE CORE
 - Grounding packet: current facts and corrections beat history and canon.
@@ -1140,19 +1170,15 @@ AUTHORITATIVE CORE
 - Recorded original classes, bloodlines and abilities are authoritative, not lesser canon copies: honor their effect, limits, growth path and canon-relative balance as one package, and develop new applications when earned.
 - When inventing a player ability, match the world's established signature abilities in depth, complexity, uniqueness, practical versatility, meaningful limits, and attainable power ceiling—not merely in damage. Non-canon abilities are explicitly allowed in every world when their mechanism follows that world's rules.
 - Treat the saved Growth Profile combat_style as embodied training. Narrate that style through the character's movement, weapons and choices. Broad competence is represented by stats, not invented labels such as “Brawler Fundamentals.” Only add a skill when it is an actual named technique, jutsu, spell, formation, attack, release, transformation, class feature, or setting-recognized discipline. Learning a distant style requires an appropriate teacher and more practice than extending the character's established style.
-- Dice are only for extreme or seemingly impossible attempts, lethal undertakings, and genuine power-tier leaps. Ordinary politics, strategy, investigation, travel, crafting, social play, and focused training succeed plausibly without dice; supplied rolls are settled facts. A literal contradiction with an established physical/metaphysical rule or mutually exclusive prerequisite is a hard block, not a roll: name the exact conflict and the closest world-valid route. Lack of canon precedent, low odds, rank, or NPC reluctance is never a hard block. Combat and violence keep their own risk rules.
-- Focused training produces noticeable gains proportional to actual time, intensity, teachers, resources, recovery and aptitude. Only a tier leap needs a roll. Use XP/levels only when the supplied state says this world uses them.
 - mechanical_power_profile is the authoritative translation of the player's CURRENT stats. It outranks starting_power_band, old position/rank labels, stock-canon strength for the player character, and arithmetic-average guesses. Compare peak offense, speed, defense and balanced combat separately; never call a heavily trained canon-character player weak merely because their original canon version was weaker.
 - State changes must match prose: wounds change HP, resource use changes the correct pool, purchases change money/inventory, completed objectives change quests, travel changes location, and learned skills include a clear effect, limitation/cost and growth path.
+- Return causal_outcome with the direct result first, actual witnesses, informed NPC reactions with knowledge_source, real costs, and complications with an explicit established cause. Ordinary successful beats usually have no complication; never add one merely for tension.
 {finance_rule}
-- Every authored skill must use the shared taxonomy when its function is known: category (offense|defense|healing|support|control|mobility|detection|stealth|summon|transformation|crafting|knowledge|social|utility), combat_usable (boolean), effect_type (damage|heal|buff|debuff|shield|cleanse|control|summon|movement|detect|stealth|transform|utility), target_type (enemy|enemies|self|ally|allies|area|environment), and duration_rounds for lasting effects. Optional status_effect is a short player-facing condition name. Profession, knowledge, navigation and crafting skills are combat_usable=false unless they have a specific combat application.
+{skill_rule}
 - An enemy whose normal hit inflicts a condition may define attack_effect with type control or debuff, a condition name, duration_rounds, and potency_pct; the application enforces it locally.
 - An initiated attack or unavoidable incoming attack begins structured combat immediately. Do not insert an extra negotiation/event-chat gate once violence is committed. A previously accepted danger scenario does not warn again unless the new action itself could kill the player.
 {agency_rules}
-- Starting a quest requires a readable briefing with objective, cause/giver, known location, risks, first step, current knowledge and clear completion conditions. A player-stated goal (e.g. "I want to prepare for [event]") becomes a real quest the same way, even without rigid built-in objectives — it must stay genuinely completable through the player's own effort, never sit permanently vague with no path to finishing it.
-  - If the goal is specific enough to have concrete requirements (a stat threshold, a particular technique, a named item, a specific confrontation to survive), set quest objectives to those exact things, and actively create narrative opportunities — scenes, encounters, training sessions, specific tasks — for the player to actually attempt and complete them. Do not just wait for the player to guess how to advance it.
-  - If the goal is more ambiguous (general preparation, growing stronger, getting ready), still track it as a real quest. Every time the player takes action genuinely relevant to it — training, gathering resources, practicing, seeking guidance — credit real, felt progress toward it, paced so that consistent honest effort actually reaches completion by its due date rather than stalling indefinitely. Judge relevance and pace from what the player is actually doing, not a fixed formula.
-  - Set a due date on the quest whenever the goal has one (a specific event, deadline, or timeframe), and pace progress against it. When objectives are met, or — for an ambiguous goal — genuine accumulated effort by the due date reasonably supports it, resolve the quest as complete in that turn's state_patch. A completable goal must actually be able to complete.
+{quest_rule}
 - End with exactly three optional, current, state-grounded suggestions written as concrete verb + specific known target + purpose. Never suggest traveling to the current location, contacting an unknown person, or continuing an encounter that has ended.
 - Return one valid JSON object. Omit empty optional fields and empty arrays/objects instead of echoing the entire schema. Never write application-owned ledgers or diagnostics in state_patch.{self._scale_lock_rule()}
 """
@@ -1213,8 +1239,9 @@ EVENT-SCENE JOB
         # player is actively taking actions or time is moving (moment,
         # time_skip) — combat_summary and opening stay lean on purpose (see
         # test_task_prompts_are_smaller_than_the_legacy_everything_prompt).
-        modules["moment"] += "\n" + faction_trade_rule + "\n"
-        modules["time_skip"] += "\n" + faction_trade_rule + "\n"
+        if routed["faction"]:
+            modules["moment"] += "\n" + faction_trade_rule + "\n"
+            modules["time_skip"] += "\n" + faction_trade_rule + "\n"
         for job in ("moment", "time_skip", "major_event", "event"):
             modules[job] += reliability_rule
         return shared + modules.get(purpose, modules["moment"])
@@ -1226,7 +1253,14 @@ EVENT-SCENE JOB
         lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
                                    limit=self.simulation_profile()["lore_limit"], purpose=purpose)
         self.last_lore_context = lore
-        return rules + (("\n\n" + lore) if lore else "") + self.satisfy_class_design_context(query) + self.rated_good_example_snippet()
+        contract = parse_player_intent(query, self.state)
+        budget = temporal_budget(purpose)
+        identity = canon_identity_context(self.state.get("world", "Custom World"), query, self.state, limit=8)
+        budget_text = (f"\nTEMPORAL RESOLUTION BUDGET: {budget}. Never narrate past its stop condition."
+                       if purpose in {"moment", "time_skip", "major_event", "event"} else "")
+        return (rules + intent_prompt(contract) + budget_text + (("\n\n" + identity) if identity else "")
+                + (("\n\n" + lore) if lore else "") + self.satisfy_class_design_context(query)
+                + self.rated_good_example_snippet(query, purpose))
 
     def gm_rules(self, action_hint=""):
         wd = WORLD_DATA[self.state["world"]]

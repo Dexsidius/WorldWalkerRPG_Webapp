@@ -9,6 +9,8 @@ import re
 
 from overgeared_classes import COMPACT_CLASS_GENERATION_RULE, infer_class_type
 from naruto_system import (CHAKRA_NATURES, apply_jinchuriki_start,
+                           dojutsu_profile_from_evidence,
+                           dojutsu_story_evidence,
                            jinchuriki_story_evidence,
                            normalize_chakra_affinity_profile,
                            normalize_jinchuriki_profile)
@@ -82,7 +84,8 @@ def _profile(value):
 
 def _skill_names(state, ranks=()):
     result = []
-    for name, detail in (state.get("skills") or {}).items():
+    skills = state.get("skills") if isinstance(state.get("skills"), dict) else {}
+    for name, detail in skills.items():
         rank = str(detail.get("rank", "")) if isinstance(detail, dict) else ""
         if not ranks or any(token.lower() in rank.lower() for token in ranks):
             result.append(str(name))
@@ -238,6 +241,15 @@ def normalize_world_progression(state, before=None):
         dojutsu_profile = _profile(special.get("Dōjutsu Profile"))
         legacy_kekkei = special.get("Kekkei Genkai", "None")
         legacy_dojutsu = special.get("Dōjutsu", "None")
+        if not dojutsu_profile and str(legacy_dojutsu).lower() in {"", "none", "unknown", "unawakened"}:
+            eye_evidence = dojutsu_story_evidence(state)
+            recovered_eye = dojutsu_profile_from_evidence(eye_evidence)
+            if recovered_eye:
+                dojutsu_profile = recovered_eye
+                legacy_dojutsu = recovered_eye["name"]
+                special["Dōjutsu"] = legacy_dojutsu
+                special["Dōjutsu Profile"] = copy.deepcopy(recovered_eye)
+                repairs.append(f"Recovered {legacy_dojutsu} profile from established campaign play")
         if kekkei_profile:
             kekkei_profile.setdefault("name", legacy_kekkei)
             kekkei_profile.setdefault("category", "Kekkei Genkai")

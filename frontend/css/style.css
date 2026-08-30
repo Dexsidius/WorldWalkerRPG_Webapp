@@ -963,6 +963,15 @@ body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] :is(.
 body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-entry-label{ color:#7b2f27; opacity:1; }
 body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-entry-copy strong{ color:#8b2f25; }
 body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-entry-chips span{ color:#3e5d37; border-color:rgba(62,93,55,.36); background:rgba(62,93,55,.08); }
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-roll-pill{
+  color:#2b1d15; background:#e7d3a3; border:1.5px solid #60432b; box-shadow:0 1px 0 rgba(255,255,255,.42),inset 0 0 0 1px rgba(255,248,222,.35); font-size:11px; letter-spacing:.015em;
+}
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-roll-pill.hit{
+  color:#173d26; background:#d9e5bb; border-color:#315c38;
+}
+body[data-world="Naruto"] .world-turn-envelope[data-presentation="scroll"] .story-roll-pill.miss{
+  color:#6b1f1a; background:#e8c3ad; border-color:#87372c;
+}
 @keyframes narutoScrollUnfurl{ from{ opacity:.2; transform:scaleX(.06); filter:brightness(.7); } 65%{ opacity:1; } to{ transform:scaleX(1); filter:none; } }
 
 body[data-world="One Piece"] .world-turn-envelope[data-presentation="poneglyph"]{

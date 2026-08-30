@@ -254,6 +254,7 @@ def _compact_memory(row):
 
 def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     """Return a bounded, source-ranked set of facts every AI role must obey."""
+    state = state if isinstance(state, dict) else {}
     terms = _terms(query)
     special = state.get("special") if isinstance(state.get("special"), dict) else {}
     active_form = ((state.get("portrait_identity") or {}).get("active_form")
@@ -278,7 +279,8 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
             "resource": [state.get("resource_name"), state.get("resource"), state.get("resource_max")],
             "top_stats": top_stats, "affiliations": copy.deepcopy(state.get("affiliations", []))[:12],
             "active_form": copy.deepcopy(active_form),
-            "combat": copy.deepcopy(state.get("combat", {})) if (state.get("combat") or {}).get("active") else {},
+            "combat": copy.deepcopy(state.get("combat", {}))
+            if isinstance(state.get("combat"), dict) and state.get("combat", {}).get("active") else {},
         },
         "locked_facts": copy.deepcopy((state.get("authoritative_corrections") or [])[-12:]),
         "relevant_people": [], "relevant_factions": [], "commitments": [],
@@ -287,18 +289,21 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
             "If two facts truly conflict, name the conflict instead of silently choosing one."
         ),
     }
-    packet["live_scene"] = copy.deepcopy(state.get("scene_state", {}))
+    packet["live_scene"] = copy.deepcopy(state.get("scene_state", {})) if isinstance(state.get("scene_state"), dict) else {}
     tiers = state.get("memory_tiers") if isinstance(state.get("memory_tiers"), dict) else {}
     packet["memory_tiers"] = {
         "hot": copy.deepcopy((tiers.get("hot") or [])[-8:]),
         "warm": copy.deepcopy((tiers.get("warm") or [])[-5:]),
         "cold": copy.deepcopy((tiers.get("cold") or [])[-5:]),
     }
-    packet["due_obligations"] = [copy.deepcopy(row) for row in state.get("obligation_ledger", [])
+    obligations = state.get("obligation_ledger") if isinstance(state.get("obligation_ledger"), list) else []
+    consequences = state.get("delayed_consequences") if isinstance(state.get("delayed_consequences"), list) else []
+    packet["due_obligations"] = [copy.deepcopy(row) for row in obligations
                                   if isinstance(row, dict) and row.get("status") in {"active", "due"}][-10:]
-    packet["due_consequences"] = [copy.deepcopy(row) for row in state.get("delayed_consequences", [])
+    packet["due_consequences"] = [copy.deepcopy(row) for row in consequences
                                    if isinstance(row, dict) and row.get("status") == "due"][-8:]
-    packet["divergence_impacts"] = copy.deepcopy((state.get("canon_divergence_impacts") or {}).get("affected_events", []))[:8]
+    divergence_impacts = state.get("canon_divergence_impacts") if isinstance(state.get("canon_divergence_impacts"), dict) else {}
+    packet["divergence_impacts"] = copy.deepcopy(divergence_impacts.get("affected_events", []))[:8]
     packet["outcome_scale"] = copy.deepcopy(state.get("last_outcome_scale", {}))
     packet["player_style"] = copy.deepcopy(state.get("player_style_profile", {}))
     packet["companion_autonomy"] = {
@@ -318,9 +323,11 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     }
 
     people = []
+    companion_rows = state.get("companions") if isinstance(state.get("companions"), list) else []
     companions = {ai_text(row.get("name") if isinstance(row, dict) else row).lower()
-                  for row in state.get("companions", [])}
-    for name, memory in (state.get("npc_memories") or {}).items():
+                  for row in companion_rows}
+    memories = state.get("npc_memories") if isinstance(state.get("npc_memories"), dict) else {}
+    for name, memory in memories.items():
         if not isinstance(memory, dict):
             continue
         priority = _score(terms, name, memory.get("goal"), memory.get("immediate_goal"), memory.get("last_known_location"))
@@ -343,11 +350,14 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     packet["relevant_people"] = [row for _, row in people[:8]]
 
     affiliation_names = _affiliation_names(state)
-    faction_names = set((state.get("factions") or {})) | set((state.get("faction_clocks") or {}))
+    factions = state.get("factions") if isinstance(state.get("factions"), dict) else {}
+    faction_clocks = state.get("faction_clocks") if isinstance(state.get("faction_clocks"), dict) else {}
+    reputation = state.get("reputation") if isinstance(state.get("reputation"), dict) else {}
+    faction_names = set(factions) | set(faction_clocks)
     faction_names |= affiliation_names
     faction_rows = []
     for name in faction_names:
-        clock = (state.get("faction_clocks") or {}).get(name, {})
+        clock = faction_clocks.get(name, {})
         if not isinstance(clock, dict): clock = {}
         priority = _score(terms, name, clock.get("strategic_goal"), clock.get("immediate_goal"), clock.get("goal"))
         if name in affiliation_names: priority += 8
@@ -355,7 +365,7 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
         if not terms and priority == 0: priority = 1
         if priority:
             faction_rows.append((priority, {
-                "name": name, "standing": (state.get("reputation") or {}).get(name),
+                "name": name, "standing": reputation.get(name),
                 "status": clock.get("status", "active"),
                 "strategic_goal": clock.get("strategic_goal") or clock.get("core_ambition") or clock.get("goal"),
                 "current_operation": copy.deepcopy(next((op for op in clock.get("operations", [])
@@ -368,13 +378,17 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     packet["relevant_factions"] = [row for _, row in faction_rows[:6]]
 
     commitments = []
-    for row in (state.get("standing_intents") or [])[-12:]:
+    standing_intents = state.get("standing_intents") if isinstance(state.get("standing_intents"), list) else []
+    for row in standing_intents[-12:]:
         if isinstance(row, dict) and row.get("status", "active") == "active":
             commitments.append({"kind": "standing intent", "text": row.get("outcome") or row.get("directive") or row.get("text"), "owner": row.get("responsible")})
-    for row in (state.get("narrative_memory") or {}).get("promises", [])[-8:]:
+    narrative_memory = state.get("narrative_memory") if isinstance(state.get("narrative_memory"), dict) else {}
+    promises = narrative_memory.get("promises") if isinstance(narrative_memory.get("promises"), list) else []
+    for row in promises[-8:]:
         if not isinstance(row, dict) or row.get("status", "active") == "active":
             commitments.append({"kind": "promise", **_compact_memory(row)})
-    for quest in state.get("quests", []):
+    quests = state.get("quests") if isinstance(state.get("quests"), list) else []
+    for quest in quests:
         if isinstance(quest, dict) and str(quest.get("status", "active")).lower() not in {"complete", "completed", "resolved", "failed", "archived"}:
             commitments.append({"kind": "quest", "name": quest.get("name"), "next": quest.get("next_hint") or quest.get("first_step")})
     packet["commitments"] = commitments[:12]
@@ -382,6 +396,7 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     history = []
     pools = [
         ("recent resolution", (state.get("resolution_ledger") or [])[-8:]),
+        ("causal result", (state.get("causality_ledger") or [])[-12:]),
         ("confirmed consequence", (state.get("consequence_ledger") or [])[-10:]),
         ("verified archive", (state.get("verified_memory_archive") or [])[-5:]),
         ("chapter", (state.get("chapter_summaries") or [])[-5:]),
@@ -390,10 +405,11 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     for kind, rows in pools:
         for row in rows:
             if not isinstance(row, dict): continue
-            title = row.get("title") or row.get("action") or row.get("kind") or kind
-            body = row.get("summary") or row.get("outcome") or row.get("narrative") or row.get("evidence") or row.get("text")
+            title = row.get("title") or row.get("action") or row.get("kind") or (row.get("actions") or [""])[0] or kind
+            body = (row.get("summary") or row.get("outcome") or row.get("direct_result") or row.get("reason")
+                    or row.get("narrative") or row.get("evidence") or row.get("text"))
             score = _score(terms, title, body)
-            if not terms and kind in {"recent resolution", "confirmed consequence", "campaign"}: score = 1
+            if not terms and kind in {"recent resolution", "causal result", "confirmed consequence", "campaign"}: score = 1
             if score:
                 history.append((score, int(row.get("turn") or (row.get("turns") or [0])[-1] or 0), {
                     "source": kind, "title": ai_text(title)[:180], "fact": ai_text(body)[:700],

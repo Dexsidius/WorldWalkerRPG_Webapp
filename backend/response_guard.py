@@ -118,6 +118,59 @@ def _chat_list(value):
     return rows
 
 
+def _information_list(value):
+    value = _decode_json(value)
+    if value in (None, ""):
+        return []
+    if not isinstance(value, list):
+        value = [value]
+    rows = []
+    for item in value[:80]:
+        if not isinstance(item, dict):
+            continue
+        fact = ai_text(item.get("fact") or item.get("message") or item.get("text")).strip()
+        if not fact:
+            continue
+        recipients = item.get("recipients")
+        if isinstance(recipients, str):
+            recipients = [recipients]
+        elif not isinstance(recipients, list):
+            recipients = []
+        try:
+            delay = max(0, int(item.get("delay_minutes", 0) or 0))
+        except (TypeError, ValueError):
+            delay = 0
+        try:
+            confidence = max(0, min(100, int(item.get("confidence", 80) or 80)))
+        except (TypeError, ValueError):
+            confidence = 80
+        rows.append({
+            "fact": fact[:500],
+            "source": ai_text(item.get("source") or "Unknown").strip()[:160],
+            "channel": ai_text(item.get("channel") or "conversation").strip()[:80],
+            "recipients": [ai_text(row).strip()[:160] for row in recipients if ai_text(row).strip()][:30],
+            "delay_minutes": delay,
+            "confidence": confidence,
+        })
+    return rows
+
+
+def _causal_outcome(value):
+    value = _decode_json(value)
+    if not isinstance(value, dict):
+        return {}
+    result = {
+        "direct_result": ai_text(value.get("direct_result") or value.get("result")).strip()[:900],
+        "witnesses": _text_list(value.get("witnesses"), 30),
+    }
+    for key in ("reactions", "costs", "complications"):
+        rows = value.get(key)
+        if not isinstance(rows, list):
+            rows = [rows] if isinstance(rows, dict) else []
+        result[key] = [copy.deepcopy(row) for row in rows[:30] if isinstance(row, dict)]
+    return result
+
+
 def normalize_assessment_response(value):
     data = _dict(value)
     checks = data.get("checks")
@@ -155,6 +208,8 @@ def normalize_turn_response(value, task="turn"):
     data["events"] = _event_list(data.get("events"))
     data["updates"] = _update_list(data.get("updates"))
     data["incoming_chats"] = _chat_list(data.get("incoming_chats"))
+    data["information_events"] = _information_list(data.get("information_events"))
+    data["causal_outcome"] = _causal_outcome(data.get("causal_outcome"))
     data["suggested_actions"] = _text_list(data.get("suggested_actions"), 12)
     data["completed_actions"] = _text_list(data.get("completed_actions"))
     data["deferred_actions"] = _text_list(data.get("deferred_actions"))

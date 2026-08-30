@@ -29,6 +29,7 @@ from jjk_system import advance_jjk_state
 from simulation_core import refresh_simulation_core, record_resolution_transaction
 from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity, normalize_world_activity
+from world_progression import normalize_world_progression
 from campaign_reliability import (
     reconcile_narrated_consequences, consolidate_long_campaign_memory,
     refresh_scene_state, normalize_outcome_scale, reconcile_commitments_and_consequences,
@@ -37,6 +38,11 @@ from campaign_reliability import (
 from simulation_enhancements import record_ability_evolution
 from experience_systems import record_world_milestones, update_scenario_memory
 from long_campaign import compact_checkpoint_state
+from gm_policy import (
+    distinct_suggestions, parse_player_intent, record_causal_outcome,
+    temporal_budget,
+)
+from standing_intents import register_standing_intents
 
 
 DEFAULT_SETTINGS = {
@@ -350,12 +356,16 @@ class TurnsMixin:
     def resolve(self, action, assessment, roll_result):
         p = {"task": "narrator_and_resolution", "role": "Narrator + Rules Referee", "action": action,
              "assessment": assessment, "dice_result": roll_result, "state_before": self.task_state_for_ai("moment", action),
+             "intent_contract": parse_player_intent(action, self.state),
+             "temporal_budget": temporal_budget("moment"),
              "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
                         "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
                         "consequence_manifest": [{"kind":"skill|title|item|quest|location|condition|reputation|affiliation|other", "target":"exact name", "change":"gained|lost|started|completed|changed", "evidence":"short sentence from this result", "details":"complete skill mechanics only when kind is skill"}],
                         "commitment_updates": [{"owner":"who made the promise/debt", "owed_to":"who expects it", "promise":"specific commitment", "due_canon_day":"integer or empty", "trigger":"condition or empty", "status":"active|fulfilled|broken|cancelled", "consequence":"what follows if relevant"}],
                         "delayed_consequences": [{"effect":"specific later consequence", "source":"decision/event causing it", "horizon":"days|weeks|months|conditional", "due_canon_day":"integer or empty", "trigger":"condition or empty"}],
                         "ability_developments": [{"ability":"existing ability name", "kind":"application|mastery|breakthrough|evolution", "development":"specific lasting development", "application":"new named or practical application, or empty", "evidence":"what caused it"}],
+                        "causal_outcome": {"direct_result":"what the action accomplished before reactions", "witnesses":["only people or channels that actually perceived it"], "reactions":[{"actor":"named informed person/faction", "response":"their causal response", "knowledge_source":"witness|conversation|message|report|rumor|research|ability"}], "costs":[{"cost":"real cost", "cause":"why it was paid"}], "complications":[{"effect":"one supported setback at most", "cause":"specific established cause"}]},
+                        "information_events": [{"fact":"what became known", "source":"actual source", "channel":"witness|conversation|letter|message|rumor|report|broadcast|ability|research", "recipients":["named recipients"], "delay_minutes":"nonnegative integer", "confidence":"0-100"}],
                         "danger_scenario_concluded": "boolean; true only when the current confrontation ended or the player left it",
                         "events": [{"type": "xp|level_up|skill|title|quest|hidden_quest|item|loot|reputation|companion|codex|location|training|combat|injury|death|discovery|world", "message": "notification"}],
                         "timeline_event": "major event or empty", "suggested_actions": ["exactly 3 optional contextual actions: strongest lead, growth/preparation, alternate hook. Each must name a real, specific person/place/faction/thread already in this campaign, not a generic template. Scale honestly — a longer-term lead can openly say so ('over the next few days...') rather than being forced into an instant."]}}
@@ -369,6 +379,7 @@ class TurnsMixin:
         When the player confirms a lethal action, the frontend sends back the
         exact assessment it was shown so we never silently re-roll the GM's
         judgement of the danger."""
+        register_standing_intents(self.state, [action])
         assessment = normalize_assessment_for_agency(
             self.state, action, cached_assessment or self.assess(action)
         )
@@ -685,6 +696,7 @@ Return ONLY valid JSON."""
             advance_npc_intentions(self.state, 5, self.simulation_mode())
             refresh_npc_schedules(self.state, 5)
             transmit_information(self.state, data, 5)
+            record_causal_outcome(self.state, data, turn_actions, int(context.get("elapsed_minutes", 5) or 5))
             if canon_repairs:
                 integrity_report.setdefault("repairs", []).extend(canon_repairs)
             if integrity_report:
@@ -730,6 +742,11 @@ Return ONLY valid JSON."""
                 normalize_outcome_scale(before, self.state, data, int(context.get("elapsed_minutes", 5) or 5))
             prior_warnings = set(before.get("continuity_ledger", {}).get("warnings", []))
             continuity_warnings = update_continuity(before, self.state, pending_action or ("campaign opening" if is_opening else ""), data.get("narrative", ""))
+            # The current result has now entered campaign_canon.  Re-run the
+            # zero-cost world mirror so a narratively acquired Sharingan (or
+            # another dedicated world-system power) appears in its panel on
+            # this same response instead of waiting for a reload/next turn.
+            normalize_world_progression(self.state, before)
             for note in self.state.pop("_pending_chronicle_notes", []):
                 self.append(note, "meta")
             # apply_time_skip has always acted on these (see its own call to
@@ -891,7 +908,7 @@ Return ONLY valid JSON."""
             if self._suggestion_is_current(text) and text.lower() not in {x.lower() for x in unique}:
                 unique.append(text[:180])
             if len(unique) == 3: break
-        return unique
+        return distinct_suggestions(unique, self.state, 3)
 
     def archive_finished_quests(self):
         active, archive = [], self.state.setdefault("quest_archive", [])
