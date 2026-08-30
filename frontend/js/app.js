@@ -967,6 +967,8 @@ function questView(q, index = 0) {
   if (typeof q !== "object" || q === null) {
     return { name: String(q || `Quest ${index + 1}`), status: "Active", explanation: "No additional explanation has been discovered yet.", knowledge: [], conditions: [], objectives: [], branchState: {}, giver: "", locations: [], risks: [], firstStep: "", deadline: "", rewards: [], developments: [], commitments: [], optionalObjectives: [], progress: 0 };
   }
+  const risks = textList(q.current_obstacles || q.risks || q.known_risks || q.consequences)
+    .filter((value) => !/^no (?:immediate|specific|known) (?:pressure|danger|risk)/i.test(String(value || "")));
   return {
     name: q.name || q.title || `Quest ${index + 1}`,
     status: q.status || q.stage || "Active",
@@ -977,7 +979,7 @@ function questView(q, index = 0) {
     branchState: q.branch_state && typeof q.branch_state === "object" ? q.branch_state : {},
     giver: q.giver || q.cause || q.employer || "",
     locations: textList(q.locations || q.location),
-    risks: textList(q.current_obstacles || q.risks || q.known_risks || q.consequences),
+    risks,
     optionalObjectives: textList(q.optional_objectives),
     firstStep: q.next_hint || q.first_step || q.next_step || "",
     progress: Number(q.progress_percent || 0),
@@ -2881,7 +2883,7 @@ function combatLogLine(e) {
 
 const COMBAT_EFFECT_ICON = { damage: "⚔ ", heal: "🩹 ", buff: "⬆ ", debuff: "⛓ ", shield: "🛡 ", cleanse: "✦ ", control: "⊘ ", summon: "♟ ", movement: "➜ ", detect: "◉ ", stealth: "◌ ", transform: "◆ ", utility: "◇ " };
 function combatAbilityEffectType(s, name) {
-  const detail = (s.skills || {})[name];
+  const detail = (s.combat?.ability_options || {})[name] || (s.skills || {})[name];
   const t = String((detail && typeof detail === "object" ? detail.effect_type : "") || "").toLowerCase();
   const valid = ["damage", "heal", "buff", "debuff", "shield", "cleanse", "control", "summon", "movement", "detect", "stealth", "transform", "utility"];
   if (valid.includes(t)) return t;
@@ -2899,7 +2901,7 @@ function combatAbilityEffectType(s, name) {
   return "damage";
 }
 function combatAbilityUsable(s, name) {
-  const detail = (s.skills || {})[name];
+  const detail = (s.combat?.ability_options || {})[name] || (s.skills || {})[name];
   if (!detail || typeof detail !== "object") return false;
   if (detail.combat_usable === false) return false;
   if (detail.combat_usable === true) return true;
@@ -2915,14 +2917,19 @@ function populateCombatAbilitySelect(s) {
   const combat = s.combat || {};
   const cooldowns = combat.cooldowns || {};
   const abilitySel = $("#combat-ability");
-  const skills = Object.keys(s.skills || {}).filter((name) => combatAbilityUsable(s, name));
+  const options = s.combat?.ability_options && typeof s.combat.ability_options === "object"
+    ? s.combat.ability_options : s.skills || {};
+  const skills = Object.keys(options).filter((name) => combatAbilityUsable(s, name));
   const priorAbility = abilitySel.value;
   abilitySel.innerHTML = `<option value="">Plain Attack</option>` + skills.map((name) => {
     const readyAt = cooldowns[name] || 0;
     const remaining = readyAt - (combat.round || 1);
     const locked = remaining > 0;
     const icon = COMBAT_EFFECT_ICON[combatAbilityEffectType(s, name)];
-    const label = locked ? `${icon}${name} (recovering, ${remaining} rd)` : `${icon}${name}`;
+    const detail = options[name] || {};
+    const displayName = detail.name || name;
+    const parentNote = detail.parent_skill && detail.parent_skill !== displayName ? ` — ${detail.parent_skill}` : "";
+    const label = locked ? `${icon}${displayName}${parentNote} (recovering, ${remaining} rd)` : `${icon}${displayName}${parentNote}`;
     return `<option value="${escapeHtml(name)}"${locked ? " disabled" : ""}>${escapeHtml(label)}</option>`;
   }).join("");
   if (skills.includes(priorAbility) && !$(`#combat-ability option[value="${CSS.escape(priorAbility)}"]`)?.disabled) abilitySel.value = priorAbility;

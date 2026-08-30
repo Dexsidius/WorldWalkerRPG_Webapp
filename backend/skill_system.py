@@ -26,7 +26,7 @@ _NONCOMBAT = re.compile(
     r"lore|apprais|diplom|negot|leadership|profession|trade|fundamentals expected of this role)\b"
 )
 _COMBAT = re.compile(
-    r"\b(attack|strike|combat|fight|weapon|jutsu|spell|blast|projectile|trap|bind|stun|"
+    r"\b(attack|strike|kick|punch|combat|fight|weapon|jutsu|spell|blast|projectile|trap|bind|stun|"
     r"heal|restore|shield|barrier|guard|weaken|poison|haki|nen|chakra pulse|damage|sword|"
     r"blade|cut|zanjutsu|hakuda|shikai|bankai|had[ōo]|bakud[ōo]|summon|transform|"
     r"teleport|dash|sense|detect|stealth|invisible|cleanse|purif|buff|empower)\b"
@@ -55,7 +55,7 @@ def _inferred_effect(blob):
         ("control", r"\b(stun\w*|bind\w*|paraly\w*|sleep\w*|freez\w*|immobil\w*|silenc\w*|confus\w*|fear\w*|restrain\w*|crowd control|bakud[ōo])\b"),
         ("debuff", r"\b(debuff|weaken|slow|poison|burn|bleed|blind|curse|mark|drain|reduce)\b"),
         ("buff", r"\b(buff|empower|enhance|strengthen|haste|increas(?:e|es) (?:power|speed|defense)|inspiration|aura)\b"),
-        ("damage", r"\b(attack|strike|damage|blast|projectile|slash|cut|pierc|crush|explod|fireball|had[ōo])\b"),
+        ("damage", r"\b(attack|strike|kick|punch|damage|blast|projectile|slash|cut|pierc|crush|explod|fireball|had[ōo])\b"),
     )
     for effect, pattern in rules:
         if re.search(pattern, blob):
@@ -114,7 +114,8 @@ def infer_skill_metadata(name, detail=None):
     """Return complete metadata while respecting any valid explicit fields."""
     explicit = detail if isinstance(detail, dict) else {}
     blob = _blob(name, detail)
-    effect = str(explicit.get("effect_type", "")).strip().lower()
+    authored_effect = str(explicit.get("effect_type", "")).strip().lower()
+    effect = authored_effect
     if effect not in EFFECT_TYPES:
         effect = _inferred_effect(blob)
     elif effect == "utility":
@@ -124,15 +125,16 @@ def infer_skill_metadata(name, detail=None):
         inferred = _inferred_effect(blob)
         if inferred != "utility":
             effect = inferred
+    upgraded_legacy_utility = authored_effect == "utility" and effect != "utility"
     category = str(explicit.get("category", "")).strip().lower()
-    if category not in SKILL_CATEGORIES:
+    if category not in SKILL_CATEGORIES or (upgraded_legacy_utility and category == "utility"):
         category = _category_for(effect, blob)
     target = str(explicit.get("target_type", explicit.get("target", ""))).strip().lower()
     if target not in TARGET_TYPES:
         target = _default_target(effect, blob)
 
     combat_usable = explicit.get("combat_usable")
-    if not isinstance(combat_usable, bool):
+    if not isinstance(combat_usable, bool) or (upgraded_legacy_utility and combat_usable is False):
         combat_usable = effect != "utility" or bool(_COMBAT.search(blob))
         if effect == "utility" and _NONCOMBAT.search(blob) and not _COMBAT.search(blob):
             combat_usable = False
@@ -198,3 +200,112 @@ def normalize_skill_map(skills):
     if not isinstance(skills, dict):
         return {}
     return {str(name): normalize_skill_detail(str(name), detail) for name, detail in skills.items()}
+
+
+def _application_name(raw):
+    if isinstance(raw, dict):
+        return str(raw.get("name") or raw.get("title") or raw.get("ability") or raw.get("technique") or "").strip()
+    return str(raw or "").strip()
+
+
+def _application_snippet(name, detail):
+    """Return only the sentence describing *name*, not the whole parent.
+
+    Passing an umbrella ability's full prose to metadata inference makes a
+    movement application look like a shield whenever the same paragraph also
+    mentions a shield.  A sentence-sized snippet keeps every application's
+    mechanics tied to its own words.
+    """
+    if not isinstance(detail, dict):
+        return name
+    values = []
+    for key in ("description", "effect", "use", "activation", "limitation", "limitations", "cost", "drawback"):
+        value = detail.get(key)
+        if isinstance(value, str) and value.strip():
+            values.append(value.strip())
+    for value in values:
+        parts = [part.strip() for part in re.split(r"(?<=[.!?;])\s+|\s*;\s*", value) if part.strip()]
+        found = next((part for part in parts if name.casefold() in part.casefold()), None)
+        if found:
+            return found[:700]
+    return name
+
+
+def extract_skill_applications(parent_name, detail):
+    """Find established named moves inside an umbrella skill.
+
+    Modern saves can store structured ``applications``.  Older/generated
+    saves often list their moves only as emphasized names in the description
+    or limits (``*Flame Flight*``, ``*Fiery Shield*``).  Both forms become
+    selectable combat applications without adding duplicate Journal cards.
+    """
+    if not isinstance(detail, dict):
+        return []
+    found, seen = [], {str(parent_name).strip().casefold()}
+
+    def add(raw):
+        name = _application_name(raw).strip(" *_—–-:.")
+        if not name or len(name) > 80 or len(name.split()) > 9 or name.casefold() in seen:
+            return
+        seen.add(name.casefold())
+        if isinstance(raw, dict):
+            app = copy.deepcopy(raw)
+            app["name"] = name
+        else:
+            app = {"name": name, "description": _application_snippet(name, detail)}
+        found.append(app)
+
+    for key in ("applications", "developed_applications", "abilities", "techniques", "moves"):
+        values = detail.get(key)
+        if isinstance(values, dict):
+            for name, value in values.items():
+                app = copy.deepcopy(value) if isinstance(value, dict) else {"description": value}
+                app["name"] = name
+                add(app)
+        elif isinstance(values, list):
+            for value in values:
+                add(value)
+
+    prose = " ".join(str(detail.get(key) or "") for key in
+                     ("description", "effect", "use", "activation", "limitation", "limitations", "cost", "drawback"))
+    for match in re.finditer(r"(?<!\*)\*{1,2}([^*\n]{2,80}?)\*{1,2}(?!\*)", prose):
+        add(match.group(1))
+    return found[:24]
+
+
+def build_combat_ability_options(skills):
+    """Flatten learned skills and their named applications for combat UI.
+
+    Keys are stable selection IDs.  Parent skill records remain untouched so
+    the Journal stays clean; nested applications inherit the parent's rank,
+    bonus and resource behavior while receiving their own inferred effect.
+    """
+    normalized = normalize_skill_map(skills)
+    options = {}
+    for parent_name, parent in normalized.items():
+        if parent.get("combat_usable"):
+            top = copy.deepcopy(parent)
+            top.update({"id": parent_name, "name": parent_name, "parent_skill": parent_name})
+            options[parent_name] = top
+        for raw in extract_skill_applications(parent_name, parent):
+            name = _application_name(raw)
+            if not name:
+                continue
+            detail = copy.deepcopy(raw)
+            detail.setdefault("description", _application_snippet(name, parent))
+            for key in ("rank", "bonus", "resource_type", "growth_path", "origin"):
+                if key not in detail and key in parent:
+                    detail[key] = copy.deepcopy(parent[key])
+            # Do not inherit a parent's effect/category: each named move has
+            # its own (flight, shield, strike, etc.) mechanical purpose.
+            detail.pop("effect_type", None)
+            detail.pop("category", None)
+            detail.pop("target_type", None)
+            detail.pop("combat_usable", None)
+            detail = normalize_skill_detail(name, detail)
+            if not detail.get("combat_usable"):
+                continue
+            selection_id = f"{parent_name}::{name}"
+            detail.update({"id": selection_id, "name": name, "parent_skill": parent_name})
+            options[selection_id] = detail
+    return options

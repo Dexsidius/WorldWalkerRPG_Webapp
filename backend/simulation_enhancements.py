@@ -260,27 +260,61 @@ def reactive_communication(state, events, elapsed_minutes, existing=None):
             candidates.append(name)
     if not candidates:
         return []
-    relevant_event = next((row for row in events if isinstance(row, dict) and _name(row.get("title")) and _number(row.get("importance"), 0) >= 40), None)
-    if not relevant_event:
+    # Match a sender to something they could plausibly know or care about.
+    # The old fallback always selected candidates[0], which let an unrelated
+    # polity quote private character developments as if it had witnessed
+    # them.  Direct involvement wins; only genuinely public major news may
+    # reach an otherwise-unrelated contact.
+    best = None
+    for row in events:
+        if not isinstance(row, dict) or not _name(row.get("title")) or _number(row.get("importance"), 0) < 40:
+            continue
+        title = ai_text(row.get("title"))
+        detail = ai_text(row.get("narrative") or row.get("message"))
+        blob = f"{title} {detail}".casefold()
+        event_type = ai_text(row.get("type")).casefold()
+        public_news = _number(row.get("importance"), 0) >= 75 and event_type in {"canon", "canon_event", "world", "headline", "news"}
+        event_words = {word for word in re.findall(r"[a-z0-9'-]+", blob) if len(word) >= 4}
+        for name in candidates:
+            contact = (state.get("contacts") or {}).get(name, {})
+            memory = (state.get("npc_memories") or {}).get(name, {})
+            context = f"{contact} {memory}".casefold()
+            direct = name.casefold() in blob
+            overlap = len(event_words & {word for word in re.findall(r"[a-z0-9'-]+", context) if len(word) >= 4})
+            score = (120 if direct else 0) + min(30, overlap * 5) + (20 if public_news else 0)
+            if score and (best is None or score > best[0]):
+                best = (score, name, row)
+    if not best:
         return []
-    # Prefer someone actually named in or connected to the development; only
-    # fall back to the first eligible contact when the event is broad news.
-    event_blob = ai_text(relevant_event).lower()
-    sender = next((name for name in candidates if name.lower() in event_blob), candidates[0])
+    _, sender, relevant_event = best
     subject = ai_text(relevant_event.get("title") or "recent developments")
     medium = WORLD_MESSAGE_MEDIUM.get(state.get("world"), WORLD_MESSAGE_MEDIUM["Custom World"])
     detail = ai_text(relevant_event.get("narrative") or relevant_event.get("message"))
     contact = (state.get("contacts") or {}).get(sender, {})
     relationship = _number(contact.get("relationship") if isinstance(contact, dict) else 0, 0)
+    event_blob = f"{subject} {detail}".lower()
+    # A thread already shows its sender and delivery date; the message body
+    # should be what they actually said, not another narrated envelope around
+    # a fake quotation.  Prefer the factual event detail over a stylized card
+    # title and remove third-person possessives from self-authored updates.
+    clean_subject = re.sub(rf"^{re.escape(sender)}(?:['’]s)?\s+", "", subject, flags=re.I).strip(" —:-") or subject
+    detail = re.sub(r"\s+", " ", detail).strip()
+    if len(detail) > 260:
+        detail = detail[:257].rsplit(" ", 1)[0] + "…"
+    kind = str(contact.get("kind") or "person").lower() if isinstance(contact, dict) else "person"
+    group_sender = kind in {"group", "faction", "organization", "village", "guild", "nation"}
     if re.search(r"\b(attack|danger|killed|death|injur|ambush|war|threat)\w*\b", event_blob, re.I):
-        message = f"A {medium} arrives from {sender}: “I heard about {subject}. Are you safe, and do you need help?”"
+        message = f"{detail or f'I received word about {clean_subject}.'} Are you safe, and do you need help?"
         purpose = "warning_and_welfare"
     elif re.search(r"\b(level|title|promotion|victory|awaken|master|achievement|clear)\w*\b", event_blob, re.I):
         tone = "I knew you could do it" if relationship >= 25 else "That is going to change how people see you"
-        message = f"A {medium} arrives from {sender}: “{tone}. I heard about {subject}.”"
+        message = f"{tone}. {detail or f'The news about {clean_subject} reached me.'}"
         purpose = "recognition"
+    elif group_sender:
+        message = f"Report — {clean_subject}: {detail or 'A relevant development has been confirmed.'}"
+        purpose = "report"
     else:
-        message = f"A {medium} arrives from {sender}: “I heard about {subject}. What does this change for your next move?”"
+        message = f"{detail or f'I have an update on {clean_subject}.'} Let me know if this changes what you want me to do next."
         purpose = "follow_up"
     memories = state.setdefault("npc_memories", {})
     memory = memories.setdefault(sender, {}) if isinstance(memories, dict) else {}
@@ -292,7 +326,7 @@ def reactive_communication(state, events, elapsed_minutes, existing=None):
         if fact not in known:
             known.append(fact); memory["confirmed_knowledge"] = known[-30:]
     return [{"thread": sender, "sender": sender,
-             "message": message,
+             "message": message.strip(),
              "metadata": {"generated_locally": True, "source_event": subject, "medium": medium, "purpose": purpose}}]
 
 

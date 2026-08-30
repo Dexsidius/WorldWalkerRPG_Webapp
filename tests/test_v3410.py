@@ -19,7 +19,7 @@ from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 class WorldwalkerV3410Tests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.44.1")
+        self.assertEqual(APP_VERSION, "3.44.2")
 
     def test_long_skip_updates_are_dated_in_order(self):
         rows = normalize_dated_updates([
@@ -56,7 +56,7 @@ class WorldwalkerV3410Tests(unittest.TestCase):
         state.update(world="Bleach", turn=8, canon_day=14, contacts={"Rukia":{"can_contact":True}})
         events = world_downtime_events(state, 7 * 1440, ["Patrol"])
         self.assertIn("Division", events[0]["title"])
-        messages = reactive_communication(state, [{"title":"Hollow Report", "narrative":"A patrol found evidence.", "importance":60}], 7 * 1440)
+        messages = reactive_communication(state, [{"title":"Rukia's Hollow Report", "narrative":"Rukia's patrol found evidence.", "importance":60}], 7 * 1440)
         self.assertEqual(messages[0]["sender"], "Rukia")
         snapshot = {"skills":{f"Skill {i}":{"description":"x"} for i in range(60)}, "inventory":list(range(80))}
         budgeted = apply_prompt_budget(snapshot, state, "Skill 59", "moment", "economy")

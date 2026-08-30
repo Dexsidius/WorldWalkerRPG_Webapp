@@ -958,7 +958,21 @@ Return ONLY valid JSON."""
             )
             def _placeholder(value):
                 text = ai_text(value).strip().lower()
-                return not text or any(text.startswith(phrase) for phrase in placeholder_phrases)
+                return (not text or text in {"none", "null", "unknown", "n/a", "not set", "tbd"}
+                        or any(text.startswith(phrase) for phrase in placeholder_phrases))
+
+            def _fact_key(value):
+                return re.sub(r"[^a-z0-9]+", " ", ai_text(value).casefold()).strip()
+
+            def _duplicates(value, *others):
+                key = _fact_key(value)
+                if not key:
+                    return True
+                for other in others:
+                    other_key = _fact_key(other)
+                    if other_key and (key == other_key or (len(key) > 35 and (key in other_key or other_key in key))):
+                        return True
+                return False
 
             source_sentence = ""
             if trigger:
@@ -993,14 +1007,24 @@ Return ONLY valid JSON."""
             clean_knowledge = [ai_text(x)[:500] for x in knowledge[:40] if ai_text(x)]
             if len(clean_knowledge) == 1 and re.match(r"(?i)^the quest begins at\b", clean_knowledge[0]):
                 clean_knowledge = []
-            quest["current_knowledge"] = clean_knowledge or ([source_sentence[:500]] if source_sentence else [f"The first lead is at {self.state.get('location', 'the current location')}." ])
+            clean_knowledge = [item for item in clean_knowledge
+                               if not _duplicates(item, explanation, source_sentence, objective)]
+            quest["current_knowledge"] = clean_knowledge
             quest["clear_conditions"] = clean_conditions or [objective[:500]]
             quest["locations"] = [ai_text(x)[:500] for x in locations[:40] if ai_text(x)] or [str(self.state.get("location", "Current location"))]
-            quest["risks"] = [ai_text(x)[:500] for x in risks[:20] if ai_text(x)] or ["No specific danger is confirmed yet."]
+            clean_risks = [ai_text(x)[:500] for x in risks[:20] if ai_text(x) and not _placeholder(x)]
+            clean_risks = [risk for risk in clean_risks if not re.match(
+                r"(?i)^(?:no (?:specific|immediate|known) (?:danger|risk|pressure)|unknown until)", risk)]
+            quest["risks"] = clean_risks or ["No immediate pressure is known yet."]
             quest["giver"] = str(quest.get("giver") or quest.get("cause") or "Circumstances")[:200]
             first_step = ai_text(quest.get("first_step") or quest.get("next_step"))
-            if _placeholder(first_step) or re.match(r"(?i)^follow the first known lead:\s*the quest begins at\b", first_step):
-                first_step = (f"Examine the evidence tied to {quest_name} at {quest['locations'][0]} and speak with the people directly involved.")
+            if re.match(r"(?i)^follow the first known lead:\s*the quest begins at\b", first_step):
+                first_step = f"Examine the evidence tied to {quest_name} at {quest['locations'][0]} and speak with the people directly involved."
+            elif _placeholder(first_step):
+                first_step = ((f"Examine the evidence tied to {quest_name} at {quest['locations'][0]} and speak with the people directly involved.")
+                              if literal_quests else "")
+            if _duplicates(first_step, explanation, source_sentence, objective):
+                first_step = ""
             quest["first_step"] = first_step[:500]
             quest["discovered_clues"] = [ai_text(x)[:500] for x in (quest.get("discovered_clues") or quest["current_knowledge"])[:40] if ai_text(x)]
             quest["completion_conditions"] = [ai_text(x)[:500] for x in (quest.get("completion_conditions") or quest["clear_conditions"])[:40] if ai_text(x)]
@@ -1009,23 +1033,26 @@ Return ONLY valid JSON."""
             quest["next_hint"] = str(quest.get("next_hint") or quest["first_step"])[:500]
             quest["agenda_mode"] = "literal" if literal_quests else "narrative"
             if literal_quests:
+                first_step = quest["first_step"] or f"Act on the clearest lead connected to {quest_name}."
+                known_risk = quest["risks"][0] if quest["risks"] else "No confirmed risk yet."
                 briefing = (
                     f"[QUEST STARTED — {quest.get('name', 'New Quest')}]\n"
                     f"{quest['explanation']}\n"
                     f"Objective: {quest['clear_conditions'][0]}\n"
-                    f"First step: {quest['first_step']}\n"
-                    f"Known risk: {quest['risks'][0]}"
+                    f"First step: {first_step}\n"
+                    f"Known risk: {known_risk}"
                 )
                 self.append(briefing, "system")
             else:
-                known = quest["current_knowledge"][0] if quest["current_knowledge"] else "The situation is still unfolding."
-                briefing = (
-                    f"[{presentation['entry_label'].upper()} ADDED — {quest.get('name', 'New Direction')}]\n"
-                    f"{quest['explanation']}\n"
-                    f"Current direction: {quest['first_step']}\n"
-                    f"What you know: {known}\n"
-                    f"Immediate pressure: {quest['risks'][0]}"
-                )
+                lines = [f"[{presentation['entry_label'].upper()} ADDED — {quest.get('name', 'New Direction')}]",
+                         quest["explanation"]]
+                if quest["first_step"]:
+                    lines.append(f"Next: {quest['first_step']}")
+                if quest["current_knowledge"]:
+                    lines.append(f"Confirmed: {quest['current_knowledge'][0]}")
+                if quest["risks"] and not re.match(r"(?i)^no (?:immediate|specific|known) (?:pressure|danger|risk)", quest["risks"][0]):
+                    lines.append(f"Pressure: {quest['risks'][0]}")
+                briefing = "\n".join(line for line in lines if line)
                 self.append(briefing, "system")
         return new_quests
 

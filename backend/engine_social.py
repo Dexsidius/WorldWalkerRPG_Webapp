@@ -25,7 +25,11 @@ from response_guard import normalize_object_response
 LOCAL_CANON_POWER_ESTIMATES = {
     "Naruto": {
         "early naruto": 45, "naruto": 65, "kakashi": 210, "average jonin": 140,
-        "typical jonin": 140, "pain": 600, "nagato": 650, "itachi": 420,
+        "typical jonin": 140, "minato namikaze": 620, "minato": 620,
+        "hiruzen sarutobi": 470, "hiruzen": 470, "jiraiya": 390,
+        "orochimaru": 410, "tsunade": 360, "might guy": 430,
+        "killer bee": 470, "hashirama": 760, "madara": 780,
+        "pain": 600, "nagato": 650, "itachi": 420,
         "kisame": 300, "konan": 175, "sasori": 190, "deidara": 180,
         "kakuzu": 205, "hidan": 125, "hanzo": 380, "obito": 610,
     },

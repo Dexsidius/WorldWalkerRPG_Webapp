@@ -18,7 +18,7 @@ from worlds import APP_VERSION, BASE_STATE
 
 class WorldwalkerV3120NarrativeAgendaTests(unittest.TestCase):
     def test_release_and_world_presentation_profiles(self):
-        self.assertEqual(APP_VERSION, "3.44.1")
+        self.assertEqual(APP_VERSION, "3.44.2")
         self.assertTrue(uses_literal_quests("Overgeared"))
         self.assertTrue(uses_literal_quests("Solo Max-Level Newbie"))
         for world in ("Naruto", "One Piece", "Hunter x Hunter", "Bleach",
@@ -77,7 +77,7 @@ class WorldwalkerV3120NarrativeAgendaTests(unittest.TestCase):
         game.ensure_quest_briefings(before, "I start a mission to escort the bridge builder")
         narrative_text = game.story_log[-1]["text"]
         self.assertIn("ASSIGNMENT ADDED", narrative_text)
-        self.assertIn("Current direction:", narrative_text)
+        self.assertIn("Next:", narrative_text)
         self.assertNotIn("Objective:", narrative_text)
 
         game.state = copy.deepcopy(BASE_STATE)

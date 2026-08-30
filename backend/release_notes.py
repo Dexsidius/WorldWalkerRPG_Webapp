@@ -1,6 +1,21 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.44.2": {
+        "title": "Combat Applications and Clearer Campaign Updates",
+        "summary": "Named moves inside broader abilities now work in combat, incoming messages stay grounded in what the sender could know, and narrative assignments no longer repeat empty boilerplate.",
+        "highlights": [
+            {"title": "Every established move is usable", "example": "Celestial Ember now exposes Flame Flight, Fiery Shield, and Ember Strike as separate combat choices without cluttering the Journal."},
+            {"title": "Legacy combat tags repair themselves", "example": "Ignition Kick is recognized as an offensive move even if an older save incorrectly labeled it Utility and non-combat."},
+            {"title": "Application-specific mechanics", "example": "Fiery Shield creates a barrier, Flame Flight grants movement advantage, and Ember Strike deals damage instead of all inheriting one generic effect."},
+            {"title": "Grounded incoming messages", "example": "Konan can report on her own operation, while an unrelated village no longer sends fake quotes about private events it could not know."},
+            {"title": "Canon-aware comparisons", "example": "Minato and other famous shinobi use world-scale benchmarks instead of being mistaken for a generic Chūnin."},
+            {"title": "Existing message cleanup", "example": "Older locally generated messages lose the redundant 'a messenger arrives from…' wrapper when the campaign is loaded."},
+            {"title": "Concise narrative assignments", "example": "Assignments omit 'Current direction: None,' repeated action text, and empty danger notices, leaving only meaningful context."},
+            {"title": "Mobile combat verified", "example": "The complete ability list was selected and Fiery Shield resolved successfully in a phone-sized browser with no console errors."},
+            {"title": "Clean combat narration", "example": "Combat logs show 'Fiery Shield' instead of leaking the internal parent/application selection ID."},
+        ],
+    },
     "3.44.1": {
         "title": "Reliable Economy and Poneglyph Chronicle",
         "summary": "Money changes are now auditable and exact, recurring expenses become payable obligations instead of negative balances, and One Piece turns arrive on the approved anime-style Poneglyph stone.",

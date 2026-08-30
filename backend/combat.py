@@ -31,7 +31,7 @@ from worlds import DIFFICULTIES, abilities_for, primary_stats_for, ability_resou
 from power_benchmarks import benchmark_context
 from util import clamp, ai_text
 from systems import normalize_tuning
-from skill_system import infer_skill_metadata, normalize_skill_map
+from skill_system import infer_skill_metadata, normalize_skill_map, build_combat_ability_options
 from ai_client import AI
 from simulation_core import companion_support_for_combat, normalize_encounter_state
 from portrait_generator import set_active_portrait_form, clear_active_portrait_form
@@ -218,6 +218,10 @@ class CombatMixin:
         combat.setdefault("player_shield", 0)
         combat.setdefault("non_lethal", False)
         self.state["skills"] = normalize_skill_map(self.state.get("skills", {}))
+        # A broad power may contain several explicitly named applications.
+        # Keep those applications out of the top-level Journal while exposing
+        # every established move to structured combat.
+        combat["ability_options"] = build_combat_ability_options(self.state["skills"])
         # Player-controlled, independent of combat.non_lethal: choosing to
         # spare a real, dangerous opponent only protects THEM from dying to
         # the player's own hits — it does nothing for the player's own HP.
@@ -253,11 +257,15 @@ class CombatMixin:
         stat = int(self.state.get("stats", {}).get(ability, 30) or 30)
         benchmark = 30
         stat_bonus = int(round((stat - benchmark) / 4.0))
-        sb = self.skill_bonus(skill) if skill else 0
+        detail = self._combat_skill_detail(skill)
+        parent = str((detail or {}).get("parent_skill") or skill or "")
+        sb = self.skill_bonus(parent) if parent else 0
+        if isinstance(detail, dict) and isinstance(detail.get("bonus"), (int, float)):
+            sb = int(detail["bonus"])
         tb = self.title_bonus()
         disclosure_bonus = 0
         if self.state.get("world") == "Jujutsu Kaisen" and skill:
-            detail = (self.state.get("skills") or {}).get(skill, {})
+            detail = self._combat_skill_detail(skill)
             system = self.state.get("jjk_system") or {}
             technique = (system.get("birth_slot") or {}).get("name")
             if isinstance(detail, dict) and detail.get("parent_technique") == technique:
@@ -279,6 +287,19 @@ class CombatMixin:
         return max(1, round(target_hp_max * pct * multiplier))
 
     # ---------- resource / cooldown cost, and effect type, of a named ability ----------
+    def _combat_skill_detail(self, skill):
+        if not skill:
+            return None
+        detail = (self.state.get("skills") or {}).get(skill)
+        if isinstance(detail, dict):
+            return detail
+        options = (self.state.get("combat") or {}).get("ability_options") or {}
+        detail = options.get(skill) if isinstance(options, dict) else None
+        return detail if isinstance(detail, dict) else None
+
+    def _combat_skill_known(self, skill):
+        return bool(skill and self._combat_skill_detail(skill))
+
     def _ability_resource_type(self, skill):
         """'pool' (spends the world resource — Chakra/Mana/Aura/Magicule/
         Stamina/Energy), 'cooldown' (no resource cost, but locked out for a
@@ -286,7 +307,7 @@ class CombatMixin:
         resource_type on the skill if the GM set one (see gm_rules' skill
         authoring guidance), otherwise falls back to the world's default —
         this is what makes an untagged legacy skill still behave sensibly."""
-        detail = self.state.get("skills", {}).get(skill) if skill else None
+        detail = self._combat_skill_detail(skill)
         explicit = str((detail or {}).get("resource_type", "")).strip().lower() if isinstance(detail, dict) else ""
         if explicit in ("pool", "cooldown", "free"):
             return explicit
@@ -303,11 +324,11 @@ class CombatMixin:
 
     def _ability_effect_type(self, skill):
         """Return the normalized mechanical effect of a named skill."""
-        detail = self.state.get("skills", {}).get(skill) if skill else None
+        detail = self._combat_skill_detail(skill)
         return infer_skill_metadata(skill or "Attack", detail).get("effect_type", "damage") if skill else "damage"
 
     def _ability_metadata(self, skill):
-        detail = self.state.get("skills", {}).get(skill) if skill else None
+        detail = self._combat_skill_detail(skill)
         return infer_skill_metadata(skill or "Attack", detail)
 
     @staticmethod
@@ -451,6 +472,7 @@ class CombatMixin:
         decisive speed edge) that can't be paid for is simply skipped by the
         caller instead, since the first swing already landed."""
         bonus, sb_used = self._player_offense_bonus(ability, swing_skill)
+        display_skill = str((self._combat_skill_detail(swing_skill) or {}).get("name") or swing_skill or "Attack")
         player_effects = self._player_effect_bonuses(combat)
         bonus += round(25 * player_effects["power_pct"])
         bonus -= round(abs(player_effects["accuracy_pct"]) * 25)
@@ -458,12 +480,12 @@ class CombatMixin:
         if swing_skill and resource_type == "cooldown":
             ready_at = combat["cooldowns"].get(swing_skill, 0)
             if combat["round"] < ready_at:
-                raise RuntimeError(f"{swing_skill} is still recovering — usable again in {ready_at - combat['round']} more round(s).")
+                raise RuntimeError(f"{display_skill} is still recovering — usable again in {ready_at - combat['round']} more round(s).")
         elif swing_skill and resource_type == "pool":
             resource_cost = self._ability_resource_cost(sb_used)
             available = int(self.state.get("resource", 0) or 0)
             if resource_cost > available:
-                raise RuntimeError(f"Not enough {self.state.get('resource_name', 'Energy')} to use {swing_skill} ({resource_cost} needed, {available} available).")
+                raise RuntimeError(f"Not enough {self.state.get('resource_name', 'Energy')} to use {display_skill} ({resource_cost} needed, {available} available).")
 
         metadata = self._ability_metadata(swing_skill) if swing_skill else self._ability_metadata(None)
         effect_type = metadata.get("effect_type", "damage") if swing_skill else "damage"
@@ -471,7 +493,7 @@ class CombatMixin:
         duration = max(1, int(metadata.get("duration_rounds", 0) or 3))
         status_name = metadata.get("status_effect")
         eff = self._effective_enemy_numbers(enemy, combat)
-        event = {"actor": "player", "ability": swing_skill or "Attack", "target": enemy["name"],
+        event = {"actor": "player", "ability": display_skill, "target": enemy["name"],
                   "resource_cost": resource_cost, "extra_swing": extra_swing, "effect": effect_type,
                   "category": metadata.get("category"), "duration": duration}
 
@@ -547,9 +569,9 @@ class CombatMixin:
             applied = bool(check["success"])
             if applied:
                 support = max(2, min(15, 3 + sb_used // 3))
-                combat.setdefault("summons", []).append({"name": status_name or swing_skill or "Summoned Ally",
+                combat.setdefault("summons", []).append({"name": status_name or display_skill or "Summoned Ally",
                                                           "rounds_left": duration, "support_bonus": support})
-            event.update({"action": "summon", "summon": status_name or swing_skill, "applied": applied, **check})
+            event.update({"action": "summon", "summon": status_name or display_skill, "applied": applied, **check})
         elif effect_type in ("movement", "detect", "stealth", "transform"):
             check = self._combat_check(bonus, 20, 45)
             applied = bool(check["success"])
@@ -565,8 +587,8 @@ class CombatMixin:
                     "effect_type": effect_type,
                 })
                 if effect_type == "transform":
-                    details = ai_text((self.state.get("skills", {}).get(swing_skill, {}) or {}).get("description")) if swing_skill else ""
-                    set_active_portrait_form(self.state, swing_skill or status_name or "Combat Transformation",
+                    details = ai_text((self._combat_skill_detail(swing_skill) or {}).get("description")) if swing_skill else ""
+                    set_active_portrait_form(self.state, display_skill or status_name or "Combat Transformation",
                                              status_name or "Transformation", details, source="combat")
             event.update({"action": effect_type, "status": status_name or effect_type.title(), "applied": applied, **check})
         elif effect_type == "utility":
@@ -694,7 +716,7 @@ class CombatMixin:
             # domination, ...) — same math, just a harder target unless the
             # power gap already makes the outcome a foregone conclusion.
             # Failing costs nothing but the attempt; try again next round.
-            bonus, _ = self._player_offense_bonus(ability, ability_name if ability_name in self.state.get("skills", {}) else None)
+            bonus, _ = self._player_offense_bonus(ability, ability_name if self._combat_skill_known(ability_name) else None)
             eff = self._effective_enemy_numbers(enemy, combat)
             gap = player_offense_stat_value - enemy_power
             if gap >= MASSIVE_GAP_THRESHOLD:
@@ -709,7 +731,7 @@ class CombatMixin:
                 combat["log"].extend([{"round": combat["round"], **e} for e in events])
                 return self.end_combat("overwhelmed", log_start)
         else:
-            requested_skill = ability_name if ability_name and ability_name in self.state.get("skills", {}) else None
+            requested_skill = ability_name if self._combat_skill_known(ability_name) else None
             requested_type = self._ability_resource_type(requested_skill) if requested_skill else "free"
             event = self._resolve_swing(combat, enemy, ability, requested_skill, requested_type, ally_support,
                                         player_offense_stat_value, enemy_power, bonus_action)

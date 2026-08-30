@@ -27,6 +27,40 @@ from world_activity import normalize_world_activity
 from long_campaign import pre_advance_health_check
 from systems import ensure_currency_state
 
+
+def _repair_legacy_local_messages(state):
+    """Unwrap v3.41 local messages that narrated their own delivery.
+
+    Chat already displays the thread, sender and date.  Older local messages
+    repeated all of that inside the body (``A messenger arrives from X: …``),
+    which looked like the sender was quoting the game's event-card title.
+    Only rows explicitly marked as locally generated are changed.
+    """
+    repaired = 0
+    threads = state.get("chat_threads")
+    if not isinstance(threads, dict):
+        return repaired
+    pattern = re.compile(r"^A\s+.+?\s+arrives\s+from\s+.+?:\s*[“\"](.+?)[”\"]\s*$", re.I | re.S)
+    for rows in threads.values():
+        messages = rows.get("messages") if isinstance(rows, dict) else rows
+        if not isinstance(messages, list):
+            continue
+        for message in messages:
+            if not isinstance(message, dict) or not isinstance(message.get("metadata"), dict):
+                continue
+            if not message["metadata"].get("generated_locally"):
+                continue
+            text = ai_text(message.get("text") or message.get("message"))
+            match = pattern.match(text.strip())
+            if match:
+                clean = match.group(1).strip()
+                if "text" in message:
+                    message["text"] = clean
+                else:
+                    message["message"] = clean
+                repaired += 1
+    return repaired
+
 def _compile_skill_mechanics(state):
     skills = normalize_skill_map(state.get("skills", {}))
     stats = state.get("stats") if isinstance(state.get("stats"), dict) else {}
@@ -564,6 +598,9 @@ def migrate_state(state, from_version="unknown"):
     repairs.extend(normalize_canon_integrity(migrated, scan_chronicle=True))
     normalize_companion_combinations(migrated)
     normalize_trophy_state(migrated)
+    legacy_messages = _repair_legacy_local_messages(migrated)
+    if legacy_messages:
+        repairs.append(f"Cleaned {legacy_messages} legacy local message bodies")
     refresh_simulation_core(migrated)
     health = pre_advance_health_check(migrated, source="migration")
     repairs.extend(health.get("repairs", []))

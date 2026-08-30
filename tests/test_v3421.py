@@ -26,7 +26,7 @@ class StableTurnAI:
 
 class LongCampaignStringCompanionRegressionTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.44.1")
+        self.assertEqual(APP_VERSION, "3.44.2")
 
     def test_canon_context_accepts_compact_companion_names(self):
         state = copy.deepcopy(BASE_STATE)
