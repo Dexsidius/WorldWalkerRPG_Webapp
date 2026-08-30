@@ -29,7 +29,7 @@ class WorldwalkerV3230RecurringFinancesTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.44.0")
+        self.assertEqual(APP_VERSION, "3.44.1")
         self.assertEqual(BASE_STATE["schema_version"], 20)
         self.assertEqual(BASE_STATE["recurring_finances"], [])
 
@@ -76,7 +76,7 @@ class WorldwalkerV3230RecurringFinancesTests(unittest.TestCase):
         self.assertEqual(game.state["currency"]["amount"], 52 * 50)
         self.assertIn("x52 cycles", appends[0]["text"])
 
-    def test_expense_subtracts_and_can_go_negative(self):
+    def test_expense_uses_available_cash_and_records_the_shortfall_as_debt(self):
         game = self.fresh()
         game.state["currency"] = {"name": "Ryo", "amount": 50}
         game.state["recurring_finances"] = [
@@ -84,7 +84,9 @@ class WorldwalkerV3230RecurringFinancesTests(unittest.TestCase):
              "interval_days": 30, "next_due_day": 30, "active": True},
         ]
         game._pay_recurring_finances(30 * 1440 + 480)
-        self.assertEqual(game.state["currency"]["amount"], -150)
+        self.assertEqual(game.state["currency"]["amount"], 0)
+        self.assertEqual(game.state["finance_debts"][0]["label"], "Workshop rent")
+        self.assertEqual(game.state["finance_debts"][0]["amount"], 150)
 
     def test_inactive_entry_is_skipped(self):
         game = self.fresh()

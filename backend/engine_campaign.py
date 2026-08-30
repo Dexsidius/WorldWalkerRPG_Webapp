@@ -15,7 +15,8 @@ from continuity import update_continuity
 from reliability import update_narrative_memory
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks)
+                     update_chapter_memory, tick_world_clocks,
+                     ensure_currency_state, record_opening_currency)
 from bleach_data import (academy_kido_skills, kido_reference_summary,
                          owns_release, zanpakuto_tracks)
 from world_progression import normalize_world_progression
@@ -1847,8 +1848,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         this specific background's wealth relative to an ordinary local
         (a runaway noble starts richer than a street orphan even if neither
         is a strong fighter — wealth and combat power are different axes,
-        so this stays separate from the power `boost` above, with only a
-        light additive nudge from it for a genuinely major starting figure)."""
+        so this stays entirely separate from the power `boost` above)."""
         baseline = int(expansion_for(world).get("currency_baseline", 250))
         text = f"{origin} {archetype} {background}".lower()
         multiplier = 1.0
@@ -1863,11 +1863,11 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         elif any(k in text for k in ("bandit", "smuggler", "black market", "criminal", "thief")):
             multiplier = 1.6
         # Combat-language boosts are intentionally open-ended; wealth is not.
-        # Being immeasurably strong does not silently mint immeasurable money.
-        amount = baseline * multiplier + min(boost, 100) * (baseline / 50.0)
-        # +/-15% so two characters with the same background text don't start
+        # Being immeasurably strong does not silently mint any extra money.
+        amount = baseline * multiplier
+        # +/-10% so two characters with the same background text don't start
         # with the exact identical number down to the last coin.
-        amount *= random.uniform(0.85, 1.15)
+        amount *= random.uniform(0.90, 1.10)
         return max(1, int(round(amount / 5.0)) * 5)
 
     @staticmethod
@@ -3222,6 +3222,8 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                                      profile.get("jjk_curse_grade", jjk_curse_grade), profile.get("jjk_curse_identity"))
                 self.state["currency"] = {"name":"Yen", "amount":0, "tracked":False}
                 self.state["currencies"] = {}
+            ensure_currency_state(self.state)
+            record_opening_currency(self.state)
             normalize_world_progression(self.state)
             normalize_world_depth(self.state)
             initialize_lit_systems(self.state)

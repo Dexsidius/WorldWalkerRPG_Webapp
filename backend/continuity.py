@@ -4,6 +4,9 @@ from datetime import datetime
 
 from util import ai_text
 from reliability import validate_campaign_state
+from worlds import expansion_for
+from systems import (ensure_currency_state, currency_balance,
+                     record_observed_currency_change, record_finance_debt)
 
 
 def _quest_map(items):
@@ -203,7 +206,35 @@ def update_continuity(before, after, action="", narrative=""):
                 after.setdefault("_pending_chronicle_notes", []).append(f"🔗 {fname}'s standing toward you shifted — {reason}")
     currency_before = before.get("currency") if isinstance(before.get("currency"), dict) else {}
     currency_after = after.get("currency") if isinstance(after.get("currency"), dict) else {}
-    tracks_currency = before.get("world") != "Bleach" and currency_before.get("tracked", True) is not False
+    tracks_currency = expansion_for(after.get("world", "Custom World")).get("tracks_currency", True) and currency_before.get("tracked", True) is not False
+    if tracks_currency:
+        ensure_currency_state(after)
+        try:
+            before_amount = float(currency_before.get("amount", 0) or 0)
+            after_amount = float(currency_balance(after, currency_after.get("name")) or 0)
+        except (TypeError, ValueError):
+            before_amount = after_amount = 0.0
+        if after_amount < 0:
+            shortfall = abs(after_amount)
+            normalized = ensure_currency_state(after)
+            normalized["amount"] = 0
+            if int(normalized.get("minor_per_major", 0) or 0) > 1:
+                normalized["amount_minor"] = 0
+            record_finance_debt(after, "Narrative obligation", shortfall, normalized.get("name"), narrative[:500])
+            after_amount = 0.0
+            after.setdefault("_pending_chronicle_notes", []).append(
+                f"An unpaid obligation of {shortfall:g} {normalized.get('name', 'Currency')} remains outstanding."
+            )
+        delta = after_amount - before_amount
+        already_recorded = any(
+            isinstance(row, dict) and row.get("turn") == turn
+            and str(row.get("currency", "")).casefold() == str(currency_after.get("name", "")).casefold()
+            and abs(float(row.get("balance_after", 0) or 0) - after_amount) < 0.0001
+            for row in after.get("currency_ledger", [])
+        )
+        if abs(delta) > 0.0001 and not already_recorded:
+            reason = (str(narrative).strip().splitlines()[0] if narrative else "Narrative transaction")[:300]
+            record_observed_currency_change(after, delta, reason, currency_after.get("name"))
     if tracks_currency and narrative and currency_before.get("amount") == currency_after.get("amount") and not _CURRENCY_NO_TRANSACTION_RE.search(narrative):
         currency_name = str(currency_after.get("name") or currency_before.get("name") or "").strip()
         currency_mentioned = (bool(currency_name) and currency_name.lower() in narrative.lower()) or bool(_CURRENCY_GENERIC_RE.search(narrative))

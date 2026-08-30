@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 
 from util import merge, ai_text
-from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for
+from worlds import BASE_STATE, DIFFICULTIES, WORLD_DATA, abilities_for, expansion_for
 from knowledge import normalize_npc_knowledge
 from bleach_data import CANON_HADO, CANON_BAKUDO
 from world_progression import normalize_world_progression
@@ -25,6 +25,7 @@ from campaign_features import normalize_companion_combinations, normalize_trophy
 from canon_integrity import normalize_canon_integrity
 from world_activity import normalize_world_activity
 from long_campaign import pre_advance_health_check
+from systems import ensure_currency_state
 
 def _compile_skill_mechanics(state):
     skills = normalize_skill_map(state.get("skills", {}))
@@ -70,7 +71,7 @@ APP_OWNED = {
     # The permanent, app-owned purchase-offer ledger (systems.py) — the GM
     # supplies a one-turn purchase_offer, but never authors the resolved
     # flag or ids in purchase_offers directly.
-    "purchase_offers", "canon_integrity_repairs",
+    "purchase_offers", "currency_ledger", "finance_debts", "canon_integrity_repairs",
     # Only the player's own rating action (engine_journal.rate_last_turn_good)
     # writes this — never the GM.
     "rated_good_turns", "narrative_memory", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs",
@@ -115,6 +116,7 @@ NESTED_LIST_FIELDS = {
     "standing_orders", "suggested_actions", "prerequisite_tracks", "lore_sources",
     "political_regions", "companion_combinations", "trophy_proposals", "legacy_trophies", "dismissed_trophy_ids",
     "verified_memory_archive", "consequence_ledger",
+    "currency_ledger", "finance_debts",
     "scene_history", "outcome_scale_ledger", "obligation_ledger", "delayed_consequences", "lore_confidence_log",
     "prompt_budget_log", "world_milestones", "recovery_timeline",
 }
@@ -313,8 +315,8 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
         if key not in BASE_STATE:
             rejected.append({"field": key, "reason": "unknown state field"})
             continue
-        if before.get("world") == "Bleach" and key in {"currency", "currencies", "purchase_offer", "recurring_finances"}:
-            rejected.append({"field": key, "reason": "Bleach treats currency as narrative context rather than tracked state"})
+        if not expansion_for(before.get("world", "Custom World")).get("tracks_currency", True) and key in {"currency", "currencies", "purchase_offer", "recurring_finances"}:
+            rejected.append({"field": key, "reason": "This world treats currency as narrative context rather than tracked state"})
             continue
         if key in APP_OWNED or (key in TIME_OWNED and not allow_time):
             rejected.append({"field": key, "reason": "application-owned field"})
@@ -325,6 +327,14 @@ def _normalize_patch(patch, before, allow_time=False, source="gm"):
         if not _type_ok(key, value):
             rejected.append({"field": key, "reason": f"invalid type {type(value).__name__}"})
             continue
+        if key == "currency":
+            value = copy.deepcopy(value)
+            if before.get("world") == "Reincarnated as a Slime" and isinstance(value.get("amount"), (int, float)) and not isinstance(value.get("amount"), bool):
+                value["minor_per_major"] = 10_000
+                value["amount_minor"] = int(round(float(value["amount"]) * 10_000))
+                value["storage_unit"] = "Copper Coin"
+                value["denominations"] = {"Gold Coin": 10_000, "Silver Coin": 100, "Copper Coin": 1}
+            value["tracked"] = True
         if key == "stats":
             allowed = set(abilities_for(before.get("world", "Custom World")))
             value = {str(k): max(1, int(v)) for k, v in value.items() if k in allowed and isinstance(v, (int, float))}
@@ -400,6 +410,7 @@ def _repair(state):
     if state.get("difficulty") not in DIFFICULTIES:
         state["difficulty"] = "Adventurer"; repairs.append("Unknown difficulty changed to Adventurer")
     repairs.extend(_repair_nested_shapes(state))
+    ensure_currency_state(state)
     normalized_combat = normalize_combat_payload(state.get("combat"))
     if normalized_combat != state.get("combat"):
         state["combat"] = normalized_combat

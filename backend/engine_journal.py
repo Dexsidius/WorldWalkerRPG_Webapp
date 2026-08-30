@@ -15,7 +15,9 @@ from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, scene_art_confidence, scene_selection_reason, scene_display_label, scene_art_signature, scene_context
 from reliability import visible_class_profile, visible_skills
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
-                     update_chapter_memory, tick_world_clocks, tension_level, resolve_shop_purchase, resolve_purchase_offer)
+                     update_chapter_memory, tick_world_clocks, tension_level,
+                     resolve_shop_purchase, resolve_purchase_offer,
+                     resolve_finance_debt)
 from simulation_integrity import integrity_snapshot
 from campaign_reliability import learn_player_style
 
@@ -189,6 +191,15 @@ class JournalMixin:
         self.append(message, "meta")
         self.autosave()
         return {"message": message, "price": price, "currency": self.state.get("currency"), "inventory": self.state.get("inventory"), "story": self._flush_story()}
+
+    def pay_finance_debt(self, debt_id, amount=None):
+        ok, message, paid = resolve_finance_debt(self.state, debt_id, amount)
+        if not ok:
+            raise ValueError(message)
+        self.append(message, "meta")
+        self.autosave()
+        return {"message": message, "paid": paid, "currency": self.state.get("currency"),
+                "finance_debts": self.state.get("finance_debts", []), "story": self._flush_story()}
 
     def rate_last_turn_good(self):
         """Snapshots the most recent resolved turn ({turn, action, outcome},

@@ -1,6 +1,20 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.44.1": {
+        "title": "Reliable Economy and Poneglyph Chronicle",
+        "summary": "Money changes are now auditable and exact, recurring expenses become payable obligations instead of negative balances, and One Piece turns arrive on the approved anime-style Poneglyph stone.",
+        "highlights": [
+            {"title": "Exact world currencies", "example": "A 0.5 Gold Coin purchase in the Slime world now deducts the correct Silver/Copper equivalent instead of becoming free."},
+            {"title": "Money history", "example": "Purchases, income, expenses, and payments appear in a compact Bag ledger with the reason for every change."},
+            {"title": "Payable obligations", "example": "Rent or wages that exceed available cash leave the balance at zero and create an outstanding obligation the player can pay later."},
+            {"title": "Secondary-currency shops", "example": "Arena tokens, guild points, and other distinct currencies can price and purchase their own items without spending the primary balance."},
+            {"title": "Reusable purchases stay useful", "example": "Bought equipment preserves its effect, rating, category, and restrictions when it enters the Bag."},
+            {"title": "Narrative-only economies protected", "example": "Bleach and JJK cannot accidentally acquire a permanent money meter or price-gated offers from an AI patch."},
+            {"title": "Wealth separated from power", "example": "Starting as immeasurably strong no longer silently creates extra money unless the background also establishes wealth."},
+            {"title": "One Piece Poneglyph Chronicle", "example": "Each One Piece turn now sinks into place as a bright cel-shaded blue stone with readable carved-style lettering."},
+        ],
+    },
     "3.44.0": {
         "title": "Causal GM and World-Native Character Sheets",
         "summary": "Actions resolve more directly, AI jobs use smaller focused prompts, oversized campaigns recover automatically, and every world receives its approved Attributes design plus bundled canon portrait art.",

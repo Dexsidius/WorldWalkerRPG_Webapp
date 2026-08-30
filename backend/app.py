@@ -1205,6 +1205,8 @@ def api_panels():
     return jsonify({
         "currency": s.get("currency", {"name": ex["currency"], "amount": 0}),
         "currencies": s.get("currencies", {}),
+        "currency_ledger": s.get("currency_ledger", []),
+        "finance_debts": s.get("finance_debts", []),
         "tracks_currency": bool(ex.get("tracks_currency", True)),
         "gear_style": gear_style_for(s.get("world", "Custom World")),
         "shops": s.get("shops", []),
@@ -1731,6 +1733,15 @@ def api_purchase_offer_buy():
     d = request.get_json(force=True)
     try:
         return jsonify(game.buy_purchase_offer(d.get("id", "")))
+    except Exception as e:
+        return err(e, 400)
+
+
+@app.route("/api/finance/debt/pay", methods=["POST"])
+def api_finance_debt_pay():
+    d = request.get_json(force=True)
+    try:
+        return jsonify(game.pay_finance_debt(d.get("id", ""), d.get("amount")))
     except Exception as e:
         return err(e, 400)
 

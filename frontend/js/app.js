@@ -27,15 +27,42 @@ const CURRENCY_ICON_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentC
 // backend systems.py's parse_price() so the Buy button only appears/enables
 // when the server-side purchase would actually succeed.
 function parsePriceClient(value) {
-  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, Math.trunc(value));
+  if (typeof value === "number" && Number.isFinite(value)) return Math.max(0, value);
   if (typeof value === "string") {
     const m = value.replace(/,/g, "").match(/\d+(?:\.\d+)?/);
-    if (m) return Math.max(0, Math.trunc(parseFloat(m[0])));
+    if (m) return Math.max(0, parseFloat(m[0]));
   }
   return null;
 }
-function currencyRowHtml(name, amount) {
-  return `<div class="jrow currency-jrow"><i class="currency-icon">${CURRENCY_ICON_SVG}</i><b>${escapeHtml(amount)}</b> ${escapeHtml(name)}</div>`;
+function formatCurrencyClient(currency, includeName = true) {
+  const c = currency && typeof currency === "object" ? currency : {};
+  const scale = Number(c.minor_per_major || 0);
+  if (scale > 1) {
+    let minor = Math.round(Number(c.amount_minor ?? (Number(c.amount || 0) * scale)));
+    const sign = minor < 0 ? "−" : "";
+    minor = Math.abs(minor);
+    const gold = Math.floor(minor / scale), remainder = minor % scale;
+    const silver = Math.floor(remainder / 100), copper = remainder % 100;
+    const parts = [];
+    if (gold) parts.push(`${gold.toLocaleString()} Gold`);
+    if (silver) parts.push(`${silver} Silver`);
+    if (copper || !parts.length) parts.push(`${copper} Copper`);
+    return sign + parts.join(" ");
+  }
+  const amount = Number(c.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
+  return includeName ? `${amount} ${c.name || "Currency"}` : amount;
+}
+function currencyRowHtml(name, amount, metadata = null) {
+  const display = metadata ? formatCurrencyClient(metadata, true) : `${Number(amount || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${name || "Currency"}`;
+  return `<div class="jrow currency-jrow"><i class="currency-icon">${CURRENCY_ICON_SVG}</i><b>${escapeHtml(display)}</b></div>`;
+}
+function currencyBalanceClient(data, name) {
+  const primary = data.currency || {};
+  if (!name || String(name).toLowerCase() === String(primary.name || "").toLowerCase()) return Number(primary.amount || 0);
+  const entries = Object.entries(data.currencies || {});
+  const found = entries.find(([key]) => String(key).toLowerCase() === String(name).toLowerCase());
+  if (!found) return 0;
+  return Number(found[1] && typeof found[1] === "object" ? found[1].amount : found[1]) || 0;
 }
 // A title is USUALLY a plain string, but a model that mimics the shape of
 // its own context occasionally hands one back as {name/title: "..."} —
@@ -1766,7 +1793,7 @@ function renderState(state) {
   const tracksCurrency = s._tracks_currency !== false && currency.tracked !== false;
   $("#currency-row").style.display = tracksCurrency ? "" : "none";
   $("#stat-currency-label").textContent = currency.name || "Currency";
-  $("#stat-currency").textContent = currency.amount !== undefined ? Number(currency.amount).toLocaleString() : "0";
+  $("#stat-currency").textContent = currency.amount !== undefined ? formatCurrencyClient(currency, false) : "0";
   $("#stat-summary-body").classList.toggle("narrative-progression", !s._uses_xp);
   document.body.classList.toggle("health-critical", Number(s.hp || 0) > 0 && Number(s.hp || 0) / Math.max(1, Number(s.hp_max || 1)) <= .25);
   animateStateChanges(previousState, s);
@@ -4290,18 +4317,25 @@ async function openJournal(tab) {
   } else if (tab === "inventory") {
     const inv = data.inventory || [];
     const eq = data.equipment || {};
-    const currencyRows = data.tracks_currency === false ? [] : [currencyRowHtml(data.currency.name, data.currency.amount)]
-      .concat(Object.entries(data.currencies || {}).map(([k, v]) => `<div class="jrow"><b>${escapeHtml(k)}:</b> ${escapeHtml(v)}</div>`));
+    const currencyRows = data.tracks_currency === false ? [] : [currencyRowHtml(data.currency.name, data.currency.amount, data.currency)]
+      .concat(Object.entries(data.currencies || {}).map(([k, v]) => currencyRowHtml(k, v && typeof v === "object" ? v.amount : v, v && typeof v === "object" ? { ...v, name: k } : null)));
+    const activeDebts = (data.finance_debts || []).filter((row) => row && row.active !== false && Number(row.amount || 0) > 0);
+    const debtRows = activeDebts.map((row) => `<div class="finance-debt-row"><span><b>${escapeHtml(row.label || "Outstanding obligation")}</b><small>${escapeHtml(Number(row.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 4 }))} ${escapeHtml(row.currency || data.currency?.name || "Currency")} due</small></span><button type="button" data-debt-pay="${escapeHtml(row.id || "")}">Pay what you can</button></div>`).join("");
+    const ledgerRows = (data.currency_ledger || []).slice(-12).reverse().map((row) => {
+      const amount = Number(row.amount || 0);
+      return `<div class="finance-ledger-row"><span class="${amount >= 0 ? "income" : "expense"}">${amount >= 0 ? "+" : ""}${escapeHtml(amount.toLocaleString(undefined, { maximumFractionDigits: 4 }))} ${escapeHtml(row.currency || "")}</span><span>${escapeHtml(row.reason || "Money changed hands")}</span></div>`;
+    }).join("");
+    const financeRows = data.tracks_currency === false ? "" : `${debtRows ? `<h3>Outstanding obligations</h3>${debtRows}` : ""}<details class="finance-history"><summary>Money history</summary>${ledgerRows || '<div class="jrow hint">No transactions recorded yet.</div>'}</details>`;
     const bagRows = inv.length ? inv.map((i) => {
       if (!i || typeof i !== "object") return `<div class="jrow">${escapeHtml(i)}</div>`;
       const effects = textList(i.effects || i.effect), limits = textList(i.restrictions || i.restriction);
       return `<article class="inventory-detail-card"><header><b>${escapeHtml(i.name || "Item")}</b><span>${escapeHtml(i.rating || i.grade || i.category || "Item")}</span></header>${effects.length ? `<p>${escapeHtml(effects.join(" · "))}</p>` : ""}${limits.length ? `<small>Limits: ${escapeHtml(limits.join(" · "))}</small>` : ""}${i.source || i.creator ? `<small>${escapeHtml(i.source || `Created by ${i.creator}`)}</small>` : ""}</article>`;
     }).join("") : `<div class="jrow">Bag is empty.</div>`;
     if (data.gear_style === "full") {
-      panel.innerHTML = currencyRows.join("") + buildMannequinHtml(eq) + bagRows;
+      panel.innerHTML = currencyRows.join("") + financeRows + buildMannequinHtml(eq) + bagRows;
       wireMannequinTooltips();
     } else {
-      panel.innerHTML = currencyRows.join("") + bagRows +
+      panel.innerHTML = currencyRows.join("") + financeRows + bagRows +
         (Object.keys(eq).length ? `<div class="jrow"><b>Weapon</b><br/>${Object.entries(eq).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
     }
   } else if (tab === "shops") {
@@ -4315,15 +4349,16 @@ async function openJournal(tab) {
         const itemObj = (it && typeof it === "object") ? it : { name: it };
         const name = itemObj.name || itemObj.item || String(it);
         const price = parsePriceClient(itemObj.price ?? itemObj.cost ?? itemObj.value);
-        const canAfford = price != null && currency.amount >= price;
-        const priceLabel = tracksCurrency ? (price != null ? `${price} ${escapeHtml(currency.name)}` : "price unclear") : escapeHtml(itemObj.access || "Narrative access");
+        const priceCurrency = itemObj.currency || itemObj.currency_name || itemObj.price_currency || currency.name;
+        const canAfford = price != null && currencyBalanceClient(data, priceCurrency) >= price;
+        const priceLabel = tracksCurrency ? (price != null ? `${escapeHtml(price)} ${escapeHtml(priceCurrency)}` : "price unclear") : escapeHtml(itemObj.access || "Narrative access");
         return `<div class="shop-item-row"><span class="shop-item-name">${escapeHtml(name)}</span><span class="shop-item-price">${priceLabel}</span>` +
           (tracksCurrency && price != null ? `<button type="button" class="shop-buy-btn" data-shop-buy="${escapeHtml(sh.name || "")}" data-shop-item="${escapeHtml(name)}"${canAfford ? "" : " disabled"}>Buy</button>` : "") +
           `</div>`;
       }).join("") : `<div class="shop-item-row muted">No priced inventory listed here yet.</div>`;
       return `<div class="jrow shop-block"><b>${escapeHtml(sh.name || "Shop")}</b><small>${escapeHtml(sh.type || "Merchant")}</small>${itemRows}</div>`;
     }).join("") : `<div class="jrow">${data.shop_types.map((t) => "• " + t).join("<br/>")}</div>`;
-    const accessNote = tracksCurrency ? currencyRowHtml(currency.name, currency.amount) : `<div class="system-summary"><b>SUPPLY ACCESS</b><span>Bleach does not track a money balance. Important equipment comes through rank, authorization, favors, requisitions, availability, or story events.</span></div>`;
+    const accessNote = tracksCurrency ? currencyRowHtml(currency.name, currency.amount, currency) : `<div class="system-summary"><b>SUPPLY ACCESS</b><span>This world handles routine equipment through rank, authorization, favors, requisitions, availability, or story events instead of a permanent money balance.</span></div>`;
     panel.innerHTML = accessNote + shopBlocks +
       `<div class="jrow"><b>Training Focus</b><br/>${data.training_options.map(escapeHtml).join(", ")}</div>` +
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
@@ -4837,6 +4872,22 @@ $("#journal-panel").addEventListener("click", async (event) => {
     } catch (error) {
       showToast(error.message, "danger");
       buyButton.disabled = false;
+    }
+    return;
+  }
+  const debtButton = event.target.closest("[data-debt-pay]");
+  if (debtButton) {
+    debtButton.disabled = true;
+    try {
+      const result = await apiPost("/api/finance/debt/pay", { id: debtButton.getAttribute("data-debt-pay") });
+      showToast(result.message, "notify");
+      const refreshed = await apiGet("/api/state");
+      APP.campaignActive = refreshed.campaign_active;
+      renderState(refreshed.state);
+      await openJournal("inventory");
+    } catch (error) {
+      showToast(error.message, "danger");
+      debtButton.disabled = false;
     }
     return;
   }

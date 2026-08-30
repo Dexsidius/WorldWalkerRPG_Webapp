@@ -16,7 +16,9 @@ from reliability import update_narrative_memory, record_progression_ledger, adva
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url, ai_text
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks, uses_literal_quests,
-                     quest_presentation_for)
+                     quest_presentation_for, ensure_currency_state,
+                     currency_balance, record_currency_transaction,
+                     record_finance_debt)
 from simulation import (deterministic_assessment, prioritize_updates,
                         advance_npc_intentions, record_simulation_events,
                         agency_bypasses_check, explicit_world_method,
@@ -1662,7 +1664,7 @@ class TimeSkipMixin:
         entries = self.state.get("recurring_finances")
         if not isinstance(entries, list) or not entries:
             return []
-        currency = self.state.setdefault("currency", {"name": "Currency", "amount": 0})
+        currency = ensure_currency_state(self.state)
         anchor_day = self.state.get("calendar_anchor_day")
         appends = []
         for entry in entries:
@@ -1676,7 +1678,10 @@ class TimeSkipMixin:
                 continue
             if not amount:
                 continue
-            sign = -1 if str(entry.get("kind", "income")).lower() == "expense" else 1
+            kind = str(entry.get("kind", "income")).lower()
+            if kind not in {"income", "expense"}:
+                continue
+            sign = -1 if kind == "expense" else 1
             due_minute = next_due * 1440 + 480
             if due_minute > after_minutes:
                 continue
@@ -1689,14 +1694,29 @@ class TimeSkipMixin:
             next_due += interval * paid_cycles
             if not paid_cycles:
                 continue
-            currency["amount"] = currency.get("amount", 0) + sign * total
             entry["next_due_day"] = next_due
             entry["last_paid_day"] = next_due - interval
             label = str(entry.get("label") or ("Recurring income" if sign > 0 else "Recurring expense"))
             date_str = format_calendar_date(world, entry["last_paid_day"], self.state.get("calendar_epoch"), anchor_day)
-            verb = "paid out" if sign > 0 else "came due"
             cycle_note = f" (x{paid_cycles} cycles)" if paid_cycles > 1 else ""
-            detail = f"{date_str} — {label}: {sign * total:+g} {currency.get('name', 'Currency')}{cycle_note}"
+            currency_name = str(entry.get("currency") or currency.get("name", "Currency"))
+            if sign > 0:
+                record_currency_transaction(self.state, total, label, "recurring_income", currency_name, "world_clock",
+                                            {"cycles": paid_cycles})
+                detail = f"{date_str} — {label}: +{total:g} {currency_name}{cycle_note}"
+            else:
+                available = max(0, currency_balance(self.state, currency_name))
+                paid = min(available, total)
+                if paid:
+                    record_currency_transaction(self.state, -paid, label, "recurring_expense", currency_name, "world_clock",
+                                                {"cycles": paid_cycles})
+                shortfall = max(0, total - paid)
+                if shortfall:
+                    record_finance_debt(self.state, label, shortfall, currency_name, str(entry.get("notes") or ""))
+                detail = f"{date_str} — {label}: {paid:g} {currency_name} paid"
+                if shortfall:
+                    detail += f"; {shortfall:g} remains outstanding"
+                detail += cycle_note
             appends.append({
                 "text": "[FINANCES]\n" + detail, "tag": "system", "canon_day": entry["last_paid_day"],
                 "major": False, "event_title": "",

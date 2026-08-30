@@ -892,22 +892,232 @@ def pacing_guidance(state):
 _PRICE_NUMBER_RE = re.compile(r"\d[\d,]*(?:\.\d+)?")
 
 
+def _clean_money_number(value, default=0):
+    if isinstance(value, bool):
+        return default
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(number):
+        return default
+    return int(number) if number.is_integer() else round(number, 4)
+
+
 def parse_price(value):
-    """Pull a plausible non-negative integer price out of a loosely-typed
+    """Pull a plausible non-negative price out of a loosely-typed
     shop item field — a raw number, or free text like '50 Berries' or
-    'Price: 1,200'. Returns None when nothing usable is present."""
+    'Price: 1,200'. Fractional prices are preserved for economies where
+    ordinary purchases cost less than one primary coin."""
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return max(0, int(value))
+        number = _clean_money_number(value, None)
+        return None if number is None else max(0, number)
     if isinstance(value, str):
         match = _PRICE_NUMBER_RE.search(value.replace(",", ""))
         if match:
             try:
-                return max(0, int(float(match.group(0))))
+                number = float(match.group(0))
+                return max(0, int(number) if number.is_integer() else round(number, 4))
             except ValueError:
                 return None
     return None
+
+
+def ensure_currency_state(state):
+    """Normalize currency and seed durable accounting containers.
+
+    Slime stores an exact copper-equivalent integer alongside its familiar
+    Gold Coin amount. Existing saves and AI-facing state retain Gold Coins,
+    while local arithmetic no longer truncates fractional purchases to zero.
+    """
+    currency = state.get("currency") if isinstance(state.get("currency"), dict) else {}
+    currency.setdefault("name", "Currency")
+    currency["amount"] = _clean_money_number(currency.get("amount"), 0)
+    if state.get("world") == "Reincarnated as a Slime":
+        scale = 10_000
+        currency.update({
+            "name": "Gold Coin", "storage_unit": "Copper Coin",
+            "minor_per_major": scale,
+            "denominations": {"Gold Coin": scale, "Silver Coin": 100, "Copper Coin": 1},
+        })
+        expected_minor = int(round(float(currency.get("amount", 0)) * scale))
+        if not isinstance(currency.get("amount_minor"), (int, float)) or isinstance(currency.get("amount_minor"), bool):
+            currency["amount_minor"] = expected_minor
+        else:
+            currency["amount_minor"] = int(round(currency["amount_minor"]))
+            currency["amount"] = round(currency["amount_minor"] / scale, 4)
+    state["currency"] = currency
+    state.setdefault("currencies", {})
+    state.setdefault("currency_ledger", [])
+    state.setdefault("finance_debts", [])
+    return currency
+
+
+def format_currency_amount(currency):
+    if not isinstance(currency, dict):
+        return "0 Currency"
+    scale = int(currency.get("minor_per_major", 0) or 0)
+    if scale > 1:
+        minor = int(round(currency.get("amount_minor", float(currency.get("amount", 0) or 0) * scale)))
+        sign = "-" if minor < 0 else ""
+        minor = abs(minor)
+        gold, remainder = divmod(minor, scale)
+        silver, copper = divmod(remainder, 100)
+        parts = []
+        if gold:
+            parts.append(f"{gold:,} Gold")
+        if silver:
+            parts.append(f"{silver} Silver")
+        if copper or not parts:
+            parts.append(f"{copper} Copper")
+        return sign + " ".join(parts)
+    amount = _clean_money_number(currency.get("amount"), 0)
+    shown = f"{amount:,}" if isinstance(amount, int) else f"{amount:,.4f}".rstrip("0").rstrip(".")
+    return f"{shown} {currency.get('name', 'Currency')}"
+
+
+def _currency_account(state, currency_name=None):
+    primary = ensure_currency_state(state)
+    requested = str(currency_name or primary.get("name") or "Currency").strip()
+    if not requested or requested.casefold() == str(primary.get("name", "")).casefold():
+        return "primary", primary.get("name", "Currency"), primary
+    currencies = state.setdefault("currencies", {})
+    key = next((name for name in currencies if str(name).casefold() == requested.casefold()), requested)
+    raw = currencies.get(key, 0)
+    if isinstance(raw, dict):
+        account = raw
+        account["amount"] = _clean_money_number(account.get("amount"), 0)
+    else:
+        account = {"amount": _clean_money_number(raw, 0)}
+    return "secondary", key, account
+
+
+def currency_balance(state, currency_name=None):
+    kind, _, account = _currency_account(state, currency_name)
+    if kind == "primary" and int(account.get("minor_per_major", 0) or 0) > 1:
+        return round(account.get("amount_minor", 0) / account["minor_per_major"], 4)
+    return _clean_money_number(account.get("amount"), 0)
+
+
+def record_currency_transaction(state, delta, reason, category="transaction", currency_name=None,
+                                source="system", metadata=None):
+    """Apply one local money change and explain it in the durable ledger."""
+    delta = _clean_money_number(delta, 0)
+    kind, name, account = _currency_account(state, currency_name)
+    before = currency_balance(state, name)
+    after = _clean_money_number(before + delta, 0)
+    if kind == "primary":
+        scale = int(account.get("minor_per_major", 0) or 0)
+        if scale > 1:
+            account["amount_minor"] = int(round(after * scale))
+            account["amount"] = round(account["amount_minor"] / scale, 4)
+        else:
+            account["amount"] = after
+        state["currency"] = account
+    else:
+        original = state.setdefault("currencies", {}).get(name)
+        if isinstance(original, dict):
+            account["amount"] = after
+            state["currencies"][name] = account
+        else:
+            state["currencies"][name] = after
+    row = {
+        "id": secrets.token_hex(6), "turn": state.get("turn", 0),
+        "canon_day": state.get("canon_day"), "currency": name,
+        "amount": delta, "balance_after": after,
+        "category": str(category or "transaction")[:60],
+        "reason": str(reason or "Money changed hands")[:300],
+        "source": str(source or "system")[:60],
+    }
+    if isinstance(metadata, dict) and metadata:
+        row["metadata"] = copy.deepcopy(metadata)
+    state.setdefault("currency_ledger", []).append(row)
+    state["currency_ledger"] = state["currency_ledger"][-200:]
+    return row
+
+
+def record_observed_currency_change(state, delta, reason, currency_name=None, source="gm"):
+    """Record a money delta already applied by a guarded GM patch.
+
+    Unlike ``record_currency_transaction`` this never changes the balance a
+    second time; it only makes an AI-authored gain or expense auditable.
+    """
+    delta = _clean_money_number(delta, 0)
+    if not delta:
+        return None
+    currency_name = str(currency_name or ensure_currency_state(state).get("name") or "Currency")
+    row = {
+        "id": secrets.token_hex(6), "turn": state.get("turn", 0),
+        "canon_day": state.get("canon_day"), "currency": currency_name,
+        "amount": delta, "balance_after": currency_balance(state, currency_name),
+        "category": "narrative_transaction", "reason": str(reason or "Narrative transaction")[:300],
+        "source": str(source or "gm")[:60],
+    }
+    state.setdefault("currency_ledger", []).append(row)
+    state["currency_ledger"] = state["currency_ledger"][-200:]
+    return row
+
+
+def record_opening_currency(state, reason="Starting funds from the character's established background"):
+    currency = ensure_currency_state(state)
+    if currency.get("tracked") is False:
+        return None
+    balance = currency_balance(state, currency.get("name"))
+    if state.get("currency_ledger"):
+        return state["currency_ledger"][0]
+    row = {
+        "id": secrets.token_hex(6), "turn": state.get("turn", 0),
+        "canon_day": state.get("canon_day"), "currency": currency.get("name", "Currency"),
+        "amount": balance, "balance_after": balance, "category": "opening_balance",
+        "reason": str(reason)[:300], "source": "character_creation",
+    }
+    state.setdefault("currency_ledger", []).append(row)
+    return row
+
+
+def record_finance_debt(state, label, amount, currency_name=None, notes=""):
+    amount = max(0, _clean_money_number(amount, 0))
+    if not amount:
+        return None
+    currency_name = str(currency_name or ensure_currency_state(state).get("name") or "Currency")
+    debts = state.setdefault("finance_debts", [])
+    debt = next((row for row in debts if isinstance(row, dict) and row.get("active", True)
+                 and str(row.get("label", "")).casefold() == str(label).casefold()
+                 and str(row.get("currency", "")).casefold() == currency_name.casefold()), None)
+    if debt is None:
+        debt = {"id": secrets.token_hex(6), "label": str(label)[:160], "currency": currency_name,
+                "amount": 0, "active": True, "created_turn": state.get("turn", 0), "history": []}
+        debts.append(debt)
+    debt["amount"] = _clean_money_number(debt.get("amount", 0) + amount, 0)
+    debt["notes"] = str(notes or debt.get("notes") or "")[:500]
+    debt.setdefault("history", []).append({"turn": state.get("turn", 0), "change": amount, "reason": "Payment came due"})
+    debt["history"] = debt["history"][-30:]
+    state["finance_debts"] = debts[-100:]
+    return debt
+
+
+def resolve_finance_debt(state, debt_id, requested_amount=None):
+    debts = state.get("finance_debts") if isinstance(state.get("finance_debts"), list) else []
+    debt = next((row for row in debts if isinstance(row, dict) and row.get("id") == debt_id and row.get("active", True)), None)
+    if debt is None:
+        return False, "That obligation is no longer outstanding.", None
+    owed = max(0, _clean_money_number(debt.get("amount"), 0))
+    available = max(0, currency_balance(state, debt.get("currency")))
+    requested = owed if requested_amount in (None, "") else max(0, _clean_money_number(requested_amount, 0))
+    payment = min(owed, available, requested)
+    if payment <= 0:
+        return False, f"No {debt.get('currency', 'currency')} is available to pay this obligation.", None
+    record_currency_transaction(state, -payment, f"Paid {debt.get('label', 'outstanding obligation')}",
+                                "debt_payment", debt.get("currency"), "player")
+    debt["amount"] = _clean_money_number(owed - payment, 0)
+    debt.setdefault("history", []).append({"turn": state.get("turn", 0), "change": -payment, "reason": "Player payment"})
+    debt["active"] = debt["amount"] > 0
+    remaining = debt["amount"]
+    message = f"Paid {payment:g} {debt.get('currency', 'currency')} toward {debt.get('label', 'the obligation')}."
+    message += f" {remaining:g} remains outstanding." if remaining else " The obligation is settled."
+    return True, message, payment
 
 
 def _shop_item_name(item):
@@ -927,6 +1137,27 @@ def _shop_item_price(item):
     return parse_price(item)
 
 
+def _shop_item_currency(state, item):
+    primary = ensure_currency_state(state)
+    if isinstance(item, dict):
+        requested = item.get("currency") or item.get("currency_name") or item.get("price_currency")
+        if requested:
+            return str(requested).strip()
+    return str(primary.get("name") or "Currency")
+
+
+def _inventory_item_from_purchase(item, display_name, source):
+    """Preserve reusable item mechanics while dropping shop bookkeeping."""
+    if isinstance(item, dict):
+        saved = copy.deepcopy(item)
+        for key in ("price", "cost", "value", "stock", "currency", "currency_name", "price_currency"):
+            saved.pop(key, None)
+        saved["name"] = display_name
+        saved["source"] = source
+        return saved
+    return {"name": display_name, "source": source}
+
+
 def resolve_shop_purchase(state, shop_name, item_name):
     """Deterministic buy: once a shop item has a real price, the arithmetic
     of paying for it doesn't need an AI turn at all — this mutates state
@@ -934,8 +1165,8 @@ def resolve_shop_purchase(state, shop_name, item_name):
     produce the narrated-but-not-patched currency drift the continuity
     detector (continuity.py) otherwise exists to catch after the fact.
     Returns (ok, message, price_paid_or_None)."""
-    if state.get("world") == "Bleach" or (isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False):
-        return False, "Bleach equipment is obtained through access, authorization, favors, requisitions, or story events—not a tracked money balance.", None
+    if isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False:
+        return False, "This world does not use tracked money; ordinary access comes through favors, requisitions, and story consequences.", None
     shops = state.get("shops") if isinstance(state.get("shops"), list) else []
     shop = next((sh for sh in shops if isinstance(sh, dict)
                  and str(sh.get("name", "")).strip().lower() == str(shop_name or "").strip().lower()), None)
@@ -946,24 +1177,27 @@ def resolve_shop_purchase(state, shop_name, item_name):
     item = next((it for it in inventory if _shop_item_name(it).strip().lower() == str(item_name or "").strip().lower()), None)
     if item is None:
         return False, f"'{item_name}' isn't in {shop.get('name', shop_name)}'s current inventory.", None
+    if isinstance(item, dict) and isinstance(item.get("stock"), (int, float)) and item.get("stock") <= 0:
+        return False, f"'{item_name}' is sold out.", None
     price = _shop_item_price(item)
     if price is None:
         return False, f"'{item_name}' doesn't have a clear price and can't be bought this way.", None
-    currency = state.get("currency") if isinstance(state.get("currency"), dict) else {"name": "Currency", "amount": 0}
-    amount = currency.get("amount", 0)
-    if not isinstance(amount, (int, float)):
-        amount = 0
+    currency_name = _shop_item_currency(state, item)
+    amount = currency_balance(state, currency_name)
     if amount < price:
-        return False, f"Not enough {currency.get('name', 'currency')} — {_shop_item_name(item)} costs {price}, you have {amount}.", None
-    currency["amount"] = amount - price
-    state["currency"] = currency
+        return False, f"Not enough {currency_name} — {_shop_item_name(item)} costs {price:g}, you have {amount:g}.", None
     display_name = _shop_item_name(item)
-    state.setdefault("inventory", []).append({"name": display_name, "source": f"Bought from {shop.get('name', shop_name)}"})
+    record_currency_transaction(
+        state, -price, f"Bought {display_name} from {shop.get('name', shop_name)}",
+        "purchase", currency_name, "shop", {"shop": shop.get("name", shop_name), "item": display_name},
+    )
+    state.setdefault("inventory", []).append(_inventory_item_from_purchase(
+        item, display_name, f"Bought from {shop.get('name', shop_name)}"))
     if isinstance(item, dict) and isinstance(item.get("stock"), (int, float)):
         item["stock"] = item["stock"] - 1
         if item["stock"] <= 0:
             inventory.remove(item)
-    return True, f"Bought {display_name} from {shop.get('name', shop_name)} for {price} {currency.get('name', 'currency')}.", price
+    return True, f"Bought {display_name} from {shop.get('name', shop_name)} for {price:g} {currency_name}.", price
 
 
 def record_purchase_offer(state):
@@ -979,20 +1213,23 @@ def record_purchase_offer(state):
     offered) so the Chronicle can render a real Buy button for it."""
     raw = state.pop("purchase_offer", None)
     state["purchase_offer"] = None
-    if state.get("world") == "Bleach" or (isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False):
+    if isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False:
         return None
     if not isinstance(raw, dict):
         return None
     item = str(raw.get("item") or "").strip()
     price = parse_price(raw.get("price"))
-    if not item or not price:
+    if not item or price is None:
         return None
     offer_id = secrets.token_hex(6)
     vendor = str(raw.get("vendor") or "").strip()
     offers = state.setdefault("purchase_offers", [])
-    offers.append({"id": offer_id, "item": item, "price": price, "vendor": vendor, "turn": state.get("turn", 0), "resolved": False})
+    currency_name = str(raw.get("currency") or (state.get("currency") or {}).get("name", "Currency"))
+    offer_metadata = raw.get("item_details") if isinstance(raw.get("item_details"), dict) else {}
+    offers.append({"id": offer_id, "item": item, "price": price, "currency": currency_name,
+                   "vendor": vendor, "item_details": copy.deepcopy(offer_metadata),
+                   "turn": state.get("turn", 0), "resolved": False})
     state["purchase_offers"] = offers[-20:]
-    currency_name = (state.get("currency") or {}).get("name", "Currency") if isinstance(state.get("currency"), dict) else "Currency"
     return {"id": offer_id, "item": item, "price": price, "vendor": vendor, "currency": currency_name}
 
 
@@ -1003,8 +1240,8 @@ def resolve_purchase_offer(state, offer_id):
     inventory, and marks the offer resolved so it can't be bought twice.
     Returns (ok, message, price_paid_or_None), same shape as
     resolve_shop_purchase."""
-    if state.get("world") == "Bleach" or (isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False):
-        return False, "Bleach equipment is handled through narrative access rather than a tracked money balance.", None
+    if isinstance(state.get("currency"), dict) and state["currency"].get("tracked") is False:
+        return False, "This world does not use tracked money; equipment comes through narrative access instead.", None
     offers = state.get("purchase_offers") if isinstance(state.get("purchase_offers"), list) else []
     offer = next((o for o in offers if isinstance(o, dict) and o.get("id") == offer_id), None)
     if offer is None:
@@ -1012,17 +1249,19 @@ def resolve_purchase_offer(state, offer_id):
     if offer.get("resolved"):
         return False, f"You already bought {offer.get('item')}.", None
     price = offer.get("price")
-    currency = state.get("currency") if isinstance(state.get("currency"), dict) else {"name": "Currency", "amount": 0}
-    amount = currency.get("amount", 0)
-    if not isinstance(amount, (int, float)):
-        amount = 0
+    currency_name = str(offer.get("currency") or (state.get("currency") or {}).get("name") or "Currency")
+    amount = currency_balance(state, currency_name)
     if amount < price:
-        return False, f"Not enough {currency.get('name', 'currency')} — {offer.get('item')} costs {price}, you have {amount}.", None
-    currency["amount"] = amount - price
-    state["currency"] = currency
-    state.setdefault("inventory", []).append({"name": offer.get("item"), "source": f"Bought from {offer.get('vendor') or 'an offer'}"})
+        return False, f"Not enough {currency_name} — {offer.get('item')} costs {price:g}, you have {amount:g}.", None
+    record_currency_transaction(
+        state, -price, f"Bought {offer.get('item')} from {offer.get('vendor') or 'an offer'}",
+        "purchase", currency_name, "chronicle_offer", {"offer_id": offer_id},
+    )
+    detail = copy.deepcopy(offer.get("item_details")) if isinstance(offer.get("item_details"), dict) else {}
+    detail.update({"name": offer.get("item"), "source": f"Bought from {offer.get('vendor') or 'an offer'}"})
+    state.setdefault("inventory", []).append(detail)
     offer["resolved"] = True
-    return True, f"Bought {offer.get('item')} for {price} {currency.get('name', 'currency')}.", price
+    return True, f"Bought {offer.get('item')} for {price:g} {currency_name}.", price
 
 
 def _notable_individuals_for(state, place_name):
