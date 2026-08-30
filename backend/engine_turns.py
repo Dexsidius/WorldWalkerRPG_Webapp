@@ -36,6 +36,7 @@ from campaign_reliability import (
 )
 from simulation_enhancements import record_ability_evolution
 from experience_systems import record_world_milestones, update_scenario_memory
+from long_campaign import compact_checkpoint_state
 
 
 DEFAULT_SETTINGS = {
@@ -383,8 +384,8 @@ class TurnsMixin:
         if assessment.get("lethal_risk") in ("high", "extreme") and not confirmed_lethal:
             return {"status": "lethal_confirm_required", "assessment": assessment}
         with self.lock:
-            self.checkpoints.append(copy.deepcopy(self.state))
-            self.checkpoints = self.checkpoints[-40:]
+            self.checkpoints.append(compact_checkpoint_state(self.state))
+            self.checkpoints = self.checkpoints[-12:]
         # The action always gets its own Chronicle line first — a roll (if
         # any) attaches to it visually as a compact inline result, and the
         # narrative that follows never has to re-state what was attempted.

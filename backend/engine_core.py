@@ -2,7 +2,7 @@
 logic (character creation, assess/roll/resolve turn loop, time skips, chat,
 world ticks, memory management, save/load) with all Tkinter UI code removed.
 Returns plain dicts so a Flask layer can serialize them straight to JSON."""
-import copy, json, random, re, secrets, threading
+import copy, json, random, re, secrets, threading, traceback
 from datetime import datetime
 from pathlib import Path
 
@@ -33,6 +33,7 @@ from campaign_reliability import (
     refresh_canon_divergence_impacts, reconcile_commitments_and_consequences,
 )
 from response_guard import normalize_turn_response
+from long_campaign import pre_advance_health_check, record_runtime_error
 
 
 DEFAULT_SETTINGS = {
@@ -240,8 +241,13 @@ class CoreMixin:
         exists only so an exception can never leave half of a failed turn in
         the active campaign.
         """
+        payload = payload or {}
+        actions = payload.get("orders") if isinstance(payload, dict) else None
+        if not isinstance(actions, list):
+            actions = payload.get("actions") if isinstance(payload, dict) else None
+        pre_advance_health_check(self.state, actions, f"before_{route}")
         return {
-            "route": str(route or "turn"), "payload": copy.deepcopy(payload or {}),
+            "route": str(route or "turn"), "payload": copy.deepcopy(payload),
             "state": copy.deepcopy(self.state), "history_count": len(self.history),
             "checkpoints_count": len(self.checkpoints), "story_count": len(self.story_log),
             "system_count": len(self.system_log),
@@ -255,11 +261,16 @@ class CoreMixin:
         self.checkpoints = self.checkpoints[:int(transaction.get("checkpoints_count", 0))]
         self.story_log = self.story_log[:int(transaction.get("story_count", 0))]
         self.system_log = self.system_log[:int(transaction.get("system_count", 0))]
+        diagnostic = record_runtime_error(
+            self.state, error, transaction.get("route", "turn"), transaction.get("payload", {}),
+            traceback.format_exc(),
+        )
         row = {
             "route": transaction.get("route", "turn"),
             "payload": copy.deepcopy(transaction.get("payload", {})),
             "error": str(error)[:500], "turn": int(self.state.get("turn", 0) or 0),
             "time": datetime.now().isoformat(timespec="seconds"), "status": "ready_to_retry",
+            "error_id": diagnostic.get("id"), "error_type": diagnostic.get("type"),
         }
         self.state["last_failed_turn"] = row
         timeline = self.state.setdefault("recovery_timeline", [])

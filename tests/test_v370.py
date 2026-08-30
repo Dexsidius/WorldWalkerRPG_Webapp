@@ -29,7 +29,7 @@ class WorldwalkerV370Tests(unittest.TestCase):
         return game
 
     def test_version_and_manual_portrait_default(self):
-        self.assertEqual(APP_VERSION, "3.42.1")
+        self.assertEqual(APP_VERSION, "3.43.0")
         self.assertFalse(DEFAULT_SETTINGS["portrait_auto_generate"])
 
     def test_completed_combat_never_overrides_the_current_environment_art(self):
@@ -180,9 +180,9 @@ class WorldwalkerV370Tests(unittest.TestCase):
         game = self.fresh()
         game.checkpoints = [{"id": i} for i in range(12)]
         game.system_log = [str(i) for i in range(1200)]
-        self.assertEqual(len(game.save_bundle("autosave")["checkpoints"]), 3)
-        self.assertEqual(len(game.save_bundle("manual")["checkpoints"]), 6)
-        self.assertEqual(len(game.save_bundle("autosave")["system_log"]), 1000)
+        self.assertEqual(len(game.save_bundle("autosave")["checkpoints"]), 2)
+        self.assertEqual(len(game.save_bundle("manual")["checkpoints"]), 4)
+        self.assertEqual(len(game.save_bundle("autosave")["system_log"]), 400)
 
     def test_frontend_filters_combat_skills_resets_time_and_supports_mobile_advisor(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")

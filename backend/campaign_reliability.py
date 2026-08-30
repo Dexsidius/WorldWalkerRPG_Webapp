@@ -288,6 +288,12 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
         ),
     }
     packet["live_scene"] = copy.deepcopy(state.get("scene_state", {}))
+    tiers = state.get("memory_tiers") if isinstance(state.get("memory_tiers"), dict) else {}
+    packet["memory_tiers"] = {
+        "hot": copy.deepcopy((tiers.get("hot") or [])[-8:]),
+        "warm": copy.deepcopy((tiers.get("warm") or [])[-5:]),
+        "cold": copy.deepcopy((tiers.get("cold") or [])[-5:]),
+    }
     packet["due_obligations"] = [copy.deepcopy(row) for row in state.get("obligation_ledger", [])
                                   if isinstance(row, dict) and row.get("status") in {"active", "due"}][-10:]
     packet["due_consequences"] = [copy.deepcopy(row) for row in state.get("delayed_consequences", [])

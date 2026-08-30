@@ -16,6 +16,7 @@ from continuity import update_continuity
 from util import merge, clamp, safe_filename, SAVE_DIR, SETTINGS_PATH, scene_category, scene_image_url
 from systems import (progression_preset_for, normalize_tuning, normalize_quest_state_machine,
                      update_chapter_memory, tick_world_clocks)
+from long_campaign import compact_checkpoint_state, compact_state_for_storage, pre_advance_health_check
 
 
 DEFAULT_SETTINGS = {
@@ -180,15 +181,17 @@ class PersistenceMixin:
 
     def save_bundle(self, kind="manual"):
         self.state["campaign_last_saved_version"] = APP_VERSION
-        checkpoint_limit = 3 if kind == "autosave" else 6
+        pre_advance_health_check(self.state, source=f"before_{kind}_save")
+        checkpoint_limit = 2 if kind == "autosave" else 4
         return {
             "version": APP_VERSION,
             "schema_version": self.state.get("schema_version", 4),
             "save_kind": kind,
             "saved_at": datetime.now().isoformat(timespec="seconds"),
             "campaign": {"name": self.state.get("name", "Traveler"), "world": self.state.get("world", "World"), "turn": self.state.get("turn", 0), "world_time": self.state.get("world_time", "")},
-            "state": self.state, "history": self.history[-1000:],
-            "checkpoints": self.checkpoints[-checkpoint_limit:], "story_log": self.story_log, "system_log": self.system_log[-1000:],
+            "state": compact_state_for_storage(self.state), "history": self.history[-600:],
+            "checkpoints": [compact_checkpoint_state(row) for row in self.checkpoints[-checkpoint_limit:]],
+            "story_log": self.story_log[-1200:], "system_log": self.system_log[-400:],
         }
 
     def write_save_atomic(self, path, kind="manual"):
@@ -294,8 +297,9 @@ class PersistenceMixin:
             "campaign": {"name": imported_state.get("name", "Traveler"), "world": imported_state.get("world", "World"),
                          "turn": imported_state.get("turn", 0), "world_time": imported_state.get("world_time", "")},
             "state": imported_state, "history": bundle.get("history", [])[-1000:],
-            "checkpoints": bundle.get("checkpoints", [])[-6:], "story_log": bundle.get("story_log", []),
-            "system_log": bundle.get("system_log", [])[-1000:], "imported_from_version": source_version,
+            "checkpoints": [compact_checkpoint_state(row) for row in bundle.get("checkpoints", [])[-4:] if isinstance(row, dict)],
+            "story_log": bundle.get("story_log", [])[-1200:],
+            "system_log": bundle.get("system_log", [])[-400:], "imported_from_version": source_version,
         }
         temporary = target.with_suffix(".tmp")
         temporary.write_text(json.dumps(clean, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
@@ -322,10 +326,10 @@ class PersistenceMixin:
             had_canon_clock = "canon_time_minutes" in b.get("state", {})
             self.state = migrate_state(b["state"], b.get("version", "Legacy"))
             normalize_quest_state_machine(self.state)
-            self.history = b.get("history", [])
-            self.checkpoints = b.get("checkpoints", [])
-            self.story_log = b.get("story_log", [])
-            self.system_log = b.get("system_log", [])
+            self.history = b.get("history", [])[-600:]
+            self.checkpoints = [compact_checkpoint_state(row) for row in b.get("checkpoints", [])[-4:] if isinstance(row, dict)]
+            self.story_log = b.get("story_log", [])[-1200:]
+            self.system_log = b.get("system_log", [])[-400:]
             # Visible Chronicle rows live outside state in the save bundle.
             # Scan them after state migration, retain the historical text,
             # and surface one transparent correction immediately on load.

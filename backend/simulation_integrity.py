@@ -291,7 +291,11 @@ def refresh_npc_schedules(state, elapsed_minutes=0):
             row["status"] = "active"
             if current_day >= int(row.get("due_day", current_day + 1)):
                 row["status"] = "due"
-                events.append({"type": "world", "message": f"{name}'s commitment is now due: {goal}", "importance": 70})
+                events.append({
+                    "type": "world", "title": f"{name}'s Plans Move",
+                    "message": f"{name}'s ongoing objective has reached a decision point. They may act soon: {goal}",
+                    "importance": 70,
+                })
         row["last_checked_day"] = current_day
     state["npc_schedules"] = schedules
     return events

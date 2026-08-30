@@ -8,16 +8,47 @@ as recoverable input rather than allowing a later ``.get`` to end the turn.
 from __future__ import annotations
 
 import copy
+import json
+import re
 
 from state_guard import normalize_combat_payload
 from util import ai_text
 
 
 def _dict(value):
-    return copy.deepcopy(value) if isinstance(value, dict) else {}
+    if isinstance(value, dict):
+        return copy.deepcopy(value)
+    decoded = _decode_json(value)
+    return copy.deepcopy(decoded) if isinstance(decoded, dict) else {}
+
+
+def _decode_json(value):
+    """Recover JSON objects/lists returned as strings or fenced blocks."""
+    if not isinstance(value, str):
+        return value
+    source = value.strip()
+    if source.startswith("```"):
+        source = re.sub(r"^```(?:json)?\s*", "", source, flags=re.I)
+        source = re.sub(r"\s*```$", "", source)
+    if not source or source[0] not in "[{":
+        return value
+    try:
+        return json.loads(source)
+    except (TypeError, ValueError):
+        # A truncated object cannot be safely invented, but a complete JSON
+        # value wrapped in model chatter can still be recovered.
+        starts = [index for index in (source.find("{"), source.find("[")) if index >= 0]
+        for start in sorted(starts):
+            for end in range(len(source), start + 1, -1):
+                try:
+                    return json.loads(source[start:end])
+                except (TypeError, ValueError):
+                    continue
+    return value
 
 
 def _text_list(value, limit=40):
+    value = _decode_json(value)
     if value in (None, ""):
         return []
     if not isinstance(value, list):
@@ -26,6 +57,7 @@ def _text_list(value, limit=40):
 
 
 def _event_list(value):
+    value = _decode_json(value)
     if value in (None, ""):
         return []
     if not isinstance(value, list):
@@ -44,6 +76,7 @@ def _event_list(value):
 
 
 def _update_list(value):
+    value = _decode_json(value)
     if value in (None, ""):
         return []
     if not isinstance(value, list):
@@ -66,6 +99,7 @@ def _update_list(value):
 
 
 def _chat_list(value):
+    value = _decode_json(value)
     if value in (None, ""):
         return []
     if not isinstance(value, list):
@@ -102,13 +136,19 @@ def normalize_turn_response(value, task="turn"):
     A bare string is retained as narrative.  Nested structures are normalized
     only where the engine has a documented shape; unknown keys remain intact.
     """
-    if isinstance(value, str):
+    decoded = _decode_json(value)
+    if isinstance(decoded, dict):
+        data = copy.deepcopy(decoded)
+    elif isinstance(decoded, list):
+        data = {"updates": decoded}
+    elif isinstance(value, str):
         data = {"narrative": value}
     elif isinstance(value, dict):
         data = copy.deepcopy(value)
     else:
         data = {}
-    data["narrative"] = ai_text(data.get("narrative") or data.get("story") or data.get("text")).strip()
+    narrative_value = data.get("narrative") or data.get("story") or data.get("text")
+    data["narrative"] = ai_text(narrative_value).strip() if narrative_value not in (None, "") else ""
     data["state_patch"] = _dict(data.get("state_patch"))
     if "combat" in data["state_patch"]:
         data["state_patch"]["combat"] = normalize_combat_payload(data["state_patch"].get("combat"))
@@ -125,8 +165,23 @@ def normalize_turn_response(value, task="turn"):
         if key in data:
             data[key] = _dict(data.get(key))
     for key in ("consequence_manifest", "commitment_updates", "delayed_consequences", "ability_developments"):
-        value = data.get(key)
+        value = _decode_json(data.get(key))
         data[key] = [copy.deepcopy(row) for row in value[:60] if isinstance(row, dict)] if isinstance(value, list) else []
+    recovered_from = []
+    if not data["narrative"] and data["updates"]:
+        data["narrative"] = "\n\n".join(row["narrative"] for row in data["updates"] if row.get("narrative"))[:12000]
+        recovered_from.append("updates")
+    if not data["narrative"] and data["events"]:
+        data["narrative"] = "\n".join(row["message"] for row in data["events"] if row.get("message"))[:12000]
+        recovered_from.append("events")
+    if not data["narrative"] and data["state_patch"]:
+        data["narrative"] = "The planned action resolves, and the resulting changes are recorded."
+        recovered_from.append("state_patch")
+    if recovered_from:
+        data["response_recovery"] = {
+            "partial": True, "recovered_from": recovered_from,
+            "note": "Usable response fields were recovered locally; no second AI call was needed.",
+        }
     return data
 
 

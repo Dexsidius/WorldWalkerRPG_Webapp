@@ -36,6 +36,7 @@ from multiplayer import (MultiplayerStore, character_from_state, player_view,
 from multiplayer_combat import resolve_multiplayer_combat_round
 from ai_client import AI
 from overgeared_classes import class_encyclopedia
+from long_campaign import record_runtime_error
 
 BACKEND_DIR = Path(__file__).resolve().parent
 ROOT_DIR = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else BACKEND_DIR.parent
@@ -288,7 +289,15 @@ def busy_error():
 
 def err(e, code=500):
     traceback.print_exc()
-    return jsonify({"error": str(e)}), code
+    try:
+        row = record_runtime_error(
+            game.state, e, request.path if request else "api",
+            request.get_json(silent=True) if request else None, traceback.format_exc(),
+        )
+        return jsonify({"error": str(e), "error_id": row.get("id"),
+                        "recovery": "The campaign was preserved. Retry the turn or export Diagnostics with this error ID."}), code
+    except Exception:
+        return jsonify({"error": str(e)}), code
 
 
 def atomic_game_call(route, payload, callback):

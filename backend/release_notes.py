@@ -1,6 +1,23 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.43.0": {
+        "title": "Long Campaign Stability",
+        "summary": "Long-running campaigns now repair stale bookkeeping before Advance, preserve complete standing plans, recover partial AI replies, and store history far more efficiently.",
+        "highlights": [
+            {"title": "Pre-Advance campaign health check", "example": "Before a turn begins, malformed deep state is repaired locally so an old save cannot crash before rollback protection starts."},
+            {"title": "Stale goals retire cleanly", "example": "A training goal from dozens of turns ago is archived when its plan is no longer active instead of contaminating the current scene."},
+            {"title": "Quests and scenes reconcile", "example": "Completed quests move to the archive, duplicates disappear, and the live scene follows the character's actual location."},
+            {"title": "Stale combat closes itself", "example": "Combat cannot remain active with a defeated opponent, missing enemy, or incapacitated player and block every later action."},
+            {"title": "Much smaller save snapshots", "example": "Undo checkpoints keep current facts but no longer repeat hundreds of old events and diagnostics in every copy."},
+            {"title": "Deep schema repair", "example": "Malformed NPC dossiers, combatants, quest rows, histories, and nested containers are normalized with exact diagnostic paths."},
+            {"title": "Actionable error IDs", "example": "An unexpected API failure returns a short support ID while preserving the campaign and recording the failing route and data shape."},
+            {"title": "Partial AI replies survive", "example": "If a model returns updates or state changes without its main narrative field, the usable result is recovered without paying for another call."},
+            {"title": "Hot, warm, and cold memory", "example": "Recent turns, chapter summaries, and verified archives are separated so the GM gets relevant history without resending the full save."},
+            {"title": "Standing orders have a lifecycle", "example": "A multi-action plan keeps every unfinished instruction across Moments while completed, deferred, and replaced orders are tracked separately."},
+            {"title": "Readable NPC development updates", "example": "Off-screen growth now distinguishes training progress, ongoing story movement, and an NPC approaching a decision instead of calling every goal an overdue commitment."},
+        ],
+    },
     "3.42.1": {
         "title": "Long-Campaign Advance Recovery",
         "summary": "Advance now accepts compact companion names correctly and automatically removes misplaced response-envelope data from NPC memories.",

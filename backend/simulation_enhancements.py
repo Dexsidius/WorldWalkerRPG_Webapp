@@ -168,10 +168,15 @@ def advance_npc_development(state, elapsed_minutes):
                 row["power_growth"] = round(_number(row.get("power_growth"), 0) + power_gain, 1)
                 if isinstance(memory.get("power_score"), (int, float)):
                     memory["power_score"] = round(_number(memory.get("power_score")) + power_gain, 1)
-            detail = f"{name} has developed through {goal or 'their own continuing activity'}"
+            if training:
+                detail = f"{name} has made independent progress toward: {goal or 'their current training'}"
+                title = f"{name}'s Training Progress"
+            else:
+                detail = f"{name}'s situation has moved forward. Current direction: {goal or 'their own continuing activity'}"
+                title = f"{name}'s Ongoing Story"
             row.setdefault("history", []).append({"turn": state.get("turn", 0), "canon_day": state.get("canon_day"), "detail": detail})
             row["history"] = row["history"][-20:]
-            events.append({"type": "world", "title": f"{name} Develops", "narrative": detail + ".", "importance": 45})
+            events.append({"type": "world", "title": title, "narrative": detail.rstrip(".") + ".", "importance": 45})
     state["npc_development"] = registry
     return events
 

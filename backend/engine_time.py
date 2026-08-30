@@ -49,6 +49,8 @@ from campaign_reliability import (
 )
 from response_guard import normalize_assessment_response
 from experience_systems import record_world_milestones, update_scenario_memory
+from long_campaign import (compact_checkpoint_state, pre_advance_health_check,
+                           sync_standing_order_lifecycle)
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -551,6 +553,7 @@ class TimeSkipMixin:
                 "reachable_actions": reachable, "deferred_actions": deferred}
 
     def assess_time_skip(self, amount, unit, orders_text, intensity, use_model=True):
+        pre_advance_health_check(self.state, source="before_time_assessment")
         event_mode = unit == "next_event"
         if unit in {"moment", "next_event"}:
             amount = 1
@@ -594,9 +597,10 @@ class TimeSkipMixin:
         budget["structured_goals"] = structured_goals
         with self.lock:
             self.state["standing_orders"] = standing_orders
+            sync_standing_order_lifecycle(self.state, standing_orders, source="time_assessment")
             self.state["time_mode"] = unit
-            self.checkpoints.append(copy.deepcopy(self.state))
-            self.checkpoints = self.checkpoints[-40:]
+            self.checkpoints.append(compact_checkpoint_state(self.state))
+            self.checkpoints = self.checkpoints[-12:]
         payload = {
             "task": "assess_time_skip", "duration": {"amount": amount, "unit": unit},
             "planned_actions": clean_orders, "intensity": intensity, "state": self.trimmed_state_for_ai(" ".join(clean_orders)),
@@ -2057,6 +2061,11 @@ class TimeSkipMixin:
             if chapter:
                 self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
             consolidate_long_campaign_memory(self.state)
+            sync_standing_order_lifecycle(
+                self.state, self.state.get("standing_orders", []),
+                data.get("completed_actions", []), data.get("deferred_actions", []),
+                source="time_resolution",
+            )
             self.archive_finished_quests()
             # A time skip can end the character's life just as surely as a
             # single action or a combat round can (a failed extreme-danger

@@ -6,11 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.42.1** (schema 20).
+Current app/save version: **3.43.0** (schema 20).
 
-Version 3.42.1 fixes Advance for long-running campaigns whose companions use
-the supported compact-name format, and removes response-envelope data that
-older model replies could accidentally place inside NPC memory records.
+Version 3.43.0 adds a pre-Advance campaign health pass, stale goal/quest/combat
+cleanup, deep nested-state validation, compact checkpoints, partial AI-response
+recovery, tiered campaign memory, actionable error IDs, and a complete standing-
+order lifecycle for long-running campaigns.
 
 Version 3.40.0 gives the GM a persistent live-scene ledger, broader conditional
 response repair, narrative/mechanical outcome-scale checks, canon-divergence

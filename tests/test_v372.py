@@ -1,5 +1,6 @@
 import copy
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -60,7 +61,7 @@ class WorldwalkerV372Tests(unittest.TestCase):
         return state
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.42.1")
+        self.assertEqual(APP_VERSION, "3.43.0")
 
     def test_extreme_specialty_is_not_called_reality_bending_overall(self):
         stats = {"Taijutsu": 199, "Ninjutsu": 749, "Genjutsu": 35,
@@ -130,25 +131,27 @@ class WorldwalkerV372Tests(unittest.TestCase):
         self.assertEqual(data["state_patch"]["stats"], {"Ninjutsu": 68})
 
     def test_ai_authors_unique_hidden_class_instead_of_selecting_pool_entry(self):
-        game = GameSession()
-        game.ai_bg = BlueprintAI()
-        game.ai_bg_ready = lambda: True
-        hidden = game.generate_hidden_class(
-            "Overgeared", "I have a hidden crafting class that stores memories in armor.",
-            20, ["Strength", "Dexterity"], {"Strength": 40, "Dexterity": 38},
-        )
+        with tempfile.TemporaryDirectory() as folder:
+            game = GameSession(save_dir=Path(folder), settings_path=Path(folder) / "settings.json")
+            game.ai_bg = BlueprintAI()
+            game.ai_bg_ready = lambda: True
+            hidden = game.generate_hidden_class(
+                "Overgeared", "I have a hidden crafting class that stores memories in armor.",
+                20, ["Strength", "Dexterity"], {"Strength": 40, "Dexterity": 38},
+            )
         self.assertEqual(hidden["name"], "Mnemonic Crucible Sovereign")
         self.assertIn("succession", hidden["growth_path"].lower())
         self.assertIn("hidden-class", hidden["canon_balance"])
         self.assertEqual(hidden["signature_skill"], "Crucible Recollection")
 
     def test_claimed_kekkei_genkai_creates_matching_persisted_techniques(self):
-        game = GameSession()
-        game.ai_bg = BlueprintAI()
-        game.ai_bg_ready = lambda: True
-        ability = game.generate_background_ability(
-            "Naruto", "I inherited a kekkei genkai that manipulates my bone density.", 20
-        )
+        with tempfile.TemporaryDirectory() as folder:
+            game = GameSession(save_dir=Path(folder), settings_path=Path(folder) / "settings.json")
+            game.ai_bg = BlueprintAI()
+            game.ai_bg_ready = lambda: True
+            ability = game.generate_background_ability(
+                "Naruto", "I inherited a kekkei genkai that manipulates my bone density.", 20
+            )
         skills = {ability["name"]: copy.deepcopy(ability["details"])}
         game.install_background_ability_skills(skills, ability)
         self.assertEqual(ability["details"]["kind"], "Kekkei Genkai")

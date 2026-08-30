@@ -24,6 +24,7 @@ from simulation_core import refresh_simulation_core
 from campaign_features import normalize_companion_combinations, normalize_trophy_state
 from canon_integrity import normalize_canon_integrity
 from world_activity import normalize_world_activity
+from long_campaign import pre_advance_health_check
 
 def _compile_skill_mechanics(state):
     skills = normalize_skill_map(state.get("skills", {}))
@@ -90,7 +91,7 @@ APP_OWNED = {
     "overgeared_system", "solo_system", "jjk_system", "world_depth",
     "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
     "encounter_state", "story_threads", "scenario_memory", "world_milestones", "resolution_ledger", "simulation_core_version", "world_activity",
-    "last_failed_turn", "recovery_timeline",
+    "last_failed_turn", "recovery_timeline", "last_combat", "standing_order_state", "memory_tiers",
     "legacy_trophies", "dismissed_trophy_ids", "downtime_surprise_state", "message_delivery_state",
     "companion_autonomy", "npc_development", "ability_evolution", "world_downtime_cycles", "prompt_budget_log",
 }
@@ -105,6 +106,7 @@ NESTED_DICT_FIELDS = {
     "polity_state", "downtime_surprise_state", "message_delivery_state", "world_activity", "memory_consolidation",
     "scene_state", "last_outcome_scale", "canon_divergence_impacts", "pacing_profile", "player_style_profile", "scenario_memory", "last_failed_turn",
     "companion_autonomy", "npc_development", "ability_evolution", "world_downtime_cycles",
+    "last_combat", "standing_order_state", "memory_tiers",
 }
 NESTED_LIST_FIELDS = {
     "titles", "inventory", "quests", "hidden_quests", "quest_archive", "affiliations",
@@ -552,6 +554,8 @@ def migrate_state(state, from_version="unknown"):
     normalize_companion_combinations(migrated)
     normalize_trophy_state(migrated)
     refresh_simulation_core(migrated)
+    health = pre_advance_health_check(migrated, source="migration")
+    repairs.extend(health.get("repairs", []))
     migrated.setdefault("diagnostics", {})["migration"] = {
         "from_version": from_version, "repairs": repairs,
         "time": datetime.now().isoformat(timespec="seconds"),

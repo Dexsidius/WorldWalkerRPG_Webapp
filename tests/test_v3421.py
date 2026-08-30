@@ -26,7 +26,7 @@ class StableTurnAI:
 
 class LongCampaignStringCompanionRegressionTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.42.1")
+        self.assertEqual(APP_VERSION, "3.43.0")
 
     def test_canon_context_accepts_compact_companion_names(self):
         state = copy.deepcopy(BASE_STATE)
@@ -43,7 +43,7 @@ class LongCampaignStringCompanionRegressionTests(unittest.TestCase):
             "elapsed": {"amount": 15, "unit": "minutes"},
             "completed_actions": ["Train"],
         }
-        repaired = migrate_state(state, "3.42.1")
+        repaired = migrate_state(state, "3.43.0")
         self.assertEqual(set(repaired["npc_memories"]), {"Emi Kuroda"})
         self.assertTrue(any("NPC memories" in row for row in repaired["diagnostics"]["migration"]["repairs"]))
 
