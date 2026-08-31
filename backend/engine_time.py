@@ -2091,7 +2091,10 @@ class TimeSkipMixin:
             new_warnings = [w for w in continuity_warnings if w not in prior_warnings]
             if new_warnings:
                 self.request_continuity_correction(new_warnings, data.get("narrative", ""))
-            chapter = update_chapter_memory(before, self.state, "Advance: " + "; ".join(context.get("actions", [])), data.get("narrative", ""))
+            from turn_recovery import remember_commands
+            remember_commands(self.state, data)
+            chapter_prose = "\n".join(str(row.get("narrative", "")) for row in data.get("updates", []) if isinstance(row, dict) and row.get("type") not in {"system", "meta"}) or data.get("narrative", "")
+            chapter = update_chapter_memory(before, self.state, "Advance: " + "; ".join(context.get("actions", [])), chapter_prose, data.get("chapter_recap"))
             if chapter:
                 self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
             consolidate_long_campaign_memory(self.state)

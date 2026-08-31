@@ -269,6 +269,8 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     """Return a bounded, source-ranked set of facts every AI role must obey."""
     state = state if isinstance(state, dict) else {}
     terms = _terms(query)
+    from gm_refinements import connected_memory
+    connections = connected_memory(state, query)
     special = state.get("special") if isinstance(state.get("special"), dict) else {}
     active_form = ((state.get("portrait_identity") or {}).get("active_form")
                    if isinstance(state.get("portrait_identity"), dict) else {}) or {}
@@ -297,6 +299,7 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
         },
         "locked_facts": copy.deepcopy((state.get("authoritative_corrections") or [])[-12:]),
         "relevant_people": [], "relevant_factions": [], "commitments": [],
+        "connected_memories": connections["records"],
         "verified_history": [], "consistency_rule": (
             "Answer and narrate from this packet first. Never replace a current campaign fact with stock canon. "
             "If two facts truly conflict, name the conflict instead of silently choosing one."
@@ -344,6 +347,7 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
         if not isinstance(memory, dict):
             continue
         priority = _score(terms, name, memory.get("goal"), memory.get("immediate_goal"), memory.get("last_known_location"))
+        if name in connections["names"]: priority += 20
         if ai_text(name).lower() in companions: priority += 8
         if memory.get("nemesis"): priority += 6
         if memory.get("last_known_location") == state.get("location"): priority += 5
@@ -407,6 +411,7 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
     for quest in quests:
         if isinstance(quest, dict) and str(quest.get("status", "active")).lower() not in {"complete", "completed", "resolved", "failed", "archived"}:
             commitments.append({"kind": "quest", "name": quest.get("name"), "next": quest.get("next_hint") or quest.get("first_step")})
+    commitments.sort(key=lambda row: -_score(terms, row))
     packet["commitments"] = commitments[:12]
 
     history = []

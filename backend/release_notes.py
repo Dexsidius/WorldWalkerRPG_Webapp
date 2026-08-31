@@ -1,6 +1,21 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.46.0": {
+        "title": "Better Memories, Faithful Commands & Short Chapters",
+        "summary": "Short narrative recaps, more relevant GM context, safer retries, and corrections directly from the Chronicle. Existing campaigns benefit too.",
+        "highlights": [
+            {"title": "Chapters read like a story", "example": "A chapter recalls rebuilding a clinic, securing medicine and training through winter in one short paragraph, rather than pages of repeated actions and system lists."},
+            {"title": "Groups and follow-up orders", "example": "Tell my guards to protect the children reaches established subordinate guards; have them continue refers back to that group without guessing among unrelated NPCs."},
+            {"title": "Connected campaign memories", "example": "Asking about your orphanage also brings its caretaker and funding promise into the GM's focused context."},
+            {"title": "Relevant reasons for reactions", "example": "Knowing you visited a harbor does not justify knowing about a secret technique. Refusals and complications must cite a relevant established fact."},
+            {"title": "Completed stories stay completed", "example": "A finished clinic remains a useful accomplishment; reopening its original problem requires a new evidenced cause, not an automatic new crisis."},
+            {"title": "Fewer false breakthrough alarms", "example": "Discussing Bankai, remembering an old achievement, or describing an NPC's awakening no longer automatically demands a new player ability."},
+            {"title": "Retry without starting from scratch", "example": "After a failed application, retry reuses settled dice and cached response stages when the action and campaign still match; repaired text is checked before committing."},
+            {"title": "Correct a Chronicle entry", "example": "Choose Correct this, preview the proposed fact and any mechanical changes, then explicitly apply it. Existing skill metadata is preserved."},
+            {"title": "Long-campaign regression coverage", "example": "Tests advance calendars and reload saves across all nine worlds while checking retirement, death, acquired skills, chapter length and settled projects."},
+        ],
+    },
     "3.45.1": {
         "title": "NPC Chat on Mobile",
         "summary": "Reach your NPC conversations directly from the phone's More menu.",

@@ -3326,3 +3326,16 @@ body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a
 }
 @keyframes systemNoticeOpen{ from{ opacity:0; transform:translate(-50%,-26px) scale(.9); } to{ opacity:1; transform:translateX(-50%) scale(1); } }
 @media(prefers-reduced-motion:reduce){.world-system-popup{animation:none}}
+/* Compact additions reuse each world's existing colors and typography. */
+.story-correct-entry { display: block; margin: .55rem 0 0 auto; padding: .3rem .55rem; font: inherit; font-size: .72rem; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 4px; opacity: .72; cursor: pointer; }
+.story-correct-entry:hover, .story-correct-entry:focus-visible { opacity: 1; }
+.correction-source { margin: 0 0 1rem; padding: .8rem; border-left: 3px solid currentColor; overflow-wrap: anywhere; max-height: 12rem; overflow: auto; }
+#correction-preview { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.chapter-source-record { margin-top: 1rem; font-size: .85em; }
+.recap-columns[hidden] { display: none; }
+.recap-summary { overflow-wrap: anywhere; line-height: 1.65; }
+.recap-continue { min-height: 44px; }
+@media(max-width:720px){ .story-correct-entry { min-height: 44px; } }
+.turn-recovery-notice { position: fixed; z-index: 150; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: min(540px, calc(100vw - 28px)); box-sizing: border-box; padding: 12px; display: flex; align-items: center; gap: 12px; background: #17242d; color: #fff2d6; border: 1px solid #ddad5a; border-radius: 8px; box-shadow: 0 4px 20px #0008; }
+.turn-recovery-notice[hidden] { display: none; }
+.turn-recovery-notice button { margin-left: auto; min-height: 44px; padding: 8px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; }

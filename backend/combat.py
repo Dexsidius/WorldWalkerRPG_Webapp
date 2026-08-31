@@ -242,8 +242,11 @@ class CombatMixin:
         low, high = clamp(int(difficulty_min) + shift, 1, 100), clamp(int(difficulty_max) + shift, 1, 100)
         if low > high:
             low, high = high, low
-        difficulty = random.randint(low, high)
-        raw = random.randint(1, 100)
+        from turn_recovery import stage
+        saved_roll = stage(self, "combat_dice", [actor_bonus, low, high])
+        if "difficulty" not in saved_roll:
+            saved_roll.update(difficulty=random.randint(low, high), raw=random.randint(1, 100))
+        difficulty, raw = saved_roll["difficulty"], saved_roll["raw"]
         breakthrough = raw >= 99
         total = raw + actor_bonus + (15 if breakthrough else 0)
         success = total > difficulty

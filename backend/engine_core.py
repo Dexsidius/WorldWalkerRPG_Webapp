@@ -251,6 +251,8 @@ class CoreMixin:
         if not isinstance(actions, list):
             actions = payload.get("actions") if isinstance(payload, dict) else None
         pre_advance_health_check(self.state, actions, f"before_{route}")
+        from turn_recovery import begin
+        begin(self, route, payload)
         return {
             "route": str(route or "turn"), "payload": copy.deepcopy(payload),
             "state": copy.deepcopy(self.state), "history_count": len(self.history),
@@ -276,11 +278,13 @@ class CoreMixin:
             "error": str(error)[:500], "turn": int(self.state.get("turn", 0) or 0),
             "time": datetime.now().isoformat(timespec="seconds"), "status": "ready_to_retry",
             "error_id": diagnostic.get("id"), "error_type": diagnostic.get("type"),
+            "work": copy.deepcopy(getattr(self, "_turn_work", {})),
         }
         self.state["last_failed_turn"] = row
         timeline = self.state.setdefault("recovery_timeline", [])
-        timeline.append({key: copy.deepcopy(value) for key, value in row.items() if key != "payload"})
+        timeline.append({key: copy.deepcopy(value) for key, value in row.items() if key not in {"payload", "work"}})
         self.state["recovery_timeline"] = timeline[-24:]
+        self._turn_work = None
         try:
             self.autosave()
         except Exception:
@@ -288,6 +292,7 @@ class CoreMixin:
         return row
 
     def complete_turn_transaction(self, transaction):
+        self._turn_work = None
         self.state["last_failed_turn"] = {}
         timeline = self.state.setdefault("recovery_timeline", [])
         timeline.append({"route": transaction.get("route", "turn"), "turn": int(self.state.get("turn", 0) or 0),
@@ -416,6 +421,7 @@ class CoreMixin:
         snapshot = dict(self.state)
         for key in self.AI_HIDDEN_FIELDS:
             snapshot.pop(key, None)
+        snapshot.pop("last_failed_turn", None)
         snapshot["npc_knowledge_boundaries"] = npc_knowledge_boundaries(self.state)
         snapshot["concealed_player_facts"] = concealed_player_facts(self.state)
         snapshot["authoritative_player_corrections"] = copy.deepcopy((self.state.get("authoritative_corrections") or [])[-30:])
@@ -789,10 +795,8 @@ class CoreMixin:
         new_location = str(patch.get("location") or "").strip()
         if new_location and new_location.lower() != str(self.state.get("location") or "").strip().lower() and new_location.lower() not in narrative.lower():
             issues.append(f"The state moves to {new_location}, but the narrative never establishes that movement.")
-        claimed_breakthrough = re.search(
-            r"\b(?:master(?:ed|y)|awak(?:en|ened|ening)|evol(?:ve|ved|ution)|bankai|domain expansion|new form|class evolution)\b",
-            narrative, re.I,
-        )
+        from gm_refinements import acquisition_claim
+        claimed_breakthrough = acquisition_claim(self.state, narrative)
         manifest = data.get("consequence_manifest") if isinstance(data.get("consequence_manifest"), list) else []
         durable_fields = {"skills", "special", "class_profile", "ability_progress", "portrait_identity", "portrait_traits", "level", "xp"}
         durable_manifest = any(isinstance(row, dict) and str(row.get("kind", "")).lower() in
@@ -816,7 +820,12 @@ class CoreMixin:
         payload = prepare_request(self.state, payload)
         instructions += CONSISTENCY_RULE
         usage_before = copy.deepcopy(getattr(client, "usage", {}))
-        data = normalize_turn_response(client.request(instructions, payload, max_output_tokens=max_output_tokens), payload.get("task"))
+        from turn_recovery import stage, request_signature
+        record = stage(self, "narrator", request_signature(instructions, payload, getattr(client, "model", ""), max_output_tokens))
+        data = copy.deepcopy(record.get("draft"))
+        if data is None:
+            data = normalize_turn_response(client.request(instructions, payload, max_output_tokens=max_output_tokens), payload.get("task"))
+            record["draft"] = copy.deepcopy(data)
         narrative_missing = not (data.get("narrative") or "").strip()
         violations = [] if narrative_missing else self._simulate_continuity_violations(payload, data)
         quality_issues = [] if narrative_missing else self._response_quality_issues(payload, data)
@@ -832,11 +841,14 @@ class CoreMixin:
                 reminder += "\n\nQUALITY REPAIR: keep every valid fact and outcome from the first attempt, but correct these locally verified omissions or contradictions: " + " ".join(quality_issues)
             repair_payload = {**payload, "repair_draft": copy.deepcopy(data), "repair_issues": quality_issues + violations}
             data = normalize_turn_response(client.request(instructions + reminder, repair_payload, max_output_tokens=max_output_tokens), payload.get("task"))
+            record["draft"] = copy.deepcopy(data)
         data, canon_repairs = repair_canon_payload(self.state.get("world", "Custom World"), data, self.state)
-        remaining = semantic_issues(self.state, data, payload)
+        data = enforce_response_policy(data, payload, self.state)
+        remaining = semantic_issues(self.state, data, payload) + self._simulate_continuity_violations(payload, data) + self._response_quality_issues(payload, data)
+        if not str(data.get("narrative") or "").strip(): remaining.insert(0, "The repaired response still has no narrative.")
         if remaining:
             raise ValueError("The GM returned a contradictory result after one repair. This result was not applied; your previous save remains usable. Retry Advance. Details: " + " ".join(remaining[:2]))
-        data = enforce_response_policy(data, payload, self.state)
+        record["draft"] = copy.deepcopy(data)
         if canon_repairs:
             data["canon_integrity_repairs"] = canon_repairs
         self._last_narrator_model = getattr(client, "model", self.settings.get("model", ""))

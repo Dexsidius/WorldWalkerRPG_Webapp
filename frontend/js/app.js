@@ -96,7 +96,25 @@ async function api(path, opts = {}) {
   return data;
 }
 const apiGet = (path) => api(path);
-const apiPost = (path, body) => api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) });
+function recoveryCampaignKey(state) {
+  return state?.campaign_id || `${state?.world || ""}:${state?.name || ""}`;
+}
+async function apiPost(path, body) {
+  const retryable = ["/api/time/resolve", "/api/combat/action", "/api/combat/narrate"].includes(path);
+  const payload = { ...(body || {}) };
+  if (retryable && !payload.request_id) payload.request_id = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  try {
+    const result = await api(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (retryable) { APP.retryRequest = null; $("#turn-recovery-notice").hidden = true; }
+    return result;
+  } catch (error) {
+    if (retryable) {
+      APP.retryRequest = { path, payload, campaign: recoveryCampaignKey(APP.state) };
+      $("#turn-recovery-notice").hidden = false;
+    }
+    throw error;
+  }
+}
 const apiForm = (path, body) => api(path, { method: "POST", body });
 
 // Phone-host helper and future hosted-PWA support. API calls remain network
@@ -791,6 +809,21 @@ function appendStoryEntries(entries, options = {}) {
       const body = document.createElement("div");
       body.className = "story-entry-copy";
       bodyWrap.appendChild(body);
+      if (["narrative", "canon_event"].includes(part.tag)) {
+        const correct = document.createElement("button");
+        correct.type = "button";
+        correct.className = "story-correct-entry";
+        correct.textContent = "Correct this";
+        correct.addEventListener("click", async () => {
+          APP.correctionSource = { text: part.body, time: entry.world_time || dateText, entities: entry.detail?.entities || [] };
+          try {
+            await openJournal("corrections");
+            if (APP.correctionSource.entities.length === 1) $("#correction-target").value = APP.correctionSource.entities[0];
+            $("#correction-value").focus();
+          } catch (error) { showToast(error.message, "danger"); }
+        });
+        bodyWrap.appendChild(correct);
+      }
       div.append(label, bodyWrap);
       entriesWrap.appendChild(div);
       if (part.tag === "narrative" && APP.animationsEnabled && presentationWorld !== "Naruto") {
@@ -1733,6 +1766,8 @@ function animateStateChanges(previous, next) {
 }
 
 function renderState(state) {
+  if (APP.retryRequest && APP.retryRequest.campaign !== recoveryCampaignKey(state)) APP.retryRequest = null;
+  $("#turn-recovery-notice").hidden = !(state?.last_failed_turn?.route || APP.retryRequest);
   const previousState = APP.state;
   APP.state = state;
   checkTrophyProposals(state);
@@ -1963,7 +1998,7 @@ function renderChapterRecap(chapter, s) {
   $("#recap-title").textContent = chapter.title || `Chapter ${chapter.number || ""}`;
   const turns = chapter.turns || [];
   $("#recap-timespan").textContent = [chapter.time_span, turns.length ? `Turns ${turns[0]}–${turns[1]}` : ""].filter(Boolean).join(" · ");
-  $("#recap-summary").textContent = chapter.summary || "The story moved forward.";
+  $("#recap-summary").textContent = chapter.narrative_summary || chapter.summary || "No detailed account was recorded.";
   $("#recap-decisions").innerHTML = (chapter.key_decisions || []).slice(0, 8).map((d) => `<li>${escapeHtml(d)}</li>`).join("");
   $("#recap-changes").innerHTML = (chapter.lasting_changes || []).slice(0, 8).map((c) => `<li>${escapeHtml(c)}</li>`).join("");
 }
@@ -4087,7 +4122,7 @@ async function openJournal(tab) {
   } else if (tab === "corrections") {
     const corrections = [...(data.simulation?.integrity?.corrections || [])].reverse();
     const currencyCorrection = data.tracks_currency === false ? "" : `<option value="currency">Currency amount</option>`;
-    panel.innerHTML = `<div class="system-summary"><b>CORRECT THE GM</b><span>Your correction becomes an authoritative campaign fact, repairs the selected state immediately, and is included in future GM context. This makes no AI call and does not advance time.</span></div><form id="gm-correction-form" class="gm-correction-form"><label>What needs correcting<select id="correction-type"><option value="fact">Story fact</option><option value="location">Current location</option><option value="inventory_add">Missing inventory item</option><option value="inventory_remove">Item you no longer own</option>${currencyCorrection}<option value="hp">Current health</option><option value="resource">Current energy pool</option><option value="quest_status">Quest status</option><option value="skill">Skill description</option></select></label><label>Target or name<input id="correction-target" type="text" placeholder="Sword, quest name, skill name, character…"></label><label>Correct value<textarea id="correction-value" rows="3" placeholder="Write the correct fact or value" required></textarea></label><label>Why, if useful<textarea id="correction-explanation" rows="2" placeholder="Optional context that helps the GM preserve this correction"></textarea></label><button class="btn-primary" type="submit">APPLY CORRECTION</button></form><h3>Correction history</h3>${corrections.length ? corrections.map((row) => `<article class="correction-card"><header><b>${escapeHtml(row.target || humanLabel(row.type))}</b><span>Turn ${escapeHtml(row.turn ?? 0)}</span></header><p>${escapeHtml(row.fact)}</p>${row.explanation ? `<small>${escapeHtml(row.explanation)}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No player corrections have been needed.</div>'}`;
+    panel.innerHTML = `<div class="system-summary"><b>CORRECT THE GM</b><span>Your correction becomes an authoritative campaign fact, previews the selected change before applying it, and is included in future GM context. This makes no AI call and does not advance time.</span></div>${APP.correctionSource ? `<blockquote class="correction-source"><small>${escapeHtml(APP.correctionSource.time || "Selected Chronicle entry")}</small><p>${escapeHtml(APP.correctionSource.text)}</p></blockquote>` : ""}<form id="gm-correction-form" class="gm-correction-form"><label>What needs correcting<select id="correction-type"><option value="fact">Story fact</option><option value="location">Current location</option><option value="inventory_add">Missing inventory item</option><option value="inventory_remove">Item you no longer own</option>${currencyCorrection}<option value="hp">Current health</option><option value="resource">Current energy pool</option><option value="quest_status">Quest status</option><option value="skill">Skill description</option></select></label><label>Target or name<input id="correction-target" type="text" placeholder="Sword, quest name, skill name, character…"></label><label>Correct value<textarea id="correction-value" rows="3" placeholder="Write the correct fact or value" required></textarea></label><label>Why, if useful<textarea id="correction-explanation" rows="2" placeholder="Optional context that helps the GM preserve this correction"></textarea></label><button class="btn-primary" type="submit">PREVIEW CORRECTION</button><div id="correction-preview" aria-live="polite"></div></form><h3>Correction history</h3>${corrections.length ? corrections.map((row) => `<article class="correction-card"><header><b>${escapeHtml(row.target || humanLabel(row.type))}</b><span>Turn ${escapeHtml(row.turn ?? 0)}</span></header><p>${escapeHtml(row.fact)}</p>${row.explanation ? `<small>${escapeHtml(row.explanation)}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No player corrections have been needed.</div>'}`;
   } else if (tab === "simulation") {
     const integrity = data.simulation?.integrity || {}, reports = [...(integrity.recent_validation || [])].reverse();
     const schedules = Object.entries(integrity.npc_schedules || {}), packets = [...(integrity.information_packets || [])].reverse();
@@ -4206,7 +4241,7 @@ async function openJournal(tab) {
     const recent = data.chapter_buffer || [];
     const daysIntoChapter = recent.length ? Math.max(0, Number(data.canon_day ?? 0) - Number(recent[0].canon_day ?? data.canon_day ?? 0)) : 0;
     panel.innerHTML = `<div class="system-summary"><b>CHAPTER MEMORY</b><span>${chapters.length} consolidated chapters · ${daysIntoChapter}/90 days toward the next</span></div>` +
-      (chapters.length ? chapters.map((chapter, index) => `<details class="quest-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(chapter.title || `Chapter ${chapter.number}`)} <small>— turns ${escapeHtml((chapter.turns || []).join("–"))}</small></summary><div class="quest-details"><p>${escapeHtml(chapter.summary || "")}</p><div class="quest-detail-label">Key decisions</div><ul>${(chapter.key_decisions || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul><div class="quest-detail-label">Lasting changes</div><ul>${(chapter.lasting_changes || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul><small>${escapeHtml(chapter.time_span || "")}</small></div></details>`).join("") : '<div class="jrow">A chapter is consolidated roughly every 3 in-game months, or sooner if a long stretch passes without much time advancing.</div>');
+      (chapters.length ? chapters.map((chapter, index) => `<details class="quest-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(chapter.title || `Chapter ${chapter.number}`)} <small>— turns ${escapeHtml((chapter.turns || []).join("–"))}</small></summary><div class="quest-details"><p>${escapeHtml(chapter.narrative_summary || chapter.summary || "")}</p><details class="chapter-source-record"><summary>Detailed record</summary><div class="quest-detail-label">Key decisions</div><ul>${(chapter.key_decisions || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul><div class="quest-detail-label">Lasting changes</div><ul>${(chapter.lasting_changes || []).map((x) => `<li>${escapeHtml(x)}</li>`).join("") || "<li>None recorded.</li>"}</ul></details><small>${escapeHtml(chapter.time_span || "")}</small></div></details>`).join("") : '<div class="jrow">A chapter is consolidated roughly every 3 in-game months, or sooner if a long stretch passes without much time advancing.</div>');
   } else if (tab === "clocks") {
     const renderClocks = (title, clocks) => `<h3>${title}</h3>` + (Object.values(clocks || {}).length ? Object.values(clocks).map((clock) => {
       // mid_term_goal/core_ambition are optional depth beyond the one
@@ -4770,12 +4805,22 @@ $("#journal-panel").addEventListener("submit", async (event) => {
     } catch (error) { target.innerHTML = `<div class="jrow">${escapeHtml(error.message)}</div>`; }
   } else if (event.target.id === "gm-correction-form") {
     event.preventDefault();
-    const payload = { type: $("#correction-type").value, target: $("#correction-target").value.trim(), value: $("#correction-value").value.trim(), explanation: $("#correction-explanation").value.trim() };
+    const payload = { type: $("#correction-type").value, target: $("#correction-target").value.trim(), value: $("#correction-value").value.trim(), explanation: $("#correction-explanation").value.trim(), source: APP.correctionSource || null };
     try {
-      const result = await apiPost("/api/campaign/correct", payload);
-      renderState(result.state); appendStoryEntries(result.story || []);
-      showToast("Correction saved as an authoritative campaign fact.", "notify");
-      await openJournal("corrections");
+      const preview = await apiPost("/api/campaign/correct/preview", payload);
+      const box = $("#correction-preview");
+      box.innerHTML = `<div class="correction-card"><h3>Review your correction</h3><p>${escapeHtml(preview.fact)}</p>${preview.changes.length ? preview.changes.map((change) => `<details><summary>${escapeHtml(humanLabel(change.field))}</summary><p>Before: ${escapeHtml(compactReadable(change.before))}</p><p>After: ${escapeHtml(compactReadable(change.after))}</p></details>`).join("") : '<p>This records a story fact; it does not alter stats or inventory.</p>'}<button type="button" class="btn-primary" id="btn-apply-preview">APPLY THIS CORRECTION</button></div>`;
+      $("#btn-apply-preview").addEventListener("click", async (click) => {
+        click.target.disabled = true;
+        try {
+          const result = await apiPost("/api/campaign/correct", { ...payload, preview_token: preview.preview_token });
+          APP.correctionSource = null;
+          renderState(result.state); appendStoryEntries(result.story || []);
+          showToast("Correction saved as an authoritative campaign fact.", "notify");
+          await openJournal("corrections");
+        } catch (error) { showToast(error.message, "danger"); click.target.disabled = false; }
+      });
+      event.target.addEventListener("input", () => { box.innerHTML = ""; }, { once: true });
     } catch (error) { showToast(error.message, "danger"); }
   } else if (event.target.id === "tuning-form") {
     event.preventDefault();
@@ -5630,6 +5675,21 @@ async function runMenuAction(action) {
 }
 
 $("#btn-diagnostics-export").addEventListener("click", () => downloadEndpoint("/api/diagnostics/export"));
+$("#btn-inline-retry").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  const pending = APP.retryRequest;
+  try {
+    const result = pending ? await apiPost(pending.path, pending.payload) : await apiPost("/api/action/retry_failed", {});
+    if (pending?.path === "/api/time/resolve") handleTimeSkipResult(result, pending.payload);
+    else {
+      if (result.state) renderState(result.state);
+      if (result.story) appendStoryEntries(result.story, { focusNew: true });
+    }
+    $("#turn-recovery-notice").hidden = true;
+  } catch (error) { showToast(error.message, "danger"); }
+  finally { button.disabled = false; }
+});
 $("#btn-diagnostics-bundle").addEventListener("click", () => downloadEndpoint("/api/diagnostics/bundle"));
 $("#btn-retry-failed-turn").addEventListener("click", async () => {
   const button = $("#btn-retry-failed-turn"); button.disabled = true;

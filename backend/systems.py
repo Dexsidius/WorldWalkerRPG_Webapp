@@ -221,10 +221,11 @@ def normalize_quest_state_machine(state):
     return completed
 
 
-def update_chapter_memory(before, state, trigger, narrative):
+def update_chapter_memory(before, state, trigger, narrative, recap=None):
     turn = int(state.get("turn", 0) or 0)
     canon_day = int(state.get("canon_day", 0) or 0)
-    clean_narrative = re.sub(r"\s+", " ", str(narrative or "The world moved forward.")).strip()[:650]
+    from chapter_recaps import compact_recap
+    clean_narrative = compact_recap([{"summary": narrative, "action": trigger}], state.get("name", ""), max_words=150)
     changes = []
     if before.get("location") != state.get("location"):
         changes.append(f"Moved to {state.get('location')}.")
@@ -259,6 +260,8 @@ def update_chapter_memory(before, state, trigger, narrative):
         "lasting_changes": [change for entry in buffer for change in entry.get("changes", [])][:20],
         "unresolved_quests": [q.get("name") for q in state.get("quests", []) if isinstance(q, dict) and str(q.get("status", "active")).lower() == "active"],
     }
+    from chapter_recaps import finish_recap
+    finish_recap(chapter, buffer, state.get("name", ""), recap)
     state["chapter_summaries"].append(chapter)
     state["chapter_summaries"] = state["chapter_summaries"][-60:]
     state["chapter_buffer"] = []

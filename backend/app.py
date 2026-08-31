@@ -10,6 +10,8 @@ from werkzeug.local import LocalProxy
 
 from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for, power_profile_for
 from release_notes import notes_for
+from chapter_recaps import chapter_view
+from gm_refinements import fingerprint
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
 from portrait_generator import (PORTRAIT_CACHE_DIR, clear_active_portrait_form, generate_portrait,
@@ -302,6 +304,20 @@ def err(e, code=500):
 
 def atomic_game_call(route, payload, callback):
     """Resolve a mutation as all-or-nothing and preserve a retry payload."""
+    from gm_refinements import fingerprint
+    request_id = str(payload.get("request_id") or "")[:100] if isinstance(payload, dict) else ""
+    campaign_key = game.state.get("campaign_id") or (game.state.get("world"), game.state.get("name"))
+    completed = getattr(game, "_completed_requests", {})
+    if request_id and request_id in completed:
+        cached = completed[request_id]
+        if cached.get("campaign") != campaign_key:
+            raise ValueError("This saved request belongs to another campaign. Submit a new action here.")
+        if cached["route"] != route or cached["input"] != fingerprint(payload):
+            raise ValueError("This request ID was already used for a different action.")
+        result = copy.deepcopy(cached["result"])
+        result["state"] = game.public_state()
+        result["replayed_request"] = True
+        return result
     transaction = game.begin_turn_transaction(route, payload)
     try:
         result = callback()
@@ -311,6 +327,10 @@ def atomic_game_call(route, payload, callback):
         # leave the client showing the now-cleared failure marker.
         if isinstance(result, dict) and "state" in result:
             result["state"] = game.public_state()
+        if request_id and isinstance(result, dict):
+            compact_result = {k: copy.deepcopy(v) for k, v in result.items() if k != "state"}
+            completed[request_id] = {"route": route, "input": fingerprint(payload), "result": compact_result, "campaign": campaign_key}
+            game._completed_requests = dict(list(completed.items())[-16:])
         return result
     except Exception as exc:
         game.rollback_turn_transaction(transaction, exc)
@@ -1260,7 +1280,7 @@ def api_panels():
         "quest_archive": s.get("quest_archive", []),
         "continuity": s.get("continuity_ledger", {}),
         "campaign_canon": s.get("campaign_canon", []),
-        "chapter_summaries": s.get("chapter_summaries", []), "chapter_buffer": s.get("chapter_buffer", []),
+        "chapter_summaries": [chapter_view(row, s.get("name", "")) for row in s.get("chapter_summaries", []) if isinstance(row, dict)], "chapter_buffer": s.get("chapter_buffer", []),
         "npc_clocks": s.get("npc_clocks", {}), "faction_clocks": s.get("faction_clocks", {}),
         "relationships_view": relationship_snapshot(s),
         "progression_preset": progression_preset_for(world), "difficulty_controls": normalize_tuning(s),
@@ -1317,6 +1337,28 @@ def api_campaign_search():
     return jsonify({"query": query, "results": campaign_search(game.state, query, request.args.get("limit", 30))})
 
 
+def correction_preview(payload):
+    scratch = copy.deepcopy(game.state)
+    record = apply_player_correction(scratch, payload.get("type"), payload.get("target"), payload.get("value"), payload.get("explanation", ""))
+    changes = []
+    for key in ("location", "inventory", "currency", "hp", "resource", "quests", "skills"):
+        if scratch.get(key) != game.state.get(key):
+            changes.append({"field": key, "before": copy.deepcopy(game.state.get(key)), "after": copy.deepcopy(scratch.get(key))})
+    from turn_recovery import guard
+    return {"fact": record["fact"], "changes": changes,
+            "preview_token": fingerprint([guard(game.state), {k: v for k, v in payload.items() if k != "preview_token"}])}
+
+
+@app.route("/api/campaign/correct/preview", methods=["POST"])
+def api_campaign_correct_preview():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    try:
+        return jsonify(correction_preview(request.get_json(force=True)))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
 @app.route("/api/campaign/correct", methods=["POST"])
 def api_campaign_correct():
     if not game.campaign_active:
@@ -1325,7 +1367,14 @@ def api_campaign_correct():
     if game.state.get("world") == "Bleach" and d.get("type") == "currency":
         return jsonify({"error": "Bleach does not maintain a tracked currency balance."}), 400
     try:
+        if game.busy:
+            return busy_error()
+        if d.get("preview_token") and d["preview_token"] != correction_preview(d)["preview_token"]:
+            return jsonify({"error": "The campaign or correction changed. Preview it again before applying."}), 409
         record = apply_player_correction(game.state, d.get("type"), d.get("target"), d.get("value"), d.get("explanation", ""))
+        source = d.get("source")
+        if isinstance(source, dict):
+            record["source_entry"] = {"text": str(source.get("text", ""))[:1600], "time": str(source.get("time", ""))[:100]}
         game.append("[PLAYER CORRECTION]\n" + record["fact"], "meta")
         game.autosave()
         return jsonify({"ok": True, "correction": record, "state": game.public_state(), "story": game._flush_story()})

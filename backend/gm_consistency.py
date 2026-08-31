@@ -11,6 +11,8 @@ import json
 import re
 
 from util import ai_text
+from gm_refinements import (commanded_people, connected_memory, relevant_evidence,
+                            record_settled_stories, closure_issues, REFINEMENT_RULE)
 
 
 def mapping(value):
@@ -68,6 +70,7 @@ def fact_values(state):
 
 
 def record_fact_changes(before, state):
+    record_settled_stories(before, state)
     old, current = fact_values(before), fact_values(state)
     history = rows(state.get("fact_history"))
     for (subject, field), value in current.items():
@@ -120,9 +123,10 @@ def command_contracts(state, query):
             name = text(companion["name"])
             known[name] = {**mapping(known.get(name)), **companion}
     contracts = []
+    targets = set(commanded_people(state, query))
     for name, raw in known.items():
         row = mapping(raw)
-        if not re.search(rf"(?<!\w){re.escape(str(name))}(?!\w)", query, re.I):
+        if name not in targets:
             continue
         leader = text(row.get("reports_to") or row.get("commander") or row.get("leader")).casefold()
         role = text(row.get("role")).casefold()
@@ -132,7 +136,7 @@ def command_contracts(state, query):
             contracts.append({"actor": str(name), "order": query[:900], "basis": "established command relationship",
                               "default": "Execute the stated objective and constraints faithfully; ordinary method choices must not replace the objective.",
                               "exceptions": "Only an established conflict of loyalty, actual inability, unavailable resources, or genuine ambiguity warrants refusal, delay or clarification. Record the specific evidence; no automatic twist."})
-    return contracts[:8]
+    return contracts[:16]
 
 
 def evidence_packet(state, query="", payload=None):
@@ -145,7 +149,8 @@ def evidence_packet(state, query="", payload=None):
         evidence.append({"id": "scene:" + ref_id(name, state.get("location")), "kind": "witness",
                          "actor": name, "fact": "Present in the live scene; perceives observable events only, not concealed thoughts or abilities."})
     memories = mapping(state.get("npc_memories"))
-    selected = sorted(memories, key=lambda name: (str(name).casefold() not in query.casefold(), str(name) not in present, str(name)))
+    connected = connected_memory(state, query)
+    selected = sorted(memories, key=lambda name: (str(name).casefold() not in query.casefold(), name not in connected["names"], str(name) not in present, str(name)))
     for name in selected[:8]:
         knowledge = mapping(mapping(memories[name]).get("knowledge"))
         for field in ("loyalties", "limitations", "injuries", "conflicting_orders"):
@@ -218,20 +223,28 @@ def prepare_request(state, payload):
         query = f"{text(packet['thread'])}: {query}"
     packet["turn_evidence"] = evidence_packet(state, query, packet)
     packet["command_contracts"] = command_contracts(state, query)
+    packet["connected_memories"] = connected_memory(state, query)
+    packet["continuity_guidance"] = REFINEMENT_RULE
+    if re.search(r"\b(?:her|him|them)\b", query, re.I) and not packet["command_contracts"]:
+        packet["reference_resolution"] = "ambiguous unless the current conversation clearly identifies the referent; do not guess"
     schema = mapping(packet.get("schema"))
     if isinstance(schema.get("causal_outcome"), dict):
         for kind in ("reactions", "complications"):
             for row in rows(schema["causal_outcome"].get(kind)):
                 if isinstance(row, dict):
                     row["evidence_refs"] = ["exact applicable ID from turn_evidence"]
+                    row["basis_fact"] = "the specific observable or remembered fact supporting this response, not merely an unrelated citation"
     if isinstance(schema.get("updates"), list):
         for row in schema["updates"]:
             if isinstance(row, dict):
                 row.update(significance="routine|milestone|decision", routine_group="same activity key for routine progress, otherwise empty")
     if packet["command_contracts"]:
-        schema["command_outcomes"] = [{"actor": "commanded subordinate", "status": "obeyed|in_progress|blocked|refused|deviated", "evidence_refs": []}]
+        schema["command_outcomes"] = [{"actor": "commanded subordinate", "status": "obeyed|in_progress|blocked|refused|deviated", "basis_fact": "specific evidence for any obstacle or refusal", "evidence_refs": []}]
+    schema["reopened_threads"] = [{"name": "exact previously settled problem, only if genuinely reopened", "cause": "new established cause", "evidence_refs": []}]
     if schema:
         packet["schema"] = schema
+    from chapter_recaps import prepare_chapter_request
+    prepare_chapter_request(state, packet)
     if "skip" in text(packet.get("task")) or packet.get("requested_duration"):
         packet["narrative_pacing"] = pacing_packet(state, packet)
     return packet
@@ -271,7 +284,9 @@ def semantic_issues(state, data, payload=None):
                     issues.append(f"{actor}'s prose refuses the order while command_outcomes says compliance. Make the settled outcome consistent.")
                 if outcome.get("status") in {"blocked", "refused", "deviated"}:
                     refs = [evidence.get(ref) for ref in rows(outcome.get("evidence_refs")) if isinstance(ref, str)]
-                    if not any(ref and ref.get("kind") != "witness" and (not ref.get("actor") or text(ref.get("actor")).casefold() == actor.casefold()) for ref in refs):
+                    applicable = [ref for ref in refs if ref and ref.get("kind") != "witness" and (not ref.get("actor") or text(ref.get("actor")).casefold() == actor.casefold())]
+                    supported_outcome = {"cause": command.get("order", ""), **outcome}
+                    if not applicable or not relevant_evidence(supported_outcome, applicable, actor):
                         issues.append(f"{actor} has an established command relationship but refuses or changes the order without applicable evidence. Preserve the player's objective and constraints; do not invent disobedience.")
         for kind in ("reactions", "complications"):
             for row in rows(mapping(data.get("causal_outcome")).get(kind)):
@@ -280,7 +295,7 @@ def semantic_issues(state, data, payload=None):
                 actor = text(row.get("actor") or row.get("who"))
                 refs = rows(row.get("evidence_refs"))
                 supplied = [evidence[ref] for ref in refs if isinstance(ref, str) and ref in evidence]
-                valid = bool(supplied) and len(supplied) == len(refs)
+                valid = bool(supplied) and len(supplied) == len(refs) and relevant_evidence(row, supplied, actor)
                 if kind == "reactions":
                     valid = valid and any(text(ref.get("actor")).casefold() == actor.casefold() for ref in supplied)
                     from knowledge import concealed_player_facts
@@ -341,6 +356,7 @@ def semantic_issues(state, data, payload=None):
     for name in claimed:
         if name.strip().casefold() not in recorded:
             issues.append(f"The prose awards {name.strip()} without a matching recorded skill and mechanics.")
+    issues.extend(closure_issues(state, data, evidence))
     return list(dict.fromkeys(issues))[:8]
 
 

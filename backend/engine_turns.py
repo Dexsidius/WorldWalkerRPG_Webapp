@@ -290,8 +290,12 @@ class TurnsMixin:
             shift += int(round((tuning.get("combat_danger", 1.0) - 1.0) * 10))
         low, high = clamp(int(low) + shift, 1, 100), clamp(int(high) + shift, 1, 100)
         if low > high: low, high = high, low
-        difficulty = random.randint(low, high)
-        raw = clamp(int(manual_roll), 1, 100) if manual_roll is not None else random.randint(1, 100)
+        from turn_recovery import stage
+        saved_roll = stage(self, "dice", {"assessment": assessment, "manual": manual_roll, "range": [low, high]})
+        if "difficulty" not in saved_roll:
+            saved_roll["difficulty"] = random.randint(low, high)
+            saved_roll["raw"] = clamp(int(manual_roll), 1, 100) if manual_roll is not None else random.randint(1, 100)
+        difficulty, raw = saved_roll["difficulty"], saved_roll["raw"]
         breakthrough = raw >= 99
         lucky_bonus = 15 if breakthrough else 0
         total = raw + stat_bonus + sb + tb + situational + class_bonus + lucky_bonus
@@ -782,7 +786,9 @@ Return ONLY valid JSON."""
             notifications = self.notify(before, self.state, data.get("events", []))
             if not is_opening:
                 self.history.append({"turn": self.state["turn"], "action": pending_action, "time": datetime.now().isoformat(timespec="seconds")})
-                chapter = update_chapter_memory(before, self.state, pending_action, data.get("narrative", ""))
+                from turn_recovery import remember_commands
+                remember_commands(self.state, data)
+                chapter = update_chapter_memory(before, self.state, pending_action, data.get("narrative", ""), data.get("chapter_recap"))
                 if chapter:
                     self.append(f"[CHAPTER RECORDED]\n{chapter['title']} is now available in Journal → Chapters.", "meta")
                 consolidate_long_campaign_memory(self.state)

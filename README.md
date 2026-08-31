@@ -6,7 +6,16 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.45.1** (schema 20).
+Current app/save version: **3.46.0** (schema 20).
+
+Version 3.46.0 adds concise narrative chapter recaps, connected people/place/promise
+retrieval, group and unambiguous follow-up commands, relevant-evidence checks, and
+protection for settled stories. Failed turns retain dice and reusable drafts; repaired
+responses are checked again before application. Chronicle entries offer **Correct this**
+with a preview before any change. Old saves receive the same rules and a compact chapter
+display without discarding their original continuity record. Chapter prose rides on the
+existing turn request when due, with a local extractive fallback; no separate recap call
+is needed in normal gameplay. Local multi-year regression scenarios cover all nine worlds.
 
 Version 3.45.1 adds **More → NPC Chat** to the mobile layout, opening the existing
 Chats & Contacts screen without changing desktop navigation or chat behavior.

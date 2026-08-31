@@ -450,14 +450,15 @@ def apply_player_correction(state, correction_type, target, value, explanation="
         except (TypeError, ValueError): raise ValueError("That correction needs a number.")
         if kind == "currency": state.setdefault("currency", {})["amount"] = number
         else: state[kind] = min(number, int(state.get(kind + "_max", number) or number))
-        applied = f"{kind.title()} is {number}."
+        applied = f"{kind.title()} is {state.get(kind) if kind != 'currency' else number}."
     elif kind == "quest_status":
         quest = next((q for q in state.get("quests", []) if isinstance(q, dict) and ai_text(q.get("name")).lower() == target.lower()), None)
         if not quest: raise ValueError("No active quest with that exact name was found.")
         quest["status"] = value; applied = f"Quest {quest['name']} is {value}."
     elif kind == "skill":
         if not target: raise ValueError("Enter the skill name in Target.")
-        state.setdefault("skills", {})[target] = {"description": value}
+        previous = state.setdefault("skills", {}).get(target)
+        state["skills"][target] = {**(previous if isinstance(previous, dict) else {}), "description": value, "effect": value}
         applied = f"{target}: {value}"
     else:
         applied = value if not target else f"{target}: {value}"

@@ -127,6 +127,7 @@ APP_OWNED = {
     "capability_profile", "ability_registry", "progression_calibration", "npc_continuity",
     "encounter_state", "story_threads", "scenario_memory", "world_milestones", "resolution_ledger", "simulation_core_version", "world_activity",
     "last_failed_turn", "recovery_timeline", "last_combat", "standing_order_state", "memory_tiers",
+    "settled_stories", "last_command_context",
     "legacy_trophies", "dismissed_trophy_ids", "downtime_surprise_state", "message_delivery_state",
     "companion_autonomy", "npc_development", "ability_evolution", "world_downtime_cycles", "prompt_budget_log",
 }

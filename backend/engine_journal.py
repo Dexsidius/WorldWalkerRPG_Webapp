@@ -250,7 +250,7 @@ class JournalMixin:
             "last_lore_context": self.last_lore_context, "validation_log": self.state.get("validation_log", [])[-30:],
             "continuity": self.state.get("continuity_ledger", {}), "system_log": self.system_log[-100:],
             "world_pack_id": self.state.get("world_pack_id", "builtin"), "last_autosave": self.state.get("last_autosave", ""),
-            "turn_recovery": {"last_failed": copy.deepcopy(self.state.get("last_failed_turn", {})),
+            "turn_recovery": {"last_failed": {k: copy.deepcopy(v) for k, v in self.state.get("last_failed_turn", {}).items() if k != "work"},
                               "timeline": copy.deepcopy((self.state.get("recovery_timeline") or [])[-12:])},
             "active_scenario": copy.deepcopy((self.state.get("scenario_memory") or {}).get("active", {})),
             "recent_milestones": copy.deepcopy((self.state.get("world_milestones") or [])[-12:]),
@@ -269,6 +269,10 @@ class JournalMixin:
 
     def public_state(self):
         s = copy.deepcopy(self.state)
+        from chapter_recaps import chapter_view
+        s["chapter_summaries"] = [chapter_view(row, s.get("name", "")) for row in s.get("chapter_summaries", []) if isinstance(row, dict)]
+        if isinstance(s.get("last_failed_turn"), dict):
+            s["last_failed_turn"].pop("work", None)
         # Governance bookkeeping powers narrative reports and map changes,
         # but is intentionally not a visible management dashboard.
         s.pop("polity_state", None)

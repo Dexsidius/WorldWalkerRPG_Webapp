@@ -638,6 +638,8 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
             before = copy.deepcopy(self.state)
             apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="side_chat")
             record_fact_changes(before, self.state)
+            from turn_recovery import remember_commands
+            remember_commands(self.state, data)
             reply = data.get("reply", "").strip()
             if reply:
                 sender = data.get("sender") or thread

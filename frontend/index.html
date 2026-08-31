@@ -21,7 +21,7 @@
   #asset-recovery p{margin:0 0 18px;color:#c4cfdf}
   #asset-recovery button{min-height:48px;padding:10px 22px;border:1px solid #79c9db;border-radius:9px;background:#173648;color:#fff;font:700 14px system-ui,-apple-system,sans-serif}
 </style>
-<link id="app-stylesheet" rel="stylesheet" href="/css/style.css?v=3.45.1"
+<link id="app-stylesheet" rel="stylesheet" href="/css/style.css?v=3.46.0"
       onload="document.documentElement.classList.remove('assets-missing')"
       onerror="document.documentElement.classList.add('assets-missing')" />
 </head>
@@ -1130,6 +1130,11 @@
   </div>
 </div>
 
+<div id="turn-recovery-notice" class="turn-recovery-notice" role="status" hidden>
+  <span>Your last action is saved for retry.</span>
+  <button type="button" id="btn-inline-retry">Retry saved action</button>
+</div>
+
 <div class="modal-backdrop" id="modal-chapter-recap">
   <div class="modal recap-modal">
     <div class="recap-frame">
@@ -1138,7 +1143,7 @@
       <div id="recap-title" class="recap-title">Chapter 1</div>
       <div id="recap-timespan" class="recap-timespan"></div>
       <p id="recap-summary" class="recap-summary"></p>
-      <div class="recap-columns">
+      <div class="recap-columns" hidden>
         <div>
           <div class="recap-label">Key Decisions</div>
           <ul id="recap-decisions" class="recap-list"></ul>
@@ -1249,6 +1254,6 @@
 <audio id="snd-naruto_death" src="/assets/sounds/naruto_death.mp3" preload="auto"></audio>
 <audio id="music-player" preload="metadata"></audio>
 
-<script src="/js/app.js?v=3.45.1"></script>
+<script src="/js/app.js?v=3.46.0"></script>
 </body>
 </html>
