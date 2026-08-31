@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.46.0"
+APP_VERSION = "3.47.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1501,6 +1501,7 @@ BASE_STATE = {
     # real established roster (see MAJOR_CHARACTER_STARTS) seed this at
     # creation; the GM keeps it updated as membership actually changes.
     "faction_rosters":{},
+    "organizations":{}, "organization_lives":{},
     "jjk_system":{},
     "known_recipes":[],"training_log":[],"combat":{},"danger_scenario":{},"active_encounters":[],"hidden_quests":[],"quest_archive":[],"achievements":[],"overgeared_system":{},"solo_system":{},"world_depth":{},"world_clock_minutes":480,"location_details":{},"travel_history":[],"loot_history":[],"ability_progress":{},"contacts":{},"chat_threads":{},"unread_chats":[],"group_chats":{},"time_mode":"moment","queued_actions":[],"standing_orders":[],"standing_intents":[],"time_skip_history":[],"current_activity":None,"calendar":{"day":1,"month":1,"year":1,"hour":8,"minute":0},"scheduled_events":[],
     # A regularly-recurring income or expense (a job, a shop's take, rent,

@@ -6,7 +6,17 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.46.0** (schema 20).
+Current app/save version: **3.47.0** (schema 20).
+
+Version 3.47.0 replaces Party with persistent world-native group rosters: crew,
+Marine squad, shinobi organization, guild, division and other appropriate labels.
+Members remain listed while away, with positions and same-world combat ratings
+(estimates are labeled). Narrative events record agreements, recruitment, departure,
+command chains, family, mentors and accepted organizational succession. Ongoing NPC
+training and aging are calculated locally from elapsed time and their own activities,
+not the player's power. Succession requires actual death or explicit retirement and
+never replaces the player's character. Old saves migrate without starting again.
+No separate model call is added; bounded group context uses the existing GM request.
 
 Version 3.46.0 adds concise narrative chapter recaps, connected people/place/promise
 retrieval, group and unambiguous follow-up commands, relevant-evidence checks, and

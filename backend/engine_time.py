@@ -1844,13 +1844,15 @@ class TimeSkipMixin:
                     self.ensure_contact(c.get("name"), c.get("kind", "person"), c)
                 else:
                     self.ensure_contact(str(c))
+            from organizations import process_organizations
+            organization_events = process_organizations(before, self.state, data, elapsed_minutes)
             autonomy_events = advance_companion_autonomy(self.state, elapsed_minutes)
             npc_growth_events = advance_npc_development(self.state, elapsed_minutes)
             downtime_events = world_downtime_events(self.state, elapsed_minutes, context.get("actions", []))
             from gm_consistency import coalesce_routine_updates
             updates = coalesce_routine_updates(data.get("updates", []))
             updates = prioritize_updates(
-                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events]
+                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events, *organization_events]
                  if isinstance(u, dict) and str(u.get("narrative", "")).strip()],
                 self.simulation_mode(),
             )

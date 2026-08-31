@@ -8,7 +8,7 @@ def guard(state):
             "hp", "hp_max", "resource", "resource_max", "stats", "skills", "titles", "inventory", "currency",
             "conditions", "combat", "special", "world_systems", "class_profile", "npc_memories", "contacts",
             "chat_threads", "quests", "relationships", "companions", "affiliations", "standing_orders", "queued_actions",
-            "authoritative_corrections", "portrait_identity", "chapter_buffer", "chapter_summaries", "alive")
+            "authoritative_corrections", "portrait_identity", "chapter_buffer", "chapter_summaries", "alive", "organizations", "organization_lives")
     return fingerprint({key: state.get(key) for key in keys})
 
 

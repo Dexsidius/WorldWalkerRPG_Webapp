@@ -1,6 +1,18 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.47.0": {
+        "title": "Crews, Command Chains & Lasting Legacies",
+        "summary": "World-specific full rosters, narrative membership, independent NPC development and agreed succession. Existing campaigns benefit without restarting.",
+        "highlights": [
+            {"title": "Your whole group, wherever they are", "example": "Pirate Crew, Marine Squad, Shinobi Organization and other world-native rosters show the group's name, members, positions and combat power—even when a member is away. Estimates are clearly marked."},
+            {"title": "Commands follow real authority", "example": "A medic who reports to your deputy receives your order through that chain; an independent ally does not become a subordinate just because they are friendly."},
+            {"title": "Members develop independently", "example": "A crewmate practicing a known combat discipline improves during a long voyage from their own stats, time and mentor. Studying medicine builds expertise without inflating combat power."},
+            {"title": "Recruitment and departure mean something", "example": "An invited navigator stays an applicant until they agree to join. Recruitment terms and reasons for departure remain in their record; leaving the current scene does not remove membership."},
+            {"title": "Family, apprentices and succession", "example": "Children age over elapsed campaign years, mentors and family ties are remembered, and an accepted successor takes over after actual death or voluntary retirement—not an automatic character switch."},
+            {"title": "Works with existing campaigns", "example": "Established affiliations and rosters migrate automatically. The phone's More menu opens the same full group roster; NPC calculations do not require an extra AI request."},
+        ],
+    },
     "3.46.0": {
         "title": "Better Memories, Faithful Commands & Short Chapters",
         "summary": "Short narrative recaps, more relevant GM context, safer retries, and corrections directly from the Chronicle. Existing campaigns benefit too.",

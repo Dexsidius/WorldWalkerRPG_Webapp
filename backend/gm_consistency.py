@@ -114,8 +114,11 @@ def decision_profiles(state, names):
 
 def command_contracts(state, query):
     """Use established command relationships, never mere friendship or power."""
-    if not re.search(r"\b(?:order|command|instruct|tell|direct|assign|have)\b|(?:^|:)\s*(?:please\s+)?(?:deliver|guard|escort|patrol|protect|carry|report)\b", query, re.I):
+    if not re.search(r"\b(?:order|command|instruct|tell|direct|assign|have|ask)\b|(?:^|:)\s*(?:please\s+)?(?:deliver|guard|escort|patrol|protect|carry|report)\b", query, re.I):
         return []
+    from organizations import organization_commands, ensure_organizations
+    organized = organization_commands(state, query)
+    managed = {name for group in ensure_organizations(state).values() if isinstance(group, dict) for name in mapping(group.get("members"))}
     player = text(state.get("name")).casefold()
     known = copy.deepcopy(mapping(state.get("npc_memories")))
     for companion in rows(state.get("companions")):
@@ -126,7 +129,7 @@ def command_contracts(state, query):
     targets = set(commanded_people(state, query))
     for name, raw in known.items():
         row = mapping(raw)
-        if name not in targets:
+        if name not in targets or name in managed:
             continue
         leader = text(row.get("reports_to") or row.get("commander") or row.get("leader")).casefold()
         role = text(row.get("role")).casefold()
@@ -136,7 +139,7 @@ def command_contracts(state, query):
             contracts.append({"actor": str(name), "order": query[:900], "basis": "established command relationship",
                               "default": "Execute the stated objective and constraints faithfully; ordinary method choices must not replace the objective.",
                               "exceptions": "Only an established conflict of loyalty, actual inability, unavailable resources, or genuine ambiguity warrants refusal, delay or clarification. Record the specific evidence; no automatic twist."})
-    return contracts[:16]
+    return list({row["actor"]: row for row in [*contracts, *organized]}.values())[:16]
 
 
 def evidence_packet(state, query="", payload=None):
@@ -224,10 +227,14 @@ def prepare_request(state, payload):
     packet["turn_evidence"] = evidence_packet(state, query, packet)
     packet["command_contracts"] = command_contracts(state, query)
     packet["connected_memories"] = connected_memory(state, query)
-    packet["continuity_guidance"] = REFINEMENT_RULE
+    from organizations import organization_context, ORGANIZATION_RULE
+    packet["organization_context"] = organization_context(state, query)
+    packet["continuity_guidance"] = REFINEMENT_RULE + ORGANIZATION_RULE
     if re.search(r"\b(?:her|him|them)\b", query, re.I) and not packet["command_contracts"]:
         packet["reference_resolution"] = "ambiguous unless the current conversation clearly identifies the referent; do not guess"
     schema = mapping(packet.get("schema"))
+    schema["organization_updates"] = [{"group": "established group name", "event": "establish|invite|join|position|leave|retire|expel|death|away|return|development|life|birth|succession_plan", "name": "person", "reason": "actual narrative cause", "accepted": "true only after agreement", "position": "world-appropriate role", "reports_to": "recognized superior", "unit": "existing unit", "activity": "for development: established practice", "discipline": "actual world stat, combat or noncombat specialty", "mentor": "known mentor or empty", "rate": "routine|focused|exceptional", "method": "established acceleration if exceptional"}]
+    schema["organization_updates"][0].update(kind="crew|marine|squad|organization|guild|division|clan|team|nation|company", leader="recognized leader, for establishment or leadership change", independent="true only for an independent ally", terms="agreed recruitment terms", loyalty_basis="established reason for loyalty", parents=["known parent"], aging_mode="mortal|ageless|immortal|spiritual|arrested", maturity_age="only when established", active="false to end ongoing development")
     if isinstance(schema.get("causal_outcome"), dict):
         for kind in ("reactions", "complications"):
             for row in rows(schema["causal_outcome"].get(kind)):
@@ -265,7 +272,8 @@ def semantic_issues(state, data, payload=None):
     """High-confidence structural/semantic contradictions, not keyword grading."""
     payload = mapping(payload)
     patch = mapping(data.get("state_patch"))
-    issues = []
+    from organizations import organization_issues
+    issues = organization_issues(state, data)
     evidence = {row["id"]: row for row in rows(payload.get("turn_evidence")) if isinstance(row, dict) and row.get("id")}
     # Legacy callers without a prepared evidence contract retain compatibility.
     if "turn_evidence" in payload:

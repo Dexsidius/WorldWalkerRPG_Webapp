@@ -3284,7 +3284,8 @@ class WorldwalkerV260Tests(unittest.TestCase):
         rules = game.gm_rules()
         self.assertIn("state_patch.faction_rosters", rules)
         self.assertIn("invented substitute", rules)
-        self.assertIn("never narrate a group's membership in a way that contradicts", rules)
+        self.assertIn("Never invent membership or remove someone for being elsewhere", rules)
+        self.assertIn("emit organization_updates", rules)
 
     def test_original_shinigami_one_year_before_start_lands_a_year_early(self):
         game = GameSession()

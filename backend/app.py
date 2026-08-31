@@ -11,6 +11,7 @@ from werkzeug.local import LocalProxy
 from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for, power_profile_for
 from release_notes import notes_for
 from chapter_recaps import chapter_view
+from organizations import roster_view
 from gm_refinements import fingerprint
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
 from game import GameSession
@@ -1245,6 +1246,7 @@ def api_panels():
         "inventory": s.get("inventory", []),
         "equipment": s.get("equipment", {}),
         "companions": s.get("companions", []),
+        "organization_roster": roster_view(s),
         "companion_combinations": s.get("companion_combinations", []),
         "titles": s.get("titles", []),
         "skills": visible_skills(s),

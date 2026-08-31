@@ -637,6 +637,8 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         with self.lock:
             before = copy.deepcopy(self.state)
             apply_guarded_patch(self.state, data.get("state_patch", {}), allow_time=False, source="side_chat")
+            from organizations import process_organizations
+            process_organizations(before, self.state, data, 0)
             record_fact_changes(before, self.state)
             from turn_recovery import remember_commands
             remember_commands(self.state, data)

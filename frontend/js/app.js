@@ -1766,6 +1766,10 @@ function animateStateChanges(previous, next) {
 }
 
 function renderState(state) {
+  const rosterLabel = state?._organization_roster?.label || "Group";
+  $$('#journal-tabs [data-tab="party"], [data-journal="party"]').forEach(button => { button.textContent = rosterLabel; });
+  const mobileRosterLabel = $('[data-mobile-open="party"] b');
+  if (mobileRosterLabel) mobileRosterLabel.textContent = rosterLabel;
   if (APP.retryRequest && APP.retryRequest.campaign !== recoveryCampaignKey(state)) APP.retryRequest = null;
   $("#turn-recovery-notice").hidden = !(state?.last_failed_turn?.route || APP.retryRequest);
   const previousState = APP.state;
@@ -4110,10 +4114,9 @@ async function openJournal(tab) {
   const panel = $("#journal-panel");
   const s = APP.state || {};
   if (tab === "party") {
-    const comp = data.companions || [];
     const combinations = data.companion_combinations || [];
     const playerSummary = s._uses_xp ? `Level ${s.level ?? 1} · ${worldIdentityLabel(s)}` : worldIdentityLabel(s);
-    const partyRows = comp.length ? comp.map((c) => `<div class="jrow"><b>${escapeHtml(c.name || "Companion")}</b><br/>${escapeHtml(c.notes || c.role || "")}</div>`).join("") : `<div class="jrow">No companions have joined you yet.</div>`;
+    const partyRows = renderOrganizationRoster(data.organization_roster || s._organization_roster || {groups: []});
     const comboRows = combinations.length ? `<h3>Combination abilities</h3>${combinations.map((combo) => `<details class="combination-card"><summary><b>${escapeHtml(combo.name)}</b><span>${escapeHtml(combo.mastery || 0)}% mastery</span></summary><p>${escapeHtml(combo.description || "A practiced shared technique.")}</p><small>${escapeHtml((combo.participants || []).join(" + "))}</small>${combo.activation ? `<p><b>Use:</b> ${escapeHtml(combo.activation)}</p>` : ""}${combo.limitation ? `<p><b>Limit:</b> ${escapeHtml(combo.limitation)}</p>` : ""}</details>`).join("")}` : "";
     panel.innerHTML = partyRows + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — ${escapeHtml(playerSummary)}</div>` + comboRows;
   } else if (tab === "search") {
@@ -4505,6 +4508,35 @@ function factionHash(name) {
   let hash = 2166136261;
   for (let i = 0; i < String(name).length; i++) { hash ^= String(name).charCodeAt(i); hash = Math.imul(hash, 16777619); }
   return hash >>> 0;
+}
+
+function renderOrganizationRoster(roster) {
+  const former = new Set(["left", "retired", "dead", "deceased", "expelled"]);
+  const memberRow = member => {
+    const power = member.power || {};
+    const facts = [member.notes, member.reason, member.terms ? `Agreement: ${compactReadable(member.terms)}` : "", member.loyalty_basis ? `Loyalty: ${compactReadable(member.loyalty_basis)}` : "", member.independent ? "Independent ally—not under your command." : "", member.mentor ? `Mentor: ${member.mentor}` : "",
+      Array.isArray(member.parents) && member.parents.length ? `Family: ${member.parents.join(", ")}` : ""].filter(Boolean);
+    return `<article class="roster-member" role="listitem">
+      <div class="roster-person"><strong>${escapeHtml(member.name)}${member.player ? ' <small>You</small>' : ''}</strong><span>${escapeHtml(member.status === "active" ? "Member" : humanLabel(member.status))}${member.age !== "" && member.age != null ? ` · Age ${escapeHtml(member.age)}` : ''}${member.stage ? ` · ${escapeHtml(member.stage)}` : ''}</span></div>
+      <div class="roster-position"><span class="roster-mobile-label">Position</span><b>${escapeHtml(member.position || "Member")}</b>${member.unit ? `<small>${escapeHtml(member.unit)}</small>` : ''}${member.reports_to ? `<small>Reports to ${escapeHtml(member.reports_to)}</small>` : ''}</div>
+      <div class="roster-power"><span class="roster-mobile-label">Combat power</span><b>${escapeHtml(power.label || "Not assessed")}</b><span>${power.score != null ? `${power.estimated ? '≈ ' : ''}${escapeHtml(power.score)} · ` : ''}${escapeHtml(power.source || "No recorded benchmark")}</span></div>
+      ${facts.length ? `<details class="roster-member-notes"><summary>Member record</summary>${facts.map(f=>`<p>${escapeHtml(f)}</p>`).join('')}</details>` : ''}
+    </article>`;
+  };
+  if (!roster.groups?.length) return `<section class="organization-roster"><h2>${escapeHtml(roster.label || "Your group")}</h2><p>No group membership is established yet. Recruit, join or form a group through the Chronicle; meeting someone alone does not add them to your roster.</p></section>`;
+  return roster.groups.map(group => {
+    const current = group.members.filter(member => !former.has(member.status) && member.status !== "candidate");
+    const previous = group.members.filter(member => former.has(member.status));
+    const candidates = group.members.filter(member => member.status === "candidate");
+    return `<section class="organization-roster"><header class="roster-heading"><span>${escapeHtml(group.type)}</span><h2>${escapeHtml(group.name)}</h2><p>${current.length} members${group.leader ? ` · Led by ${escapeHtml(group.leader)}` : ''}</p>${group.successor ? `<p>Agreed successor: ${escapeHtml(group.successor)}</p>` : ''}</header>
+      <p class="roster-caption">All members, including those away. ≈ marks estimated combat power.</p>
+      <div class="roster-column-labels" aria-hidden="true"><span>Member</span><span>Position</span><span>Combat power</span></div>
+      <div role="list" aria-label="${escapeHtml(group.name)} members">${current.map(memberRow).join('') || '<p>No current members are recorded.</p>'}</div>
+      ${candidates.length ? `<details class="roster-history"><summary>Invitations & applicants (${candidates.length})</summary><div role="list">${candidates.map(memberRow).join('')}</div></details>` : ''}
+      ${previous.length ? `<details class="roster-history"><summary>Former members & legacy (${previous.length})</summary><div role="list">${previous.map(memberRow).join('')}</div></details>` : ''}
+      ${group.history?.length ? `<details class="roster-history"><summary>Group history</summary>${group.history.slice().reverse().map(event=>`<p><b>${escapeHtml(event.name)}</b> · ${escapeHtml(humanLabel(event.event))}<br>${escapeHtml(event.reason)}</p>`).join('')}</details>` : ''}
+    </section>`;
+  }).join('');
 }
 function factionColorMap(names) {
   const colors = new Map(), used = new Set();

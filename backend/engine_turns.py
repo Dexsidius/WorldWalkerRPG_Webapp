@@ -739,6 +739,9 @@ Return ONLY valid JSON."""
             reconcile_commitments_and_consequences(
                 self.state, data, 0 if is_opening else int(context.get("elapsed_minutes", 5) or 5),
             )
+            from organizations import process_organizations
+            for organization_event in process_organizations(before, self.state, data, 0 if is_opening else int(context.get("elapsed_minutes", 5) or 5)):
+                self.append(organization_event["narrative"], "narrative")
             refresh_canon_divergence_impacts(self.state)
             refresh_scene_state(self.state, data, turn_actions)
             if not is_opening:

@@ -3339,3 +3339,30 @@ body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a
 .turn-recovery-notice { position: fixed; z-index: 150; top: max(12px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); width: min(540px, calc(100vw - 28px)); box-sizing: border-box; padding: 12px; display: flex; align-items: center; gap: 12px; background: #17242d; color: #fff2d6; border: 1px solid #ddad5a; border-radius: 8px; box-shadow: 0 4px 20px #0008; }
 .turn-recovery-notice[hidden] { display: none; }
 .turn-recovery-notice button { margin-left: auto; min-height: 44px; padding: 8px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; }
+
+/* Roster information stays in the Journal and inherits approved world skins. */
+.organization-roster { margin-bottom: 30px; color: var(--text); }
+.roster-heading { border-bottom: 2px solid var(--accent); padding-bottom: 14px; margin-bottom: 12px; }
+.roster-heading > span { color: var(--accent); font-family: var(--font-display); }
+.roster-heading h2 { margin: 6px 0; font-family: var(--font-display); overflow-wrap: anywhere; }
+.roster-heading p, .roster-caption { color: var(--sub); font-size: .9rem; line-height: 1.5; margin: 6px 0; }
+.roster-column-labels, .roster-member { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.2fr); gap: 12px; }
+.roster-column-labels { padding: 14px 10px 8px; color: var(--accent); font-size: .82rem; }
+.roster-member { padding: 14px 10px; border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
+.roster-member:nth-child(even) { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.roster-person, .roster-position, .roster-power { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.roster-person strong { font-size: 1rem; }
+.roster-person small { color: var(--accent); font-size: .8rem; }
+.roster-person > span, .roster-position small, .roster-power > span { color: var(--sub); font-size: .8rem; line-height: 1.5; }
+.roster-power b { color: var(--accent); }
+.roster-member-notes { grid-column: 1 / -1; font-size: .85rem; }
+.roster-member-notes summary, .roster-history > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; color: var(--accent); }
+.roster-member-notes p, .roster-history p { line-height: 1.6; margin: 6px 0 12px; overflow-wrap: anywhere; }
+.roster-history { margin-top: 14px; }
+.roster-mobile-label { display: none; }
+@media(max-width:640px){
+  .roster-column-labels { display: none; }
+  .roster-member { grid-template-columns: minmax(0,1fr) minmax(0,1fr); padding: 16px 4px; }
+  .roster-person { grid-column: 1 / -1; }
+  .roster-mobile-label { display: block; color: var(--sub); font-size: .75rem; }
+}

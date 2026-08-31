@@ -269,6 +269,10 @@ class JournalMixin:
 
     def public_state(self):
         s = copy.deepcopy(self.state)
+        from organizations import roster_view
+        s["_organization_roster"] = roster_view(self.state)
+        s.pop("organizations", None)
+        s.pop("organization_lives", None)
         from chapter_recaps import chapter_view
         s["chapter_summaries"] = [chapter_view(row, s.get("name", "")) for row in s.get("chapter_summaries", []) if isinstance(row, dict)]
         if isinstance(s.get("last_failed_turn"), dict):

@@ -139,8 +139,11 @@ def advance_npc_development(state, elapsed_minutes):
         return []
     registry = state.setdefault("npc_development", {})
     events = []
+    organized = {name for group in (state.get("organizations") or {}).values() if isinstance(group, dict) for name in (group.get("members") or {})}
     companions = {_name(row).casefold() for row in state.get("companions", []) if _name(row)}
     for name, memory in (state.get("npc_memories") or {}).items():
+        if name in organized:
+            continue  # organization life progression owns these NPCs; never award twice
         if not isinstance(memory, dict) or str(memory.get("status", "active")).lower() in {"dead", "deceased"}:
             continue
         goal = ai_text(memory.get("immediate_goal") or memory.get("goal") or memory.get("current_goal"))
