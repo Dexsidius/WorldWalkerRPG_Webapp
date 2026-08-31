@@ -383,6 +383,8 @@ class TurnsMixin:
         When the player confirms a lethal action, the frontend sends back the
         exact assessment it was shown so we never silently re-roll the GM's
         judgement of the danger."""
+        from naruto_tactics import require_narrative_available
+        require_narrative_available(self.state)
         register_standing_intents(self.state, [action])
         assessment = normalize_assessment_for_agency(
             self.state, action, cached_assessment or self.assess(action)

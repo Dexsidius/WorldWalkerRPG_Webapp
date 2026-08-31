@@ -36,7 +36,7 @@ class WorldwalkerV3443GMPolicyTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.47.0")
+        self.assertEqual(APP_VERSION, "3.48.0")
 
     def test_intent_parser_preserves_method_target_duration_and_standing_order(self):
         contract = parse_player_intent(

@@ -1,6 +1,18 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.48.0": {
+        "title": "Tactical Battles: Naruto & One Piece",
+        "summary": "Narrative encounters in Naruto and One Piece can now open a server-authoritative grid battle with movement, aimed techniques, transformations, status enforcement and world-specific rules.",
+        "highlights": [
+            {"title": "Move and aim on the battlefield", "example": "Move horizontally or vertically without spending your attack, choose a learned move, preview its exact affected tiles, then launch it in the chosen direction."},
+            {"title": "Naruto techniques keep their identity", "example": "Shadow Clones occupy the selected open tile, Rasengan uses its own range and effect, summons require established contracts, and named forms activate without consuming the attack action."},
+            {"title": "One Piece powers follow their rules", "example": "Devil Fruit applications, Haki, Zoan forms, Logia counters, Sea-Prism Stone, Geppo and Room: Shambles behave differently instead of becoming generic attacks."},
+            {"title": "Strength comes from the campaign", "example": "A Marine captain, bandit or canon fighter enters with strength supported by their role and established feats rather than automatically scaling to the player."},
+            {"title": "Phone-ready combat", "example": "The same board supports tap targeting, clear out-of-range feedback, readable stamina or chakra, world-specific styling, and no typed actions until the battle is resolved."},
+            {"title": "Safe outcomes and old saves", "example": "Older Haki records migrate automatically, retries cannot replay an accepted move, and battle receipts return to the Chronicle without inventing loot, bounties or news coverage."},
+        ],
+    },
     "3.47.0": {
         "title": "Crews, Command Chains & Lasting Legacies",
         "summary": "World-specific full rosters, narrative membership, independent NPC development and agreed succession. Existing campaigns benefit without restarting.",

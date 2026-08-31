@@ -3050,6 +3050,13 @@ function renderCombatPanel(s) {
   const panel = $("#combat-panel");
   const combat = s.combat || {};
   const actionInput = $("#action-input");
+  const tactical = ['Naruto','One Piece'].includes(s.world) && combat.active && s._tactical_battle_url === '/tactical-preview/designs/campaign.html';
+  actionInput.disabled = !!tactical;
+  if (tactical) {
+    panel.hidden = true;
+    window.location.replace(s._tactical_battle_url);
+    return;
+  }
   if (!combat.active) {
     panel.hidden = true;
     actionInput.placeholder = "TYPE AN ACTION HERE\nPress Enter or Add to keep it in this chat until you Advance.";
@@ -6188,7 +6195,7 @@ async function finishGameBoot() {
         tag: "system", multiplayer_scope: "local",
       }]);
     } else {
-      appendStoryEntries([{ text: "Welcome back to " + (st.state.world || "Worldwalker") + ".", tag: "system" }]);
+      appendStoryEntries(Array.isArray(st.tactical_story) && st.tactical_story.length ? st.tactical_story : [{ text: "Welcome back to " + (st.state.world || "Worldwalker") + ".", tag: "system" }]);
     }
   } else {
     appendStoryEntries([

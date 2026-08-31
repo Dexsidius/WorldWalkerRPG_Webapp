@@ -1,0 +1,10 @@
+#tiles{grid-template-columns:repeat(var(--size,8),1fr);grid-template-rows:repeat(var(--size,8),1fr)}
+#board canvas,#ground,#fx{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}#ground{z-index:2}#pieces{z-index:3}#fx{z-index:4}
+[data-design=stage] .piece{transform:none;left:calc((var(--x) + .14)*100%/var(--size));top:calc((var(--y) - .01)*100%/var(--size));width:calc(72%/var(--size));height:calc(88%/var(--size));transition:left .22s,top .22s}
+.portrait-crop svg{width:100%;height:100%;display:block}.piece .avatar{width:100%;height:100%;overflow:hidden}.inspector label{display:grid;gap:8px}.inspector select,.effect-lab select{width:100%;min-width:0}.commands button{min-height:44px}#resources{flex-wrap:wrap}#skill-detail{overflow-wrap:anywhere;max-width:100%}#identity svg,#identity img{max-height:180px;width:100%;object-fit:contain}#cutin{background:#182328;color:#f4e6ce;border:2px solid #dca765;max-width:min(90vw,500px)}#form-art svg,#form-art img{width:100%;height:260px;object-fit:contain}#form-title{overflow-wrap:anywhere}#form-art{animation:formReveal .7s ease-out}@keyframes formReveal{from{opacity:0;transform:scale(.92);filter:brightness(2)}to{opacity:1;transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){#form-art{animation:none}.piece{transition:none!important}}
+#identity{display:grid;min-width:0}#identity h3{min-width:0;overflow-wrap:anywhere}.design-bar{flex-wrap:wrap}
+body[data-world="One Piece"]{--bg:#071521;--panel:#0c1e2f;--accent:#d4a14a;--sub:#9ad9e7;--line:#385f70;background:linear-gradient(#071521,#092b3b)}
+body[data-world="One Piece"] .game-header{border-bottom:3px double #d4a14a}body[data-world="One Piece"] .board-scroll{background:#153a47}
+body[data-world="One Piece"] .primary,body[data-world="One Piece"] .form-button{border-color:#d4a14a;color:#fff3c4}
+

@@ -252,9 +252,22 @@ def release_busy():
     game.busy = False
 
 
+def tactical_feature_enabled():
+    """Production feature switch; the legacy Naruto variable remains supported."""
+    value=os.environ.get('WORLDWALKER_TACTICAL')
+    if value is None:value=os.environ.get('WORLDWALKER_NARUTO_TACTICAL','1')
+    return str(value).strip().lower() not in {'0','false','off','no'}
+
+
 def request_public_state():
     """Shared world plus the signed-in member's own character and plan."""
+    tactical_local=(tactical_feature_enabled() and
+                    game.state.get('world') in {'Naruto','One Piece'} and game.combat_active())
+    if tactical_local:
+        game.state['combat']['tactical_enabled']=True
     state = game.public_state()
+    if tactical_local:
+        state['_tactical_battle_url']='/tactical-preview/designs/campaign.html'
     room = getattr(g, "worldwalker_room", None)
     user = getattr(g, "worldwalker_user", None)
     if room and user and _multiplayer_store:
@@ -355,6 +368,10 @@ def _room_game(room_id):
 
 
 def _resolve_multiplayer_room(room_id, force=False):
+    if tactical_feature_enabled() and _multiplayer_store:
+        _, candidate=_room_game(room_id)
+        if (candidate.state.get('combat') or {}).get('tactical_enabled') and candidate.combat_active():
+            return False  # tactical ownership/timer, never the legacy text-action resolver
     if not _multiplayer_store or not _multiplayer_store.claim(room_id, force=force):
         return False
     target_game = None
@@ -462,6 +479,22 @@ def _resolve_multiplayer_room(room_id, force=False):
 def _multiplayer_timer_loop():
     while True:
         try:
+            if tactical_feature_enabled():
+                from naruto_tactical_room import tick,persist_members
+                with _multiplayer_store._connect() as db:
+                    active_ids=[r['id'] for r in db.execute("SELECT id FROM multiplayer_rooms WHERE status='active'").fetchall()]
+                for rid in active_ids:
+                    _, active_game=_room_game(rid)
+                    if not active_game.combat_active() or not (active_game.state.get('combat') or {}).get('tactical_enabled'):continue
+                    with _busy_lock:
+                        if active_game.busy:continue
+                        active_game.busy=True
+                    try:
+                        plan=_multiplayer_store.resolution_plan(rid)
+                        if tick(active_game,plan['participants']):
+                            persist_members(active_game,_multiplayer_store,rid,plan['participants'])
+                            active_game.save()
+                    finally:active_game.busy=False
             for room_id in _multiplayer_store.due_rooms():
                 _resolve_multiplayer_room(room_id, force=False)
         except Exception:
@@ -810,6 +843,7 @@ def api_campaign_opening():
 @app.route("/api/state")
 def api_state():
     return jsonify({"state": request_public_state(), "busy": game.busy, "campaign_active": game.campaign_active,
+                     "tactical_story":game.story_log[-300:] if tactical_feature_enabled() and game.state.get('world') in {'Naruto','One Piece'} and not getattr(g,'worldwalker_room',None) else [],
                      "ai_ready": game.ai_ready(), "ai_connection_status": game.settings.get("ai_connection_status", "untested"),
                      "local_mode": game.local_mode()})
 
@@ -879,6 +913,68 @@ def api_actions_remove():
         return jsonify({"queued_actions": queued})
     except Exception as e:
         return err(e, 400)
+
+
+@app.route("/api/combat/tactical", methods=["GET", "POST"])
+def api_naruto_tactical():
+    """Server-authoritative tactical endpoint for supported worlds."""
+    if not tactical_feature_enabled():
+        return jsonify({'error':'Tactical combat is disabled.'}),404
+    room=getattr(g,'worldwalker_room',None)
+    user=getattr(g,'worldwalker_user',None)
+    if room and (not user or not _multiplayer_store):
+        return jsonify({'error':'Sign in to the shared room first.'}),409
+    if not game.campaign_active or game.state.get('world') not in {'Naruto','One Piece'}:
+        return jsonify({'error':'Load a supported tactical test campaign first.'}),400
+    from tactical_combat import ensure_board, board_view, submit_naruto_action
+    if not acquire_busy(): return busy_error()
+    try:
+        participants=[]
+        if room:
+            from naruto_tactical_room import initialize,snapshot,submit,tick,persist_members
+            _multiplayer_store.status(room['id'],user['id'],heartbeat=True)
+            participants=_multiplayer_store.resolution_plan(room['id'])['participants']
+        if request.method=='GET':
+            if game.combat_active():game.state['combat']['tactical_enabled']=True
+            if not (game.state.get('combat') or {}).get('tactical_enabled'):
+                return jsonify({'enabled':False})
+            game.ensure_combat_numbers()
+            if room:
+                initialize(game,participants,room['host_user_id'])
+                if tick(game,participants):persist_members(game,_multiplayer_store,room['id'],participants)
+                return jsonify({'enabled':True,**snapshot(game,user['id'])})
+            return jsonify({'enabled':True,'world':game.state.get('world'),'board':board_view(game.state),'combat':game.state['combat'],
+                            'portrait_identity':game.state.get('portrait_identity',{})})
+        payload=request.get_json(force=True)
+        def apply():
+            if payload.get('action')=='enable':
+                if room and user['id']!=room['host_user_id']:raise ValueError('Only the host can enable this local test encounter.')
+                if not game.combat_active(): raise ValueError('Start an encounter first.')
+                game.ensure_combat_numbers()
+                game.state['combat']['tactical_enabled']=True
+                ensure_board(game.state); game.autosave()
+                if room:
+                    initialize(game,participants,room['host_user_id']);game.autosave()
+                    return {'enabled':True,**snapshot(game,user['id'])}
+                return {'world':game.state.get('world'),'combat':game.state['combat'],'board':board_view(game.state)}
+            if room:
+                result=submit(game,user['id'],payload)
+                persist_members(game,_multiplayer_store,room['id'],participants)
+                return result
+            return submit_naruto_action(game,payload)
+        return jsonify(atomic_game_call('naruto_tactical',payload,apply))
+    except Exception as e:
+        return err(e,400)
+    finally:
+        release_busy()
+
+
+@app.route('/tactical-preview/<path:filename>')
+def local_tactical_preview(filename):
+    if not tactical_feature_enabled():return jsonify({'error':'Tactical combat is disabled.'}),404
+    # Preserve the approved preview URL while serving files included in every build.
+    if filename.startswith('designs/'):filename=filename[len('designs/'):]
+    return send_from_directory(FRONTEND_DIR/'tactical',filename)
 
 
 @app.route("/api/combat/state")

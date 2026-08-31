@@ -142,6 +142,10 @@ class CombatMixin:
         if not combat.get("enemy") and combat.get("enemies"):
             legacy = [e for e in combat["enemies"] if isinstance(e, dict)]
             if legacy:
+                # Keep individuals for the tactical renderer/resolver; the
+                # aggregate remains only as a compatibility summary.
+                import copy
+                combat.setdefault("opponents", copy.deepcopy(legacy))
                 combat["enemy"] = {
                     "name": legacy[0].get("name", "Enemy") if len(legacy) == 1 else f"{legacy[0].get('name', 'Enemy')} and allies",
                     "is_group": len(legacy) > 1, "group_size": len(legacy) if len(legacy) > 1 else None,
@@ -460,7 +464,7 @@ class CombatMixin:
             # enemy total and damage instead.
             "attack_min": int(enemy["attack_min"]),
             "attack_max": int(enemy["attack_max"]),
-            "speed": max(1, int(enemy["power"] * (1.0 + speed_pct))),
+            "speed": max(1, int(enemy.get("speed", enemy["power"]) * (1.0 + speed_pct))),
             "accuracy_penalty": max(0, round(abs(accuracy_pct) * 25)),
             "damage_multiplier": clamp(power_mult, .4, 1.0),
         }
@@ -643,6 +647,8 @@ class CombatMixin:
         player vs. the single combat.enemy entity — a lone foe or a whole
         group represented as one aggregate (see gm_rules). Returns a plain
         dict describing exactly what happened — no prose, no AI call."""
+        from naruto_tactics import require_narrative_available
+        require_narrative_available(self.state)
         self.ensure_combat_numbers()
         combat = self.state["combat"]
         log_start = len(combat.get("log", []))
@@ -745,7 +751,7 @@ class CombatMixin:
         # disabling effect still consumes the character's opportunity to act.
         earned_bonus_turn = (
             not bonus_action and not player_disabling and enemy.get("alive", True)
-            and (player_speed - enemy_power) >= SPEED_GAP_THRESHOLD
+            and (player_speed - effective_enemy["speed"]) >= SPEED_GAP_THRESHOLD
         )
 
         combat["log"].extend([{"round": combat["round"], **e} for e in events])
@@ -754,7 +760,7 @@ class CombatMixin:
             return self.end_combat("victory", log_start)
 
         if earned_bonus_turn:
-            reason = f"Speed advantage: {player_speed} vs {enemy_power}"
+            reason = f"Speed advantage: {player_speed} vs {effective_enemy['speed']}"
             combat["bonus_turn_pending"] = True
             combat["bonus_turn_reason"] = reason
             combat["bonus_turn_first_action"] = action
@@ -847,7 +853,10 @@ class CombatMixin:
         mercy_shown = bool(combat.get("non_lethal") or combat.get("spare_enemy"))
         death_prevented = bool(enemy.get("death_prevented") or enemy.get("immortal") or enemy.get("cannot_die"))
         enemy_died = outcome in {"victory", "overwhelmed"} and not mercy_shown and not death_prevented
-        if outcome in {"victory", "overwhelmed"}:
+        tactical = combat.get('tactical_enabled') and self.state.get('world') in {'Naruto','One Piece'}
+        if tactical:
+            enemy_died = any(r.get('side')=='enemy' and r.get('outcome')=='killed' for r in combat.get('casualties',[]))
+        if outcome in {"victory", "overwhelmed"} and not tactical:
             if enemy_died:
                 enemy["hp"] = 0
                 enemy["alive"] = False
@@ -886,6 +895,8 @@ class CombatMixin:
         """Turn everything since the last narration into prose + a normal
         state_patch (loot, injuries, quest/XP consequences) — one AI call
         covering the whole exchange, not one per round."""
+        from naruto_tactics import require_narrative_available
+        require_narrative_available(self.state)
         combat = self.state.get("combat") or {}
         log = combat.get("log", [])
         start = combat.get("narrated_through", 0)
@@ -898,6 +909,7 @@ class CombatMixin:
         payload = {
             "task": "narrate_combat", "state": self.task_state_for_ai("combat_summary"), "combat_outcome": combat.get("outcome"),
             "mercy_shown": mercy_shown, "enemy_died": bool(combat.get("enemy_died")), "mechanical_log": pending,
+            "tactical_result": combat.get("result_receipt"),
             "schema": {"narrative": "2-6 sentences turning the mechanical log into a real combat scene — do not re-roll or contradict any result",
                        "state_patch": "loot, injuries, XP, quest/codex/companion consequences of this fight",
                        "events": "system notifications", "timeline_event": "major event or empty",
@@ -936,8 +948,8 @@ class CombatMixin:
             actor, action = row.get("actor"), row.get("action")
             if action == "attack":
                 if row.get("success") and row.get("damage"):
-                    subject = self.state.get("name", "You") if actor == "player" else enemy
-                    target = enemy if actor == "player" else self.state.get("name", "you")
+                    subject = row.get('name') or (self.state.get("name", "You") if actor == "player" else enemy)
+                    target = row.get('target') or (enemy if actor == "player" else self.state.get("name", "you"))
                     phrases.append(f"{subject} struck {target} for {row.get('damage')} damage.")
                 else:
                     phrases.append(f"{self.state.get('name', 'You') if actor == 'player' else enemy} missed the attack.")
@@ -951,6 +963,8 @@ class CombatMixin:
                 phrases.append(f"{row.get('ability') or row.get('status') or action.title()} took effect." if row.get("success", row.get("applied", True)) else f"{row.get('ability') or action.title()} failed to take hold.")
         outcome = str(combat.get("outcome") or "ongoing")
         lethal_ending = f"{enemy} was killed." if combat.get("enemy_died") else f"{enemy} was defeated but survived."
+        if combat.get('tactical_enabled'):
+            lethal_ending=' '.join(f"{r['name']} was {r['outcome']}." for r in combat.get('casualties',[]) if r.get('side')=='enemy') or 'The encounter ended.'
         endings = {"victory": lethal_ending, "overwhelmed": lethal_ending,
                    "fled": "You escaped the fight.", "defeat": "You were defeated.", "yielded": "You yielded the nonlethal bout."}
         if outcome in endings:

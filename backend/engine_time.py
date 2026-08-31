@@ -560,6 +560,8 @@ class TimeSkipMixin:
                 "reachable_actions": reachable, "deferred_actions": deferred}
 
     def assess_time_skip(self, amount, unit, orders_text, intensity, use_model=True):
+        from naruto_tactics import require_narrative_available
+        require_narrative_available(self.state)
         pre_advance_health_check(self.state, source="before_time_assessment")
         event_mode = unit == "next_event"
         if unit in {"moment", "next_event"}:
@@ -709,6 +711,8 @@ class TimeSkipMixin:
                 "time_budget": budget}
 
     def run_time_skip(self, amount, unit, orders, intensity, assessment, confirmed_lethal=False, confirmed_power_goal=False, manual_rolls=None, challenge_modes=None, challenge_resolution_mode="continue", danger_warning_acknowledged=False):
+        from naruto_tactics import require_narrative_available
+        require_narrative_available(self.state)
         assessment = assessment if isinstance(assessment, dict) else {}
         event_mode = unit == "next_event"
         if unit in {"moment", "next_event"}:

@@ -6,9 +6,9 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.47.0** (schema 20).
+Current app/save version: **3.48.0** (schema 20).
 
-Version 3.47.0 replaces Party with persistent world-native group rosters: crew,
+Version 3.48.0 replaces Party with persistent world-native group rosters: crew,
 Marine squad, shinobi organization, guild, division and other appropriate labels.
 Members remain listed while away, with positions and same-world combat ratings
 (estimates are labeled). Narrative events record agreements, recruitment, departure,
