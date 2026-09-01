@@ -6,7 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.49.0** (schema 20).
+Current app/save version: **3.50.0** (schema 20).
+
+Version 3.50.0 puts approved character portraits into conversations, rosters,
+relationships, notifications, Advisor comparisons, timeline events, major events,
+location previews, suggested interactions, and tactical turn/target controls without
+adding new panels. Unknown people use initials rather than an incorrect portrait.
 
 Version 3.49.0 presets One Piece's battle-relevant canon power library locally,
 including Devil Fruits, Haki applications, fighting styles, transformations and

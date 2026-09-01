@@ -1299,6 +1299,8 @@ body[data-world="Solo Max-Level Newbie"] .combat-enemy.defeat-transition{ animat
 .toast.world{ border-left-color:var(--sub); }
 .toast.message{ border-left-color:var(--accent2); }
 .toast.achievement{ border-left-color:var(--gold); }
+.toast:has(.person-portrait){ display:flex; align-items:center; gap:9px; padding:8px 12px 8px 8px; }
+.toast:has(.person-portrait)>span:last-child{ min-width:0; line-height:1.4; }
 
 #cinematic-banner{ position:fixed; top:0; left:50%; transform:translate(-50%,-120%); z-index:300; pointer-events:none; transition:transform .45s cubic-bezier(.2,.8,.25,1); }
 #cinematic-banner.show{ transform:translate(-50%,18px); }
@@ -1569,6 +1571,7 @@ body[data-world="Reincarnated as a Slime"] .percentile-tray{ background:radial-g
   font-size:12.5px; cursor:pointer; transition:.15s;
 }
 .chat-contacts .contact-item:hover, .chat-contacts .contact-item.active{ border-color:var(--accent2); background:rgba(var(--accent2-rgb),.1); }
+.chat-contacts .contact-item{ display:flex; align-items:center; gap:8px; padding:7px 9px; }
 .chat-contacts .unread-badge{ background:var(--danger); color:#fff; border-radius:999px; padding:1px 7px; font-size:10px; margin-left:6px; }
 .chat-thread{ display:flex; flex-direction:column; min-height:0; }
 .chat-messages{ flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:4px; }
@@ -1576,6 +1579,12 @@ body[data-world="Reincarnated as a Slime"] .percentile-tray{ background:radial-g
 .chat-msg.incoming{ align-self:flex-start; background:var(--panel-soft); border:1px solid var(--border-soft); }
 .chat-msg.outgoing{ align-self:flex-end; background:rgba(var(--accent2-rgb),.18); border:1px solid rgba(var(--accent2-rgb),.4); }
 .chat-msg .meta{ font-size:9.5px; color:var(--muted); margin-bottom:2px; }
+.chat-msg{ display:flex; align-items:flex-start; gap:8px; padding:8px 10px; }
+.chat-msg.outgoing{ flex-direction:row-reverse; }
+.chat-msg-copy{ min-width:0; flex:1; }
+.chat-msg-copy>p{ margin:0; white-space:pre-wrap; overflow-wrap:anywhere; }
+.chat-msg.outgoing .chat-msg-copy{ text-align:right; }
+.advisor-msg .chat-msg-copy{ text-align:left; }
 .chat-hint{ margin:8px 0 0; }
 .chat-input-row{ display:flex; gap:8px; margin-top:10px; }
 .chat-input-row textarea{ flex:1; }
@@ -2506,6 +2515,8 @@ body[data-world="Reincarnated as a Slime"] .quick-nav button:active, body[data-w
 .memory-row p{ margin:0 0 5px; color:var(--text); }
 .memory-row small{ color:var(--sub); text-transform:capitalize; }
 .timeline-row header{ display:flex; justify-content:space-between; gap:8px; }
+.timeline-title-with-portraits{ display:flex; align-items:center; gap:8px; min-width:0; }
+.timeline-title-with-portraits>b{ min-width:0; overflow-wrap:anywhere; }
 .canon-status{ padding:2px 6px; border:1px solid var(--border); font-size:9px; letter-spacing:.08em; text-transform:uppercase; }
 .canon-status.altered,.canon-status.delayed{ color:var(--gold); border-color:var(--accent); }
 .canon-status.impossible{ color:var(--danger); border-color:var(--danger); }
@@ -3340,6 +3351,35 @@ body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a
 .turn-recovery-notice[hidden] { display: none; }
 .turn-recovery-notice button { margin-left: auto; min-height: 44px; padding: 8px; border: 1px solid currentColor; border-radius: 5px; background: transparent; color: inherit; cursor: pointer; }
 
+/* Compact character identity. Approved art is reused without adding panels. */
+.person-portrait{ --portrait-size:38px; position:relative; display:inline-grid; place-items:center; flex:0 0 var(--portrait-size); width:var(--portrait-size); height:var(--portrait-size); overflow:hidden; border:1px solid color-mix(in srgb,var(--accent2) 56%,var(--border)); border-radius:7px; background:color-mix(in srgb,var(--panel-soft) 84%,var(--accent) 16%); color:var(--accent2); font:800 10px/1 var(--font-label); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); vertical-align:middle; }
+.person-portrait img{ width:100%; height:100%; object-fit:cover; object-position:center 22%; display:block; }
+.person-portrait-xs{ --portrait-size:30px; border-radius:5px; font-size:8px; }
+.person-portrait-sm{ --portrait-size:38px; }
+.person-portrait-md{ --portrait-size:48px; }
+.person-portrait[data-person-open]{ cursor:pointer; }
+.person-portrait[data-person-open]:hover{ border-color:var(--accent2); filter:brightness(1.08); }
+.portrait-stack{ display:inline-flex; align-items:center; min-width:0; }
+.portrait-stack .person-portrait+ .person-portrait{ margin-left:-9px; }
+.portrait-stack .person-portrait{ box-shadow:0 0 0 2px var(--panel-soft); }
+.message-preview{ display:flex; align-items:center; gap:8px; min-width:0; }
+.message-preview>span:last-child{ min-width:0; display:flex; flex-wrap:wrap; align-items:center; gap:3px; }
+.message-preview small{ flex-basis:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--sub); }
+.advisor-chart-label{ display:flex; align-items:center; gap:6px; }
+.advisor-chart-label>span{ min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.advisor-meta{ display:flex; align-items:center; gap:8px; }
+.advisor-meta .portrait-stack{ margin-left:auto; }
+.location-people{ display:flex; flex-wrap:wrap; gap:7px 10px; align-items:center; }
+.location-people>span{ display:flex; align-items:center; gap:5px; max-width:145px; }
+.location-people b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:10px; }
+.location-people>small{ color:var(--accent2); }
+.relationship-card>summary{ align-items:center; }
+.relationship-card>summary>b{ margin-right:auto; }
+.event-window-cast{ display:flex; gap:6px; margin:9px 0; }
+.event-window-cast[hidden]{ display:none; }
+.canon-cinematic .event-window-cast{ position:absolute; z-index:7; right:clamp(76px,7vw,116px); top:72px; margin:0; }
+.canon-cinematic .event-window-cast .person-portrait{ box-shadow:0 0 0 2px rgba(5,7,6,.8),0 9px 22px rgba(0,0,0,.36); }
+
 /* Roster information stays in the Journal and inherits approved world skins. */
 .organization-roster { margin-bottom: 30px; color: var(--text); }
 .roster-heading { border-bottom: 2px solid var(--accent); padding-bottom: 14px; margin-bottom: 12px; }
@@ -3351,6 +3391,8 @@ body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a
 .roster-member { padding: 14px 10px; border-bottom: 1px solid var(--border-soft); overflow-wrap: anywhere; }
 .roster-member:nth-child(even) { background: color-mix(in srgb, var(--accent) 5%, transparent); }
 .roster-person, .roster-position, .roster-power { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.roster-person{ flex-direction:row; align-items:center; }
+.roster-person-copy{ display:flex; flex-direction:column; gap:5px; min-width:0; }
 .roster-person strong { font-size: 1rem; }
 .roster-person small { color: var(--accent); font-size: .8rem; }
 .roster-person > span, .roster-position small, .roster-power > span { color: var(--sub); font-size: .8rem; line-height: 1.5; }
@@ -3365,6 +3407,13 @@ body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a
   .roster-member { grid-template-columns: minmax(0,1fr) minmax(0,1fr); padding: 16px 4px; }
   .roster-person { grid-column: 1 / -1; }
   .roster-mobile-label { display: block; color: var(--sub); font-size: .75rem; }
+}
+@media(max-width:640px){
+  .person-portrait-md{ --portrait-size:44px; }
+  .canon-cinematic .event-window-cast{ top:max(66px,env(safe-area-inset-top)); right:64px; }
+  .canon-cinematic .event-window-cast .person-portrait-md{ --portrait-size:40px; }
+  .chat-msg{ max-width:92%; }
+  .advisor-chart-row{ grid-template-columns:min(40%,145px) 1fr auto; }
 }
 
 /* Successful Haoshoku Overwhelm: pressure wave and black-red lightning cut-in. */

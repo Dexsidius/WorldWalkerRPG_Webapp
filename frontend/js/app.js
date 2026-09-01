@@ -71,6 +71,77 @@ function titleLabel(t) {
   return (t && typeof t === "object" ? compactReadable(t.name || t.title) : "") || compactReadable(t) || "Title";
 }
 
+// One compact identity resolver powers every secondary portrait surface.
+// Explicit campaign art always wins, followed by approved bundled canon art.
+// Unknown people use initials rather than a misleading generic face.
+const CANON_PORTRAIT_BY_NAME = new Map(Object.entries({
+  "monkey d luffy": "luffy_departure.webp", "luffy": "luffy_departure.webp",
+  "roronoa zoro": "zoro_shells.webp", "zoro": "zoro_shells.webp",
+  "gon freecss": "gon_departure.webp", "gon": "gon_departure.webp",
+  "kurapika": "kurapika_exam.webp", "naruto uzumaki": "naruto_graduation.webp", "naruto": "naruto_graduation.webp",
+  "yahiko": "yahiko_akatsuki.webp", "pain": "pain_birth.webp", "nagato": "pain_birth.webp",
+  "kang jinhyeok": "jinhyeok_tower.webp", "kang jinhyuk": "jinhyeok_tower.webp", "jinhyeok": "jinhyeok_tower.webp",
+  "grid": "grid_pagma.webp", "rimuru tempest": "rimuru_awakens.webp", "rimuru": "rimuru_awakens.webp",
+  "ichigo kurosaki": "ichigo_series_start.webp", "ichigo": "ichigo_series_start.webp",
+  "yuji itadori": "yuji_finger.webp", "yuji": "yuji_finger.webp", "satoru gojo": "gojo_inventory.webp", "gojo": "gojo_inventory.webp",
+  "yuta okkotsu": "yuta_enrolls.webp", "yuta": "yuta_enrolls.webp", "megumi fushiguro": "megumi_finger.webp", "megumi": "megumi_finger.webp",
+  "maki zenin": "maki_second_year.webp", "maki": "maki_second_year.webp",
+}));
+const CANON_PORTRAIT_BY_ID = {
+  luffy_departure: "luffy_departure.webp", zoro_shells: "zoro_shells.webp", gon_departure: "gon_departure.webp",
+  kurapika_exam: "kurapika_exam.webp", naruto_birth: "naruto_birth.webp", naruto_graduation: "naruto_graduation.webp",
+  yahiko_akatsuki: "yahiko_akatsuki.webp", pain_birth: "pain_birth.webp", jinhyeok_tower: "jinhyeok_tower.webp",
+  grid_pagma: "grid_pagma.webp", rimuru_awakens: "rimuru_awakens.webp", ichigo_series_start: "ichigo_series_start.webp",
+  yuji_finger: "yuji_finger.webp", gojo_inventory: "gojo_inventory.webp", yuta_enrolls: "yuta_enrolls.webp",
+  megumi_finger: "megumi_finger.webp", maki_second_year: "maki_second_year.webp",
+};
+function normalizePersonName(value) {
+  return String(value || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim();
+}
+function safePortraitUrl(value) {
+  const url = String(value || "").trim();
+  return /^\/(?:assets|portrait-cache)\//.test(url) ? url : "";
+}
+function portraitUrlForPerson(name, record = {}, state = APP.state || {}) {
+  const person = record && typeof record === "object" ? record : {};
+  const explicit = safePortraitUrl(person.portrait_url || person.portrait || person.image_url || person._portrait_image);
+  if (explicit) return explicit;
+  if (normalizePersonName(name) === normalizePersonName(state.name)) return safePortraitUrl(state._portrait_image);
+  const canonId = String(person.canon_character_id || person.canon_id || person.identity || "").trim();
+  const file = CANON_PORTRAIT_BY_ID[canonId] || CANON_PORTRAIT_BY_NAME.get(normalizePersonName(name));
+  return file ? `/assets/canon_portraits/${file}` : "";
+}
+function personInitials(name) {
+  return String(name || "?").trim().split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "?";
+}
+function personPortraitHtml(name, record = {}, options = {}) {
+  const url = portraitUrlForPerson(name, record, options.state || APP.state || {});
+  const size = options.size || "sm";
+  const classes = ["person-portrait", `person-portrait-${size}`, options.className || "", url ? "has-image" : "portrait-initials"].filter(Boolean).join(" ");
+  const content = url ? `<img src="${escapeHtml(url)}" alt="">` : `<span aria-hidden="true">${escapeHtml(personInitials(name))}</span>`;
+  const label = options.label || `${name || "Unknown person"} portrait`;
+  return `<span class="${classes}" title="${escapeHtml(name || "Unknown person")}" role="img" aria-label="${escapeHtml(label)}" data-person-open="${escapeHtml(name || "")}">${content}</span>`;
+}
+function knownPersonRecords(state = APP.state || {}) {
+  return { ...(state.contacts || {}), ...(state.npc_memories || {}) };
+}
+function mentionedPortraitsHtml(text, records = knownPersonRecords(), max = 3, size = "sm") {
+  const haystack = normalizePersonName(text);
+  if (!haystack) return "";
+  const names = new Set([...Object.keys(records || {}), ...CANON_PORTRAIT_BY_NAME.keys()]);
+  const matches = [...names].filter((name) => {
+    const normalized = normalizePersonName(name);
+    return normalized.length > 2 && (` ${haystack} `).includes(` ${normalized} `);
+  }).sort((a, b) => b.length - a.length);
+  const unique = [];
+  matches.forEach((name) => {
+    if (unique.some((existing) => normalizePersonName(existing).includes(normalizePersonName(name)) || normalizePersonName(name).includes(normalizePersonName(existing)))) return;
+    unique.push(name);
+  });
+  const shown = unique.slice(0, max);
+  return shown.length ? `<span class="portrait-stack" aria-label="People involved">${shown.map((name) => personPortraitHtml(name, records[name] || {}, { size })).join("")}</span>` : "";
+}
+
 // ---------------------------------------------------------------------------
 // API
 // ---------------------------------------------------------------------------
@@ -472,11 +543,12 @@ async function openMusicFolder() {
 // ---------------------------------------------------------------------------
 // Toasts + cinematic banner + screen fx
 // ---------------------------------------------------------------------------
-function showToast(message, tag) {
+function showToast(message, tag, personName = "", personRecord = {}) {
   const stack = $("#toast-stack");
   const el = document.createElement("div");
   el.className = "toast " + (tag || "system");
-  el.textContent = message;
+  if (personName) el.innerHTML = `${personPortraitHtml(personName, personRecord, { size: "sm" })}<span>${escapeHtml(message)}</span>`;
+  else el.textContent = message;
   stack.appendChild(el);
   setTimeout(() => el.remove(), 5100);
 }
@@ -540,11 +612,16 @@ function handleNotifications(notifications) {
   showWorldSystemNotice(notifications);
   (notifications || []).forEach((n) => {
     const shownMessage = n.display_message || n.message;
+    const records = knownPersonRecords();
+    const explicitlyNamed = n.person || n.character || n.sender || n.npc || "";
+    const inferredName = explicitlyNamed || Object.keys(records).find((name) => normalizePersonName(shownMessage).includes(normalizePersonName(name))) || "";
+    const personName = typeof inferredName === "object" ? (inferredName.name || inferredName.display_name || "") : inferredName;
+    const personRecord = personName ? (records[personName] || {}) : {};
     // Reserve the large cinematic interruption for genuinely major changes.
     // Routine stat, XP, and quest updates remain readable in the Chronicle.
     const majorCinematics = new Set(["level_up", "position", "danger", "damage", "achievement", "canon_event"]);
     const toastCinematics = new Set([...majorCinematics, "notify"]);
-    if (toastCinematics.has(n.cinematic)) showToast(shownMessage, n.cinematic || n.tag);
+    if (toastCinematics.has(n.cinematic)) showToast(shownMessage, n.cinematic || n.tag, personName, personRecord);
     if (majorCinematics.has(n.cinematic)) {
       showCinematic(n.cinematic, shownMessage, n.world_system);
       if (n.cinematic === "level_up") { playSfx("level_up"); triggerAbilityEffect("growth", shownMessage); }
@@ -1952,7 +2029,8 @@ function renderState(state) {
     btn.type = "button";
     btn.className = "suggestion-card";
     btn.setAttribute("aria-label", a);
-    btn.innerHTML = `<span class="suggestion-card-icon" aria-hidden="true">${suggestionIcon(a, index)}</span><span>${escapeHtml(a)}</span>`;
+    const people = mentionedPortraitsHtml(a, knownPersonRecords(s), 1, "xs");
+    btn.innerHTML = `${people || `<span class="suggestion-card-icon" aria-hidden="true">${suggestionIcon(a, index)}</span>`}<span>${escapeHtml(a)}</span>`;
     btn.addEventListener("click", () => {
       const input = $("#action-input");
       const current = input.value.trim();
@@ -2244,7 +2322,8 @@ function renderMessagesPanel(s) {
     rows.push({ name, last, isUnread, time: last.turn || 0 });
   });
   rows.sort((a, b) => b.time - a.time);
-  const items = rows.slice(0, 6).map((r) => `<b>${escapeHtml(r.name)}</b>${r.isUnread ? '<span class="unread-badge">•</span>' : ""}: ${escapeHtml((r.last.text || "").slice(0, 60))}`);
+  const contacts = s.contacts || {};
+  const items = rows.slice(0, 6).map((r) => `<span class="message-preview">${personPortraitHtml(r.name, contacts[r.name] || {}, { size: "xs" })}<span><b>${escapeHtml(r.name)}</b>${r.isUnread ? '<span class="unread-badge">•</span>' : ""}<small>${escapeHtml((r.last.text || "").slice(0, 60))}</small></span></span>`);
   renderTagListHtml("#messages-list", items, "No messages yet.");
 }
 
@@ -2746,8 +2825,12 @@ function openEventNotice(result) {
     ? "COMBAT HAS BEGUN"
     : isCanon ? "THE TIMELINE HAS REACHED THIS MOMENT" : "THE SIMULATION HAS STOPPED HERE";
   $("#event-window-heading").textContent = title;
-  $("#event-window-context").textContent = result.interruption_context || result.interruption_reason ||
+  const contextText = result.interruption_context || result.interruption_reason ||
     "An important event has reached your character's current place in the story.";
+  $("#event-window-context").textContent = contextText;
+  const cast = $("#event-window-cast");
+  cast.innerHTML = mentionedPortraitsHtml(`${title} ${contextText}`, knownPersonRecords(result.state || APP.state || {}), 3, "md");
+  cast.hidden = !cast.innerHTML;
   const meta = $("#event-window-meta");
   const eventDay = Number.isFinite(Number(notice.canon_day)) ? Number(notice.canon_day) : Number(result.state?.canon_day);
   const dateLabel = Number.isFinite(eventDay)
@@ -3882,9 +3965,11 @@ async function refreshChat() {
   if (!names.length) { list.innerHTML = '<p class="hint">No contacts yet. Meet recurring characters in the story to unlock chats.</p>'; return; }
   names.forEach((name) => {
     const unread = (data.unread || []).filter((u) => u.thread === name).length;
+    const contact = (data.contacts || {})[name] || {};
     const div = document.createElement("div");
     div.className = "contact-item" + (name === APP.activeChatThread ? " active" : "");
-    div.innerHTML = `${escapeHtml(name)}${unread ? `<span class="unread-badge">${unread}</span>` : ""}`;
+    div.dataset.contactName = name;
+    div.innerHTML = `${personPortraitHtml(name, contact, { size: "sm" })}<span>${escapeHtml(name)}</span>${unread ? `<span class="unread-badge">${unread}</span>` : ""}`;
     div.addEventListener("click", () => renderChatThread(name, data));
     list.appendChild(div);
   });
@@ -3894,10 +3979,16 @@ async function refreshChat() {
 
 function renderChatThread(name, data) {
   APP.activeChatThread = name;
-  $$(".chat-contacts .contact-item").forEach((el) => el.classList.toggle("active", el.textContent.startsWith(name)));
+  $$(".chat-contacts .contact-item").forEach((el) => el.classList.toggle("active", el.dataset.contactName === name));
   const msgs = (data.chat_threads || {})[name] || [];
+  const contact = (data.contacts || {})[name] || {};
   const box = $("#chat-messages");
-  box.innerHTML = msgs.map((m) => `<div class="chat-msg ${m.direction}"><div class="meta">${escapeHtml(m.direction === "outgoing" ? "You" : m.sender)} · ${escapeHtml(m.time || "")}</div>${escapeHtml(m.text)}</div>`).join("");
+  box.innerHTML = msgs.map((m) => {
+    const outgoing = m.direction === "outgoing";
+    const sender = outgoing ? (APP.state?.name || "You") : (m.sender || name);
+    const record = outgoing ? (APP.state || {}) : contact;
+    return `<div class="chat-msg ${m.direction}">${personPortraitHtml(sender, record, { size: "sm", className: "chat-avatar" })}<div class="chat-msg-copy"><div class="meta">${escapeHtml(outgoing ? "You" : sender)} · ${escapeHtml(m.time || "")}</div><p>${escapeHtml(m.text)}</p></div></div>`;
+  }).join("");
   box.scrollTop = box.scrollHeight;
   apiPost("/api/chats/read", { thread: name }).catch(() => {});
 }
@@ -3914,7 +4005,7 @@ $("#btn-chat-send").addEventListener("click", async () => {
   // call and can take a few seconds, so the conversation shouldn't look
   // frozen while it's in flight.
   const box = $("#chat-messages");
-  box.insertAdjacentHTML("beforeend", `<div class="chat-msg outgoing"><div class="meta">You</div>${escapeHtml(text)}</div>`);
+  box.insertAdjacentHTML("beforeend", `<div class="chat-msg outgoing">${personPortraitHtml(APP.state?.name || "You", APP.state || {}, { size: "sm", className: "chat-avatar" })}<div class="chat-msg-copy"><div class="meta">You</div><p>${escapeHtml(text)}</p></div></div>`);
   box.scrollTop = box.scrollHeight;
   input.value = "";
   try {
@@ -4029,7 +4120,7 @@ function renderAdvisorChart(chart) {
     const pct = Math.max(2, Math.abs(it.value) / max * 100);
     const valueLabel = Number.isFinite(it.value) ? (Math.abs(it.value) >= 1000 ? it.value.toLocaleString() : String(it.value)) : "";
     return `<div class="advisor-chart-row">
-      <div class="advisor-chart-label">${escapeHtml(it.label)}</div>
+      <div class="advisor-chart-label">${personPortraitHtml(it.label, it, { size: "xs" })}<span>${escapeHtml(it.label)}</span></div>
       <div class="advisor-chart-track"><div class="advisor-chart-bar" style="width:${pct}%"></div></div>
       <div class="advisor-chart-value">${escapeHtml(valueLabel)}</div>
     </div>`;
@@ -4042,17 +4133,18 @@ function renderAdvisorChart(chart) {
 
 function renderAdvisorMessage(m) {
   if (m.role === "player") {
-    return `<div class="chat-msg outgoing"><div class="meta">You</div>${escapeHtml(m.text)}</div>`;
+    return `<div class="chat-msg outgoing">${personPortraitHtml(APP.state?.name || "You", APP.state || {}, { size: "sm", className: "chat-avatar" })}<div class="chat-msg-copy"><div class="meta">You</div><p>${escapeHtml(m.text)}</p></div></div>`;
   }
   const points = (m.points || []).map((p) => `<li>${escapeHtml(p)}</li>`).join("");
   const countdown = m.canon_countdown?.label ? `<div class="advisor-countdown">⏳ ${escapeHtml(m.canon_countdown.label)}</div>` : "";
   const evidenceRows = (m.evidence || []).map((row) => `<li><b>${escapeHtml(row.label || "Evidence")}</b><span>${escapeHtml(row.detail || "")}</span><small>${escapeHtml(row.source || "campaign")}</small></li>`).join("");
   const evidence = evidenceRows ? `<details class="advisor-evidence"><summary>Why the Advisor says this</summary><ul>${evidenceRows}</ul></details>` : "";
-  return `<div class="chat-msg incoming advisor-msg"><div class="meta">Advisor${m.fourth_wall ? " · FOURTH-WALL" : ""}</div>
+  const involved = mentionedPortraitsHtml([m.summary, m.text, ...(m.points || [])].filter(Boolean).join(" "), knownPersonRecords(), 3, "sm");
+  return `<div class="chat-msg incoming advisor-msg"><div class="chat-msg-copy"><div class="meta advisor-meta">Advisor${m.fourth_wall ? " · FOURTH-WALL" : ""}${involved}</div>
     <div class="advisor-msg-summary">${escapeHtml(m.summary || m.text || "...")}</div>
     ${renderAdvisorChart(m.chart)}
     ${countdown}${points ? `<ul class="advisor-msg-points">${points}</ul>` : ""}${evidence}
-  </div>`;
+  </div></div>`;
 }
 
 function renderAdvisorThread(thread) {
@@ -4122,6 +4214,16 @@ $("#advisor-followups").addEventListener("click", (e) => {
 // ---------------------------------------------------------------------------
 $$("[data-journal]").forEach((btn) => btn.addEventListener("click", () => openJournal(btn.getAttribute("data-journal"))));
 $$("#journal-tabs button[data-tab]").forEach((btn) => btn.addEventListener("click", () => openJournal(btn.getAttribute("data-tab"))));
+document.addEventListener("click", async (event) => {
+  const portrait = event.target.closest("[data-person-open]");
+  if (!portrait || portrait.closest(".contact-item,.suggestion-card,.roster-unit,.piece")) return;
+  const name = portrait.getAttribute("data-person-open");
+  if (!name || normalizePersonName(name) === normalizePersonName(APP.state?.name)) return;
+  await openJournal("relationships");
+  const card = [...document.querySelectorAll("[data-person-card]")].find((node) => normalizePersonName(node.getAttribute("data-person-card")) === normalizePersonName(name));
+  if (card) { card.open = true; card.scrollIntoView({ block: "center", behavior: APP.animationsEnabled ? "smooth" : "auto" }); }
+  else showToast(`${name} does not have a full relationship record yet.`, "system");
+});
 $("#btn-journal-advanced-toggle").addEventListener("click", () => setJournalAdvancedOpen($("#journal-tabs-advanced").hidden));
 
 function setJournalAdvancedOpen(open) {
@@ -4312,7 +4414,7 @@ async function openJournal(tab) {
           (person.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(person.core_ambition)}</p>` : "");
         const motive = intentionMap[person.name] || {};
         const motiveLines = `${textList(motive.loyalties).length ? `<p><b>Loyalties:</b> ${textList(motive.loyalties).map(escapeHtml).join(" · ")}</p>` : ""}${textList(motive.fears).length ? `<p><b>Known concerns:</b> ${textList(motive.fears).map(escapeHtml).join(" · ")}</p>` : ""}${motive.opinion_of_player ? `<p><b>Opinion of you:</b> ${escapeHtml(motive.opinion_of_player)}</p>` : ""}`;
-        return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}"><summary><b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}${motiveLines}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}${chainHistoryHtml(person.chain)}</div></details>`;
+        return `<details class="relationship-card${person.nemesis ? " nemesis-card" : ""}" data-person-card="${escapeHtml(person.name)}"><summary>${personPortraitHtml(person.name, person, { size: "sm" })}<b>${person.nemesis ? "⚠ " : ""}${escapeHtml(person.name)}</b><span>${escapeHtml(person.label)} · ${Number(person.score) >= 0 ? "+" : ""}${escapeHtml(person.score)}</span></summary><div><p><b>Goal:</b> ${escapeHtml(person.goal)}</p>${layers}${motiveLines}<p><b>Last known:</b> ${escapeHtml(person.last_known_location)}</p>${textList(person.promises).length ? `<p><b>Promises:</b> ${textList(person.promises).map(escapeHtml).join(" · ")}</p>` : ""}${textList(person.debts).length ? `<p><b>Debts:</b> ${textList(person.debts).map(escapeHtml).join(" · ")}</p>` : ""}${chainHistoryHtml(person.chain)}</div></details>`;
       }).join("") : '<div class="jrow hint">No recurring relationships have been established.</div>') +
       // NPCs relating to each other independent of the player — allies,
       // rivals, grudges the GM has established between two named
@@ -4345,7 +4447,8 @@ async function openJournal(tab) {
       const status = event.status || (occurred ? "occurred" : "likely");
       const effectiveDay = event.effective_day ?? event.day;
       const confidence = event.confidence || {};
-      return `<div class="timeline-row ${escapeHtml(status)} ${current ? "current" : ""}"><div class="timeline-day">${escapeHtml(formatCalendarDate(world, effectiveDay, data.calendar_epoch, data.calendar_anchor_day))}</div><div><header><b>${escapeHtml(event.title || "World event")}</b><span class="canon-status ${escapeHtml(status)}">${escapeHtml(status)}</span></header><small>${escapeHtml(event.location || "")}${confidence.label ? ` · ${escapeHtml(confidence.label)}` : ""}</small><p>${escapeHtml(event.summary || "")}</p>${(event.requires || []).length ? `<p class="timeline-dependencies"><b>Depends on:</b> ${event.requires.map(escapeHtml).join(" → ")}</p>` : ""}${event.reason && !["likely","upcoming","occurred"].includes(status) ? `<p class="timeline-reason"><b>Why changed:</b> ${escapeHtml(event.reason)}</p>` : ""}${event.replacement ? `<p class="timeline-replacement"><b>What may happen instead:</b> ${escapeHtml(event.replacement)}</p>` : ""}${confidence.note ? `<p class="timeline-confidence">${escapeHtml(confidence.note)}</p>` : ""}</div></div>`;
+      const involved = mentionedPortraitsHtml(`${event.title || ""} ${event.summary || ""}`, knownPersonRecords(s), 3, "xs");
+      return `<div class="timeline-row ${escapeHtml(status)} ${current ? "current" : ""}"><div class="timeline-day">${escapeHtml(formatCalendarDate(world, effectiveDay, data.calendar_epoch, data.calendar_anchor_day))}</div><div><header><span class="timeline-title-with-portraits">${involved}<b>${escapeHtml(event.title || "World event")}</b></span><span class="canon-status ${escapeHtml(status)}">${escapeHtml(status)}</span></header><small>${escapeHtml(event.location || "")}${confidence.label ? ` · ${escapeHtml(confidence.label)}` : ""}</small><p>${escapeHtml(event.summary || "")}</p>${(event.requires || []).length ? `<p class="timeline-dependencies"><b>Depends on:</b> ${event.requires.map(escapeHtml).join(" → ")}</p>` : ""}${event.reason && !["likely","upcoming","occurred"].includes(status) ? `<p class="timeline-reason"><b>Why changed:</b> ${escapeHtml(event.reason)}</p>` : ""}${event.replacement ? `<p class="timeline-replacement"><b>What may happen instead:</b> ${escapeHtml(event.replacement)}</p>` : ""}${confidence.note ? `<p class="timeline-confidence">${escapeHtml(confidence.note)}</p>` : ""}</div></div>`;
     }).join("");
     panel.innerHTML = `<div class="timeline-anchor"><b>Current: ${escapeHtml(formatCalendarDate(data.world || "Custom World", currentDay, data.calendar_epoch, data.calendar_anchor_day))}</b><span>${escapeHtml(data.canon_anchor || "Before the main story")}</span></div>${rows || '<div class="jrow">No fixed canon timeline for this world.</div>'}<div class="jrow hint">Canon events are scheduled pressures, not rails. Player-caused divergences can alter or prevent their original form.</div>`;
   } else if (tab === "schedule") {
@@ -4541,7 +4644,7 @@ function renderOrganizationRoster(roster) {
     const facts = [member.notes, member.reason, member.terms ? `Agreement: ${compactReadable(member.terms)}` : "", member.loyalty_basis ? `Loyalty: ${compactReadable(member.loyalty_basis)}` : "", member.independent ? "Independent ally—not under your command." : "", member.mentor ? `Mentor: ${member.mentor}` : "",
       Array.isArray(member.parents) && member.parents.length ? `Family: ${member.parents.join(", ")}` : ""].filter(Boolean);
     return `<article class="roster-member" role="listitem">
-      <div class="roster-person"><strong>${escapeHtml(member.name)}${member.player ? ' <small>You</small>' : ''}</strong><span>${escapeHtml(member.status === "active" ? "Member" : humanLabel(member.status))}${member.age !== "" && member.age != null ? ` · Age ${escapeHtml(member.age)}` : ''}${member.stage ? ` · ${escapeHtml(member.stage)}` : ''}</span></div>
+      <div class="roster-person">${personPortraitHtml(member.name, member, { size: "md" })}<span class="roster-person-copy"><strong>${escapeHtml(member.name)}${member.player ? ' <small>You</small>' : ''}</strong><span>${escapeHtml(member.status === "active" ? "Member" : humanLabel(member.status))}${member.age !== "" && member.age != null ? ` · Age ${escapeHtml(member.age)}` : ''}${member.stage ? ` · ${escapeHtml(member.stage)}` : ''}</span></span></div>
       <div class="roster-position"><span class="roster-mobile-label">Position</span><b>${escapeHtml(member.position || "Member")}</b>${member.unit ? `<small>${escapeHtml(member.unit)}</small>` : ''}${member.reports_to ? `<small>Reports to ${escapeHtml(member.reports_to)}</small>` : ''}</div>
       <div class="roster-power"><span class="roster-mobile-label">Combat power</span><b>${escapeHtml(power.label || "Not assessed")}</b><span>${power.score != null ? `${power.estimated ? '≈ ' : ''}${escapeHtml(power.score)} · ` : ''}${escapeHtml(power.source || "No recorded benchmark")}</span></div>
       ${facts.length ? `<details class="roster-member-notes"><summary>Member record</summary>${facts.map(f=>`<p>${escapeHtml(f)}</p>`).join('')}</details>` : ''}
@@ -5028,9 +5131,10 @@ $("#journal-panel").addEventListener("click", async (event) => {
     const node = (APP.mapNodes || []).find((row) => row.name === nodeButton.getAttribute("data-map-node"));
     if (!node) return;
     const detail = $("#map-detail");
-    const people = node.notable_individuals || [];
+    const people = (node.notable_individuals || []).map((person) => typeof person === "object" ? person : { name: person });
     const links = APP.travelGraph?.edges?.[node.name] || [];
-    detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")} · tier ${escapeHtml(node.tier || 1)}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes)}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller)}</dd>${node.danger_level ? `<dt>Danger</dt><dd class="danger-label danger-${escapeHtml(node.danger_level.toLowerCase())}">${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Notable individuals</dt><dd>${people.length ? people.map(escapeHtml).join(", ") : "None recorded yet"}</dd><dt>Quest links</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "None known"}</dd><dt>Direct routes</dt><dd>${links.length ? links.map((x) => `${escapeHtml(x.to)} (${escapeHtml(formatDuration(x.minutes))})`).join("<br>") : "No direct route recorded"}</dd></dl><div id="map-route-preview" class="map-route-preview">Calculating route from your current location…</div>`;
+    const peopleRow = people.length ? `<div class="location-people" aria-label="Known people here">${people.slice(0, 4).map((person) => { const name = person.name || person.display_name || "Unknown"; return `<span>${personPortraitHtml(name, person, { size: "sm" })}<b>${escapeHtml(name)}</b></span>`; }).join("")}${people.length > 4 ? `<small>+${people.length - 4} more</small>` : ""}</div>` : "None recorded yet";
+    detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")} · tier ${escapeHtml(node.tier || 1)}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes)}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller)}</dd>${node.danger_level ? `<dt>Danger</dt><dd class="danger-label danger-${escapeHtml(node.danger_level.toLowerCase())}">${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Known people here</dt><dd>${peopleRow}</dd><dt>Quest links</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "None known"}</dd><dt>Direct routes</dt><dd>${links.length ? links.map((x) => `${escapeHtml(x.to)} (${escapeHtml(formatDuration(x.minutes))})`).join("<br>") : "No direct route recorded"}</dd></dl><div id="map-route-preview" class="map-route-preview">Calculating route from your current location…</div>`;
     try {
       const route = await apiGet(`/api/travel/route?destination=${encodeURIComponent(node.name)}`);
       const preview = $("#map-route-preview");

@@ -1,6 +1,18 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.50.0": {
+        "title": "Faces Across the World",
+        "summary": "Approved portraits now identify people throughout the interface without adding more menus or crowding existing screens.",
+        "highlights": [
+            {"title": "Conversations have a face", "example": "NPC chats, incoming messages and conversation suggestions show the speaker in the row you already use."},
+            {"title": "Groups are easier to scan", "example": "Crew, squads, organizations and relationships use compact portraits while preserving every existing position, power and relationship detail."},
+            {"title": "Battles identify everyone", "example": "The tactical turn strip, battlefield pieces and target list use the same approved form-aware art, including active transformations."},
+            {"title": "Events show who matters", "example": "Advisor comparisons, relationship changes, major events and timeline entries show up to three relevant faces instead of adding another panel."},
+            {"title": "Locations feel inhabited", "example": "Selecting a map location previews known people present there while respecting what the campaign has actually recorded."},
+            {"title": "No misleading stand-ins", "example": "If an approved portrait is unavailable, the interface shows readable initials rather than reusing the wrong character art."},
+        ],
+    },
     "3.49.0": {
         "title": "One Piece Canon Power Library",
         "summary": "One Piece canon powers now resolve from local presets, with richer Haki mechanics and a dedicated Conqueror's Haki victory cut-in.",
