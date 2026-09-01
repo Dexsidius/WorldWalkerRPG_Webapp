@@ -3366,3 +3366,15 @@ body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a
   .roster-person { grid-column: 1 / -1; }
   .roster-mobile-label { display: block; color: var(--sub); font-size: .75rem; }
 }
+
+/* Successful Haoshoku Overwhelm: pressure wave and black-red lightning cut-in. */
+.haoshoku-cinematic { position: fixed; inset: 0; z-index: 260; pointer-events: none; overflow: hidden; background: radial-gradient(circle at 50% 52%, #650c16aa 0 8%, #12090dcc 34%, #050607f2 78%); animation: hakiScene 1.55s ease-out forwards; }
+.haoshoku-cinematic::before { content: ""; position: absolute; inset: -20%; background: repeating-conic-gradient(from 12deg at 50% 52%, transparent 0 7deg, #b51d3333 8deg, transparent 10deg 24deg); animation: hakiPressure .7s ease-out both; }
+.haoshoku-cinematic::after { content: "CONQUEROR'S HAKI"; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: #f3e8d5; font: 900 clamp(1.4rem,5vw,4rem)/1 var(--font-display); letter-spacing: .12em; text-shadow: 0 3px #16070a,0 0 24px #d32742; white-space: nowrap; animation: hakiTitle 1.25s cubic-bezier(.2,.8,.2,1) both; }
+.haoshoku-bolt { position: absolute; left: 50%; top: 50%; width: clamp(170px,45vw,620px); height: 5px; background: #d4273e; box-shadow: 0 0 6px #ff4059,0 0 16px #a90022; transform-origin: 0 50%; clip-path: polygon(0 35%,16% 0,28% 70%,42% 8%,57% 82%,72% 15%,100% 48%,74% 63%,58% 100%,41% 38%,27% 92%,14% 48%); animation: hakiBolt .78s ease-out both; }
+.haoshoku-bolt:nth-child(2){transform:rotate(47deg);animation-delay:.06s}.haoshoku-bolt:nth-child(3){transform:rotate(137deg);animation-delay:.12s}.haoshoku-bolt:nth-child(4){transform:rotate(218deg);animation-delay:.03s}.haoshoku-bolt:nth-child(5){transform:rotate(310deg);animation-delay:.1s}
+@keyframes hakiScene{0%{opacity:0}9%,76%{opacity:1}100%{opacity:0}}
+@keyframes hakiPressure{0%{transform:scale(.2);opacity:0}55%{opacity:1}100%{transform:scale(1.35);opacity:0}}
+@keyframes hakiTitle{0%{opacity:0;filter:blur(12px);transform:translate(-50%,-50%) scale(1.5)}35%,72%{opacity:1;filter:none;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}}
+@keyframes hakiBolt{0%{opacity:0;scale:.05 1}20%,60%{opacity:1;scale:1 1}100%{opacity:0;scale:1.18 .3}}
+@media(prefers-reduced-motion:reduce){.haoshoku-cinematic{animation:hakiScene .65s ease-out forwards}.haoshoku-cinematic::before,.haoshoku-bolt{animation:none}.haoshoku-cinematic::after{animation:hakiTitle .65s ease-out both}}

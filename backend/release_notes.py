@@ -1,6 +1,17 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.49.0": {
+        "title": "One Piece Canon Power Library",
+        "summary": "One Piece canon powers now resolve from local presets, with richer Haki mechanics and a dedicated Conqueror's Haki victory cut-in.",
+        "highlights": [
+            {"title": "Canon powers are ready locally", "example": "Known Devil Fruits, named techniques, transformations and fighting styles already know their range, affected tiles, cost and visual treatment instead of asking the AI to design them during battle."},
+            {"title": "Haki applications stay distinct", "example": "Future Sight, Hardening, Emission, Internal Destruction and Conqueror's Coating provide different effects and remain gated by the character's actual mastery and recorded unlocks."},
+            {"title": "Conqueror's victories feel decisive", "example": "Winning through the Overwhelm button with Conqueror's Haki triggers a black-red pressure and lightning cut-in; resisted attempts do not play the victory animation."},
+            {"title": "No accidental future powers", "example": "The catalog records canon ownership and introduction arc, but a technique appears for use only when the campaign says that character has learned or awakened it."},
+            {"title": "Original powers remain welcome", "example": "A player-created Devil Fruit is still unique, then its applications are classified locally into the same combat vocabulary without needing an extra AI mechanics call."},
+        ],
+    },
     "3.48.0": {
         "title": "Tactical Battles: Naruto & One Piece",
         "summary": "Narrative encounters in Naruto and One Piece can now open a server-authoritative grid battle with movement, aimed techniques, transformations, status enforcement and world-specific rules.",

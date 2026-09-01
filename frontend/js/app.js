@@ -3111,6 +3111,22 @@ function renderCombatPanel(s) {
   populateCombatAbilitySelect(s);
 }
 
+function playConquerorsHakiCinematic(entries) {
+  const victory = (entries || []).find((entry) => entry?.cinematic === "conquerors_haki" && entry?.success && entry?.visual_outcome === "victory");
+  if (!victory) return Promise.resolve(false);
+  document.querySelectorAll(".haoshoku-cinematic").forEach((node) => node.remove());
+  const scene = document.createElement("div");
+  scene.className = "haoshoku-cinematic";
+  scene.setAttribute("role", "img");
+  scene.setAttribute("aria-label", `${victory.ability || "Conqueror's Haki"} overwhelms the enemy`);
+  scene.innerHTML = "<i class=\"haoshoku-bolt\"></i><i class=\"haoshoku-bolt\"></i><i class=\"haoshoku-bolt\"></i><i class=\"haoshoku-bolt\"></i>";
+  document.body.appendChild(scene);
+  playSfx("hit");
+  if (navigator.vibrate) navigator.vibrate([35, 35, 70]);
+  const duration = matchMedia("(prefers-reduced-motion: reduce)").matches ? 650 : 1550;
+  return new Promise((resolve) => setTimeout(() => { scene.remove(); resolve(true); }, duration));
+}
+
 function appendCombatLogEntries(entries) {
   const log = $("#combat-log");
   (entries || []).forEach((e) => {
@@ -3160,6 +3176,7 @@ async function submitCombatAction(action) {
     const priorPlayerHp = Number(APP.state?.hp ?? NaN);
     const result = await apiPost("/api/combat/action", payload);
     appendCombatLogEntries(result.log_tail);
+    await playConquerorsHakiCinematic(result.log_tail);
     playSfx("dice");
     if (result.hp !== undefined) { APP.state.hp = result.hp; APP.state.hp_max = result.hp_max; }
     if (result.resource !== undefined) { APP.state.resource = result.resource; APP.state.resource_max = result.resource_max; }

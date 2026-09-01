@@ -734,8 +734,13 @@ class CombatMixin:
                 check = self._combat_check(bonus + ally_support,
                                             eff["difficulty_min"] + OVERWHELM_DIFFICULTY_PADDING,
                                             eff["difficulty_max"] + OVERWHELM_DIFFICULTY_PADDING)
+            conquerors_haki = bool(
+                self.state.get("world") == "One Piece"
+                and re.search(r"\b(?:conqueror(?:'s)?|haoshoku)\b.*\bhaki\b|\bhaoshoku\b", str(ability_name or ""), re.I)
+            )
             events.append({"actor": "player", "action": "overwhelm", "ability": ability_name or "Overwhelm",
-                            "target": enemy["name"], **check})
+                            "target": enemy["name"], "cinematic": "conquerors_haki" if conquerors_haki else None,
+                            "visual_outcome": "victory" if check["success"] else "resisted", **check})
             if check["success"]:
                 combat["log"].extend([{"round": combat["round"], **e} for e in events])
                 return self.end_combat("overwhelmed", log_start)

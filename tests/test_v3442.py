@@ -48,7 +48,7 @@ def game_state():
 
 class CombatApplicationTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.48.0")
+        self.assertEqual(APP_VERSION, "3.49.0")
 
     def test_umbrella_moves_and_kick_are_real_combat_options(self):
         options = build_combat_ability_options(game_state()["skills"])

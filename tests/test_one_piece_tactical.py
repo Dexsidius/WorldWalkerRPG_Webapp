@@ -5,6 +5,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from test_naruto_tactical import fresh
 from tactical_combat import ensure_board,board_view,submit_tactical_action,paths
 from one_piece_tactics import CATALOG,compile_skill,saved_skill_details,capabilities
+from one_piece_power_catalog import DEVIL_FRUITS,CANON_TECHNIQUES,TACTICAL_PRESETS,HAKI_APPLICATIONS,FIGHTING_STYLES
 
 def game(fruit=None,haki=None,skills=None):
     g=fresh(skills or {});g.state['world']='One Piece';g.state['stats']={'Strength':100,'Agility':100,'Endurance':100,'Instinct':100,'Willpower':100}
@@ -80,5 +81,37 @@ class OnePieceTacticalTests(unittest.TestCase):
         for move in CATALOG.values():
             self.assertIn(move['tactical']['shape'],{'single','arc','line','burst','cone','self'})
             self.assertTrue(move.get('visual_effect',{}).get('asset'))
+
+    def test_canon_registry_covers_major_fruits_haki_styles_and_named_techniques(self):
+        self.assertGreaterEqual(len(DEVIL_FRUITS),90)
+        self.assertGreaterEqual(len(CANON_TECHNIQUES),250)
+        self.assertEqual(set(HAKI_APPLICATIONS),{'Observation Haki','Armament Haki',"Conqueror's Haki"})
+        self.assertIn('Rokushiki',FIGHTING_STYLES);self.assertIn('Three Sword Style',FIGHTING_STYLES)
+        self.assertEqual(compile_skill('Internal Destruction',{})['armor_piercing'],True)
+        self.assertEqual(compile_skill('Future Sight',{})['tactical']['effect'],'buff')
+
+    def test_every_canon_technique_is_locally_preset_without_ai_generation(self):
+        valid_effects={'damage','heal','shield','control','debuff','buff','cleanse','transform','summon','movement','field','detect'}
+        valid_shapes={'single','self','line','cone','arc','burst','ring','cross'}
+        self.assertEqual(set(TACTICAL_PRESETS),set(CANON_TECHNIQUES))
+        for name,preset in TACTICAL_PRESETS.items():
+            self.assertIn(preset['effect_type'],valid_effects,name)
+            self.assertIn(preset['tactical']['shape'],valid_shapes,name)
+            self.assertTrue(preset['visual_effect'].get('family'),name)
+            self.assertGreaterEqual(preset['resource_cost'],0,name)
+
+    def test_successful_conquerors_overwhelm_emits_victory_cinematic_only_on_success(self):
+        g=game(haki={'Conqueror':{'mastery':90,'applications':['Dominating Burst']}})
+        g.state['combat']['tactical_enabled']=False
+        g._combat_check=lambda *args,**kwargs:{'roll':1,'difficulty':1,'success':True}
+        result=g.resolve_combat_round('overwhelm',ability_name='Conqueror Haki')
+        self.assertEqual(result['log_tail'][0]['cinematic'],'conquerors_haki')
+        self.assertEqual(result['log_tail'][0]['visual_outcome'],'victory')
+
+        g=game(haki={'Conqueror':{'mastery':90,'applications':['Dominating Burst']}})
+        g.state['combat']['tactical_enabled']=False
+        g._combat_check=lambda *args,**kwargs:{'roll':100,'difficulty':1,'total':0,'success':False}
+        result=g.resolve_combat_round('overwhelm',ability_name='Conqueror Haki')
+        self.assertEqual(result['log_tail'][0]['visual_outcome'],'resisted')
 
 if __name__=='__main__':unittest.main()

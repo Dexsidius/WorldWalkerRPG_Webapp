@@ -1,6 +1,8 @@
 """One Piece tactical adapter: saved powers in, no invented ownership out."""
 import copy,re
 from naruto_tactics import key
+from tactical_effects import compile_tactical_effect
+from one_piece_power_catalog import CANON_TECHNIQUES,TACTICAL_PRESETS,DEVIL_FRUITS,HAKI_APPLICATIONS,TRANSFORMATIONS,fruit_by_name
 
 ELEMENT_ASSET={'fire':'fireball','flame':'fireball','ice':'water-wave','water':'water-wave','lightning':'lightning-bolt','electric':'lightning-bolt','wind':'wind-blade','sand':'sand-wave','poison':'insect-swarm','string':'shadow-bind','gravity':'earth-spikes','light':'lightning-lance'}
 CATALOG={}
@@ -53,6 +55,24 @@ def compile_skill(name,detail):
     category=key(detail.get('category',''))
     canonical=CATALOG.get(key(name))
     if canonical:return {**detail,**copy.deepcopy(canonical),'mechanics_source':'curated One Piece tactical adaptation'}
+    if detail.get('effect_type')=='transform' or category in {'zoan form','transformation'}:
+        if not detail.get('combat_boosts') and not detail.get('stat_boosts'):
+            return {**detail,'tactical_disabled':'This saved form needs recorded combat boosts before it can be activated.'}
+        return {**detail,'effect_type':'transform','tactical':{'shape':'self','origin':'self','effect':'transform','handler':'form'},
+                'visual_effect':detail.get('visual_effect',{'family':'release-transformation','delivery':'self'})}
+    canon=next((row for title,row in CANON_TECHNIQUES.items() if key(title)==key(name)),None)
+    if canon:
+        canon_name=next(title for title in CANON_TECHNIQUES if key(title)==key(name))
+        detail.setdefault('category',canon.get('category'))
+        detail.setdefault('canon_source',canon.get('source'))
+        detail.setdefault('description',f"Canon application of {canon.get('source')}.")
+        preset=copy.deepcopy(TACTICAL_PRESETS[canon_name])
+        if preset.get('effect_type')=='transform':
+            known=next((v for title,v in TRANSFORMATIONS.items() if key(title)==key(name)),None)
+            boosts=detail.get('combat_boosts') or detail.get('stat_boosts') or (known or {}).get('boosts')
+            if not boosts:return {**detail,'tactical_disabled':'This canon form needs its recorded transformation profile before activation.'}
+            preset['combat_boosts']=copy.deepcopy(boosts)
+        return {**detail,**preset,'canon_owner':canon.get('owner'),'mechanics_source':'preset canon One Piece catalog'}
     if 'observation' in text and 'haki' in text:
         return {**detail,'effect_type':'buff','combat_boosts':{'speed_pct':.15},'duration_rounds':2,'resource_cost':8,
                 'tactical':{'shape':'self','origin':'self','effect':'buff','handler':'observation'},'visual_effect':{'asset':'genjutsu','delivery':'self'}}
@@ -66,19 +86,7 @@ def compile_skill(name,detail):
         if not detail.get('combat_boosts') and not detail.get('stat_boosts'):
             return {**detail,'tactical_disabled':'This saved form needs recorded combat boosts before it can be activated.'}
         return {**detail,'effect_type':'transform','tactical':{'shape':'self','origin':'self','effect':'transform','handler':'form'}}
-    if re.search(r'heal|recovery|medicine',text):shape,effect='single','heal'
-    elif re.search(r'barrier|shield|guard',text):shape,effect='self','shield'
-    elif re.search(r'bind|string|restrain|trap',text):shape,effect='single','control'
-    elif re.search(r'field|storm|quake|room|area|explosion',text):shape,effect='burst','damage'
-    elif re.search(r'breath|cone|spray',text):shape,effect='cone','damage'
-    elif re.search(r'beam|slash wave|shockwave',text):shape,effect='line','damage'
-    elif re.search(r'attack|strike|kick|punch|slash|shot|bullet|shift|fruit|technique|style',text):shape,effect='single','damage'
-    else:return {**detail,'tactical_disabled':'This technique needs an explicit One Piece tactical profile.'}
-    tactical={'shape':shape,'origin':'self' if shape in {'self','line','cone'} else 'target','effect':effect}
-    if shape=='single':tactical['range']=1 if re.search(r'kick|punch|strike|slash',text) else 5
-    if shape=='burst':tactical.update(range=4,radius=1)
-    if shape in {'line','cone'}:tactical['length']=4 if shape=='line' else 3
-    return {**detail,'effect_type':effect,'resource_cost':detail.get('resource_cost',10),'tactical':tactical,'visual_effect':_visual(text,shape)}
+    return compile_tactical_effect('One Piece',name,detail,default_cost=10)
 
 def saved_skill_details(state):
     sources={}
@@ -86,6 +94,10 @@ def saved_skill_details(state):
         if isinstance(source,dict):sources.update({k:v for k,v in source.items() if k not in sources})
     fruit=_profile(state)
     if fruit and fruit.get('name'):
+        canon_fruit=fruit_by_name(fruit.get('name'))
+        if canon_fruit:
+            fruit.setdefault('canon_owner',canon_fruit['canon_owner']);fruit.setdefault('governing_rule',canon_fruit['governing_rule'])
+            fruit.setdefault('canon_reference',canon_fruit['name'])
         for i,row in enumerate(fruit.get('abilities',[]) if isinstance(fruit.get('abilities'),list) else []):
             text=str(row);name=(text.split('—',1)[0].strip() if '—' in text else f"{fruit['name']} · Application {i+1}")
             sources.setdefault(name,{'description':text,'category':'devil fruit','fruit_name':fruit['name'],'fruit_type':fruit.get('type'),'resource_cost':12+i*4})
@@ -100,6 +112,13 @@ def saved_skill_details(state):
         title=str(branch)
         if 'haki' not in title.lower():title+=' Haki'
         sources.setdefault(title,{'description':f"Established {title} proficiency.",'category':'haki','mastery':row.get('mastery',0),'resource_cost':10})
+        profile=next((p for p in HAKI_APPLICATIONS.values() if key(p['branch'])==key(branch)),None)
+        known={key(v) for v in row.get('applications',[]) if isinstance(v,str)}
+        if profile:
+            for application,mechanics in profile['applications'].items():
+                if key(application) in known:
+                    sources.setdefault(application,{'description':f"Established {profile['branch']} Haki application.",'category':'haki',
+                                      'haki_branch':profile['branch'],'mastery':row.get('mastery',0),**mechanics})
     return sources
 
 def skill_options(state):return {n:compile_skill(n,d) for n,d in saved_skill_details(state).items()}
