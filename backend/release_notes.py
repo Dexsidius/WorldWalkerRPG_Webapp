@@ -1,6 +1,14 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.51.1": {
+        "title": "Desktop Tactical Data Repair",
+        "summary": "The packaged Windows and Phone Host builds now include Naruto's authored tactical move library.",
+        "highlights": [
+            {"title": "Advance works in packaged builds", "example": "Starting or continuing a Naruto campaign no longer stops with a missing naruto_tactical_moves.json error."},
+            {"title": "Portable extraction", "example": "The required move data travels inside the ZIP and works regardless of where the game folder is extracted."},
+        ],
+    },
     "3.51.0": {
         "title": "Choose or Write Any Action",
         "summary": "A world-aware action picker makes common choices quick without restricting the freeform game.",

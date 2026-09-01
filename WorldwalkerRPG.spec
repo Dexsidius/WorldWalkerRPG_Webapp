@@ -8,7 +8,13 @@ a = Analysis(
     # Music is copied beside the finished EXE by the release packaging step.
     # Frozen launcher.py deliberately reads that user-editable top-level folder;
     # embedding a second copy under _internal only doubled every release ZIP.
-    datas=[('frontend', 'frontend'), ('assets', 'assets')],
+    datas=[
+        ('frontend', 'frontend'),
+        ('assets', 'assets'),
+        # naruto_tactics is imported as a top-level frozen module, so its
+        # adjacent authored move library must live at the _internal root.
+        ('backend/naruto_tactical_moves.json', '.'),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
