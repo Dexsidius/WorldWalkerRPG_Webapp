@@ -892,12 +892,18 @@ def api_actions_queue():
     if not game.campaign_active:
         return jsonify({"error": "Start or load a campaign first."}), 400
     try:
-        action = request.get_json(force=True).get("action") or ""
+        payload = request.get_json(force=True)
+        action = payload.get("action") or ""
+        from living_world import interpretation as interpret_action
+        interpreted = interpret_action(action, game.state)
+        if interpreted.get("ambiguous") and not payload.get("confirmed_interpretation"):
+            return jsonify({"status": "interpretation_required", "interpretation": interpreted,
+                            "queued_actions": list(game.state.get("queued_actions", []))})
         room = getattr(g, "worldwalker_room", None)
         user = getattr(g, "worldwalker_user", None)
         queued = (_multiplayer_store.queue_action(room["id"], user["id"], action)
                   if room and user else game.queue_action(action))
-        return jsonify({"queued_actions": queued})
+        return jsonify({"queued_actions": queued, "interpretation": interpreted})
     except Exception as e:
         return err(e, 400)
 

@@ -1,6 +1,19 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.52.0": {
+        "title": "The Living World Director",
+        "summary": "Choices now build grounded follow-ups, reciprocal relationships and longer campaign patterns without manufacturing constant trouble.",
+        "highlights": [
+            {"title": "Repeated choices shape the campaign", "example": "Train consistently and a specialist lesson or breakthrough opportunity can emerge because of that practice—not from a random crisis."},
+            {"title": "NPCs initiate contact", "example": "A known companion with an unresolved promise or goal can message you first and refer to the actual subject."},
+            {"title": "Vague actions are clarified", "example": "If ‘do something about it’ could mean several things, the game shows its interpretation before adding it to the queue."},
+            {"title": "More believable outcome variety", "example": "Ordinary successes can simply go well; complications and setbacks are recorded only when the result actually contains one."},
+            {"title": "More everyday choices", "example": "Shop, manage property, celebrate, mentor, recruit and manage established territory directly from Choose an Action."},
+            {"title": "Old saves learn automatically", "example": "Living-world history and duplicate protection are created lazily when an older campaign next advances."},
+            {"title": "No extra AI call", "example": "Interpretation, pattern tracking, contact eligibility and duplicate checks run locally before the normal GM response."},
+        ],
+    },
     "3.51.1": {
         "title": "Desktop Tactical Data Repair",
         "summary": "The packaged Windows and Phone Host builds now include Naruto's authored tactical move library.",

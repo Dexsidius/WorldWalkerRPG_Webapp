@@ -703,6 +703,18 @@ Return ONLY valid JSON."""
             refresh_npc_schedules(self.state, 5)
             transmit_information(self.state, data, 5)
             record_causal_outcome(self.state, data, turn_actions, int(context.get("elapsed_minutes", 5) or 5))
+            if not is_opening:
+                from living_world import advance as advance_living_world, record_outcome as record_living_outcome
+                living = advance_living_world(self.state, turn_actions, int(context.get("elapsed_minutes", 5) or 5), data.get("events", []))
+                record_living_outcome(self.state, data, turn_actions)
+                for event in living.get("events", []):
+                    data.setdefault("events", []).append(event)
+                    self.append(f"[LIVING WORLD — {event.get('title', 'FOLLOW-UP')}]\n{event.get('narrative', '')}\nWhy now: {event.get('why_it_matters', 'Your earlier choices created this opening.')}", "system")
+                for message in living.get("incoming_chats", []):
+                    thread = message.get("thread") or message.get("sender")
+                    if thread:
+                        self.ensure_contact(thread)
+                        self.add_chat_message(thread, message.get("sender"), message.get("message", ""), "incoming")
             if canon_repairs:
                 integrity_report.setdefault("repairs", []).extend(canon_repairs)
             if integrity_report:

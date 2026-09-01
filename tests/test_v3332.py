@@ -12,7 +12,7 @@ from worlds import APP_VERSION
 
 class WorldwalkerV3332PhoneRecoveryTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.51.1")
+        self.assertEqual(APP_VERSION, "3.52.0")
 
     def test_game_data_is_never_cached(self):
         self.assertTrue(_cache_control_for("/api/state").startswith("no-store"))

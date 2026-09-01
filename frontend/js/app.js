@@ -1948,9 +1948,14 @@ function buildActionDeckChoices(state = APP.state || {}, personName = "") {
   choices.push(actionChoice("personal-recover", "personal", "Seek treatment", "Address injuries, illness, exhaustion or lingering status effects.", "Seek appropriate treatment and recovery"));
   choices.push(actionChoice("personal-maintain", "personal", "Maintain equipment", "Clean, organize and maintain important reusable possessions.", "Maintain and organize my important equipment", { duration: "hour" }));
   choices.push(actionChoice("personal-reflect", "personal", "Reflect and plan", "Review recent events and decide what matters next.", "Take time to reflect on recent events and plan my next priorities", { duration: "hour" }));
+  choices.push(actionChoice("personal-shop", "personal", "Shop or trade", "Buy, sell or trade something appropriate to local availability and your actual funds.", "Shop or trade for something useful in the current location"));
+  choices.push(actionChoice("personal-finances", "personal", "Manage money and property", "Review meaningful funds, income, debts, businesses and owned property without tracking trivial purchases.", "Review and manage my money, income and property", { duration: "hour" }));
+  choices.push(actionChoice("personal-celebrate", "personal", "Celebrate", "Mark a victory, milestone or relationship in a way that fits this world.", "Celebrate a recent achievement with the appropriate people", { duration: "hour" }));
   people.slice(0, 6).forEach((row) => choices.push(actionChoice(`person:${row.name}`, "people", `Interact with ${row.name}`, row.role || row.position || "Choose how you want to approach this person.", `Talk with ${row.name}`, { person: row })));
   choices.push(actionChoice("people-message", "people", "Send a message", "Contact someone who is not currently nearby.", "Send a message to someone I know"));
   choices.push(actionChoice("people-socialize", "people", "Socialize", "Spend ordinary social time with available people.", "Spend time socializing with people around me", { duration: "hour" }));
+  choices.push(actionChoice("people-mentor", "people", "Teach or mentor", "Help someone develop through instruction suited to your established knowledge.", "Teach or mentor someone using skills I actually possess", { duration: "hour" }));
+  choices.push(actionChoice("people-recruit", "people", "Invite or recruit", "Ask someone to join an appropriate group without overriding their motives or consent.", "Invite an appropriate person to join my group"));
   const skillNames = Object.keys(state.skills || {}).slice(0, 5);
   skillNames.forEach((name) => choices.push(actionChoice(`skill:${name}`, "training", `Practice ${name}`, "Train an established ability without inventing a separate generic skill.", `Practice and improve ${name}`, { duration: "hour" })));
   choices.push(actionChoice("training-stats", "training", "Condition the body", "Train the physical attributes appropriate to your established style.", "Condition my body using training appropriate to my established fighting style", { duration: "hour" }));
@@ -1965,6 +1970,7 @@ function buildActionDeckChoices(state = APP.state || {}, personName = "") {
   choices.push(actionChoice("group-meeting", "organization", `Call a ${group?.label ? group.label.toLowerCase() : "group"} meeting`, "Gather associated members for reports, discussion or planning.", "Call a meeting of my full group"));
   choices.push(actionChoice("group-orders", "organization", "Issue group instructions", "Give clear orders through the established command structure.", "Issue clear instructions to the members under my authority"));
   choices.push(actionChoice("group-review", "organization", "Review the organization", "Check members, roles, commitments, resources and current concerns.", "Review my organization, its members and its current needs"));
+  choices.push(actionChoice("group-territory", "organization", "Manage territory", "Handle an established holding, settlement or claimed land through narrative decisions.", "Review and manage the territory under my legitimate control", { duration: "hour" }));
   if (state.combat?.active) {
     choices.push(actionChoice("combat-current", "combat", "Resolve the current battle", "Return to the active combat controls and finish the encounter.", "Continue fighting the current enemy"));
   } else {
@@ -3202,12 +3208,20 @@ async function submitAction(text) {
   if (!APP.campaignActive) { showToast("Start a campaign first.", "system"); openModal("modal-campaign"); return; }
   playSfx("ui_click");
   try {
-    const result = await apiPost("/api/actions/queue", { action: text });
+    let result = await apiPost("/api/actions/queue", { action: text });
+    if (result.status === "interpretation_required") {
+      const understood = result.interpretation?.summary || text;
+      if (!window.confirm(`I interpreted your action as:\n\n${understood}\n\nQueue this action?`)) return;
+      result = await apiPost("/api/actions/queue", { action: text, confirmed_interpretation: true });
+    }
     $("#action-input").value = "";
     try { localStorage.removeItem(mobileCampaignKey("draft")); } catch (_) {}
     autoGrowMobileComposer();
     APP.state.queued_actions = result.queued_actions || [];
     renderQueuedActions(APP.state.queued_actions);
+    if (result.interpretation?.summary && result.interpretation.summary.toLowerCase() !== String(text).trim().toLowerCase()) {
+      showToast(`Queued as: ${result.interpretation.summary}`, "system");
+    }
   } catch (e) {
     showToast(e.message, "danger"); playSfx("error");
   }

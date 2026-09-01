@@ -1853,10 +1853,13 @@ class TimeSkipMixin:
             autonomy_events = advance_companion_autonomy(self.state, elapsed_minutes)
             npc_growth_events = advance_npc_development(self.state, elapsed_minutes)
             downtime_events = world_downtime_events(self.state, elapsed_minutes, context.get("actions", []))
+            from living_world import advance as advance_living_world, record_outcome as record_living_outcome
+            living = advance_living_world(self.state, context.get("actions", []), elapsed_minutes, data.get("updates", []))
+            record_living_outcome(self.state, data, context.get("actions", []))
             from gm_consistency import coalesce_routine_updates
             updates = coalesce_routine_updates(data.get("updates", []))
             updates = prioritize_updates(
-                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events, *organization_events]
+                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events, *organization_events, *living.get("events", [])]
                  if isinstance(u, dict) and str(u.get("narrative", "")).strip()],
                 self.simulation_mode(),
             )
@@ -1865,6 +1868,7 @@ class TimeSkipMixin:
                 int(self.state.get("canon_day", before.get("canon_day", 0)) or 0), elapsed_minutes,
             )
             incoming_chats = [m for m in (data.get("incoming_chats", []) or []) if isinstance(m, dict)]
+            incoming_chats.extend(living.get("incoming_chats", []))
             incoming_chats.extend(reactive_communication(self.state, updates, elapsed_minutes, incoming_chats))
             for m in incoming_chats:
                 thread = m.get("thread") or m.get("sender")
