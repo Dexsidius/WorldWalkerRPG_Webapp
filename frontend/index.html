@@ -21,7 +21,7 @@
   #asset-recovery p{margin:0 0 18px;color:#c4cfdf}
   #asset-recovery button{min-height:48px;padding:10px 22px;border:1px solid #79c9db;border-radius:9px;background:#173648;color:#fff;font:700 14px system-ui,-apple-system,sans-serif}
 </style>
-<link id="app-stylesheet" rel="stylesheet" href="/css/style.css?v=3.50.0"
+<link id="app-stylesheet" rel="stylesheet" href="/css/style.css?v=3.51.0"
       onload="document.documentElement.classList.remove('assets-missing')"
       onerror="document.documentElement.classList.add('assets-missing')" />
 </head>
@@ -304,6 +304,11 @@
           <button id="btn-mobile-queue-clear" type="button">Clear</button>
         </div>
         <div id="queued-actions" class="queued-actions"><p class="hint">No actions queued. Add as many as you want, in order.</p></div>
+        <button id="btn-action-deck" class="action-deck-trigger" type="button" aria-haspopup="dialog" aria-controls="modal-action-deck">
+          <span class="action-deck-trigger-icon" aria-hidden="true">＋</span>
+          <span><b>CHOOSE AN ACTION</b><small>People, training, travel, rest, missions and more</small></span>
+          <span aria-hidden="true">›</span>
+        </button>
         <div class="composer-row">
           <textarea id="action-input" rows="4" placeholder="TYPE AN ACTION HERE&#10;Press Enter or Add to keep it in this chat until you Advance."></textarea>
           <button id="btn-send" class="btn-primary">
@@ -1208,6 +1213,41 @@
   </div>
 </div>
 
+<div class="modal-backdrop action-deck-backdrop" id="modal-action-deck">
+  <div class="modal action-deck-modal" role="dialog" aria-modal="true" aria-labelledby="action-deck-title">
+    <header class="modal-head action-deck-head">
+      <span><b id="action-deck-title">Choose an action</b><small id="action-deck-context">Actions available right now</small></span>
+      <button class="modal-close" data-close="modal-action-deck" aria-label="Close action choices">✕</button>
+    </header>
+    <div class="action-deck-body">
+      <nav id="action-deck-categories" class="action-deck-categories" aria-label="Action categories"></nav>
+      <section class="action-deck-main">
+        <div class="action-deck-tools">
+          <label for="action-deck-duration">Duration</label>
+          <select id="action-deck-duration">
+            <option value="moment">One moment</option>
+            <option value="hour">One hour</option>
+            <option value="day">One day</option>
+            <option value="week">One week</option>
+            <option value="month">One month</option>
+            <option value="ongoing">Until I stop it</option>
+          </select>
+          <button id="action-deck-write" type="button">Write anything</button>
+        </div>
+        <div id="action-deck-person" class="action-deck-person" hidden></div>
+        <div id="action-deck-list" class="action-deck-list" role="list"></div>
+        <div id="action-deck-empty" class="action-deck-empty" hidden><b>No actions in this category yet.</b><span>You can still write exactly what you want to do.</span></div>
+      </section>
+      <aside class="action-deck-side">
+        <section><header><b>Favorites</b><small>Saved on this device</small></header><div id="action-deck-favorites"></div></section>
+        <section><header><b>Recent</b><small>Your latest choices</small></header><div id="action-deck-recent"></div></section>
+        <section><header><b>Ongoing</b><small>Standing instructions</small></header><div id="action-deck-ongoing"></div></section>
+        <section><header><b>Current plan</b><small id="action-deck-queue-count">0 queued</small></header><div id="action-deck-queue"></div></section>
+      </aside>
+    </div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modal-help">
   <div class="modal modal-lg">
     <header class="modal-head"><span>How To Play</span><button class="modal-close" data-close="modal-help">✕</button></header>
@@ -1255,6 +1295,6 @@
 <audio id="snd-naruto_death" src="/assets/sounds/naruto_death.mp3" preload="auto"></audio>
 <audio id="music-player" preload="metadata"></audio>
 
-<script src="/js/app.js?v=3.50.0"></script>
+<script src="/js/app.js?v=3.51.0"></script>
 </body>
 </html>

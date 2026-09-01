@@ -1,6 +1,18 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.51.0": {
+        "title": "Choose or Write Any Action",
+        "summary": "A world-aware action picker makes common choices quick without restricting the freeform game.",
+        "highlights": [
+            {"title": "Actions are easier to find", "example": "Open Choose an Action for relevant people, training, travel, work, group, combat, personal and world-specific choices."},
+            {"title": "Rest is always available", "example": "Rest, sleep, meals, treatment, relaxation, reflection and equipment care are available without rewriting them every turn."},
+            {"title": "People are directly interactive", "example": "Select a portrait in Relationships to talk, spend time, train, help, give a gift, spar or issue a valid instruction."},
+            {"title": "Long-running plans stay clear", "example": "An ongoing care or protection choice is written as a standing instruction that persists until canceled or circumstances stop it."},
+            {"title": "Freeform play is unchanged", "example": "Write Anything returns to the normal composer, where any reasonable world-valid action can still be described and edited."},
+            {"title": "No extra AI charge", "example": "The menu, recommendations, favorites and recent actions are assembled locally; only the normal turn resolution uses the GM."},
+        ],
+    },
     "3.50.0": {
         "title": "Faces Across the World",
         "summary": "Approved portraits now identify people throughout the interface without adding more menus or crowding existing screens.",

@@ -13,7 +13,7 @@ from worlds import APP_VERSION
 
 class WorldwalkerV3161Tests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.50.0")
+        self.assertEqual(APP_VERSION, "3.51.0")
 
     def test_optimized_naruto_cues_are_packaged_and_small(self):
         limits = {

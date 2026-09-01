@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.50.0** (schema 20).
+Current app/save version: **3.51.0** (schema 20).
+
+Version 3.51.0 adds a compact, world-aware action picker without limiting the
+existing freeform composer. It includes rest and recovery, training, travel,
+work, group duties and world-specific activities. Relationship portraits open
+person-specific interactions, and ongoing selections become explicit standing
+instructions. The picker runs locally and adds no AI request of its own.
 
 Version 3.50.0 puts approved character portraits into conversations, rosters,
 relationships, notifications, Advisor comparisons, timeline events, major events,
