@@ -381,6 +381,8 @@ class CoreMixin:
     # temptation at all rather than trust it to resist one it can see.
     AI_HIDDEN_FIELDS = ("living_world", "generated_content_history", "continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log", "prompt_budget_log", "fact_history")
 
+    AI_HIDDEN_FIELDS = ("campaign_arcs", "campaign_arc_archive", "campaign_arc_director") + AI_HIDDEN_FIELDS
+
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
         current location, a companion, a marked nemesis, or named in the
@@ -527,7 +529,14 @@ class CoreMixin:
         lore = format_lore_context(self.state.get("world", "Custom World"), query, self.state,
                                    limit=self.simulation_profile()["lore_limit"], purpose="moment")
         self.last_lore_context = lore
-        return self.gm_rules(query) + (("\n\n" + lore) if lore else "") + self.satisfy_class_design_context(query) + self.rated_good_example_snippet()
+        arc = self.state.get("campaign_arc_context") if isinstance(self.state.get("campaign_arc_context"), dict) else {}
+        arc_rule = ""
+        if arc.get("active_arcs") or arc.get("quiet_period"):
+            arc_rule = ("\n\nCAMPAIGN ARC PACING: campaign_arc_context is locally calculated from established choices. "
+                        "Use it for continuity, but never force an arc, fabricate an escalation, or require its listed approaches in order. "
+                        "Any listed approach is optional and other plausible approaches remain valid. During quiet_period, allow recovery, relationships, "
+                        "training and ordinary life unless an already-established urgent event genuinely prevents it. Arc closure must follow an actual resolution and preserve its consequences.")
+        return self.gm_rules(query) + (("\n\n" + lore) if lore else "") + arc_rule + self.satisfy_class_design_context(query) + self.rated_good_example_snippet()
 
     def satisfy_class_design_context(self, query=""):
         """Load the large canon catalog only on turns that may author a class."""

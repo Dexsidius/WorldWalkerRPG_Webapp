@@ -71,11 +71,13 @@ def validate_nested_campaign_state(state):
         "scheduled_events", "campaign_canon", "chapter_summaries", "scene_history",
         "verified_memory_archive", "resolution_ledger", "progression_ledger",
         "consequence_ledger", "obligation_ledger", "delayed_consequences", "fact_history",
+        "campaign_arcs", "campaign_arc_archive",
     )
     dict_fields = (
         "scene_state", "combat", "danger_scenario", "npc_memories", "contacts",
         "chat_threads", "narrative_memory", "memory_consolidation", "scenario_memory",
         "continuity_ledger", "diagnostics", "standing_order_state", "memory_tiers",
+        "campaign_arc_director", "campaign_arc_context",
     )
     for key in list_fields:
         if not isinstance(state.get(key), list):

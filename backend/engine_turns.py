@@ -715,6 +715,11 @@ Return ONLY valid JSON."""
                     if thread:
                         self.ensure_contact(thread)
                         self.add_chat_message(thread, message.get("sender"), message.get("message", ""), "incoming")
+                from arc_director import advance as advance_campaign_arcs
+                arc_result = advance_campaign_arcs(self.state, turn_actions, data.get("events", []), int(context.get("elapsed_minutes", 5) or 5))
+                for beat in arc_result.get("beats", []):
+                    data.setdefault("events", []).append(beat)
+                    self.append(f"[{beat.get('title', 'CAMPAIGN ARC')}]\n{beat.get('narrative', '')}", "system")
             if canon_repairs:
                 integrity_report.setdefault("repairs", []).extend(canon_repairs)
             if integrity_report:

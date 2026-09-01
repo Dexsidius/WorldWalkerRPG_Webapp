@@ -35,7 +35,7 @@ class StableAI:
 
 class LongCampaignHealthTests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.52.0")
+        self.assertEqual(APP_VERSION, "3.53.0")
 
     def test_deep_shapes_stale_goals_quests_scene_and_combat_repair_together(self):
         state = copy.deepcopy(BASE_STATE)

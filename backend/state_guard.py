@@ -120,6 +120,7 @@ APP_OWNED = {
     "information_packets", "npc_schedules", "canon_event_states",
     "simulation_validation",
     "campaign_direction", "relationship_opportunities", "last_cause_effect", "last_training_summary", "last_ai_route",
+    "campaign_arcs", "campaign_arc_archive", "campaign_arc_director", "campaign_arc_context",
     "scene_state", "scene_history", "last_outcome_scale", "outcome_scale_ledger",
     "obligation_ledger", "delayed_consequences", "canon_divergence_impacts", "pacing_profile",
     "player_style_profile", "lore_confidence_log", "fact_history",

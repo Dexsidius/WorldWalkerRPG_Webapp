@@ -1856,10 +1856,12 @@ class TimeSkipMixin:
             from living_world import advance as advance_living_world, record_outcome as record_living_outcome
             living = advance_living_world(self.state, context.get("actions", []), elapsed_minutes, data.get("updates", []))
             record_living_outcome(self.state, data, context.get("actions", []))
+            from arc_director import advance as advance_campaign_arcs
+            arc_result = advance_campaign_arcs(self.state, context.get("actions", []), [*data.get("updates", []), *living.get("events", [])], elapsed_minutes)
             from gm_consistency import coalesce_routine_updates
             updates = coalesce_routine_updates(data.get("updates", []))
             updates = prioritize_updates(
-                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events, *organization_events, *living.get("events", [])]
+                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events, *organization_events, *living.get("events", []), *arc_result.get("beats", [])]
                  if isinstance(u, dict) and str(u.get("narrative", "")).strip()],
                 self.simulation_mode(),
             )

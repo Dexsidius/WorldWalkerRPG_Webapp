@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.52.0"
+APP_VERSION = "3.53.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -1516,7 +1516,7 @@ BASE_STATE = {
     # memory_updates is a transient GM suggestion; reliability.py folds it
     # into the app-owned, deduplicated long-term narrative memory.
     "memory_updates":{},"narrative_memory":{"established_facts":[],"player_goals":[],"unresolved_mysteries":[],"promises":[],"relationships":[],"consequences":[]},
-    "campaign_direction":{},"relationship_opportunities":[],"last_cause_effect":[],"last_training_summary":{},"last_ai_route":{},
+    "campaign_direction":{},"relationship_opportunities":[],"last_cause_effect":[],"last_training_summary":{},"last_ai_route":{},"campaign_arcs":[],"campaign_arc_archive":[],"campaign_arc_director":{"quiet_until_turn":0,"last_beat_turn":-1,"last_resolution_turn":-1,"history":[]},"campaign_arc_context":{"active_arcs":[],"quiet_period":False,"quiet_until_turn":0,"recent_resolutions":[]},
     "trophy_proposals":[],"legacy_trophies":[],"dismissed_trophy_ids":[],"downtime_surprise_state":{},"message_delivery_state":{},
     "capability_profile":{},"ability_registry":{},"progression_calibration":{},"npc_continuity":{},
     "encounter_state":{"version":1,"phase":"idle","negotiation_possible":True,"violence_committed":False},

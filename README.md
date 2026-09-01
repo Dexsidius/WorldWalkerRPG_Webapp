@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.52.0** (schema 20).
+Current app/save version: **3.53.0** (schema 20).
+
+Version 3.53.0 adds a local Campaign Arc Director that turns established quests,
+standing instructions, repeated development and nemeses into optional multi-turn
+arcs. Threads advance only when relevant actions or recorded events touch them,
+support multiple conclusions, close with persistent epilogues, and create quiet
+aftermaths without another AI call.
 
 Version 3.52.0 adds a local Living World Director: repeated behavior creates grounded follow-ups, known NPCs can initiate contact from remembered goals, outcomes are tracked with more variety, vague typed actions are confirmed before queuing, and more everyday actions are available without additional AI calls.
 

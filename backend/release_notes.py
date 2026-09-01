@@ -1,6 +1,19 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.53.0": {
+        "title": "Campaign Arc Director",
+        "summary": "Established goals can now grow into optional multi-turn stories with causal development, multiple conclusions, persistent closure and breathing room afterward.",
+        "highlights": [
+            {"title": "Actions build real arcs", "example": "Repeatedly investigating an island conflict advances that thread; eating breakfast or training elsewhere does not."},
+            {"title": "No required objective order", "example": "A conflict can be confronted, investigated, negotiated, approached with allies or abandoned when circumstances allow."},
+            {"title": "NPC plans can intersect yours", "example": "A named nemesis or an established NPC action advances an arc only when their recorded behavior actually touches it."},
+            {"title": "Resolutions stay resolved", "example": "Negotiating peace creates a different epilogue from overthrowing a ruler, and the method and consequences remain in campaign memory."},
+            {"title": "Quiet aftermaths", "example": "After a major resolution, the GM allows recovery, relationships, training and ordinary life instead of immediately manufacturing another crisis."},
+            {"title": "Old campaigns are supported", "example": "Existing quests, standing orders, behavior patterns and nemeses become arc sources automatically after loading."},
+            {"title": "No additional AI call", "example": "Discovery, relevance, phase changes, branching, closure and pacing are calculated locally."},
+        ],
+    },
     "3.52.0": {
         "title": "The Living World Director",
         "summary": "Choices now build grounded follow-ups, reciprocal relationships and longer campaign patterns without manufacturing constant trouble.",
