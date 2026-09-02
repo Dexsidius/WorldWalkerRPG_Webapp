@@ -1,6 +1,19 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.54.0": {
+        "title": "Character Life & Legacy",
+        "summary": "Companions, relationships, mentorships and lasting deeds now develop through one grounded local simulation shared by AI and offline play.",
+        "highlights": [
+            {"title": "Companions have lives", "example": "A crewmate, teammate or guild member retains a personal goal and can make independent progress without scaling to the player."},
+            {"title": "Relationships have readable phases", "example": "Established history and affinity resolve into Acquainted, Trusted, Close or Strained phases with the reason preserved."},
+            {"title": "Standing care and training matter", "example": "An order to train a child or student continues across months and produces grounded development milestones."},
+            {"title": "Major life choices remain yours", "example": "Marriage, children, reconciliation, retirement and succession require evidence and player consent rather than random drama."},
+            {"title": "Deeds become legacy", "example": "Founding, liberating or saving something at true campaign scale is retained using the world's own language, such as inherited will or shinobi legacy."},
+            {"title": "Old campaigns upgrade automatically", "example": "Existing companions, contacts, NPC relationships and standing instructions populate the new system when the save loads."},
+            {"title": "No extra AI call", "example": "Eligibility, phases, deduplication, mentorship time and legacy storage run locally and can also support offline choices."},
+        ],
+    },
     "3.53.1": {
         "title": "Chronicle Turn Focus Repair",
         "summary": "After Advance, the Chronicle now opens at the first newly generated update instead of the beginning of the campaign.",

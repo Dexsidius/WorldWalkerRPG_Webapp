@@ -29,6 +29,7 @@ from jjk_system import advance_jjk_state
 from simulation_core import refresh_simulation_core, record_resolution_transaction
 from canon_integrity import repair_canon_payload
 from world_activity import advance_world_activity, normalize_world_activity
+from life_simulation import advance as advance_life_simulation
 from world_progression import normalize_world_progression
 from campaign_reliability import (
     reconcile_narrated_consequences, consolidate_long_campaign_memory,
@@ -720,6 +721,14 @@ Return ONLY valid JSON."""
                 for beat in arc_result.get("beats", []):
                     data.setdefault("events", []).append(beat)
                     self.append(f"[{beat.get('title', 'CAMPAIGN ARC')}]\n{beat.get('narrative', '')}", "system")
+                life_result = advance_life_simulation(
+                    self.state, turn_actions,
+                    [*data.get("events", []), *living.get("events", []), *arc_result.get("beats", [])],
+                    int(context.get("elapsed_minutes", 5) or 5),
+                )
+                for beat in life_result.get("events", []):
+                    data.setdefault("events", []).append(beat)
+                    self.append(f"[LIFE — {beat.get('title', 'DEVELOPMENT')}]\n{beat.get('narrative', '')}", "system")
             if canon_repairs:
                 integrity_report.setdefault("repairs", []).extend(canon_repairs)
             if integrity_report:

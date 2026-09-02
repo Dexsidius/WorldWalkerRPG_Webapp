@@ -17,7 +17,7 @@ from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 class WorldwalkerV3121ProgressionAndQATests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.53.1")
+        self.assertEqual(APP_VERSION, "3.54.0")
 
     def make_system_game(self, world):
         game = GameSession()

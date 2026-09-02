@@ -29,8 +29,8 @@ class WorldwalkerV3230RecurringFinancesTests(unittest.TestCase):
         return game
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.53.1")
-        self.assertEqual(BASE_STATE["schema_version"], 20)
+        self.assertEqual(APP_VERSION, "3.54.0")
+        self.assertEqual(BASE_STATE["schema_version"], 21)
         self.assertEqual(BASE_STATE["recurring_finances"], [])
 
     def test_gm_rules_documents_recurring_finances_for_a_normal_world(self):

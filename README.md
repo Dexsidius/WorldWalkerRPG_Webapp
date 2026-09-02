@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.53.1** (schema 20).
+Current app/save version: **3.54.0** (schema 21).
+
+Version 3.54.0 adds a local Character Life & Legacy engine for companion goals,
+relationship phases, mentorship, family choices, development, succession and
+lasting deeds. Major milestones require causal evidence or player consent, old
+saves migrate automatically, and the same compact state supports AI and offline
+resolution without an additional AI call.
 
 Version 3.53.1 fixes completed-turn Chronicle focus so every layout begins at
 the first newly generated update instead of jumping to the campaign's beginning.

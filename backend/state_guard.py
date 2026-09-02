@@ -601,6 +601,8 @@ def migrate_state(state, from_version="unknown"):
     repairs.extend(normalize_canon_integrity(migrated, scan_chronicle=True))
     normalize_companion_combinations(migrated)
     normalize_trophy_state(migrated)
+    from life_simulation import normalize as normalize_life_simulation
+    normalize_life_simulation(migrated)
     legacy_messages = _repair_legacy_local_messages(migrated)
     if legacy_messages:
         repairs.append(f"Cleaned {legacy_messages} legacy local message bodies")

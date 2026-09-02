@@ -37,8 +37,8 @@ def state_for(world="Naruto"):
 
 class WorldwalkerV3390ReliabilityTests(unittest.TestCase):
     def test_version_and_schema(self):
-        self.assertEqual(APP_VERSION, "3.53.1")
-        self.assertEqual(BASE_STATE["schema_version"], 20)
+        self.assertEqual(APP_VERSION, "3.54.0")
+        self.assertEqual(BASE_STATE["schema_version"], 21)
 
     def test_grounding_packet_prioritizes_current_state_and_named_context(self):
         state = state_for()

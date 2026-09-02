@@ -58,6 +58,7 @@ from gm_policy import (
     parse_player_intent, progression_plan, record_causal_outcome,
     temporal_budget,
 )
+from life_simulation import advance as advance_life_simulation
 
 
 # The minimum in-game time a single "next major event" click is allowed to
@@ -1858,10 +1859,15 @@ class TimeSkipMixin:
             record_living_outcome(self.state, data, context.get("actions", []))
             from arc_director import advance as advance_campaign_arcs
             arc_result = advance_campaign_arcs(self.state, context.get("actions", []), [*data.get("updates", []), *living.get("events", [])], elapsed_minutes)
+            life_result = advance_life_simulation(
+                self.state, context.get("actions", []),
+                [*data.get("updates", []), *data.get("events", []), *autonomy_events, *npc_growth_events, *organization_events, *living.get("events", []), *arc_result.get("beats", [])],
+                elapsed_minutes,
+            )
             from gm_consistency import coalesce_routine_updates
             updates = coalesce_routine_updates(data.get("updates", []))
             updates = prioritize_updates(
-                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events, *organization_events, *living.get("events", []), *arc_result.get("beats", [])]
+                [u for u in [*updates, *autonomy_events, *npc_growth_events, *downtime_events, *organization_events, *living.get("events", []), *arc_result.get("beats", []), *life_result.get("events", [])]
                  if isinstance(u, dict) and str(u.get("narrative", "")).strip()],
                 self.simulation_mode(),
             )

@@ -31,8 +31,8 @@ class WorldwalkerV340Tests(unittest.TestCase):
         return state
 
     def test_version_schema_and_new_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.53.1")
-        self.assertEqual(BASE_STATE["schema_version"], 20)
+        self.assertEqual(APP_VERSION, "3.54.0")
+        self.assertEqual(BASE_STATE["schema_version"], 21)
         for key in ("action_goals", "correction_log", "authoritative_corrections",
                     "information_packets", "npc_schedules", "canon_event_states",
                     "simulation_validation"):
@@ -67,7 +67,7 @@ class WorldwalkerV340Tests(unittest.TestCase):
 
     def test_old_save_migrates_all_integrity_fields(self):
         state = migrate_state({"schema_version": 10, "world": "Naruto"}, "3.3.0")
-        self.assertEqual(state["schema_version"], 20)
+        self.assertEqual(state["schema_version"], 21)
         self.assertIn("information_packets", state)
 
     def test_structured_goals_keep_exact_action_indices(self):

@@ -77,7 +77,7 @@ def validate_nested_campaign_state(state):
         "scene_state", "combat", "danger_scenario", "npc_memories", "contacts",
         "chat_threads", "narrative_memory", "memory_consolidation", "scenario_memory",
         "continuity_ledger", "diagnostics", "standing_order_state", "memory_tiers",
-        "campaign_arc_director", "campaign_arc_context",
+        "campaign_arc_director", "campaign_arc_context", "life_simulation", "life_context",
     )
     for key in list_fields:
         if not isinstance(state.get(key), list):
