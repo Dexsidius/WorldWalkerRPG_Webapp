@@ -6,7 +6,10 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.53.0** (schema 20).
+Current app/save version: **3.53.1** (schema 20).
+
+Version 3.53.1 fixes completed-turn Chronicle focus so every layout begins at
+the first newly generated update instead of jumping to the campaign's beginning.
 
 Version 3.53.0 adds a local Campaign Arc Director that turns established quests,
 standing instructions, repeated development and nemeses into optional multi-turn

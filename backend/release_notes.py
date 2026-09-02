@@ -1,6 +1,15 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.53.1": {
+        "title": "Chronicle Turn Focus Repair",
+        "summary": "After Advance, the Chronicle now opens at the first newly generated update instead of the beginning of the campaign.",
+        "highlights": [
+            {"title": "Read each turn from its beginning", "example": "A multi-update turn lands on its first new dated card, allowing the player to read downward in order."},
+            {"title": "Themed Chronicles are fixed", "example": "Naruto scrolls and One Piece poneglyph wrappers no longer confuse the Chronicle's scroll-position calculation."},
+            {"title": "Desktop and phone behavior remain appropriate", "example": "Scrollable Chronicle panels move internally; layouts using page scrolling move the page to the new update."},
+        ],
+    },
     "3.53.0": {
         "title": "Campaign Arc Director",
         "summary": "Established goals can now grow into optional multi-turn stories with causal development, multiple conclusions, persistent closure and breathing room afterward.",

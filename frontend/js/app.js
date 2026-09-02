@@ -971,7 +971,15 @@ function appendStoryEntries(entries, options = {}) {
     // and scrolls the page itself, so each layout needs its own scroll owner.
     requestAnimationFrame(() => {
       if (feed.scrollHeight > feed.clientHeight + 2) {
-        feed.scrollTo({ top: Math.max(0, firstNewBeat.offsetTop - feed.offsetTop - 8), behavior: "auto" });
+        // offsetTop is relative to offsetParent, and themed turn envelopes
+        // introduce a different offsetParent than the Chronicle feed. Using
+        // two unrelated offsetTop values made Naruto/One Piece calculate 0
+        // and jump to the beginning of the entire campaign. Convert viewport
+        // geometry into the feed's own scroll coordinates instead.
+        const feedRect = feed.getBoundingClientRect();
+        const beatRect = firstNewBeat.getBoundingClientRect();
+        const target = feed.scrollTop + beatRect.top - feedRect.top - 8;
+        feed.scrollTo({ top: Math.max(0, target), behavior: "auto" });
       } else {
         const pageTop = firstNewBeat.getBoundingClientRect().top + window.scrollY;
         window.scrollTo({ top: Math.max(0, pageTop - 12), behavior: "auto" });
