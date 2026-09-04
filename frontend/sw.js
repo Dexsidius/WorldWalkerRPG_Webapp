@@ -1,6 +1,6 @@
-const CACHE = "worldwalker-v3531-shell-1";
+const CACHE = "worldwalker-v3571-shell-1";
 const SHELL = [
-  "/", "/css/style.css?v=3.57.0", "/js/app.js?v=3.57.0", "/manifest.webmanifest",
+  "/", "/css/style.css?v=3.57.1", "/css/living-map.css?v=3.57.1-map2", "/js/app.js?v=3.57.1", "/js/living-map.js?v=3.57.1-map2", "/manifest.webmanifest",
   "/assets/branding/worldwalker-emblem.png", "/cursors/naruto-kunai.svg", "/cursors/naruto-shuriken.svg",
   "/cursors/bleach-zanpakuto.svg", "/cursors/jjk-sukuna-finger.svg", "/cursors/one-piece-strawhat-jolly-roger.svg"
 ];

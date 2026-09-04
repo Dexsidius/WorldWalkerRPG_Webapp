@@ -34,14 +34,30 @@ class MapWorkspaceTests(unittest.TestCase):
         for name in ("Kusagakure", "Takigakure", "Yugakure", "Otogakure", "Uzushiogakure Ruins", "Five Kage Summit"):
             self.assertIn(name, names)
 
-    def test_journal_promotes_map_to_viewport_workspace(self):
+    def test_approved_living_map_replaces_the_journal_renderer(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
-        self.assertIn('classList.toggle("map-workspace", tab === "map")', js)
-        self.assertIn("#modal-journal.map-workspace>.modal", css)
-        self.assertIn("height:calc(100dvh", css)
+        living_js = (ROOT / "frontend" / "js" / "living-map.js").read_text(encoding="utf-8")
+        living_css = (ROOT / "frontend" / "css" / "living-map.css").read_text(encoding="utf-8")
+        self.assertIn('window.WorldwalkerLivingMap.open()', js)
+        self.assertIn('/js/living-map.js?v=3.57.1-map2', html)
+        self.assertIn('grid-template-columns:clamp(205px,17vw,290px) minmax(0,1fr)', living_css)
+        self.assertIn('mode: "political"', living_js)
+        self.assertNotIn('paintMapTerritories', living_js)
         self.assertIn('data-mobile-view="world" aria-selected="false"><span>⌖</span>Map', html)
+
+    def test_living_map_preserves_tracking_and_world_layer_rules(self):
+        js = (ROOT / "frontend" / "js" / "living-map.js").read_text(encoding="utf-8")
+        css = (ROOT / "frontend" / "css" / "living-map.css").read_text(encoding="utf-8")
+        self.assertIn('Math.abs(scoreOf(row)) >= 20', js)
+        self.assertIn('/companion|mentor|nemesis/i', js)
+        self.assertIn('organization_roster', js)
+        self.assertIn('Political', js)
+        self.assertIn('Danger', js)
+        self.assertIn('Relationships', js)
+        self.assertIn('Events', js)
+        self.assertIn('radialGradient', js)
+        self.assertIn('.lm-marker.is-moving', css)
 
 
 if __name__ == "__main__":

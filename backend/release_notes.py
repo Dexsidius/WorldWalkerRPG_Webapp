@@ -1,6 +1,19 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.57.1": {
+        "title": "The Living Map Arrives",
+        "summary": "The approved Living Map now replaces the old Journal atlas instead of placing new artwork beneath the legacy territory overlay.",
+        "highlights": [
+            {"title": "Approved map composition", "example": "Desktop opens with character context on the left, a dominant expanding atlas in the center, a selected-place inspector on the right, and the Chronicle/action bridge below."},
+            {"title": "No more blob shading", "example": "Political control appears as restrained, feathered influence washes that leave roads, terrain, coastlines, and labels readable."},
+            {"title": "Four useful views", "example": "Switch between Political, Danger, Relationships, and Events without changing the campaign or spending an AI call."},
+            {"title": "Living pieces", "example": "The player and eligible known characters appear as pieces; recorded travel animates smoothly along the map rather than teleporting visually."},
+            {"title": "Relationship-safe tracking", "example": "A named character appears live only at meaningful relationship strength, as a companion/mentor/nemesis, or through a shared tracked group."},
+            {"title": "True phone Map tab", "example": "On phones, Map occupies the available screen above the normal bottom navigation, with touch pan, zoom, modes, and bottom-sheet details."},
+            {"title": "New atlases retained", "example": "The sharper maps from v3.57.0 remain installed, including Bleach's five switchable realm boards."},
+        ],
+    },
     "3.57.0": {
         "title": "World Atlas Rebuild",
         "summary": "Every world now has a sharper setting-specific atlas, while Bleach uses separate switchable maps for each realm.",
