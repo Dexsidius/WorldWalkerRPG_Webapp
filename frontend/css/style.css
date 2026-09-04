@@ -1848,6 +1848,25 @@ body[data-world="Reincarnated as a Slime"] .percentile-tray{ background:radial-g
 .map-zoom-controls button{ width:26px; height:26px; border-radius:6px; border:1px solid var(--border-soft); background:rgba(4,8,12,.75); color:var(--text); font-size:14px; line-height:1; cursor:pointer; }
 .map-zoom-controls button:hover{ background:rgba(var(--accent-rgb),.25); }
 .map-layout{ display:grid; grid-template-columns:minmax(0,1fr) 230px; gap:10px; }
+
+/* Full atlas workspace. The map consumes every pixel not occupied by the
+   compact tab rail or the selected-place inspector, matching a strategy
+   game's map-first hierarchy instead of floating between three columns. */
+#modal-journal.map-workspace{ padding:clamp(8px,1vw,16px); align-items:stretch; }
+#modal-journal.map-workspace>.modal{
+  width:100%; max-width:none; height:calc(100dvh - clamp(16px,2vw,32px)); max-height:none;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+#modal-journal.map-workspace .modal-head{ flex:0 0 auto; }
+#modal-journal.map-workspace .modal-body{ flex:1 1 0; min-height:0; display:flex; flex-direction:column; overflow:hidden; padding:10px 12px 12px; }
+#modal-journal.map-workspace .journal-tabs{ flex:0 0 auto; margin-bottom:8px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:thin; }
+#modal-journal.map-workspace .journal-panel{ flex:1 1 0; min-height:0; padding:0; overflow:hidden; display:flex; flex-direction:column; }
+#modal-journal.map-workspace .map-heading{ flex:0 0 auto; margin-bottom:6px; }
+#modal-journal.map-workspace .territory-legend{ flex:0 0 auto; margin-bottom:7px; }
+#modal-journal.map-workspace .map-layout{ flex:1 1 0; min-height:0; grid-template-columns:minmax(0,1fr) clamp(220px,18vw,310px); gap:8px; }
+#modal-journal.map-workspace .map-wrap{ height:100%; min-height:0; aspect-ratio:auto; }
+#modal-journal.map-workspace .map-detail{ min-height:0; height:100%; overflow-y:auto; }
+#modal-journal.map-workspace .map-canvas{ background-size:cover; }
 .map-node{ appearance:none; position:absolute; width:1px; height:1px; padding:0; border:0; background:transparent; transform:translate(-50%,-50%); z-index:4; cursor:pointer; }
 .map-pip{ position:absolute; left:-5px; top:-5px; width:10px; height:10px; border:2px solid rgba(0,0,0,.7); border-radius:50%; background:var(--accent2); box-shadow:0 0 8px var(--accent2); }
 .map-node.here .map-pip{ left:-7px; top:-7px; width:14px; height:14px; background:var(--gold); box-shadow:0 0 14px var(--gold); animation:mapPulse 1.8s ease-in-out infinite; }

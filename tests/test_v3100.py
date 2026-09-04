@@ -14,7 +14,7 @@ from worlds import (WORLD_DATA, WORLD_EXPANSIONS, abilities_for,
 
 class WorldwalkerV3100Tests(unittest.TestCase):
     MAP_COUNTS = {
-        "One Piece": 38, "Hunter x Hunter": 14, "Naruto": 15,
+        "One Piece": 38, "Hunter x Hunter": 14, "Naruto": 21,
         "Solo Max-Level Newbie": 51, "Overgeared": 10,
         "Reincarnated as a Slime": 10, "Bleach": 33,
     }
@@ -28,7 +28,7 @@ class WorldwalkerV3100Tests(unittest.TestCase):
         "Bleach": [-40150,-2190,-1460,0,20,40,60,61,71,74,88,175,185,205,214,226,238,252,278,795,850,930,935,950,970,990,1005],
     }
 
-    def test_map_nodes_and_timeline_dates_were_not_expanded(self):
+    def test_intentional_map_node_counts_and_unchanged_timeline_dates(self):
         for world, count in self.MAP_COUNTS.items():
             self.assertEqual(len(WORLD_DATA[world]["map"]), count, world)
             self.assertEqual([e["day"] for e in timeline_for(world)["events"]], self.TIMELINE_DAYS[world], world)

@@ -24,6 +24,21 @@ CLAIM_SIZES = {
     "realm": 27.0,
     "continent": 34.0,
 }
+
+# Canon publications establish the relative placement of the five great
+# countries and several smaller neighbors, but do not provide survey-grade
+# borders. These polygons follow those published silhouettes on the game's
+# label-free Naruto atlas. They are deliberately kept separate from the
+# background art so a campaign can repaint or annex them narratively.
+NARUTO_CANON_TERRITORY_POLYGONS = {
+    "Konohagakure": [[39, 31], [55, 27], [68, 37], [68, 61], [59, 70], [42, 68], [33, 55], [34, 40]],
+    "Sunagakure": [[0, 40], [23, 39], [34, 48], [42, 68], [35, 91], [0, 91]],
+    "Kirigakure": [[73, 35], [100, 28], [100, 82], [73, 78], [68, 60]],
+    "Kumogakure": [[59, 0], [91, 0], [92, 32], [77, 43], [68, 37], [55, 27]],
+    "Iwagakure": [[0, 0], [39, 0], [42, 25], [34, 40], [23, 39], [0, 40]],
+    "Amegakure": [[24, 35], [34, 32], [39, 40], [36, 58], [28, 58], [22, 48]],
+    "Iron Country": [[38, 0], [59, 0], [55, 27], [42, 25]],
+}
 LEADER_WORDS = {
     "ruler", "leader", "founder", "sovereign", "king", "queen", "emperor",
     "empress", "president", "governor", "lord", "lady", "chief", "daimyo",
@@ -273,10 +288,11 @@ def political_regions_for_map(state, nodes):
         kind = str(node.get("kind") or "").lower()
         tier = _number(node.get("tier"), 1, 1, 10)
         size = kind_sizes.get(kind, 8.5 + tier * 0.8)
+        canon_polygon = NARUTO_CANON_TERRITORY_POLYGONS.get(str(node.get("name") or "")) if state.get("world") == "Naruto" else None
         regions.append({
             "id": f"landmark-{_slug(node.get('name'))}", "name": node.get("name"),
             "controller": controller, "x": node.get("x", 50), "y": node.get("y", 50),
-            "size": size, "polygon": None, "geometry": "strategic",
+            "size": size, "polygon": canon_polygon, "geometry": "canon" if canon_polygon else "strategic",
             "contested_by": list(node.get("contested_by") or []), "recently_changed": bool(node.get("recently_changed")),
         })
     return regions

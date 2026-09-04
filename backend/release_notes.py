@@ -1,18 +1,18 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
-    "3.55.0": {
-        "title": "Tactical Combat Overhaul",
-        "summary": "Naruto, One Piece and Bleach battles now play out on a responsive local grid with aimed powers, full ally control and world-faithful rules.",
+    "3.56.0": {
+        "title": "Living Atlas — Naruto Rebuild",
+        "summary": "The atlas is now a full-screen strategy workspace, every world map is zoom-ready, and Naruto has rebuilt geography, political borders and canon location placement.",
         "highlights": [
-            {"title": "Control the whole team", "example": "Every present combat-support ally gets a separate movable piece, their own abilities and any speed-earned bonus turn."},
-            {"title": "Aim the real area", "example": "Select a technique to preview its line, cone, arc, burst, ring or target tiles, then click or tap where it lands."},
-            {"title": "Bleach joins tactical combat", "example": "Kidō, Shunpo, Shikai, Bankai and recorded release applications use Reiryoku and remain gated by powers the campaign actually unlocked."},
-            {"title": "World rules remain distinct", "example": "Naruto contracts and chakra restrictions, One Piece Haki and sea weaknesses, and Bleach releases do not collapse into generic attacks."},
-            {"title": "Transformations are tactical", "example": "A named form changes the portrait, grants only its recorded applications and stat changes, and does not consume the attack action."},
-            {"title": "Enemies keep believable strength", "example": "A bandit, captain or canon opponent uses its established role and feats plus a prewritten matching move family instead of scaling to the player."},
-            {"title": "Phone and account play repaired", "example": "LAN browsers can submit moves without randomUUID support, and signed-in phone sessions carry their saved fallback login into the battle screen."},
-            {"title": "No per-move AI charge", "example": "Movement, damage, statuses, enemy turns and battle receipts resolve locally; the GM only narrates the completed result."},
+            {"title": "Map-first desktop layout", "example": "Opening Map replaces the small journal card with a viewport-filling atlas and a narrow selected-place inspector."},
+            {"title": "A real phone Map tab", "example": "The bottom navigation now says Map and opens the same touch-ready atlas directly."},
+            {"title": "Sharper zoom in every world", "example": "All bundled atlas textures are at least 4096 pixels wide, so roads and terrain remain readable while zooming."},
+            {"title": "Naruto geography rebuilt", "example": "The five great countries occupy their established northwest, northeast, eastern-island, southwest and central positions without incorrect labels baked into the artwork."},
+            {"title": "Canon-shaped political borders", "example": "The great villages, Amegakure and the Land of Iron begin with stable country geometry instead of overlapping circular blobs."},
+            {"title": "Territory still changes with the story", "example": "If control changes, the same country geometry repaints for the new faction; a new player holding can still begin as one hex and expand."},
+            {"title": "More supported Naruto landmarks", "example": "Kusagakure, Takigakure, Yugakure, Otogakure, Uzushiogakure's ruins and the Five Kage Summit can now be selected on the atlas."},
+            {"title": "No false precision", "example": "Places whose exact world-map position is not established, such as Mount Myōboku or the moving Turtle Island, are not pinned to a made-up coordinate."},
         ],
     },
     "3.54.0": {

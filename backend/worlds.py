@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.55.0"
+APP_VERSION = "3.56.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -240,13 +240,16 @@ WORLD_DATA = {
         # aren't confirmed on that specific map (it flags Iron Country as
         # guesswork itself), so both use a reasonable nearby placement.
         "map": [
-            ("Konohagakure",41,59,"village",3), ("Land of Fire",44,52,"region",2),
-            ("Sunagakure",24,72,"village",5), ("Kirigakure",87,64,"village",6),
-            ("Kumogakure",64,24,"village",7), ("Iwagakure",24,23,"village",7),
-            ("Valley of the End",44,44,"landmark",6), ("Forest of Death",46,62,"training",5),
-            ("Land of Waves",40,89,"region",4), ("Amegakure",32,56,"village",8),
-            ("Iron Country",56,32,"nation",8), ("Kannabi Bridge",31,44,"landmark",7),
-            ("Land of Rice Fields",51,40,"region",5), ("Fourth War Front",60,46,"battlefield",12),
+            ("Konohagakure",52,52,"village",3), ("Land of Fire",52,48,"region",2),
+            ("Sunagakure",21,62,"village",5), ("Kirigakure",84,57,"village",6),
+            ("Kumogakure",73,21,"village",7), ("Iwagakure",23,22,"village",7),
+            ("Valley of the End",55,42,"landmark",6), ("Forest of Death",54,55,"training",5),
+            ("Land of Waves",68,73,"region",4), ("Amegakure",31,47,"village",8),
+            ("Iron Country",48,13,"nation",8), ("Kannabi Bridge",36,37,"landmark",7),
+            ("Land of Rice Fields",62,35,"region",5), ("Kusagakure",47,29,"village",5),
+            ("Takigakure",34,35,"village",6), ("Yugakure",67,45,"village",5),
+            ("Otogakure",64,32,"village",7), ("Uzushiogakure Ruins",65,67,"historical",7),
+            ("Five Kage Summit",48,14,"landmark",8), ("Fourth War Front",63,36,"battlefield",12),
             ("Kaguya's Dimension",92,8,"dimension",15)
         ],
         "special": {"Shinobi Rank":"Civilian","Nature Affinity":"Unknown","Known Jutsu":[],"Clan":"None"}
