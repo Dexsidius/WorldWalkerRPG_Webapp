@@ -1,6 +1,20 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.55.0": {
+        "title": "Tactical Combat Overhaul",
+        "summary": "Naruto, One Piece and Bleach battles now play out on a responsive local grid with aimed powers, full ally control and world-faithful rules.",
+        "highlights": [
+            {"title": "Control the whole team", "example": "Every present combat-support ally gets a separate movable piece, their own abilities and any speed-earned bonus turn."},
+            {"title": "Aim the real area", "example": "Select a technique to preview its line, cone, arc, burst, ring or target tiles, then click or tap where it lands."},
+            {"title": "Bleach joins tactical combat", "example": "Kidō, Shunpo, Shikai, Bankai and recorded release applications use Reiryoku and remain gated by powers the campaign actually unlocked."},
+            {"title": "World rules remain distinct", "example": "Naruto contracts and chakra restrictions, One Piece Haki and sea weaknesses, and Bleach releases do not collapse into generic attacks."},
+            {"title": "Transformations are tactical", "example": "A named form changes the portrait, grants only its recorded applications and stat changes, and does not consume the attack action."},
+            {"title": "Enemies keep believable strength", "example": "A bandit, captain or canon opponent uses its established role and feats plus a prewritten matching move family instead of scaling to the player."},
+            {"title": "Phone and account play repaired", "example": "LAN browsers can submit moves without randomUUID support, and signed-in phone sessions carry their saved fallback login into the battle screen."},
+            {"title": "No per-move AI charge", "example": "Movement, damage, statuses, enemy turns and battle receipts resolve locally; the GM only narrates the completed result."},
+        ],
+    },
     "3.54.0": {
         "title": "Character Life & Legacy",
         "summary": "Companions, relationships, mentorships and lasting deeds now develop through one grounded local simulation shared by AI and offline play.",

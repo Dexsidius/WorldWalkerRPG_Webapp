@@ -229,11 +229,20 @@ def normalize_npc_continuity(state):
 def companion_support_for_combat(state):
     registry = state.get("npc_continuity") or normalize_npc_continuity(state)
     current = str(state.get("location") or "").lower()
+    companions={str(row.get('name')):row for row in state.get('companions',[]) if isinstance(row,dict) and row.get('name')}
+    memories=state.get('npc_memories') if isinstance(state.get('npc_memories'),dict) else {}
     supporters = []
     for row in registry.values():
         present = row.get("last_known_location") in ("", "Unknown") or str(row.get("last_known_location", "")).lower() == current
         if row.get("companion") and row.get("combat_support") and row.get("status") != "deceased" and present:
-            supporters.append({"name": row["name"], "bonus": row.get("support_bonus", 0), "role": row.get("role", "Support")})
+            # Preserve the ally's own saved stats, abilities, portrait and forms.
+            # The old aggregate-support row was sufficient for narrative combat,
+            # but it cannot represent a player-controlled tactical piece.
+            source=copy.deepcopy(memories.get(row['name'],{})) if isinstance(memories.get(row['name']),dict) else {}
+            source.update(copy.deepcopy(companions.get(row['name'],{})))
+            source.update(name=row['name'],bonus=row.get('support_bonus',0),role=row.get('role','Support'),
+                          combat_support=True)
+            supporters.append(source)
     return supporters
 
 

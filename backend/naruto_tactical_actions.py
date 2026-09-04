@@ -1,5 +1,5 @@
 """Naruto casts execute once on the server; presentation never resolves damage."""
-import copy
+import copy,re
 from naruto_tactics import compile_skill as naruto_compile, validate_requirements, saved_skill_details as naruto_details
 from tactical_combat import (obj, seq, number, cells, blocked_cells, live_units,
     ability_footprint, footprint_cells, _actor_effects, _blocked, _floor,
@@ -18,6 +18,8 @@ def cast(game, board, payload, actor=None, detail_override=None):
     name=str(payload.get('ability') or '')
     if state.get('world')=='One Piece':
         from one_piece_tactics import compile_skill,saved_skill_details,blocked_by_sea
+    elif state.get('world')=='Bleach':
+        from bleach_tactics import compile_skill,saved_skill_details
     else:compile_skill,saved_skill_details=naruto_compile,naruto_details
     known=saved_skill_details(state) if actor.get('player') else {}
     if name and actor.get('player') and name not in known: raise ValueError('This character has not learned that ability.')
@@ -35,12 +37,18 @@ def cast(game, board, payload, actor=None, detail_override=None):
     if disabling and not (disabling.get('kind')=='genjutsu' and 'genjutsu' in mechanics.get('cleanse',[])):
         raise ValueError('This character cannot act while incapacitated.')
     if actor.get('action_used') and not free: raise ValueError('Your action is spent; move or end your turn.')
+    required_form=str(detail.get('requires_form') or '').strip()
+    if required_form:
+        _,_,active_buffs=_actor_effects(state,actor)
+        if not any(obj(row).get('form') and str(obj(row).get('name'))==required_form for row in active_buffs):
+            raise ValueError('Activate '+required_form+' before using this application.')
     form_token=actor['id']+':'+name
     if free and form_token in board.get('forms_used',[]): raise ValueError('That form was already changed this activation.')
     cost=max(0,number(detail.get('resource_cost'),20 if name else 0))
-    if pools.get('resource',0)<cost: raise ValueError('Not enough stamina.' if state.get('world')=='One Piece' else 'Not enough chakra.')
+    resource_name={'One Piece':'stamina','Bleach':'Reiryoku'}.get(state.get('world'),'chakra')
+    if pools.get('resource',0)<cost: raise ValueError('Not enough '+resource_name+'.')
     status,_,_=_actor_effects(state,actor)
-    if cost and any(obj(s).get('kind')=='chakra_blocked' for s in status): raise ValueError('Chakra points are blocked.')
+    if state.get('world')=='Naruto' and cost and any(obj(s).get('kind')=='chakra_blocked' for s in status): raise ValueError('Chakra points are blocked.')
     cooldowns=combat.setdefault('tactical_cooldowns',{}) if actor.get('player') else actor.setdefault('cooldowns',{})
     if number(cooldowns.get(name))>0: raise ValueError('That technique is still on cooldown.')
     target=(int(number(payload.get('x'),actor['x'])),int(number(payload.get('y'),actor['y'])))
@@ -67,8 +75,9 @@ def cast(game, board, payload, actor=None, detail_override=None):
             if not summon.get('contract_established') or not obj(summon.get('stats')):
                 raise ValueError('A recorded summoning contract and summon attributes are required.')
     elif effect=='transform':
-        if not obj(detail.get('stat_boosts')) and not obj(detail.get('combat_boosts')):
-            raise ValueError('This form needs its actual stat boosts recorded; a generic bonus will not be invented.')
+        if (not obj(detail.get('stat_boosts')) and not obj(detail.get('combat_boosts'))
+                and not seq(detail.get('release_unlocks'))):
+            raise ValueError('This form needs actual stat boosts or recorded release applications; a generic bonus will not be invented.')
     elif not targets:
         raise ValueError('No valid target in this footprint.')
     if effect not in {'damage','control','debuff','heal','shield','cleanse','buff','transform','summon','movement'}:
@@ -111,6 +120,9 @@ def cast(game, board, payload, actor=None, detail_override=None):
         else:
             child=combat_profile(state,detail['summon_profile'],'ally',f'summon-{serial}')
         child.update(summoner_id=actor['id'],x=target[0],y=target[1],action_used=False)
+        if actor.get('player') or actor.get('player_controlled'):
+            child['player_controlled']=True
+            child['skills']={a['name']:copy.deepcopy(a) for a in child.get('abilities',[]) if isinstance(a,dict) and a.get('name')}
         child['movement_max']=movement_budget(child['speed'],board['width']);child['movement_left']=0
         board['units'].append(child);event['summoned']=child['name'];event['destination']=list(target)
         event['visual']={'asset':'clone-barrage','delivery':'target','scale':1}
@@ -119,10 +131,12 @@ def cast(game, board, payload, actor=None, detail_override=None):
         from portrait_generator import set_active_portrait_form
         boosts=obj(detail.get('combat_boosts')); stats=obj(detail.get('stat_boosts'))
         speed_base=max(1,number(actor.get('base_speed'),30)); defense_base=max(1,number(actor.get('defense'),30))
+        world=state.get('world','Naruto')
+        power_stat={'Bleach':'Reiatsu Control','One Piece':'Strength'}.get(world,'Ninjutsu')
         row={'name':name,'form':True,'rounds_left':max(1,int(number(detail.get('duration_rounds'),999999))),
-             'speed_pct':number(boosts.get('speed_pct'),number(stats.get(speed_stat_for('Naruto')))/speed_base),
-             'power_pct':number(boosts.get('power_pct'),number(stats.get('Ninjutsu'))/max(1,actor['power'])),
-             'defense_pct':number(boosts.get('defense_pct'),number(stats.get(defense_stat_for('Naruto')))/defense_base),
+             'speed_pct':number(boosts.get('speed_pct'),number(stats.get(speed_stat_for(world)))/speed_base),
+             'power_pct':number(boosts.get('power_pct'),number(stats.get(power_stat))/max(1,actor['power'])),
+             'defense_pct':number(boosts.get('defense_pct'),number(stats.get(defense_stat_for(world)))/defense_base),
              'upkeep':max(0,number(detail.get('upkeep'))),'recoil':max(0,number(detail.get('recoil')))}
         # Mutually exclusive forms replace, rather than repeatedly stacking on clicks.
         row['form_slot']=str(detail.get('form_slot') or ('eyes' if any(k in name.lower() for k in ('sharingan','byakugan','rinnegan')) else 'body'))
@@ -150,8 +164,12 @@ def cast(game, board, payload, actor=None, detail_override=None):
             if effect in {'damage','control','debuff'}:
                 _,ad,ab=_actor_effects(state,actor)
                 _,td,tb=_actor_effects(state,unit)
-                attribute=detail.get('stat') or ('Taijutsu' if mechanics.get('element')=='physical' or not name else
-                                               'Genjutsu' if obj(mechanics.get('status')).get('kind')=='genjutsu' else 'Ninjutsu')
+                world=state.get('world','Naruto')
+                attribute=detail.get('stat') or (('Zanjutsu' if re.search(r'\b(sword|slash|zanpakuto|zanjutsu)\b',name,re.I) else
+                                                   'Hakuda' if re.search(r'\b(punch|kick|hakuda|strike)\b',name,re.I) else 'Kido') if world=='Bleach' else
+                                                  ('Strength' if world=='One Piece' else
+                                                   'Taijutsu' if mechanics.get('element')=='physical' or not name else
+                                                   'Genjutsu' if obj(mechanics.get('status')).get('kind')=='genjutsu' else 'Ninjutsu'))
                 power=number(obj(actor.get('stats')).get(attribute),actor['power'])*max(.1,1+sum(number(obj(r).get('power_pct')) for r in [*ab,*ad]))
                 defense=unit['defense']*(1+sum(number(obj(r).get('defense_pct')) for r in [*tb,*td]))
                 check=game._combat_check(round((power-defense)/4),30,60);result.update(check)

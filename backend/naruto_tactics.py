@@ -157,5 +157,8 @@ def require_narrative_available(state):
     if state.get('world')=='One Piece':
         from one_piece_tactics import blocks_narrative as one_piece_blocked
         blocked=one_piece_blocked(state)
+    elif state.get('world')=='Bleach':
+        from bleach_tactics import blocks_narrative as bleach_blocked
+        blocked=bleach_blocked(state)
     if blocked:
         raise ValueError('Finish the tactical battle before typing actions or advancing time.')

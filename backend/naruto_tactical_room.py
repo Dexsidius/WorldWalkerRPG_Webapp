@@ -10,6 +10,9 @@ def rules(game):
     if game.state.get('world')=='One Piece':
         from one_piece_tactics import compile_skill,saved_skill_details
         return compile_skill,saved_skill_details
+    if game.state.get('world')=='Bleach':
+        from bleach_tactics import compile_skill,saved_skill_details
+        return compile_skill,saved_skill_details
     return naruto_compile,naruto_details
 
 

@@ -7,4 +7,6 @@
 body[data-world="One Piece"]{--bg:#071521;--panel:#0c1e2f;--accent:#d4a14a;--sub:#9ad9e7;--line:#385f70;background:linear-gradient(#071521,#092b3b)}
 body[data-world="One Piece"] .game-header{border-bottom:3px double #d4a14a}body[data-world="One Piece"] .board-scroll{background:#153a47}
 body[data-world="One Piece"] .primary,body[data-world="One Piece"] .form-button{border-color:#d4a14a;color:#fff3c4}
-
+body[data-world="Bleach"]{--bg:#0b0c0d;--panel:#17191b;--accent:#e7e2d5;--sub:#a9c4cc;--line:#5d6265;background:linear-gradient(135deg,#090a0b,#202326)}
+body[data-world="Bleach"] .game-header{border-bottom:3px double #e7e2d5}body[data-world="Bleach"] .board-scroll{background:#25282a}
+body[data-world="Bleach"] .primary,body[data-world="Bleach"] .form-button{border-color:#e7e2d5;color:#fff;background:#17191b}

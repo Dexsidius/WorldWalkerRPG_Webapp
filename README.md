@@ -6,7 +6,14 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.54.0** (schema 21).
+Current app/save version: **3.55.0** (schema 21).
+
+Version 3.55.0 completes the tactical combat overhaul for Naruto, One Piece,
+and Bleach. Battles use a server-authoritative grid with stat-based movement,
+aimed ability shapes, player control of every present ally, locally resolved
+status effects and transformations, prewritten enemy attacks, and world-specific
+power rules and visuals. Phone and account play use the same board without typed
+combat actions or extra per-move AI calls.
 
 Version 3.54.0 adds a local Character Life & Legacy engine for companion goals,
 relationship phases, mentorship, family choices, development, succession and

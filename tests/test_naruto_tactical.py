@@ -42,12 +42,57 @@ def send(game,action='attack',**fields):
 
 
 class NarutoTacticalTests(unittest.TestCase):
+    def test_single_player_controls_every_present_combat_ally(self):
+        from tactical_combat import board_view
+        g=fresh();g.state['companions']=[{'name':'Konan','role':'Ranged support','combat_support':True,
+            'stats':{'Taijutsu':60,'Ninjutsu':110,'Genjutsu':50,'Chakra Control':100,'Willpower':90,'Intellect':90},
+            'skills':{'Paper Spear':{'description':'A paper projectile pierces one enemy.','effect_type':'damage'}}}]
+        g.state['npc_memories']={'Konan':{'last_known_location':g.state.get('location','Unknown')}}
+        g.state['npc_continuity']={};g.state['combat']['tactical']=None
+        board=ensure_board(g.state);ally=next(u for u in board['units'] if u.get('player_controlled'))
+        self.assertEqual(ally['name'],'Konan');self.assertIn('Paper Spear',ally['skills'])
+        send(g,'end')
+        self.assertEqual(board['active_id'],ally['id'])
+        self.assertFalse(any(row.get('name')=='Konan' and row.get('action')=='attack' for row in g.state['combat']['log']))
+        view=board_view(g.state);self.assertIn('Paper Spear',view['skill_profiles'])
+
+    def test_controlled_ally_uses_own_position_stats_and_ability(self):
+        g=fresh();g.state['companions']=[{'name':'Konan','combat_support':True,
+            'stats':{'Taijutsu':60,'Ninjutsu':110,'Genjutsu':50,'Chakra Control':100,'Willpower':90,'Intellect':90},
+            'skills':{'Paper Spear':{'description':'A paper projectile pierces one enemy.','effect_type':'damage'}}}]
+        g.state['npc_memories']={'Konan':{'last_known_location':g.state.get('location','Unknown')}}
+        g.state['npc_continuity']={};g.state['combat']['tactical']=None
+        board=ensure_board(g.state);ally=next(u for u in board['units'] if u.get('player_controlled'));enemy=next(u for u in board['units'] if u['side']=='enemy')
+        ally.update(x=2,y=2);enemy.update(x=4,y=2);send(g,'end')
+        before=enemy['hp'];send(g,ability='Paper Spear',x=4,y=2)
+        self.assertLess(enemy['hp'],before);self.assertEqual(g.state['combat']['log'][-1]['unit_id'],ally['id'])
+
+    def test_each_controlled_ally_receives_its_own_speed_bonus_choice(self):
+        g=fresh();g.state['companions']=[{'name':'Fast Ally','combat_support':True,
+            'stats':{'Taijutsu':80,'Ninjutsu':80,'Genjutsu':30,'Chakra Control':80,'Willpower':80,'Intellect':50},
+            'skills':{'Quick Strike':{'description':'A close strike attacks one enemy.'}}}]
+        g.state['npc_memories']={'Fast Ally':{'last_known_location':g.state.get('location','Unknown')}}
+        g.state['npc_continuity']={};g.state['combat']['tactical']=None
+        board=ensure_board(g.state);ally=next(u for u in board['units'] if u.get('player_controlled'));enemy=next(u for u in board['units'] if u['side']=='enemy')
+        # Avoid spending the main character's own speed bonus in this fixture.
+        board['units'][0]['speed']=board['units'][0]['base_speed']=enemy['speed'];ally['speed']=ally['base_speed']=enemy['speed']+30
+        send(g,'end');self.assertEqual(board['active_id'],ally['id'])
+        send(g,'end');self.assertEqual(board['active_id'],ally['id']);self.assertTrue(board['bonus_activation'])
+
     def test_original_visuals_reference_real_exported_assets(self):
         runtime=(Path(__file__).resolve().parents[1]/'frontend/tactical/unity-battle-fx.js').read_text(encoding='utf-8')
         for element in ('Fire','Water','Wind','Lightning','Earth'):
             detail=compile_skill(element+' Sweeping Kick',{'description':'Sweeps three squares'})
             self.assertIn("'"+detail['visual_effect']['asset']+"'",runtime)
             self.assertEqual(detail['visual_effect']['delivery'],'area')
+
+    def test_lan_browser_request_ids_do_not_require_random_uuid(self):
+        runtime=(Path(__file__).resolve().parents[1]/'frontend/tactical/campaign.js').read_text(encoding='utf-8')
+        self.assertIn('function requestId()',runtime)
+        self.assertIn('request_id:requestId()',runtime)
+        self.assertNotIn('request_id:crypto.randomUUID()',runtime)
+        self.assertIn("fetchJSON('/api/auth/session')",runtime)
+        self.assertIn("worldwalker_friend_auth_token",runtime)
 
     def test_clone_retains_portrait_when_host_reverts(self):
         g=fresh({'Shadow Clone Technique':{'description':'A real clone'}})
@@ -109,7 +154,7 @@ class NarutoTacticalTests(unittest.TestCase):
                 g.state['combat']['active']=False
                 self.assertNotIn('_tactical_battle_url',api.request_public_state())
                 g.state.update(world='Bleach');g.state['combat']['active']=True
-                self.assertNotIn('_tactical_battle_url',api.request_public_state())
+                self.assertIn('_tactical_battle_url',api.request_public_state())
             g.state['world']='Naruto'
             with patch.dict('os.environ',{'WORLDWALKER_NARUTO_TACTICAL':'0'}):
                 self.assertNotIn('_tactical_battle_url',api.request_public_state())

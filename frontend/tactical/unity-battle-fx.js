@@ -7,6 +7,7 @@ const angle=facing=>({e:0,s:Math.PI/2,w:Math.PI,n:-Math.PI/2})[facing]||0;
 const center=p=>({x:p.x*100+50,y:p.y*100+50});
 function profile(o){
  if(o.effect)return o.effect;
+ if(o.visual_effect?.family)return null;
  // Neutral energy has its own procedural geometry, never a borrowed Rasengan.
  if(o.element==='energy')return null;
  if(o.mode==='sweep')return {asset:'clone-barrage',delivery:'area',scale:1};
@@ -76,4 +77,3 @@ class UnityBattleFX extends Base{
 }
 const api={profile,placement,AtlasCache,UnityBattleFX};if(typeof module==='object'&&module.exports)module.exports=api;else{root.UnityBattleFX=UnityBattleFX;root.UnityEffects=api;}
 })(typeof window==='object'?window:globalThis);
-

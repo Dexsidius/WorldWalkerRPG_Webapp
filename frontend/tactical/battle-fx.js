@@ -15,6 +15,7 @@ class BattleFX{
  stroke(points,color,width){const c=this.ctx;c.beginPath();points.forEach(([x,y],i)=>i?c.lineTo(x,y):c.moveTo(x,y));c.strokeStyle=color;c.lineWidth=width;c.lineCap='round';c.lineJoin='round';c.stroke();}
  flame(x,y,r,phase,color){const c=this.ctx;c.fillStyle=color;c.beginPath();c.moveTo(x-r*.65,y+r*.5);c.bezierCurveTo(x-r,y-r*.1,x-r*.14,y-r*.6,x+r*.1*Math.sin(phase),y-r*1.45);c.bezierCurveTo(x+r*.1,y-r*.8,x+r*.62,y-r*.45,x+r*.56,y+r*.1);c.bezierCurveTo(x+r*.4,y+r*.8,x-r*.3,y+r*.85,x-r*.65,y+r*.5);c.fill();}
  draw(o,t,reduced){const c=this.ctx,pal=palettes[o.visual==='binding'||o.mode==='binding'?'binding':o.element]||palettes.impact,origin={x:o.origin.x*100+50,y:o.origin.y*100+50},fade=clamp((1-t)*5),progress=clamp(t/.55);this.clear();if(this.ground)root.GroundAOE.draw(this.ground,o,t,{reduced});c.save();
+  if(root.EffectFamilies?.draw(c,o,t,{reduced})){c.restore();this.labels(o,clamp((t-.4)*2.5),fade);return;}
   if(reduced){c.globalAlpha=.25*fade;c.fillStyle=pal[1];for(const cell of o.cells){const [x,y]=cell.split(',').map(Number);c.fillRect(x*100+3,y*100+3,94,94);}c.restore();this.labels(o,clamp((t-.2)*2),fade);return;}
   if(o.element==='energy'&&!['binding','barrier','heal','buff'].includes(o.visual)){
    const end={x:(o.aim?.x??o.origin.x)*100+50,y:(o.aim?.y??o.origin.y)*100+50},q=ease(clamp(t/.48));
@@ -60,4 +61,3 @@ class BattleFX{
 }
 root.BattleFX=BattleFX;
 })(window);
-

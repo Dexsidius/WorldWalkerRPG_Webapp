@@ -3446,7 +3446,7 @@ function renderCombatPanel(s) {
   const panel = $("#combat-panel");
   const combat = s.combat || {};
   const actionInput = $("#action-input");
-  const tactical = ['Naruto','One Piece'].includes(s.world) && combat.active && s._tactical_battle_url === '/tactical-preview/designs/campaign.html';
+  const tactical = ['Naruto','One Piece','Bleach'].includes(s.world) && combat.active && s._tactical_battle_url === '/tactical-preview/designs/campaign.html';
   actionInput.disabled = !!tactical;
   if (tactical) {
     panel.hidden = true;

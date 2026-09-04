@@ -348,6 +348,12 @@ def combat_profile(state, raw, side='enemy', unit_id='enemy-1'):
         if re.search(r'armament.*haki|busoshoku',text):capabilities.add('armament-haki')
         if re.search(r'observation.*haki|kenbunshoku',text):capabilities.add('observation-haki')
         if re.search(r'geppo|moonwalk|flight|flying',text):capabilities.add('flight')
+    elif world=='Bleach':
+        text=words(established)
+        if re.search(r'\b(shunpo|flash step)\b',text):capabilities.add('shunpo')
+        if re.search(r'\bshikai\b',text):capabilities.add('shikai')
+        if re.search(r'\bbankai\b',text):capabilities.update({'shikai','bankai'})
+        if re.search(r'\b(flying|flight|winged)\b',text):capabilities.add('flight')
     return {**raw, 'id': unit_id, 'name': name, 'side': side,
             'power': round(power, 1), 'power_source': source,
             'power_tier': benchmark_tier(world, power)['name'], 'strength_basis': reason,
@@ -364,6 +370,8 @@ def combat_profile(state, raw, side='enemy', unit_id='enemy-1'):
 def player_profile(state):
     if state.get('world')=='One Piece':
         from one_piece_tactics import capabilities as saved_capabilities
+    elif state.get('world')=='Bleach':
+        from bleach_tactics import capabilities as saved_capabilities
     else:
         from naruto_tactics import saved_capabilities
     stats = obj(state.get('stats')); world = state.get('world', 'Custom World')
@@ -394,6 +402,18 @@ def ensure_board(state):
         if player:
             player.update({k: v for k, v in player_profile(state).items()
                            if k not in {'statuses', 'debuffs', 'buffs', 'cooldowns', 'alive'}})
+        # Migrate already-running single-player boards: friendly companions are
+        # choices for the player, never hidden AI actors.
+        if not existing.get('owners'):
+            if state.get('world')=='One Piece':from one_piece_tactics import compile_skill
+            elif state.get('world')=='Bleach':from bleach_tactics import compile_skill
+            else:from naruto_tactics import compile_skill
+            for unit in existing['units']:
+                if unit.get('side')!='ally' or unit.get('player') or unit.get('human'):continue
+                unit['player_controlled']=True
+                if not obj(unit.get('skills')):
+                    compiled=[compile_skill(a.get('name',''),a) for a in seq(unit.get('abilities')) if isinstance(a,dict)]
+                    unit['abilities']=compiled;unit['skills']={a['name']:copy.deepcopy(a) for a in compiled if a.get('name')}
         refresh_movement(state, existing)
         return existing
     raw_enemies = seq(combat.get('opponents')) or seq(combat.get('enemies'))
@@ -418,19 +438,26 @@ def ensure_board(state):
     for row in companion_support_for_combat(state)[:min(6, MAX_UNITS-len(units))]:
         if row.get('name') == state.get('name'):
             continue
-        units.append(combat_profile(state, row, 'ally', f'ally-{len(units)}'))
+        ally=combat_profile(state, row, 'ally', f'ally-{len(units)}')
+        ally.update(player_controlled=True,character=copy.deepcopy(row))
+        units.append(ally)
     board = make_board(state, units)
     board['world_rules'] = state.get('world') if combat.get('tactical_enabled') else ''
     board['naruto_rules'] = board['world_rules']=='Naruto'
     board['one_piece_rules'] = board['world_rules']=='One Piece'
+    board['bleach_rules'] = board['world_rules']=='Bleach'
     board['conditions'] = copy.deepcopy(seq(combat.get('conditions')))
     board['teleport_marks'] = copy.deepcopy(seq(combat.get('teleport_marks')))
-    if state.get('world') in {'Naruto','One Piece'}:
+    if state.get('world') in {'Naruto','One Piece','Bleach'}:
         if state.get('world')=='One Piece':from one_piece_tactics import compile_skill
+        elif state.get('world')=='Bleach':from bleach_tactics import compile_skill
         else:from naruto_tactics import compile_skill
         for unit in units:
             if not unit.get('player'):
                 unit['abilities'] = [compile_skill(a['name'],a) for a in unit['abilities']]
+                if unit.get('player_controlled'):
+                    unit['skills']={a.get('name',f"Ability {i+1}"):copy.deepcopy(a)
+                                    for i,a in enumerate(unit['abilities']) if a.get('name')}
     combat['tactical'] = board
     refresh_movement(state, board)
     # Existing conditions survive converting an in-progress fight.
@@ -460,20 +487,23 @@ def board_view(state):
     board['turn_order'] = preview
     combat = obj(state.get('combat'))
     if state.get('world')=='One Piece':from one_piece_tactics import saved_skill_details
+    elif state.get('world')=='Bleach':from bleach_tactics import saved_skill_details
     else:from naruto_tactics import saved_skill_details
-    options = saved_skill_details(state)
+    options = (saved_skill_details(state) if not actor or actor.get('player') else
+               copy.deepcopy(obj(actor.get('skills'))))
     board['ability_shapes'] = {'': ability_footprint('', {}, board['width'])}
     for name, detail in options.items():
         board['ability_shapes'][name] = ability_footprint(name, detail, board['width'])
-    if state.get('world') in {'Naruto','One Piece'} and combat.get('tactical_enabled'):
+    if state.get('world') in {'Naruto','One Piece','Bleach'} and combat.get('tactical_enabled'):
         if state.get('world')=='One Piece':from one_piece_tactics import compile_skill
+        elif state.get('world')=='Bleach':from bleach_tactics import compile_skill
         else:from naruto_tactics import compile_skill
         board['skill_profiles'] = {name:compile_skill(name,detail) for name,detail in options.items()}
         board['ability_shapes'] = {'':ability_footprint('',{},board['width']), **{
             name:ability_footprint(name,detail,board['width']) for name,detail in board['skill_profiles'].items()
             if not detail.get('tactical_disabled')}}
     view=copy.deepcopy(board)
-    if state.get('world') in {'Naruto','One Piece'}:
+    if state.get('world') in {'Naruto','One Piece','Bleach'}:
         from portrait_generator import portrait_view
         for unit in view['units']:
             source=state if unit.get('player') else obj(unit.get('character'))
@@ -538,7 +568,8 @@ def _outcome(game, board, log_start):
         _mark_defeated(game.state, actor)
     _sync_aggregate(game.state, board)
     player = next(u for u in board['units'] if u.get('player'))
-    lost = not any(u.get('human') for u in live_units(board)) if board.get('owners') else player.get('defeated')
+    lost = (not any(u.get('human') for u in live_units(board)) if board.get('owners') else
+            not any(u['side']=='ally' and (u.get('player') or u.get('player_controlled')) for u in live_units(board)))
     outcome = 'defeat' if lost else 'victory' if not any(u['side']=='enemy' for u in live_units(board)) else None
     if outcome:
         if outcome=='defeat' and combat.get('non_lethal'):
@@ -579,10 +610,17 @@ def _targets(board, actor, spec, target=None, facing='east'):
     return area, found
 
 
-def _player_attack(game, board, payload):
-    if game.state.get('world') in {'Naruto','One Piece'} and game.state['combat'].get('tactical_enabled'):
+def _player_attack(game, board, payload, actor=None):
+    actor=actor or next(u for u in board['units'] if u.get('player'))
+    if game.state.get('world') in {'Naruto','One Piece','Bleach'} and game.state['combat'].get('tactical_enabled'):
         from naruto_tactical_actions import cast
-        return cast(game,board,payload)
+        detail=None
+        if not actor.get('player'):
+            name=str(payload.get('ability') or '')
+            if name:
+                if name not in obj(actor.get('skills')):raise ValueError('That ally has not learned this ability.')
+                detail=copy.deepcopy(actor['skills'][name])
+        return cast(game,board,payload,actor,detail)
     from worlds import abilities_for, primary_stats_for
     state=game.state; combat=state['combat']; player=next(u for u in board['units'] if u.get('player'))
     name=str(payload.get('ability') or '')
@@ -755,7 +793,7 @@ def _npc_activation(game,board,actor):
                                      'name':actor['name'],'action':'move','distance':len(path),'path':[list(p) for p in path]})
     if best:
         _,attack,area,targets,aim,facing=best
-        if (board.get('naruto_rules') or board.get('one_piece_rules')) and (attack.get('catalog_id') or obj(attack.get('tactical')).get('handler')):
+        if (board.get('naruto_rules') or board.get('one_piece_rules') or board.get('bleach_rules')) and (attack.get('catalog_id') or obj(attack.get('tactical')).get('handler')):
             from naruto_tactical_actions import cast
             try:
                 cast(game,board,{'ability':attack['name'],'x':aim[0],'y':aim[1],'facing':facing},actor,attack)
@@ -797,6 +835,74 @@ def _end_activation(game,board,log_start):
     combat=game.state['combat'];player=next(u for u in board['units'] if u.get('player'))
     foes=[u for u in live_units(board) if u['side']=='enemy']
     refresh_movement(game.state,board)
+    if not board.get('owners'):
+        actor=next((u for u in live_units(board) if u['id']==board.get('active_id')),player)
+        controlled=[u for u in live_units(board) if u['side']=='ally' and (u.get('player') or u.get('player_controlled'))]
+        # The established speed rule grants this piece another chosen activation.
+        if foes and not actor.get('bonus_taken') and not _blocked(game,actor) and actor['speed']-max(u['speed'] for u in foes)>=25:
+            actor['bonus_taken']=True;actor['movement_left']=actor['movement_max'];actor['action_used']=False
+            board['bonus_activation']=True;board['activation']+=1;board['forms_used']=[]
+            combat['bonus_turn_pending']=True
+            combat['bonus_turn_reason']=f"Speed advantage: {actor['speed']:g} vs {max(u['speed'] for u in foes):g}"
+            combat['log'].append({'round':combat['round'],'actor':'system','action':'bonus_turn',
+                                  'unit_id':actor['id'],'name':actor['name'],'reason':combat['bonus_turn_reason']})
+            return None
+        _status_damage(game,actor)
+        outcome=_outcome(game,board,log_start)
+        if outcome:return outcome
+        if actor.get('player'):
+            for key in ('player_statuses','player_debuffs','player_buffs'):
+                combat[key]=[{**r,'rounds_left':int(number(r.get('rounds_left'),1))-1}
+                             for r in seq(combat.get(key)) if isinstance(r,dict) and number(r.get('rounds_left'),1)>1]
+            combat['tactical_cooldowns']={k:max(0,int(number(v))-1) for k,v in obj(combat.get('tactical_cooldowns')).items()}
+        else:_tick_actor(actor)
+        form_rows=combat.get('player_buffs',[]) if actor.get('player') else actor.get('buffs',[])
+        pool=game.state if actor.get('player') else actor
+        for form in list(form_rows):
+            if not obj(form).get('form'):continue
+            if number(pool.get('resource'))<number(form.get('upkeep')):form_rows.remove(form)
+            else:
+                pool['resource']=max(0,number(pool.get('resource'))-number(form.get('upkeep')))
+                pool['hp']=max(_floor(combat,actor),number(pool.get('hp'))-number(form.get('recoil')))
+                actor['resource']=pool['resource'];actor['hp']=pool['hp']
+        from portrait_generator import clear_active_portrait_form,set_active_portrait_form
+        portrait_owner=game.state if actor.get('player') else actor
+        forms=[r['name'] for r in form_rows if obj(r).get('form')]
+        if forms:set_active_portrait_form(portrait_owner,' + '.join(forms),source='tactical')
+        elif obj(obj(portrait_owner.get('portrait_identity')).get('active_form')).get('source')=='tactical':clear_active_portrait_form(portrait_owner)
+        actor.update(guarding=False,bonus_taken=False)
+        # Every surviving allied piece receives its own player-controlled turn.
+        try:index=controlled.index(actor)
+        except ValueError:index=-1
+        pending=controlled[index+1:] if index>=0 else controlled
+        if pending:
+            next_actor=pending[0];board['active_id']=next_actor['id'];board['bonus_activation']=False;board['forms_used']=[]
+            next_actor.update(movement_left=next_actor['movement_max'],action_used=False,guarding=False)
+            combat.pop('bonus_turn_pending',None);combat.pop('bonus_turn_reason',None)
+            return None
+        # Enemy AI acts only after every player-controlled ally has finished.
+        for enemy in sorted([u for u in live_units(board) if u['side']=='enemy'],key=lambda u:-u['speed']):
+            _status_damage(game,enemy)
+            outcome=_outcome(game,board,log_start)
+            if outcome:return outcome
+            if enemy.get('defeated'):continue
+            opponents=[u for u in live_units(board) if u['side']!=enemy['side']]
+            if not opponents:break
+            enemy['guarding']=False
+            count=2 if enemy['speed']-max(u['speed'] for u in opponents)>=25 and not _blocked(game,enemy) else 1
+            for _ in range(count):
+                _npc_activation(game,board,enemy)
+                outcome=_outcome(game,board,log_start)
+                if outcome:return outcome
+            _tick_actor(enemy)
+        combat.pop('bonus_turn_pending',None);combat.pop('bonus_turn_reason',None);combat.pop('bonus_turn_first_action',None)
+        combat['round']+=1;board['activation']+=1;board['bonus_activation']=False;board['forms_used']=[]
+        controlled=[u for u in live_units(board) if u['side']=='ally' and (u.get('player') or u.get('player_controlled'))]
+        if controlled:
+            board['active_id']=controlled[0]['id']
+            for unit in controlled:unit.update(movement_left=unit['movement_max'],action_used=False,guarding=False,bonus_taken=False)
+        refresh_movement(game.state,board)
+        return None
     # Preserve the shipped +25 speed-gap rule: exactly one fresh chosen bonus
     # activation, not a continuous initiative scheduler or an automatic repeat.
     if foes and not board.get('bonus_activation') and not _blocked(game,player) and player['speed']-max(u['speed'] for u in foes)>=25:
@@ -858,35 +964,43 @@ def resolve_tactical_action(game,payload):
     if payload.get('revision') is not None and number(payload['revision'],-1)!=board['revision']:
         raise ValueError('The battlefield changed. Refresh it before submitting that move.')
     player=next(u for u in board['units'] if u.get('player'))
+    actor=next((u for u in live_units(board) if u['id']==board.get('active_id')),player)
+    if actor['side']!='ally' or not (actor.get('player') or actor.get('player_controlled')):
+        raise ValueError('Wait for a player-controlled allied turn.')
     log_start=len(combat['log']);action=str(payload.get('action') or 'attack')
     if action=='move':
-        if _blocked(game,player): raise ValueError('You cannot move while incapacitated. End this turn to continue.')
+        if _blocked(game,actor): raise ValueError('This ally cannot move while incapacitated. End this turn to continue.')
         destination=(int(number(payload.get('x'),-1)),int(number(payload.get('y'),-1)))
-        route=paths(board,(player['x'],player['y']),player['movement_left'],player['id']).get(destination)
+        route=paths(board,(actor['x'],actor['y']),actor['movement_left'],actor['id']).get(destination)
         if not route: raise ValueError('That square is occupied, blocked, or beyond your remaining movement.')
         from naruto_tactical_actions import _release_channel
-        _release_channel(board,player)
-        player['x'],player['y']=destination;player['movement_left']-=len(route)
+        _release_channel(board,actor)
+        actor['x'],actor['y']=destination;actor['movement_left']-=len(route)
         board['last_path']=[list(p) for p in route];board['last_footprint']=[]
-        combat['log'].append({'round':combat['round'],'actor':'player','action':'move','name':player['name'],
-                             'distance':len(route),'movement_left':player['movement_left'],'path':board['last_path']})
+        combat['log'].append({'round':combat['round'],'actor':'player','action':'move','unit_id':actor['id'],'name':actor['name'],
+                             'distance':len(route),'movement_left':actor['movement_left'],'path':board['last_path']})
     elif action in {'attack','transform'}:
-        _player_attack(game,board,payload)
+        _player_attack(game,board,payload,actor)
     elif action=='revert':
-        if _blocked(game,player): raise ValueError('You cannot voluntarily change form while incapacitated.')
+        if _blocked(game,actor): raise ValueError('This ally cannot voluntarily change form while incapacitated.')
         from portrait_generator import clear_active_portrait_form
-        combat['player_buffs']=[r for r in seq(combat.get('player_buffs')) if not obj(r).get('form')]
-        clear_active_portrait_form(state);refresh_movement(state,board)
-        combat['log'].append({'actor':'player','action':'revert','round':combat['round']})
+        if actor.get('player'):
+            combat['player_buffs']=[r for r in seq(combat.get('player_buffs')) if not obj(r).get('form')]
+            clear_active_portrait_form(state)
+        else:
+            actor['buffs']=[r for r in seq(actor.get('buffs')) if not obj(r).get('form')]
+            clear_active_portrait_form(actor)
+        refresh_movement(state,board);combat['log'].append({'actor':'player','unit_id':actor['id'],'name':actor['name'],'action':'revert','round':combat['round']})
     elif action=='defend':
-        if player['action_used']: raise ValueError('Your action is already spent.')
-        if _blocked(game,player): raise ValueError('You cannot act while incapacitated. End this turn to continue.')
-        player['guarding']=True;player['action_used']=True
-        combat['log'].append({'round':combat['round'],'actor':'player','action':'defend','result':'braced'})
+        if actor['action_used']: raise ValueError('This ally’s action is already spent.')
+        if _blocked(game,actor): raise ValueError('This ally cannot act while incapacitated. End this turn to continue.')
+        actor['guarding']=True;actor['action_used']=True
+        combat['log'].append({'round':combat['round'],'actor':'player','unit_id':actor['id'],'name':actor['name'],'action':'defend','result':'braced'})
     elif action=='flee':
-        if player['action_used'] or _blocked(game,player): raise ValueError('You cannot flee without an available action.')
-        check=game._combat_check(round((player['speed']-30)/4),35,65);player['action_used']=True
-        combat['log'].append({'round':combat['round'],'actor':'player','action':'flee',**check,'result':'escaped' if check['success'] else 'failed to escape'})
+        if not actor.get('player'):raise ValueError('Only the player character can order a retreat for the whole team.')
+        if actor['action_used'] or _blocked(game,actor): raise ValueError('The active ally cannot flee without an available action.')
+        check=game._combat_check(round((actor['speed']-30)/4),35,65);actor['action_used']=True
+        combat['log'].append({'round':combat['round'],'actor':'player','unit_id':actor['id'],'name':actor['name'],'action':'flee',**check,'result':'escaped' if check['success'] else 'failed to escape'})
         if check['success']:
             result=game.end_combat('fled',log_start)
             board['revision']+=1
@@ -922,6 +1036,13 @@ def record_outcome(game, board, outcome):
                          'public':bool(combat.get('witnesses') or combat.get('public_battle')),
                          'bounty_change':'pending narrative assessment','newspaper':'pending only if information spreads'})
         del evidence[:-50]
+    elif game.state.get('world')=='Bleach':
+        evidence=game.state.setdefault('bleach_combat_evidence',[])
+        evidence.append({'id':receipt_id,'turn':game.state.get('turn'),'outcome':outcome,
+                         'defeated':[r['name'] for r in receipts[-1]['casualties'] if r.get('side')=='enemy'],
+                         'witnessed_by':copy.deepcopy(seq(combat.get('witnesses'))),
+                         'division_report':'pending narrative assessment'})
+        del evidence[:-50]
     lines=[f"{r['name']}: {r['outcome']}" for r in receipts[-1]['casualties']]
     game.append('[BATTLE RESULT]\n'+outcome.title()+('. '+ '; '.join(lines) if lines else ''), 'narrative')
 
@@ -929,7 +1050,7 @@ def record_outcome(game, board, outcome):
 def submit_tactical_action(game, payload):
     """Persist retry IDs with the board so reconnect/restart cannot replay a cast."""
     import json
-    if game.state.get('world') not in {'Naruto','One Piece'} or not obj(game.state.get('combat')).get('tactical_enabled'):
+    if game.state.get('world') not in {'Naruto','One Piece','Bleach'} or not obj(game.state.get('combat')).get('tactical_enabled'):
         raise ValueError('Tactical combat is not enabled for this encounter.')
     request_id=str(payload.get('request_id') or '')[:100]
     if not request_id or 'revision' not in payload:

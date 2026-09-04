@@ -262,7 +262,7 @@ def tactical_feature_enabled():
 def request_public_state():
     """Shared world plus the signed-in member's own character and plan."""
     tactical_local=(tactical_feature_enabled() and
-                    game.state.get('world') in {'Naruto','One Piece'} and game.combat_active())
+                    game.state.get('world') in {'Naruto','One Piece','Bleach'} and game.combat_active())
     if tactical_local:
         game.state['combat']['tactical_enabled']=True
     state = game.public_state()
@@ -843,7 +843,7 @@ def api_campaign_opening():
 @app.route("/api/state")
 def api_state():
     return jsonify({"state": request_public_state(), "busy": game.busy, "campaign_active": game.campaign_active,
-                     "tactical_story":game.story_log[-300:] if tactical_feature_enabled() and game.state.get('world') in {'Naruto','One Piece'} and not getattr(g,'worldwalker_room',None) else [],
+                     "tactical_story":game.story_log[-300:] if tactical_feature_enabled() and game.state.get('world') in {'Naruto','One Piece','Bleach'} and not getattr(g,'worldwalker_room',None) else [],
                      "ai_ready": game.ai_ready(), "ai_connection_status": game.settings.get("ai_connection_status", "untested"),
                      "local_mode": game.local_mode()})
 
@@ -930,7 +930,7 @@ def api_naruto_tactical():
     user=getattr(g,'worldwalker_user',None)
     if room and (not user or not _multiplayer_store):
         return jsonify({'error':'Sign in to the shared room first.'}),409
-    if not game.campaign_active or game.state.get('world') not in {'Naruto','One Piece'}:
+    if not game.campaign_active or game.state.get('world') not in {'Naruto','One Piece','Bleach'}:
         return jsonify({'error':'Load a supported tactical test campaign first.'}),400
     from tactical_combat import ensure_board, board_view, submit_naruto_action
     if not acquire_busy(): return busy_error()
@@ -949,7 +949,8 @@ def api_naruto_tactical():
                 initialize(game,participants,room['host_user_id'])
                 if tick(game,participants):persist_members(game,_multiplayer_store,room['id'],participants)
                 return jsonify({'enabled':True,**snapshot(game,user['id'])})
-            return jsonify({'enabled':True,'world':game.state.get('world'),'board':board_view(game.state),'combat':game.state['combat'],
+            board=board_view(game.state)
+            return jsonify({'enabled':True,'world':game.state.get('world'),'board':board,'viewer_id':board.get('active_id','player'),'combat':game.state['combat'],
                             'portrait_identity':game.state.get('portrait_identity',{})})
         payload=request.get_json(force=True)
         def apply():

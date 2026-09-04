@@ -858,7 +858,7 @@ class CombatMixin:
         mercy_shown = bool(combat.get("non_lethal") or combat.get("spare_enemy"))
         death_prevented = bool(enemy.get("death_prevented") or enemy.get("immortal") or enemy.get("cannot_die"))
         enemy_died = outcome in {"victory", "overwhelmed"} and not mercy_shown and not death_prevented
-        tactical = combat.get('tactical_enabled') and self.state.get('world') in {'Naruto','One Piece'}
+        tactical = combat.get('tactical_enabled') and self.state.get('world') in {'Naruto','One Piece','Bleach'}
         if tactical:
             enemy_died = any(r.get('side')=='enemy' and r.get('outcome')=='killed' for r in combat.get('casualties',[]))
         if outcome in {"victory", "overwhelmed"} and not tactical:
