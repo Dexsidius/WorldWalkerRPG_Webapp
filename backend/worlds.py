@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.56.1"
+APP_VERSION = "3.57.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -179,25 +179,25 @@ WORLD_DATA = {
         # that had no map node at all before — the vague catch-all "New
         # World" region node is retired in favor of these concrete ones.
         "map": [
-            ("Foosha Village",83,34,"settlement",1), ("Goa Kingdom",72,21,"kingdom",2),
-            ("Shells Town",87,31,"marine",2), ("Orange Town",66,24,"settlement",2),
-            ("Syrup Village",65,28,"settlement",2), ("Baratie",65,31,"sea",3),
-            ("Arlong Park",80,31,"enemy",4), ("Loguetown",57,37,"city",4),
-            ("Reverse Mountain",51,48,"landmark",5), ("Whiskey Peak",56,49,"island",5),
-            ("Little Garden",59,48,"island",6), ("Drum Island",66,48,"island",6),
-            ("Alabasta",69,50,"kingdom",7), ("Jaya",35,22,"island",7),
-            ("Skypiea",33,10,"sky",8), ("Water 7",75,49,"city",8),
-            ("Enies Lobby",81,48,"government",9), ("Thriller Bark",89,49,"island",9),
-            ("Sabaody",93,49,"archipelago",10), ("Zou",96,50,"island",10),
-            ("Fishman Island",51,62,"island",11), ("Impel Down",41,56,"prison",12),
-            ("Totto Land",15,49,"island",13), ("Marineford",45,54,"marine",13),
-            ("Amazon Lily",29,61,"island",10), ("Punk Hazard",9,66,"island",11),
-            ("Dressrosa",12,62,"kingdom",12), ("Mary Geoise",50,43,"government",15),
-            ("Egghead Island",5,69,"island",14), ("Lulusia Kingdom",27,70,"kingdom",9),
-            ("Ohara",22,40,"historical",8), ("Wano Country",6,51,"nation",14),
-            ("Cocoyasi Village",77,29,"settlement",3), ("Shimotsuki Village",72,27,"settlement",2),
-            ("Baltigo",31,76,"revolutionary",10), ("Kano Country",31,34,"kingdom",7),
-            ("Sorbet Kingdom",62,79,"kingdom",6), ("Germa Kingdom",18,24,"mobile kingdom",9)
+            ("Foosha Village",82,27,"settlement",1), ("Goa Kingdom",79,25,"kingdom",2),
+            ("Shells Town",87,30,"marine",2), ("Orange Town",74,31,"settlement",2),
+            ("Syrup Village",70,34,"settlement",2), ("Baratie",66,38,"sea",3),
+            ("Arlong Park",79,36,"enemy",4), ("Loguetown",59,39,"city",4),
+            ("Reverse Mountain",27,48,"landmark",5), ("Whiskey Peak",31,48,"island",5),
+            ("Little Garden",34,47,"island",6), ("Drum Island",38,46,"island",6),
+            ("Alabasta",41,50,"kingdom",7), ("Jaya",43,45,"island",7),
+            ("Skypiea",43,28,"sky",8), ("Water 7",46,48,"city",8),
+            ("Enies Lobby",48,47,"government",9), ("Thriller Bark",49,51,"island",9),
+            ("Sabaody",51,48,"archipelago",10), ("Zou",68,47,"island",10),
+            ("Fishman Island",51,57,"island",11), ("Impel Down",48,57,"prison",12),
+            ("Totto Land",73,46,"island",13), ("Marineford",49,55,"marine",13),
+            ("Amazon Lily",41,61,"island",10), ("Punk Hazard",57,48,"island",11),
+            ("Dressrosa",61,49,"kingdom",12), ("Mary Geoise",51,43,"government",15),
+            ("Egghead Island",88,53,"island",14), ("Lulusia Kingdom",66,68,"kingdom",9),
+            ("Ohara",18,34,"historical",8), ("Wano Country",81,50,"nation",14),
+            ("Cocoyasi Village",78,34,"settlement",3), ("Shimotsuki Village",75,28,"settlement",2),
+            ("Baltigo",24,74,"revolutionary",10), ("Kano Country",24,24,"kingdom",7),
+            ("Sorbet Kingdom",66,75,"kingdom",6), ("Germa Kingdom",20,20,"mobile kingdom",9)
         ],
         "special": {"Haki":{"Observation":0,"Armament":0,"Conqueror":0}, "Bounty":0, "Devil Fruit":"None", "Crew":"None"}
     },
@@ -209,14 +209,14 @@ WORLD_DATA = {
         "start": "Yorknew City",
         "factions": {"Hunter Association":0,"Yorknew Mafia":0,"Phantom Troupe":0,"Zoldyck Family":0},
         "map": [
-            ("Yorknew City",45,55,"city",4), ("Kukuroo Mountain",22,36,"estate",7),
-            ("Whale Island",74,70,"island",1), ("Hunter Exam Site",60,62,"exam",3),
-            ("Heavens Arena",58,38,"arena",6), ("Meteor City",18,62,"city",8),
-            ("Greed Island",78,42,"island",9), ("NGL",70,22,"region",10),
-            ("East Gorteau",55,16,"nation",11), ("Hunter Association HQ",37,23,"hq",7),
-            ("Dark Continent Route",16,12,"frontier",15),
-            ("Route to the Exam",67,67,"route",2), ("Exam Ship",70,73,"ship",2),
-            ("Zevil Island",63,50,"island",5)
+            ("Yorknew City",48,51,"city",4), ("Kukuroo Mountain",34,43,"estate",7),
+            ("Whale Island",71,68,"island",1), ("Hunter Exam Site",58,61,"exam",3),
+            ("Heavens Arena",58,43,"arena",6), ("Meteor City",31,60,"city",8),
+            ("Greed Island",75,48,"island",9), ("NGL",67,32,"region",10),
+            ("East Gorteau",61,27,"nation",11), ("Hunter Association HQ",47,35,"hq",7),
+            ("Kakin Empire",52,68,"nation",12), ("Republic of Padokea",36,44,"nation",6),
+            ("Yorbian Continent",48,53,"region",5), ("Mitene Union",64,29,"region",8),
+            ("Dark Continent Expedition Route",18,14,"frontier",15), ("Zevil Island",62,51,"island",5)
         ],
         "special": {"Nen Category":"Unknown","Ten":0,"Zetsu":0,"Ren":0,"Hatsu":"Undeveloped"}
     },
@@ -272,10 +272,13 @@ WORLD_DATA = {
         "start": "Winston",
         "factions": {"Players":0,"Local Lords":0,"Church":0,"Guilds":0,"Kingdom":0},
         "map": [
-            ("Winston",22,65,"city",2), ("Patrian",38,58,"city",4), ("Reidan",52,68,"city",6),
-            ("Bairan",34,42,"city",5), ("Titan",58,42,"capital",8), ("Frontier",78,60,"region",8),
-            ("Saharan Empire",70,27,"empire",10), ("Northern Frontier",40,20,"region",10),
-            ("Kesan Canyon",29,71,"region",5), ("Temple of Yatan",18,78,"dungeon",7)
+            ("Winston",52,54,"city",2), ("Patrian",45,57,"city",4), ("Reidan",25,55,"city",6),
+            ("Bairan",48,47,"city",5), ("Titan",56,43,"capital",8), ("Frontier",75,57,"region",8),
+            ("Saharan Empire",59,35,"empire",10), ("Northern Frontier",43,18,"region",10),
+            ("Kesan Canyon",29,58,"region",5), ("Temple of Yatan",39,68,"dungeon",7),
+            ("Reinhardt",53,64,"capital",9), ("Pangea",69,61,"city",7),
+            ("Talima",34,28,"city",8), ("Vatican",63,47,"holy city",9),
+            ("Valhalla",73,43,"nation",10), ("Behen Archipelago",82,61,"dungeon",10)
         ],
         "special": {"Class":"Beginner","Secondary Class":"None","Crafting Mastery":0,"Guild":"None","NPC Affinity":{}}
     },
@@ -287,11 +290,14 @@ WORLD_DATA = {
         "start": "Great Jura Forest",
         "factions": {"Jura Forest Monsters": 0, "Kingdom of Falmuth": 0, "Demon Lords": 0, "Free Guild": 0},
         "map": [
-            ("Great Jura Forest",50,60,"forest",1), ("Goblin Village",42,55,"settlement",2),
-            ("Blumund",78,60,"town",2), ("Kingdom of Falmuth",70,78,"kingdom",3),
-            ("Dwargon",30,40,"nation",5), ("Sorcerous Dynasty of Thalion",20,25,"nation",6),
-            ("Demon Lord's Domain",65,20,"territory",8), ("Tempest",50,58,"nation",10),
-            ("Great Jura Forest — Sealed Cave",47,48,"cave",4), ("Dragon Peak",42,19,"landmark",9)
+            ("Great Jura Forest",52,45,"forest",1), ("Goblin Village",49,48,"settlement",2),
+            ("Blumund",38,54,"town",2), ("Kingdom of Falmuth",70,50,"kingdom",3),
+            ("Dwargon",53,24,"nation",5), ("Sorcerous Dynasty of Thalion",24,63,"nation",6),
+            ("Jistav",72,31,"nation",8), ("Tempest",53,49,"nation",10),
+            ("Great Jura Forest — Sealed Cave",50,42,"cave",4), ("Dragon Peak",66,22,"landmark",9),
+            ("Holy Empire of Lubelius",27,30,"nation",9), ("Ingrassia",31,44,"nation",6),
+            ("Eurazania",66,70,"nation",8), ("Milim's Domain",76,66,"territory",10),
+            ("Walpurqis",88,76,"otherworld",14), ("El Dorado",12,79,"nation",12)
         ],
         "special": {"Named Skills":[], "Evolution Stage":"Unnamed", "Magicule Capacity":0, "Species":"Unknown"}
     },
@@ -307,22 +313,22 @@ WORLD_DATA = {
         "start": "Shin'o Academy",
         "factions": {"Gotei 13": 0, "Central 46": 0, "Onmitsukido": 0, "Kido Corps": 0, "Noble Houses": 0, "Urahara Network": 0},
         "map": [
-            ("Karakura Town",56,55,"settlement",1), ("Karakura High School",56,47,"settlement",1),
-            ("Kurosaki Clinic",53,64,"landmark",1), ("Urahara Shop",65,59,"shop",3),
-            ("Naruki City",61,52,"settlement",2), ("Urahara Training Grounds",64,62,"training",5),
-            ("Senkaimon",40,66,"landmark",5), ("Dangai",41,51,"region",7),
-            ("Rukongai",16,57,"region",4), ("North Rukongai",15,21,"region",4),
-            ("East Rukongai",34,43,"region",4), ("South Rukongai",18,67,"region",4),
-            ("West Rukongai",2,43,"region",4), ("Shin'o Academy",9,36,"training",4),
-            ("Seireitei",18,40,"government",6), ("Gotei 13 Barracks",25,53,"hq",6),
-            ("Kido Corps Headquarters",22,47,"hq",7), ("Onmitsukido Headquarters",14,45,"hq",8),
-            ("Senzaikyu",10,49,"prison",7), ("Sokyoku Hill",21,28,"landmark",8),
-            ("Central 46 Chambers",20,50,"government",8), ("Maggot's Nest",8,57,"prison",8),
-            ("Muken",20,74,"prison",12), ("Hueco Mundo Desert",84,44,"region",10),
-            ("Forest of Menos",86,47,"dungeon",11), ("Las Noches",91,29,"nation",14),
-            ("Garganta",88,66,"region",9), ("Valley of Screams",42,35,"region",10),
-            ("Soul King Palace",56,17,"government",16), ("Royal Guard Domains",61,18,"region",17),
-            ("Silbern",80,12,"hq",15), ("Wahrwelt",65,30,"nation",18), ("Gates of Hell",45,84,"landmark",18)
+            ("Karakura Town",50,52,"settlement",1), ("Karakura High School",49,49,"settlement",1),
+            ("Kurosaki Clinic",48,55,"landmark",1), ("Urahara Shop",54,54,"shop",3),
+            ("Naruki City",53,50,"settlement",2), ("Urahara Training Grounds",53,57,"training",5),
+            ("Senkaimon",37,48,"landmark",5), ("Dangai",39,43,"region",7),
+            ("Rukongai",18,45,"region",4), ("North Rukongai",18,25,"region",4),
+            ("East Rukongai",31,44,"region",4), ("South Rukongai",18,65,"region",4),
+            ("West Rukongai",5,44,"region",4), ("Shin'o Academy",16,40,"training",4),
+            ("Seireitei",18,44,"government",6), ("Gotei 13 Barracks",21,47,"hq",6),
+            ("Kido Corps Headquarters",20,42,"hq",7), ("Onmitsukido Headquarters",15,45,"hq",8),
+            ("Senzaikyu",16,48,"prison",7), ("Sokyoku Hill",21,38,"landmark",8),
+            ("Central 46 Chambers",18,46,"government",8), ("Maggot's Nest",9,53,"prison",8),
+            ("Muken",18,69,"prison",12), ("Hueco Mundo Desert",83,46,"region",10),
+            ("Forest of Menos",82,57,"dungeon",11), ("Las Noches",84,36,"nation",14),
+            ("Garganta",65,47,"region",9), ("Valley of Screams",36,36,"region",10),
+            ("Soul King Palace",50,13,"government",16), ("Royal Guard Domains",57,14,"region",17),
+            ("Silbern",18,43,"hidden realm",15), ("Wahrwelt",53,20,"nation",18), ("Gates of Hell",50,78,"landmark",18)
         ],
         "special": {"Spiritual Nature":"Soul Reaper","Shinigami Rank":"Academy Senior","Zanpakuto":"Unnamed Asauchi","Zanpakuto Profile":{"stage":"Sealed","name":"Unknown","development_evidence":[]},"Shikai":"Unachieved","Bankai":"Unachieved","Squad":"Unassigned","Kido Curriculum":{"Hadō":"#1-99 learnable","Bakudō":"#1-99 learnable","Unshown Numbers":"Generated once when discovered, then permanent"}}
     },
@@ -334,13 +340,16 @@ WORLD_DATA = {
         "start": "Tokyo Jujutsu High",
         "factions": {"Tokyo Jujutsu High":0, "Kyoto Jujutsu High":0, "Jujutsu Headquarters":0, "Gojo Clan":0, "Zenin Clan":0, "Kamo Clan":0, "Independent Curse Users":0, "Cursed Spirits":0},
         "map": [
-            ("Tokyo Jujutsu High",55,55,"academy",4), ("Kyoto Jujutsu High",27,48,"academy",4),
-            ("Shibuya",56,42,"city",6), ("Sendai",70,27,"city",5), ("Saitama Detention Center",60,50,"danger",5),
-            ("Sugisawa High School",74,32,"school",2), ("Eishu Juvenile Detention Center",64,47,"danger",6),
-            ("Star Religious Group Headquarters",49,52,"hq",7), ("Zenin Estate",35,44,"estate",8),
-            ("Kamo Estate",25,54,"estate",7), ("Gojo Estate",46,46,"estate",9),
-            ("Tombs of the Star Corridor",53,58,"barrier",10), ("Cursed Warehouse",52,54,"vault",7),
-            ("Colonies",78,61,"barrier",12)
+            ("Tokyo Jujutsu High",66,61,"academy",4), ("Kyoto Jujutsu High",46,62,"academy",4),
+            ("Shibuya",67,63,"city",6), ("Sendai",74,44,"city",5), ("Saitama Detention Center",67,57,"danger",5),
+            ("Sugisawa High School",74,43,"school",2), ("Eishu Juvenile Detention Center",66,59,"danger",6),
+            ("Star Religious Group Headquarters",66,62,"hq",7), ("Zenin Estate",47,63,"estate",8),
+            ("Tombs of the Star Corridor",66,60,"barrier",10), ("Cursed Warehouse",66,61,"vault",7),
+            ("Tokyo No. 1 Colony",66,58,"barrier",12), ("Tokyo No. 2 Colony",64,61,"barrier",12),
+            ("Sendai Colony",74,44,"barrier",12), ("Aomori Colony",77,28,"barrier",12),
+            ("Aichi Colony",55,61,"barrier",12), ("Kyoto Colony",46,62,"barrier",12),
+            ("Osaka Colony",44,65,"barrier",12), ("Hiroshima Colony",35,65,"barrier",12),
+            ("Sakurajima Colony",22,79,"barrier",12), ("Hokkaido Sacred Zone",86,16,"barrier",13)
         ],
         "special": {"Grade":"Unassessed", "Official Status":"Unregistered", "Birth Slot":"Pending generation", "Innate Technique":"Pending generation", "Heavenly Restriction":"None", "Domain Expansion":"Unachieved", "Reverse Cursed Technique":"Unachieved", "Black Flashes":0}
     },
@@ -1044,7 +1053,7 @@ MAJOR_CHARACTER_STARTS = {
              {"name":"Mito Freecss","attitude":"Devoted guardian","goal":"Raised Gon on Whale Island; worries about him constantly but let him go.","is_companion":False,"last_known_location":"Whale Island"},
              {"name":"Ging Freecss","attitude":"Absent father, the reason for this whole journey","goal":"A legendary Hunter whose whereabouts Gon doesn't actually know — finding him is the real destination.","is_companion":False,"last_known_location":"Unknown"},
          ]},
-        {"id":"kurapika_exam","name":"Kurapika","label":"Kurapika — Hunter Exam journey","start_day":1,"location":"Hunter Exam Route","age":17,"origin":"Kurta Survivor","archetype":"Strategist","appearance":"A slight blond teenager with gray-brown eyes and a blue-and-gold traditional tunic.","background":"Traveling toward the Hunter Exam while pursuing information about the Kurta eyes.",
+        {"id":"kurapika_exam","name":"Kurapika","label":"Kurapika — Hunter Exam journey","start_day":1,"location":"Hunter Exam Site","age":17,"origin":"Kurta Survivor","archetype":"Strategist","appearance":"A slight blond teenager with gray-brown eyes and a blue-and-gold traditional tunic.","background":"Traveling toward the Hunter Exam while pursuing information about the Kurta eyes.",
          "title":"Last Known Kurta","stat_minimums":{"Strength":34,"Agility":38,"Cunning":46,"Willpower":52,"Charisma":36},
          "equipment":{"Weapon":"Paired Wooden Training Sticks"},
          "special_patch":{"Hunter License":"Applicant","Nen Category":"Unknown","Kurta Eyes":"Scarlet when emotionally agitated"},
@@ -1444,7 +1453,7 @@ WORLD_START_OPTIONS = {
         {"label":"Tempest (established nation)","location":"Tempest","note":"Starting in established Tempest; select a compatible era or accept an alternate-history premise."},
         {"label":"Kingdom of Falmuth (human power)","location":"Kingdom of Falmuth","note":"Starting in Falmuth as a citizen, soldier, adventurer, official, merchant, demi-human, or concealed monster."},
         {"label":"Sorcerous Dynasty of Thalion (magical nation)","location":"Sorcerous Dynasty of Thalion","note":"Starting in Thalion with social access, magical education and official scrutiny determined by the background."},
-        {"label":"Demon Lord's Domain (dangerous court)","location":"Demon Lord's Domain","note":"Starting in a demon lord's territory with allegiance, invitation, captivity, infiltration or exceptional survival explained by the background."},
+        {"label":"Milim's Domain (dangerous court)","location":"Milim's Domain","note":"Starting in a demon lord's territory with allegiance, invitation, captivity, infiltration or exceptional survival explained by the background."},
         {"label":"Dragon Peak (remote frontier)","location":"Dragon Peak","note":"Starting near Dragon Peak as an explorer, monster, pilgrim, researcher or survivor with risks scaled to the background."},
     ],
     "Custom World": [

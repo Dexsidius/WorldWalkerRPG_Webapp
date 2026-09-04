@@ -1,6 +1,18 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.57.0": {
+        "title": "World Atlas Rebuild",
+        "summary": "Every world now has a sharper setting-specific atlas, while Bleach uses separate switchable maps for each realm.",
+        "highlights": [
+            {"title": "Every atlas rebuilt", "example": "One Piece reads as a world sea chart, JJK as Japan, Slime and Overgeared as continental political maps, HxH as the Known World, and Solo as a vertical tower overview."},
+            {"title": "Five Bleach realm maps", "example": "A character in Karakura opens the World of the Living map; the realm selector can inspect Soul Society, Hueco Mundo, the Royal Realm, or Hell without teleporting them."},
+            {"title": "Cleaner political control", "example": "Established countries use stable border shapes and repaint when the narrative changes ownership instead of piling circular blobs over one another."},
+            {"title": "More canon landmarks", "example": "The HxH, Overgeared, Slime and JJK atlases now include important regions that were missing from their previous sparse maps."},
+            {"title": "Honest uncertain geography", "example": "When canon never supplies an exact coordinate, the map states that its placement is approximate instead of presenting fan geography as fact."},
+            {"title": "Solo floor maps prepared", "example": "The tower overview no longer pretends floors are neighboring territories; its data is ready for current-floor-only boards in a later update."},
+        ],
+    },
     "3.56.1": {
         "title": "One Battlefield Per World",
         "summary": "Naruto, One Piece and Bleach now enter tactical combat exclusively, with every legacy combat entry point removed for those worlds.",

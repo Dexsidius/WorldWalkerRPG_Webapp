@@ -39,6 +39,35 @@ NARUTO_CANON_TERRITORY_POLYGONS = {
     "Amegakure": [[24, 35], [34, 32], [39, 40], [36, 58], [28, 58], [22, 48]],
     "Iron Country": [[38, 0], [59, 0], [55, 27], [42, 25]],
 }
+CANON_TERRITORY_POLYGONS = {
+    "Naruto": NARUTO_CANON_TERRITORY_POLYGONS,
+    # These are atlas silhouettes, not claims of survey-grade canon borders.
+    # They prevent city-sized holdings from becoming overlapping circles and
+    # remain repaintable when narrative ownership changes.
+    "Bleach": {
+        "Rukongai": [[7,8],[93,8],[97,50],[89,88],[11,88],[3,50]],
+        "Seireitei": [[31,27],[69,27],[76,50],[68,72],[32,72],[24,50]],
+        "Shin'o Academy": [[34,35],[48,35],[48,49],[34,49]],
+        "Senzaikyu": [[40,53],[49,53],[49,65],[40,65]],
+        "Central 46 Chambers": [[47,52],[56,52],[56,64],[47,64]],
+    },
+    "Reincarnated as a Slime": {
+        "Great Jura Forest": [[33,28],[65,27],[74,43],[66,64],[39,65],[27,48]],
+        "Tempest": [[45,42],[61,41],[64,54],[47,57]],
+        "Kingdom of Falmuth": [[64,36],[87,36],[90,60],[67,64]],
+        "Dwargon": [[42,8],[66,7],[68,28],[42,31]],
+        "Holy Empire of Lubelius": [[13,17],[38,15],[39,38],[19,43]],
+        "Eurazania": [[56,60],[79,58],[84,86],[54,87]],
+        "Jistav": [[63,18],[83,17],[87,38],[66,39]],
+        "El Dorado": [[1,61],[25,58],[31,91],[0,93]],
+    },
+    "Overgeared": {
+        "Saharan Empire": [[35,15],[77,13],[88,46],[72,69],[39,65],[28,39]],
+        "Reidan": [[14,43],[36,39],[39,66],[16,72]],
+        "Reinhardt": [[39,54],[65,52],[67,77],[42,81]],
+        "Valhalla": [[63,28],[90,28],[94,59],[71,65]],
+    },
+}
 LEADER_WORDS = {
     "ruler", "leader", "founder", "sovereign", "king", "queen", "emperor",
     "empress", "president", "governor", "lord", "lady", "chief", "daimyo",
@@ -288,7 +317,7 @@ def political_regions_for_map(state, nodes):
         kind = str(node.get("kind") or "").lower()
         tier = _number(node.get("tier"), 1, 1, 10)
         size = kind_sizes.get(kind, 8.5 + tier * 0.8)
-        canon_polygon = NARUTO_CANON_TERRITORY_POLYGONS.get(str(node.get("name") or "")) if state.get("world") == "Naruto" else None
+        canon_polygon = CANON_TERRITORY_POLYGONS.get(str(state.get("world") or ""), {}).get(str(node.get("name") or ""))
         regions.append({
             "id": f"landmark-{_slug(node.get('name'))}", "name": node.get("name"),
             "controller": controller, "x": node.get("x", 50), "y": node.get("y", 50),

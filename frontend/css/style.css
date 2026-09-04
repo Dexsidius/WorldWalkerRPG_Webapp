@@ -1848,6 +1848,9 @@ body[data-world="Reincarnated as a Slime"] .percentile-tray{ background:radial-g
 .map-zoom-controls button{ width:26px; height:26px; border-radius:6px; border:1px solid var(--border-soft); background:rgba(4,8,12,.75); color:var(--text); font-size:14px; line-height:1; cursor:pointer; }
 .map-zoom-controls button:hover{ background:rgba(var(--accent-rgb),.25); }
 .map-layout{ display:grid; grid-template-columns:minmax(0,1fr) 230px; gap:10px; }
+.map-board-picker{ display:grid; gap:3px; min-width:190px; margin:0; }
+.map-board-picker span{ color:var(--muted); font:700 9px var(--font-mono); letter-spacing:.12em; text-transform:uppercase; }
+.map-board-picker select{ min-height:34px; margin:0; border:1px solid var(--border-soft); background:var(--panel-soft); color:var(--text); }
 
 /* Full atlas workspace. The map consumes every pixel not occupied by the
    compact tab rail or the selected-place inspector, matching a strategy

@@ -67,9 +67,12 @@ WORLD_TERRITORIES = {
     "Hunter x Hunter": {"Hunter Exam Site": "Hunter Association", "Hunter Association HQ": "Hunter Association", "Meteor City": "Phantom Troupe", "Kukuroo Mountain": "Zoldyck Family", "Yorknew City": "Yorknew Mafia"},
     "Naruto": {"Konohagakure": "Konohagakure", "Sunagakure": "Sunagakure", "Kirigakure": "Kirigakure", "Kumogakure": "Kumogakure", "Iwagakure": "Iwagakure",
                "Amegakure": "Amegakure", "Iron Country": "Iron Country"},
-    "Solo Max-Level Newbie": {"Earth — Tower Entrance": "Players", "Floor 10": "Tower Administrators", "Floor 20": "Tower Administrators", "Floor 30": "Tower Administrators", "Floor 40": "Tower Administrators", "Floor 50+": "Tower Administrators"},
-    "Overgeared": {"Winston": "Local Lords", "Titan": "Kingdom", "Saharan Empire": "Kingdom", "Reidan": "Guilds"},
-    "Reincarnated as a Slime": {"Great Jura Forest": "Jura Forest Monsters", "Goblin Village": "Jura Forest Monsters", "Tempest": "Jura Forest Monsters", "Kingdom of Falmuth": "Kingdom of Falmuth", "Demon Lord's Domain": "Demon Lords"},
+    # Floors are self-contained stages, not neighboring countries. The tower
+    # overview therefore has no misleading territorial blobs; per-floor maps
+    # can later use the same board contract as Bleach realms.
+    "Solo Max-Level Newbie": {},
+    "Overgeared": {"Winston": "Eternal Kingdom", "Titan": "Saharan Empire", "Saharan Empire": "Saharan Empire", "Reidan": "Eternal Kingdom", "Reinhardt": "Eternal Kingdom", "Valhalla": "Valhalla"},
+    "Reincarnated as a Slime": {"Great Jura Forest": "Jura Forest", "Goblin Village": "Jura Forest", "Tempest": "Jura Tempest Federation", "Kingdom of Falmuth": "Kingdom of Falmuth", "Dwargon": "Armed Nation of Dwargon", "Holy Empire of Lubelius": "Holy Empire of Lubelius", "Eurazania": "Beast Kingdom Eurazania", "Jistav": "Jistav", "El Dorado": "El Dorado"},
     # Hueco Mundo/Las Noches deliberately have no controller seeded here —
     # at this world's default campaign start (pre-Aizen-reveal), who
     # actually holds it isn't public knowledge yet, and seeding one would
@@ -78,6 +81,42 @@ WORLD_TERRITORIES = {
                "Senzaikyu": "Central 46", "Central 46 Chambers": "Central 46"},
     "Custom World": {"Starting Region": "Local Faction"},
 }
+
+
+WORLD_MAP_META = {
+    "One Piece": {"projection": "World sea chart", "accuracy_note": "Routes and relative seas follow established canon; many islands have no survey-grade coordinates."},
+    "Hunter x Hunter": {"projection": "Known World and Lake Mobius", "accuracy_note": "Confirmed regions are preserved; deliberately undisclosed locations remain approximate."},
+    "Naruto": {"projection": "Shinobi continent", "accuracy_note": "Major countries and villages follow canon relative geography; borders remain narrative and repaintable."},
+    "Solo Max-Level Newbie": {"projection": "Tower overview", "accuracy_note": "Floors are sequential realms, not adjacent territory. Individual floor maps are reserved for a later update."},
+    "Overgeared": {"projection": "Satisfy continental atlas", "accuracy_note": "Confirmed places and political relationships are prioritized where the source does not publish a complete atlas."},
+    "Reincarnated as a Slime": {"projection": "Central World", "accuracy_note": "Nations follow their established relationship to the Great Jura Forest; borders remain campaign-reactive."},
+    "Bleach": {"projection": "Realm atlas", "accuracy_note": "Each dimension has its own board. Switching boards changes only the view, never the character's location."},
+    "Jujutsu Kaisen": {"projection": "Japan", "accuracy_note": "Schools, incidents, and Culling Game barriers follow their established regions; overlays are not political borders."},
+    "Custom World": {"projection": "Campaign atlas", "accuracy_note": "The atlas grows and repaints as the narrative establishes new geography and control."},
+}
+
+BLEACH_REALM_NODES = {
+    "Soul Society": {"Rukongai": (50,52), "North Rukongai": (50,14), "East Rukongai": (81,50), "South Rukongai": (50,86), "West Rukongai": (18,50), "Shin'o Academy": (42,43), "Seireitei": (50,50), "Gotei 13 Barracks": (58,59), "Kido Corps Headquarters": (55,43), "Onmitsukido Headquarters": (40,54), "Senzaikyu": (45,60), "Sokyoku Hill": (61,38), "Central 46 Chambers": (50,58), "Maggot's Nest": (19,63), "Muken": (50,91), "Silbern": (50,50)},
+    "World of the Living": {"Karakura Town": (50,52), "Karakura High School": (55,49), "Kurosaki Clinic": (41,63), "Urahara Shop": (31,68), "Naruki City": (72,25), "Urahara Training Grounds": (70,81), "Senkaimon": (94,34), "Dangai": (96,43), "Valley of Screams": (92,56)},
+    "Hueco Mundo": {"Hueco Mundo Desert": (50,50), "Forest of Menos": (68,69), "Las Noches": (72,25), "Garganta": (14,22)},
+    "Royal Realm": {"Soul King Palace": (50,44), "Royal Guard Domains": (28,28), "Wahrwelt": (81,72)},
+    "Hell": {"Gates of Hell": (23,17)},
+}
+BLEACH_REALM_IMAGES = {realm: f"/assets/generated_maps/Bleach_{realm.replace(' ', '_')}.webp" for realm in BLEACH_REALM_NODES}
+
+
+def _bleach_realm_and_anchor(location):
+    text = str(location or "").lower()
+    if any(word in text for word in ("hueco", "las noches", "menos")):
+        return "Hueco Mundo", "Hueco Mundo Desert"
+    if any(word in text for word in ("royal realm", "soul king", "royal palace", "zero division", "squad zero", "wahrwelt")):
+        return "Royal Realm", "Soul King Palace"
+    if "hell" in text:
+        return "Hell", "Gates of Hell"
+    if any(word in text for word in ("soul society", "seireitei", "rukongai", "division", "gotei", "academy", "sokyoku", "senzaikyu", "central 46", "muken", "maggot")):
+        anchor = "Gotei 13 Barracks" if "division" in text or "barracks" in text else "Seireitei"
+        return "Soul Society", anchor
+    return "World of the Living", "Karakura Town"
 
 
 def progression_preset_for(world):
@@ -1315,7 +1354,8 @@ def map_snapshot(state, world_map, world):
             x, y = 50.0, 50.0
         custom_nodes.append((name, x, y, str(entry.get("kind") or "landmark"), int(entry.get("tier", 1) or 1)))
     full_map = list(world_map) + custom_nodes
-    current_node = next((node for node in full_map if str(node[0]).lower() in current.lower() or current.lower() in str(node[0]).lower()), full_map[0] if full_map else (current, 50, 50, "region", 1))
+    matched_current = next((node for node in full_map if str(node[0]).lower() in current.lower() or current.lower() in str(node[0]).lower()), None)
+    current_node = matched_current or (full_map[0] if full_map else (current, 50, 50, "region", 1))
     quest_locations = {}
     for quest in state.get("quests", []):
         if not isinstance(quest, dict): continue
@@ -1348,4 +1388,25 @@ def map_snapshot(state, world_map, world):
                       "quests": list(dict.fromkeys(quests)), "notes": detail.get("notes") or detail.get("description") or "No additional local notes recorded.",
                       "notable_individuals": _notable_individuals_for(state, name), "danger_level": str(detail.get("danger_level") or ""),
                       "recently_changed": recently_changed})
-    return {"nodes": nodes, "regions": political_regions_for_map(state, nodes)}
+    result = {"nodes": nodes, "regions": political_regions_for_map(state, nodes), "meta": copy.deepcopy(WORLD_MAP_META.get(world, WORLD_MAP_META["Custom World"]))}
+    if world == "Bleach":
+        boards = []
+        active_realm, fallback_anchor = _bleach_realm_and_anchor(current)
+        current_name = str(current_node[0])
+        for realm, placements in BLEACH_REALM_NODES.items():
+            if matched_current and current_name in placements:
+                active_realm = realm
+            board_nodes = []
+            for node in nodes:
+                if node["name"] not in placements:
+                    continue
+                placed = copy.deepcopy(node)
+                placed["x"], placed["y"] = placements[node["name"]]
+                placed["current"] = (bool(matched_current) and node["name"] == current_name) or (not matched_current and realm == active_realm and node["name"] == fallback_anchor)
+                board_nodes.append(placed)
+            boards.append({"id": re.sub(r"[^a-z0-9]+", "-", realm.lower()).strip("-"), "name": realm,
+                           "image": BLEACH_REALM_IMAGES[realm], "nodes": board_nodes,
+                           "regions": political_regions_for_map(state, board_nodes)})
+        active = next(board for board in boards if board["name"] == active_realm)
+        result.update({"nodes": active["nodes"], "regions": active["regions"], "boards": boards, "active_board": active_realm})
+    return result

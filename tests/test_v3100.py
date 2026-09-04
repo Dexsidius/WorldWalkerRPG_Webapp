@@ -14,9 +14,9 @@ from worlds import (WORLD_DATA, WORLD_EXPANSIONS, abilities_for,
 
 class WorldwalkerV3100Tests(unittest.TestCase):
     MAP_COUNTS = {
-        "One Piece": 38, "Hunter x Hunter": 14, "Naruto": 21,
-        "Solo Max-Level Newbie": 51, "Overgeared": 10,
-        "Reincarnated as a Slime": 10, "Bleach": 33,
+        "One Piece": 38, "Hunter x Hunter": 16, "Naruto": 21,
+        "Solo Max-Level Newbie": 51, "Overgeared": 16,
+        "Reincarnated as a Slime": 16, "Bleach": 33,
     }
     TIMELINE_DAYS = {
         "One Piece": [-7799,-7331,-7180,-6450,-6112,-3530,-975,-123,0,2,5,10,11,13,14,17,17,18,20,31,36,45,47,52,59,67,68,68,82,733,734,735,736,748,758,760,763,774,792,797],
