@@ -4552,6 +4552,10 @@ function setJournalAdvancedOpen(open) {
 
 async function openJournal(tab) {
   APP.journalTab = tab;
+  // The atlas is a primary play surface, not a card-sized journal entry.
+  // Promote it to a viewport workspace while it is selected; every other
+  // journal page keeps the familiar modal dimensions.
+  $("#modal-journal").classList.toggle("map-workspace", tab === "map");
   if ($(`#journal-tabs-advanced button[data-tab="${tab}"]`)) setJournalAdvancedOpen(true);
   $$("#journal-tabs button[data-tab]").forEach((b) => b.classList.toggle("active", b.getAttribute("data-tab") === tab));
   openModal("modal-journal");
@@ -4885,7 +4889,7 @@ async function openJournal(tab) {
     const legendChips = groupNodesByController(regions.length ? regions : nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}"><i></i>${escapeHtml(t.controller)}</span>`).join("");
     panel.innerHTML = `<div class="map-heading"><div><span class="map-kicker">POLITICAL ATLAS</span><b>${escapeHtml(data.world || s.world || "World")}</b><small>${nodes.length} important landmarks · ${knownCount} visited or discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
       (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
-      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="strategic" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><canvas class="map-routes" id="map-route-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>Territory is shown as one clean strategy layer. Borders join automatically when the same faction controls neighboring land and repaint when the story changes ownership.</p><small>Drag to pan. Scroll or use the controls to zoom.</small></aside></div>`;
+      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="strategic" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><canvas class="map-routes" id="map-route-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out" aria-label="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view" aria-label="Reset map view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>Territory is shown as one clean strategy layer. Borders join automatically when the same faction controls neighboring land and repaint when the story changes ownership.</p><small>Drag to pan. Scroll or use the controls to zoom.</small></aside></div>`;
     const canvas = $("#map-canvas");
     const territoryData = regions.length ? regions : nodes;
     const territoryLayout = paintMapTerritories($("#map-territory-canvas"), territoryData);
