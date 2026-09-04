@@ -4558,11 +4558,50 @@ function setJournalAdvancedOpen(open) {
   $("#btn-journal-advanced-toggle").textContent = open ? "Less ▴" : "More ▾";
 }
 
+function openApprovedLivingMap() {
+  if (window.WorldwalkerLivingMap) return window.WorldwalkerLivingMap.open();
+  let shell = document.getElementById("living-map-shell");
+  if (!shell) {
+    shell = document.createElement("section");
+    shell.id = "living-map-shell";
+    shell.className = "living-map-shell";
+    shell.setAttribute("aria-label", "Living world map");
+    shell.innerHTML = `<iframe id="living-map-frame" class="living-map-frame" src="/living-map/index.html?v=3.57.2" title="Worldwalker Living Map"></iframe>`;
+    document.body.appendChild(shell);
+  }
+  if (!shell.dataset.bridgeBound) {
+    shell.dataset.bridgeBound = "true";
+    window.addEventListener("message", (event) => {
+      if (event.source !== document.getElementById("living-map-frame")?.contentWindow || !event.data) return;
+      if (event.data.type === "worldwalker-map-close") {
+        shell.hidden = true;
+        document.body.classList.remove("living-map-open");
+      } else if (event.data.type === "worldwalker-map-action") {
+        shell.hidden = true;
+        document.body.classList.remove("living-map-open");
+        const input = document.getElementById("action-input");
+        if (input && event.data.action) {
+          input.value = String(event.data.action);
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.focus();
+        }
+        if (isMobileLayout()) setMobileView("actions");
+      }
+    });
+  }
+  shell.hidden = false;
+  document.body.classList.add("living-map-open");
+  if (isMobileLayout()) {
+    APP.mobileView = "map";
+    document.getElementById("mobile-advance-dock")?.style.setProperty("display", "none", "important");
+  }
+}
+
 async function openJournal(tab) {
-  if (tab === "map" && window.WorldwalkerLivingMap) {
+  if (tab === "map") {
     APP.journalTab = "map";
     closeModal("modal-journal");
-    return window.WorldwalkerLivingMap.open();
+    return openApprovedLivingMap();
   }
   APP.journalTab = tab;
   // The atlas is a primary play surface, not a card-sized journal entry.
@@ -6384,7 +6423,7 @@ function initMobileExperience() {
     if (view === "world") {
       $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
       APP.mobileView = "map";
-      await window.WorldwalkerLivingMap.open();
+      await openApprovedLivingMap();
     } else if (view === "more") {
       $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
       openModal("modal-mobile-more");
