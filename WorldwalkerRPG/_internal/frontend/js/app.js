@@ -4890,14 +4890,24 @@ async function openJournal(tab) {
       `<div class="jrow"><b>Training Focus</b><br/>${data.training_options.map(escapeHtml).join(", ")}</div>` +
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
   } else if (tab === "map") {
-    const nodes = data.map_data?.nodes || [];
-    const regions = data.map_data?.regions || [];
+    const mapPayload = data.map_data || {};
+    const boards = Array.isArray(mapPayload.boards) ? mapPayload.boards : [];
+    const selectionKey = `${data.world || s.world || "World"}:${APP.mapBoardSelection || ""}`;
+    const selectedBoard = boards.find((board) => selectionKey.endsWith(`:${board.name}`))
+      || boards.find((board) => board.name === mapPayload.active_board) || boards[0];
+    const nodes = selectedBoard?.nodes || mapPayload.nodes || [];
+    const regions = selectedBoard?.regions || mapPayload.regions || [];
+    const mapImage = selectedBoard?.image || data.map_image || "";
+    const mapMeta = mapPayload.meta || {};
     const travelGraph = data.travel_graph || { edges: {} };
     const knownCount = nodes.filter((node) => node.discovered).length;
     const legendChips = groupNodesByController(regions.length ? regions : nodes).map((t) => `<span class="territory-chip" style="--tc:${t.color}"><i></i>${escapeHtml(t.controller)}</span>`).join("");
-    panel.innerHTML = `<div class="map-heading"><div><span class="map-kicker">POLITICAL ATLAS</span><b>${escapeHtml(data.world || s.world || "World")}</b><small>${nodes.length} important landmarks · ${knownCount} visited or discovered</small></div><div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
+    const boardPicker = boards.length ? `<label class="map-board-picker"><span>Realm map</span><select id="map-board-select">${boards.map((board) => `<option value="${escapeHtml(board.name)}"${board.name === selectedBoard?.name ? " selected" : ""}>${escapeHtml(board.name)}${board.name === mapPayload.active_board ? " · current realm" : ""}</option>`).join("")}</select></label>` : "";
+    panel.innerHTML = `<div class="map-heading"><div><span class="map-kicker">${escapeHtml(mapMeta.projection || "POLITICAL ATLAS")}</span><b>${escapeHtml(selectedBoard?.name || data.world || s.world || "World")}</b><small>${nodes.length} important landmarks · ${knownCount} visited or discovered</small></div>${boardPicker}<div class="map-legend"><span class="current">Current</span><span class="known">Discovered</span><span class="unknown">Known landmark</span></div></div>` +
       (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
-      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="strategic" style="--map-image:url('${escapeHtml(data.map_image || "")}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><canvas class="map-routes" id="map-route-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out" aria-label="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view" aria-label="Reset map view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>Territory is shown as one clean strategy layer. Borders join automatically when the same faction controls neighboring land and repaint when the story changes ownership.</p><small>Drag to pan. Scroll or use the controls to zoom.</small></aside></div>`;
+      `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="strategic" style="--map-image:url('${escapeHtml(mapImage)}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><canvas class="map-routes" id="map-route-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out" aria-label="Zoom out">−</button><button type="button" data-map-zoom-reset title="Reset view" aria-label="Reset map view">⤾</button></div></div><aside class="map-detail" id="map-detail"><b>Select a landmark</b><p>${escapeHtml(mapMeta.accuracy_note || "Territory is shown as one clean strategy layer. Borders repaint when the story changes ownership.")}</p><small>Drag to pan. Scroll or use the controls to zoom.${boards.length ? " Switching realms changes only this view." : ""}</small></aside></div>`;
+    const boardSelect = $("#map-board-select");
+    if (boardSelect) boardSelect.addEventListener("change", () => { APP.mapBoardSelection = boardSelect.value; openJournal("map"); });
     const canvas = $("#map-canvas");
     const territoryData = regions.length ? regions : nodes;
     const territoryLayout = paintMapTerritories($("#map-territory-canvas"), territoryData);
