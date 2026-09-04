@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class PortraitIdentityUpdateTests(unittest.TestCase):
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.56.0")
+        self.assertEqual(APP_VERSION, "3.56.1")
         self.assertEqual(notes_for(APP_VERSION)["version"], APP_VERSION)
 
     def test_shared_portrait_surfaces_are_present(self):

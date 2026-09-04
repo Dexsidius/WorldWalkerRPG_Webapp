@@ -1772,6 +1772,7 @@ function renderMobileState(s) {
   const status = (Array.isArray(s.status) ? s.status.join(", ") : s.status) || "Normal";
   const tension = s._tension || { label: "Calm" };
   const combat = !!s.combat?.active;
+  const tacticalCombat = combat && ['Naruto','One Piece','Bleach'].includes(s.world);
   const chips = [
     `<span class="mobile-status-chip"><span>HP</span><b>${escapeHtml(s.hp ?? 0)} / ${escapeHtml(s.hp_max ?? 0)}</b></span>`,
     `<span class="mobile-status-chip"><span>${escapeHtml(s.resource_name || "Energy")}</span><b>${escapeHtml(s.resource ?? 0)}</b></span>`,
@@ -1786,8 +1787,8 @@ function renderMobileState(s) {
   $("#mobile-action-count").textContent = `${count} queued action${count === 1 ? "" : "s"}`;
   if ($("#mobile-time-label")) $("#mobile-time-label").textContent = mobileTimeText();
   syncMobileTimeInputs();
-  document.body.classList.toggle("mobile-combat-active", combat);
-  $("#mobile-combat-dock").hidden = !combat;
+  document.body.classList.toggle("mobile-combat-active", combat && !tacticalCombat);
+  $("#mobile-combat-dock").hidden = !combat || tacticalCombat;
   $("#mobile-advance-dock").hidden = combat;
   $("#mobile-bottom-nav").hidden = combat;
 }
@@ -3446,11 +3447,14 @@ function renderCombatPanel(s) {
   const panel = $("#combat-panel");
   const combat = s.combat || {};
   const actionInput = $("#action-input");
-  const tactical = ['Naruto','One Piece','Bleach'].includes(s.world) && combat.active && s._tactical_battle_url === '/tactical-preview/designs/campaign.html';
+  const tacticalWorld = ['Naruto','One Piece','Bleach'].includes(s.world);
+  const tactical = tacticalWorld && combat.active;
   actionInput.disabled = !!tactical;
   if (tactical) {
     panel.hidden = true;
-    window.location.replace(s._tactical_battle_url);
+    $("#mobile-combat-dock").hidden = true;
+    const destination = s._tactical_battle_url || '/tactical-preview/designs/campaign.html';
+    if (!location.pathname.startsWith('/tactical-preview/')) window.location.replace(destination);
     return;
   }
   if (!combat.active) {
@@ -3551,6 +3555,10 @@ async function submitCombatAction(action) {
   // this round is resolved entirely locally and returns near-instantly, so
   // showing an AI-busy state here would misrepresent what's actually free.
   if (combatRoundBusy || APP.busy || !APP.state?.combat?.active) return;
+  if (['Naruto','One Piece','Bleach'].includes(APP.state?.world)) {
+    window.location.replace(APP.state?._tactical_battle_url || '/tactical-preview/designs/campaign.html');
+    return;
+  }
   if (APP.multiplayer) {
     try {
       const ability = (action === "attack" || action === "overwhelm") ? $("#combat-ability").value : "";

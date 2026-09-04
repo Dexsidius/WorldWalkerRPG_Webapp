@@ -252,17 +252,17 @@ def release_busy():
     game.busy = False
 
 
+TACTICAL_COMBAT_WORLDS = frozenset({'Naruto', 'One Piece', 'Bleach'})
+
+
 def tactical_feature_enabled():
-    """Production feature switch; the legacy Naruto variable remains supported."""
-    value=os.environ.get('WORLDWALKER_TACTICAL')
-    if value is None:value=os.environ.get('WORLDWALKER_NARUTO_TACTICAL','1')
-    return str(value).strip().lower() not in {'0','false','off','no'}
+    """Compatibility helper: tactical combat is now mandatory where shipped."""
+    return True
 
 
 def request_public_state():
     """Shared world plus the signed-in member's own character and plan."""
-    tactical_local=(tactical_feature_enabled() and
-                    game.state.get('world') in {'Naruto','One Piece','Bleach'} and game.combat_active())
+    tactical_local=(game.state.get('world') in TACTICAL_COMBAT_WORLDS and game.combat_active())
     if tactical_local:
         game.state['combat']['tactical_enabled']=True
     state = game.public_state()
@@ -924,13 +924,11 @@ def api_actions_remove():
 @app.route("/api/combat/tactical", methods=["GET", "POST"])
 def api_naruto_tactical():
     """Server-authoritative tactical endpoint for supported worlds."""
-    if not tactical_feature_enabled():
-        return jsonify({'error':'Tactical combat is disabled.'}),404
     room=getattr(g,'worldwalker_room',None)
     user=getattr(g,'worldwalker_user',None)
     if room and (not user or not _multiplayer_store):
         return jsonify({'error':'Sign in to the shared room first.'}),409
-    if not game.campaign_active or game.state.get('world') not in {'Naruto','One Piece','Bleach'}:
+    if not game.campaign_active or game.state.get('world') not in TACTICAL_COMBAT_WORLDS:
         return jsonify({'error':'Load a supported tactical test campaign first.'}),400
     from tactical_combat import ensure_board, board_view, submit_naruto_action
     if not acquire_busy(): return busy_error()
@@ -978,7 +976,6 @@ def api_naruto_tactical():
 
 @app.route('/tactical-preview/<path:filename>')
 def local_tactical_preview(filename):
-    if not tactical_feature_enabled():return jsonify({'error':'Tactical combat is disabled.'}),404
     # Preserve the approved preview URL while serving files included in every build.
     if filename.startswith('designs/'):filename=filename[len('designs/'):]
     return send_from_directory(FRONTEND_DIR/'tactical',filename)
@@ -1004,6 +1001,9 @@ def api_combat_mercy():
         return jsonify({"error": "Start or load a campaign first."}), 400
     if not game.combat_active():
         return jsonify({"error": "Not in combat."}), 400
+    if game.state.get("world") in TACTICAL_COMBAT_WORLDS:
+        return jsonify({"error": "Use the tactical battlefield for this combat.",
+                        "tactical_url": "/tactical-preview/designs/campaign.html"}), 409
     d = request.get_json(force=True)
     game.state["combat"]["spare_enemy"] = bool(d.get("spare"))
     return jsonify({"combat": game.state["combat"]})
@@ -1017,6 +1017,9 @@ def api_combat_action():
         return jsonify({"error": "Start or load a campaign first."}), 400
     if not game.combat_active():
         return jsonify({"error": "Not in combat."}), 400
+    if game.state.get("world") in TACTICAL_COMBAT_WORLDS:
+        return jsonify({"error": "Legacy combat is unavailable in this world. Continue on the tactical battlefield.",
+                        "tactical_url": "/tactical-preview/designs/campaign.html"}), 409
     d = request.get_json(force=True)
     action = (d.get("action") or "attack").strip().lower()
     if action not in ("attack", "defend", "flee", "overwhelm"):

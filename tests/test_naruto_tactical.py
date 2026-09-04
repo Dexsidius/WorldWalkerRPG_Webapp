@@ -144,20 +144,19 @@ class NarutoTacticalTests(unittest.TestCase):
         cast(g,board,{'ability':'Rasengan','x':2,'y':2},enemy,compile_skill('Rasengan',{}))
         self.assertEqual(g.state['combat']['log'][-1]['origin'],{'x':3,'y':2})
 
-    def test_normal_state_routes_only_opted_in_naruto_combat(self):
+    def test_normal_state_always_routes_supported_combat_to_tactical(self):
         import app as api
         from unittest.mock import Mock
         g=fresh();g.public_state=Mock(side_effect=lambda:copy.deepcopy(g.state))
         with patch.object(api,'game',g),api.app.test_request_context('/api/state'):
-            with patch.dict('os.environ',{'WORLDWALKER_NARUTO_TACTICAL':'1'}):
-                self.assertIn('_tactical_battle_url',api.request_public_state())
-                g.state['combat']['active']=False
-                self.assertNotIn('_tactical_battle_url',api.request_public_state())
-                g.state.update(world='Bleach');g.state['combat']['active']=True
-                self.assertIn('_tactical_battle_url',api.request_public_state())
+            self.assertIn('_tactical_battle_url',api.request_public_state())
+            g.state['combat']['active']=False
+            self.assertNotIn('_tactical_battle_url',api.request_public_state())
+            g.state.update(world='Bleach');g.state['combat']['active']=True
+            self.assertIn('_tactical_battle_url',api.request_public_state())
             g.state['world']='Naruto'
             with patch.dict('os.environ',{'WORLDWALKER_NARUTO_TACTICAL':'0'}):
-                self.assertNotIn('_tactical_battle_url',api.request_public_state())
+                self.assertIn('_tactical_battle_url',api.request_public_state())
 
     def test_room_completion_publishes_once(self):
         from naruto_tactical_room import initialize,persist_members
@@ -379,11 +378,12 @@ class NarutoTacticalTests(unittest.TestCase):
         self.assertEqual(before['units'][0]['movement_left'],after['units'][0]['movement_left'])
         self.assertTrue(after['units'][0]['action_used'])
 
-    def test_local_endpoint_is_disabled_by_default(self):
+    def test_local_endpoint_cannot_be_disabled_after_shipping(self):
         import app as api
         with patch.dict('os.environ',{'WORLDWALKER_NARUTO_TACTICAL':'0'}),api.app.test_request_context('/api/combat/tactical'):
             response,status=api.api_naruto_tactical()
-            self.assertEqual(status,404)
+            self.assertEqual(status,400)
+            self.assertNotIn('disabled', response.get_json()['error'].lower())
 
     def test_local_endpoint_rejects_multiplayer_instead_of_mutating_host(self):
         import app as api

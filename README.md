@@ -6,7 +6,12 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.56.0** (schema 21).
+Current app/save version: **3.56.1** (schema 21).
+
+Version 3.56.1 makes the tactical battlefield the only combat interface in
+Naruto, One Piece and Bleach. Legacy combat controls and direct legacy actions
+are blocked in those worlds, including on old saves; worlds awaiting their
+tactical implementation continue using the established combat panel.
 
 Version 3.56.0 promotes the Living Atlas to a full-screen strategy workspace,
 adds a dedicated mobile Map tab, upgrades every bundled map for deep zooming,

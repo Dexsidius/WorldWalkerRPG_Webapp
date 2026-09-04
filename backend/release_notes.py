@@ -1,6 +1,16 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.56.1": {
+        "title": "One Battlefield Per World",
+        "summary": "Naruto, One Piece and Bleach now enter tactical combat exclusively, with every legacy combat entry point removed for those worlds.",
+        "highlights": [
+            {"title": "No duplicate combat screen", "example": "When a battle begins in Naruto, One Piece or Bleach, the game opens the grid battlefield without briefly showing the old Attack, Defend and Flee panel."},
+            {"title": "Old saves are covered", "example": "An existing campaign already in combat is routed into its tactical board as soon as it loads."},
+            {"title": "No hidden fallback", "example": "An obsolete setting or direct legacy request cannot silently resolve the fight through the retired system."},
+            {"title": "Other worlds remain playable", "example": "Hunter x Hunter, JJK, Overgeared, Solo Max-Level Newbie, Slime and Custom World retain legacy combat until their tactical battlefield is implemented."},
+        ],
+    },
     "3.56.0": {
         "title": "Living Atlas — Naruto Rebuild",
         "summary": "The atlas is now a full-screen strategy workspace, every world map is zoom-ready, and Naruto has rebuilt geography, political borders and canon location placement.",
