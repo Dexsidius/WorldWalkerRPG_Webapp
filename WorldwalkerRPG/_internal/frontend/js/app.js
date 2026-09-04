@@ -4559,6 +4559,11 @@ function setJournalAdvancedOpen(open) {
 }
 
 async function openJournal(tab) {
+  if (tab === "map" && window.WorldwalkerLivingMap) {
+    APP.journalTab = "map";
+    closeModal("modal-journal");
+    return window.WorldwalkerLivingMap.open();
+  }
   APP.journalTab = tab;
   // The atlas is a primary play surface, not a card-sized journal entry.
   // Promote it to a viewport workspace while it is selected; every other
@@ -6378,7 +6383,8 @@ function initMobileExperience() {
     mobileVibrate(8);
     if (view === "world") {
       $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
-      await openJournal("map");
+      APP.mobileView = "map";
+      await window.WorldwalkerLivingMap.open();
     } else if (view === "more") {
       $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
       openModal("modal-mobile-more");
