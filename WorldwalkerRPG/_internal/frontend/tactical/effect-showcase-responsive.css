@@ -1,0 +1,22 @@
+#board {
+  width: 100%;
+  max-width: 76vh;
+  max-height: none;
+}
+
+.tile {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+@media (max-width: 420px) {
+  main { width: calc(100% - 16px); padding-top: 10px; }
+  header { padding-left: 12px; margin-bottom: 12px; }
+  header h1 { font-size: 1.75rem; }
+  header > p:last-child { display: none; }
+  .stage { padding: 8px; }
+  #presets { grid-template-columns: 1fr; }
+}

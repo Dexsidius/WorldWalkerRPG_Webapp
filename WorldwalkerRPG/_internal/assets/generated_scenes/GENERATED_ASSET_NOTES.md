@@ -7,5 +7,6 @@ Mode: new raster generation with the built-in ImageGen tool. The PNG files are r
 - `academy_classroom`: original cross-world martial academy classroom, practice targets, unreadable diagrams, training pads and sunbeams.
 - `ship_deck`: original sailing-ship deck, rigging, cream sails, tropical sea and islands, no emblems.
 - `arena_floor`: original grand circular combat arena, abstract banners, distant crowd, open competition floor.
+- `hospital_clinic`: original cross-world fantasy healing clinic, treatment beds, privacy screens, medical supplies, herbs, and a softly glowing healing station.
 
 Every prompt explicitly requested an original environment, no readable text, logos, famous franchise symbols, exact copyrighted locations, or foreground characters. Ambient motion is rendered separately in the game (lantern/fire flicker, dust, water/wind, and crowd shimmer).

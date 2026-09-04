@@ -1,5 +1,9 @@
-const CACHE = "worldwalker-v260-shell-1";
-const SHELL = ["/", "/css/style.css", "/js/app.js", "/manifest.webmanifest", "/assets/branding/worldwalker-emblem.png"];
+const CACHE = "worldwalker-v3531-shell-1";
+const SHELL = [
+  "/", "/css/style.css?v=3.55.0", "/js/app.js?v=3.55.0", "/manifest.webmanifest",
+  "/assets/branding/worldwalker-emblem.png", "/cursors/naruto-kunai.svg", "/cursors/naruto-shuriken.svg",
+  "/cursors/bleach-zanpakuto.svg", "/cursors/jjk-sukuna-finger.svg", "/cursors/one-piece-strawhat-jolly-roger.svg"
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -10,8 +14,28 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.startsWith("/api/") || url.pathname.startsWith("/music/") || url.pathname.startsWith("/portrait-cache/")) return;
+  if (url.pathname.startsWith("/assets/")) {
+    event.respondWith(caches.open(CACHE).then(async (cache) => {
+      const cached = await cache.match(event.request);
+      const refresh = fetch(event.request).then((response) => {
+        const assetCopy = response.ok ? response.clone() : null;
+        if (assetCopy) cache.put(event.request, assetCopy);
+        return response;
+      }).catch(() => cached);
+      return cached || refresh;
+    }));
+    return;
+  }
   event.respondWith(fetch(event.request).then((response) => {
-    if (response.ok) caches.open(CACHE).then((cache) => cache.put(event.request, response.clone()));
+    // The clone MUST happen synchronously, in this same tick, before the
+    // response is handed back below — once `caches.open()`'s promise settles
+    // (a later tick), the page may already have started reading this same
+    // response's body, which locks it and makes clone() throw "Response
+    // body is already used". That race was silently falling back to
+    // whatever stale copy sat in the old cache, which is why style/JS
+    // updates could appear to not take effect after an update.
+    const copy = response.ok ? response.clone() : null;
+    if (copy) caches.open(CACHE).then((cache) => cache.put(event.request, copy));
     return response;
   }).catch(() => caches.match(event.request)));
 });

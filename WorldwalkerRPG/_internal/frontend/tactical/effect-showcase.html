@@ -1,0 +1,8 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Worldwalker Phase One Effects</title><link rel="stylesheet" href="effect-showcase.css"><link rel="stylesheet" href="effect-showcase-responsive.css"></head>
+<body><main>
+ <header><p class="eyebrow">WORLDWALKER TACTICAL LAB</p><h1>Phase One Effect Library</h1><p>Thirty reusable animation families. Select an effect, aim on the board, then play it.</p></header>
+ <section class="layout">
+  <aside><h2>Featured releases</h2><div id="presets"></div><label>All effect families<select id="family"></select></label><div class="controls"><button id="play">Play effect</button><button id="random" class="quiet">Next family</button></div><dl><div><dt>Family</dt><dd id="family-name"></dd></div><div><dt>Use</dt><dd id="family-use"></dd></div></dl></aside>
+  <section class="stage"><div class="stage-head"><span id="technique">Black Tide Undertow</span><span>Tap a tile to aim</span></div><div id="board"><div id="tiles"></div><canvas id="ground" width="800" height="800"></canvas><div id="pieces"><div class="piece player" style="--x:1;--y:4"><span>魂</span></div><div class="piece enemy" id="enemy" style="--x:6;--y:4"><span>虚</span></div></div><canvas id="fx" width="800" height="800"></canvas></div><p class="receipt" id="receipt">AOE cells are the exact cells the resolver would use.</p></section>
+ </section>
+</main><script src="ground-aoe.js"></script><script src="effect-family-library.js"></script><script src="battle-fx.js"></script><script src="effect-showcase.js"></script></body></html>
