@@ -12,4 +12,4 @@ def test_frozen_build_includes_the_naruto_move_library_beside_the_module():
 
 def test_release_version_is_3511():
     from worlds import APP_VERSION
-    assert APP_VERSION == "3.57.1"
+    assert APP_VERSION == "3.57.2"

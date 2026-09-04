@@ -6,9 +6,10 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.57.1** (schema 21).
+Current app/save version: **3.57.2** (schema 21).
 
-Version 3.57.1 integrates the approved Living Map presentation while retaining
+Version 3.57.2 directly integrates the approved Living Map prototype renderer, including its
+World/Regional/Local semantic zoom and dominant center-stage layout. Version 3.57.1 integrated an interim Living Map presentation while retaining
 the sharper setting-specific atlases introduced in 3.57.0. It replaces the old
 blob-style territory overlay with soft influence, adds map modes, moving pieces,
 relationship-gated tracking, semantic zoom, desktop context panels, and a true

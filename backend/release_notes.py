@@ -1,6 +1,16 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.57.2": {
+        "title": "The Approved Living Map",
+        "summary": "The shipped Map tab now uses the approved prototype renderer and its full semantic zoom system.",
+        "highlights": [
+            "Restores the approved left character rail, dominant center map, right inspector, and bottom Chronicle/action dock.",
+            "Restores true World, Regional, and Local zoom bands with different visible map detail at each level.",
+            "Expands the center map across all space not occupied by panels while preserving the complete artwork.",
+            "Connects the prototype renderer to the active campaign and sends map actions back to the main game.",
+        ],
+    },
     "3.57.1": {
         "title": "The Living Map Arrives",
         "summary": "The approved Living Map now replaces the old Journal atlas instead of placing new artwork beneath the legacy territory overlay.",

@@ -21,10 +21,10 @@
   #asset-recovery p{margin:0 0 18px;color:#c4cfdf}
   #asset-recovery button{min-height:48px;padding:10px 22px;border:1px solid #79c9db;border-radius:9px;background:#173648;color:#fff;font:700 14px system-ui,-apple-system,sans-serif}
 </style>
-<link id="app-stylesheet" rel="stylesheet" href="/css/style.css?v=3.57.1"
+<link id="app-stylesheet" rel="stylesheet" href="/css/style.css?v=3.57.2"
       onload="document.documentElement.classList.remove('assets-missing')"
       onerror="document.documentElement.classList.add('assets-missing')" />
-<link rel="stylesheet" href="/css/living-map.css?v=3.57.1-map2" />
+<link rel="stylesheet" href="/css/living-map.css?v=3.57.2-map4" />
 </head>
 <body data-world="Custom World" data-scene="starry_sky">
 
@@ -1280,6 +1280,10 @@
 <audio id="snd-ui_click" src="/assets/sounds/ui_click.wav" preload="auto"></audio>
 <audio id="snd-dice" src="/assets/sounds/dice.wav" preload="auto"></audio>
 <audio id="snd-xp" src="/assets/sounds/xp.wav" preload="auto"></audio>
+<section id="living-map-shell" class="living-map-shell" aria-label="Living world map" hidden>
+  <iframe id="living-map-frame" class="living-map-frame" src="/living-map/index.html?v=3.57.2" title="Worldwalker Living Map"></iframe>
+</section>
+
 <audio id="snd-level_up" src="/assets/sounds/level_up.wav" preload="auto"></audio>
 <audio id="snd-message" src="/assets/sounds/message.wav" preload="auto"></audio>
 <audio id="snd-notify" src="/assets/sounds/notify.wav" preload="auto"></audio>
@@ -1296,7 +1300,7 @@
 <audio id="snd-naruto_death" src="/assets/sounds/naruto_death.mp3" preload="auto"></audio>
 <audio id="music-player" preload="metadata"></audio>
 
-<script src="/js/app.js?v=3.57.1"></script>
-<script src="/js/living-map.js?v=3.57.1-map2"></script>
+<script src="/js/app.js?v=3.57.2"></script>
+<script src="/js/living-map.js?v=3.57.2-map4"></script>
 </body>
 </html>
