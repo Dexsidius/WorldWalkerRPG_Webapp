@@ -1,6 +1,18 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.59.0": {
+        "title": "Living Political Atlas",
+        "summary": "A vector atlas replaces the cropped artwork and overlapping territory blobs. Starting control is preset per world; campaign claims repaint the same land.",
+        "highlights": [
+            {"title": "Continuous territories", "example": "All displayed land is shaded. Taking the Land of Fire repaints its territory; a small player holding starts with just one tile."},
+            {"title": "World-specific geography", "example": "Naruto countries, One Piece islands, HxH's Mitene Union and Satisfy's two continents use separate schematics, never recycled Naruto landmarks."},
+            {"title": "Sharp at every zoom", "example": "Coastlines, ownership and labels share one vector projection, so zooming cannot blur the map or detach a village from its land."},
+            {"title": "Borders follow the story", "example": "Neighboring territory with the same controller merges; newly captured tiles briefly highlight. No AI call is required to draw changes."},
+            {"title": "More usable atlas", "example": "Find a location by name, pan or pinch to zoom, and open dismissible details. Traveling moves your piece, not the landmark."},
+            {"title": "Separate realms", "example": "Bleach follows your current realm while allowing other boards to be viewed. Solo shows only your current floor; detailed floor geography remains future work."},
+        ],
+    },
     "3.58.0": {
         "title": "The Map Becomes the World",
         "summary": "The approved Living Map is now the main play layout, with strict world-specific geography and the current scene beside the action controls.",

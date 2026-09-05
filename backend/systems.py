@@ -13,6 +13,7 @@ import secrets
 from util import ai_text
 from causality import advance_causal_clock
 from politics import political_regions_for_map, tick_polity_governance
+from world_atlas import political_atlas
 
 # A chapter is meant to read as a season of the story, not a fixed number of
 # actions — consolidate roughly every in-game quarter (90 days on the
@@ -1404,9 +1405,30 @@ def map_snapshot(state, world_map, world):
                 placed["x"], placed["y"] = placements[node["name"]]
                 placed["current"] = (bool(matched_current) and node["name"] == current_name) or (not matched_current and realm == active_realm and node["name"] == fallback_anchor)
                 board_nodes.append(placed)
+            # Custom destinations require an explicit realm, so they cannot
+            # accidentally appear on all five boards.
+            for custom in state.get("custom_locations", []) or []:
+                if isinstance(custom, dict) and (custom.get("realm") or custom.get("board")) == realm:
+                    original = next((n for n in nodes if n["name"] == custom.get("name")), None)
+                    if original and original["name"] not in placements: board_nodes.append(copy.deepcopy(original))
+            atlas = political_atlas(state, board_nodes, world, realm)
             boards.append({"id": re.sub(r"[^a-z0-9]+", "-", realm.lower()).strip("-"), "name": realm,
                            "image": BLEACH_REALM_IMAGES[realm], "nodes": board_nodes,
+                           "atlas": atlas,
                            "regions": political_regions_for_map(state, board_nodes)})
         active = next(board for board in boards if board["name"] == active_realm)
-        result.update({"nodes": active["nodes"], "regions": active["regions"], "boards": boards, "active_board": active_realm})
+        result.update({"nodes": active["nodes"], "regions": active["regions"], "boards": boards, "active_board": active_realm, "atlas": active["atlas"]})
+    elif world == "Solo Max-Level Newbie":
+        floor = re.search(r"\bfloor\s*(\d+)\b", current, re.I)
+        board = f"Floor {max(1, min(50, int(floor.group(1))))}" if floor else "Earth"
+        floor_nodes = [copy.deepcopy(n) for n in nodes if n["name"] == board or (board == "Earth" and "Entrance" in n["name"])]
+        for n in floor_nodes: n.update(x=50, y=50, current=True)
+        for custom in state.get("custom_locations", []) or []:
+            if isinstance(custom, dict) and (custom.get("board") or custom.get("realm")) == board:
+                n = next((copy.deepcopy(n) for n in nodes if n["name"] == custom.get("name")), None)
+                if n: floor_nodes.append(n)
+        result.update(nodes=floor_nodes, regions=[], active_board=board, atlas=political_atlas(state, floor_nodes, world, board))
+        result["meta"] = {"projection": f"Tower atlas · {board}", "accuracy_note": "Only the current floor is visible. This is a schematic territorial board; detailed floor terrain has not yet been authored."}
+    else:
+        result["atlas"] = political_atlas(state, nodes, world)
     return result

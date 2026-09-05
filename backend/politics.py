@@ -196,6 +196,8 @@ def _clean_region(raw, index):
         cleaned["contested_by"] = [str(value).strip()[:160] for value in contested if str(value).strip()][:8]
     if raw.get("parent_id"):
         cleaned["parent_id"] = str(raw.get("parent_id"))[:100]
+    for key in ("world", "board", "realm"):
+        if raw.get(key): cleaned[key] = str(raw[key])[:100]
     for key in ("established_day", "controller_changed_turn"):
         if isinstance(raw.get(key), (int, float)):
             cleaned[key] = raw[key]

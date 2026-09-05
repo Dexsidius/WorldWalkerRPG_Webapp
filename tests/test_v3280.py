@@ -15,7 +15,7 @@ from worlds import APP_VERSION, BASE_STATE, power_profile_for
 
 class WorldwalkerV3280Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.58.0")
+        self.assertEqual(APP_VERSION, "3.59.0")
 
     def test_world_power_benchmark_is_part_of_authoritative_profile(self):
         profile = power_profile_for("Naruto", {"Taijutsu": 199, "Ninjutsu": 749, "Genjutsu": 35,

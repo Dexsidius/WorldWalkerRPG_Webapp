@@ -2694,10 +2694,13 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertIn("Totto Land", map_names)
         self.assertIn("Wano Country", map_names)
         self.assertIn("Fishman Island", map_names)
-        territories = {"Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates", "Fishman Island": "Whitebeard Pirates"}
+        # Protection is not sovereignty: Ryugu retains its government under
+        # Whitebeard's flag, and its undersea marker is not Red Line land.
+        territories = {"Totto Land": "Big Mom Pirates", "Wano Country": "Kaido's Beasts Pirates", "Fishman Island": "Ryugu Kingdom"}
         for name, expected_controller in territories.items():
             snap = next(n for n in map_snapshot(BASE_STATE, WORLD_DATA["One Piece"]["map"], "One Piece")["nodes"] if n["name"] == name)
             self.assertEqual(snap["controller"], expected_controller)
+            if name == 'Fishman Island': self.assertEqual(snap['protection'],'Whitebeard Pirates')
         for faction in ("Whitebeard Pirates", "Big Mom Pirates", "Kaido's Beasts Pirates", "Shanks' Red Hair Pirates"):
             self.assertIn(faction, WORLD_DATA["One Piece"]["factions"])
 

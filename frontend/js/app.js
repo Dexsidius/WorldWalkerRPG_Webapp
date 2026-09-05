@@ -1724,7 +1724,7 @@ function setMobileView(view, focus = true) {
   try { saved = Number(localStorage.getItem(mobileCampaignKey(`scroll_${APP.mobileView}`)) || 0); } catch (_) {}
   requestAnimationFrame(() => window.scrollTo({ top: saved, behavior: "auto" }));
   if (APP.mobileView === "actions") requestAnimationFrame(() => $("#action-input")?.focus({ preventScroll: true }));
-  if (APP.mobileView === "map") requestAnimationFrame(() => { clampMapPan($("#map-wrap")); applyMapView(); });
+  if (APP.mobileView === "map") requestAnimationFrame(() => { if (window.WorldAtlas) WorldAtlas.refresh(); });
 }
 
 function mobileTimeText() {
@@ -4565,7 +4565,7 @@ let livingMapRefreshSequence = 0;
 
 function scheduleLivingMapRefresh(state) {
   window.clearTimeout(livingMapRefreshTimer);
-  const signature = `${state?.campaign_id || state?.name || ""}|${state?.world || "Custom World"}|${state?.turn || 0}|${state?.location || ""}`;
+  const signature = `${state?.campaign_id || state?.name || ""}|${state?.world || "Custom World"}|${state?.turn || 0}|${state?.location || ""}|${JSON.stringify([state?.political_regions,state?.location_details,state?.custom_locations])}`;
   if (APP.livingMapSignature === signature && $("#map-canvas")) return;
   livingMapRefreshTimer = window.setTimeout(() => refreshMainLivingMap(signature), 0);
 }
@@ -4582,6 +4582,7 @@ async function refreshMainLivingMap(signature = "") {
     renderMainLivingMap(data);
     APP.livingMapSignature = signature || `${APP.state?.campaign_id || APP.state?.name || ""}|${activeWorld}|${APP.state?.turn || 0}|${APP.state?.location || ""}`;
   } catch (error) {
+    if (sequence !== livingMapRefreshSequence) return;
     host.innerHTML = `<div class="living-map-unavailable"><b>${escapeHtml(APP.state?.world || "World")} MAP UNAVAILABLE</b><span>${escapeHtml(error.message || "This world's map could not be loaded.")}</span><button type="button" class="btn-ghost" data-map-retry>TRY AGAIN</button></div>`;
     host.querySelector("[data-map-retry]")?.addEventListener("click", () => refreshMainLivingMap());
   }
@@ -4589,6 +4590,13 @@ async function refreshMainLivingMap(signature = "") {
 
 function selectedLivingMapBoard(mapPayload, world) {
   const boards = Array.isArray(mapPayload.boards) ? mapPayload.boards : [];
+  const scope = `${APP.state?.campaign_id || APP.state?.name}:${world}`;
+  APP.mapActiveRealm ||= {};
+  if (APP.mapActiveRealm[scope] !== mapPayload.active_board) {
+    APP.mapBoardSelectionByWorld ||= {};
+    APP.mapBoardSelectionByWorld[world] = mapPayload.active_board;
+    APP.mapActiveRealm[scope] = mapPayload.active_board;
+  }
   const saved = APP.mapBoardSelectionByWorld?.[world];
   return boards.find((board) => board.name === saved)
     || boards.find((board) => board.name === mapPayload.active_board) || boards[0] || null;
@@ -4629,26 +4637,27 @@ function renderMainLivingMap(data) {
   const nodes = selectedBoard?.nodes || mapPayload.nodes || [];
   const regions = selectedBoard?.regions || mapPayload.regions || [];
   const mapImage = selectedBoard?.image || data.map_image || "";
+  const atlas = selectedBoard?.atlas || mapPayload.atlas;
+  const atlasKey = `${APP.state?.campaign_id || APP.state?.name || 'campaign'}:${atlas?.id || world}`;
   const mapMeta = mapPayload.meta || {};
   const travelGraph = data.travel_graph || { edges: {} };
-  if (!mapImage || !nodes.length) throw new Error(`No ${world} geography is installed in this build.`);
+  if (!atlas?.cells?.length || !nodes.length) throw new Error(`No ${world} geography is installed in this build.`);
   const knownCount = nodes.filter((node) => node.discovered).length;
-  const legendChips = groupNodesByController(regions.length ? regions : nodes)
-    .map((entry) => `<span class="territory-chip" style="--tc:${entry.color}"><i></i>${escapeHtml(entry.controller)}</span>`).join("");
+  const legendChips = [...new Set(atlas.cells.map(cell => cell.owner))].sort()
+    .map((name) => `<span class="territory-chip" style="--tc:${WorldAtlas.color(name)}"><i></i>${escapeHtml(name)}</span>`).join("");
   const boardPicker = boards.length ? `<label class="map-board-picker"><span>Realm map</span><select id="map-board-select">${boards.map((board) => `<option value="${escapeHtml(board.name)}"${board.name === selectedBoard?.name ? " selected" : ""}>${escapeHtml(board.name)}${board.name === mapPayload.active_board ? " · current realm" : ""}</option>`).join("")}</select></label>` : "";
   const mode = APP.mainMapMode || "political";
   host.innerHTML = `<div class="map-heading"><div><span class="map-kicker">${escapeHtml(mapMeta.projection || "LIVING ATLAS")}</span><b>${escapeHtml(selectedBoard?.name || world)}</b><small>${nodes.length} landmarks · ${knownCount} discovered · ${escapeHtml(APP.state?.world_time || "Current campaign")}</small></div>${boardPicker}<div class="map-mode-tabs" role="tablist" aria-label="Map view"><button data-main-map-mode="political">Political</button><button data-main-map-mode="danger">Danger</button><button data-main-map-mode="relationships">Relations</button><button data-main-map-mode="events">Events</button></div></div>` +
     (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
     `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="living" data-world="${escapeHtml(world)}" style="--map-image:url('${escapeHtml(mapImage)}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><canvas class="map-routes" id="map-route-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-view-pill" id="map-view-pill">WORLD VIEW</div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out" aria-label="Zoom out">−</button><button type="button" data-map-focus title="Focus current location" aria-label="Focus current location">◉</button><button type="button" data-map-zoom-reset title="Reset view" aria-label="Reset map view">⤢</button></div><div class="map-ribbon">The map shows the active ${escapeHtml(world)} campaign and changes with its narrative.</div></div><aside class="map-detail" id="map-detail" tabindex="-1"><b>Select a landmark</b><p>${escapeHtml(mapMeta.accuracy_note || "Borders repaint whenever the story changes control.")}</p><small>Drag to pan. Scroll or use the controls to zoom.${boards.length ? " Change realm above without moving the character." : ""}</small></aside></div>`;
   shell.dataset.mapMode = mode;
+  host.querySelector('.map-heading').insertAdjacentHTML('afterend', `<form class="atlas-search"><input aria-label="Find a map location" placeholder="Find a location…" list="atlas-locations" autocomplete="off"><datalist id="atlas-locations">${nodes.map(n=>`<option value="${escapeHtml(n.name)}"></option>`).join('')}</datalist><button type="submit">Find</button><button type="button" data-atlas-info aria-label="Map information">ⓘ</button><small>Drag · pinch · zoom</small></form>`);
   shell.dataset.mapWorld = world;
   $$("[data-main-map-mode]", host).forEach((button) => button.classList.toggle("active", button.dataset.mainMapMode === mode));
-  const territoryData = regions.length ? regions : nodes;
-  const territoryLayout = paintMapTerritories($("#map-territory-canvas"), territoryData);
-  paintMapRoutes($("#map-route-canvas"), nodes, travelGraph);
-  renderMapFactionLabels($("#map-faction-labels"), territoryLayout, nodes);
-  applyNativeMapFx(nodes);
   const mapCanvas = $("#map-canvas");
+  const atlasResult = WorldAtlas.render(mapCanvas, atlas, atlasKey);
+  const ribbon = host.querySelector('.map-ribbon');
+  if (ribbon) ribbon.textContent = atlasResult.changed ? `Territory changed · ${atlasResult.changed} land tiles repainted` : 'Schematic geography · campaign-controlled borders';
   const previousPlayer = APP.lastLivingMapPlayer;
   nodes.forEach((node) => {
     const dot = document.createElement("button");
@@ -4656,21 +4665,26 @@ function renderMainLivingMap(data) {
     const major = majorKinds.has(String(node.kind || "").toLowerCase());
     dot.type = "button";
     dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
-    dot.style.left = `${node.current && previousPlayer?.world === world ? previousPlayer.x : node.x}%`;
-    dot.style.top = `${node.current && previousPlayer?.world === world ? previousPlayer.y : node.y}%`;
+    dot.style.left = `${node.x}%`;
+    dot.style.top = `${node.y}%`;
     dot.title = `${node.name} · ${node.kind || "landmark"}${node.controller && node.controller !== "Unknown" ? ` · ${node.controller}` : ""}`;
     dot.dataset.mapNode = node.name;
     dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.name)}</span>`;
     mapCanvas.appendChild(dot);
     if (node.current) {
-      requestAnimationFrame(() => requestAnimationFrame(() => { dot.style.left = `${node.x}%`; dot.style.top = `${node.y}%`; }));
-      APP.lastLivingMapPlayer = { world, x: Number(node.x), y: Number(node.y) };
+      const piece = document.createElement('span');
+      piece.className = 'map-person map-player-piece'; piece.textContent = '◆';
+      piece.style.left = `${previousPlayer?.key === atlasKey ? previousPlayer.x : node.x}%`;
+      piece.style.top = `${previousPlayer?.key === atlasKey ? previousPlayer.y : node.y}%`;
+      mapCanvas.appendChild(piece);
+      requestAnimationFrame(() => requestAnimationFrame(() => { piece.style.left = `${node.x}%`; piece.style.top = `${node.y}%`; }));
+      APP.lastLivingMapPlayer = { key: atlasKey, world, x: Number(node.x), y: Number(node.y) };
     }
   });
   const previousPeople = APP.lastLivingMapPeople || {};
   const nextPeople = {};
   trackedLivingMapPeople(data, nodes).forEach((person) => {
-    const marker = document.createElement("button"), key = `${world}:${normalizePersonName(person.name)}`;
+    const marker = document.createElement("button"), key = `${atlasKey}:${normalizePersonName(person.name)}`;
     const previous = previousPeople[key];
     marker.type = "button"; marker.className = `map-person${person.nemesis ? " nemesis" : ""}`;
     marker.style.left = `${previous?.x ?? person.x}%`; marker.style.top = `${previous?.y ?? person.y}%`;
@@ -4683,7 +4697,12 @@ function renderMainLivingMap(data) {
   });
   APP.lastLivingMapPeople = nextPeople;
   APP.mapNodes = nodes; APP.mapRegions = regions; APP.travelGraph = travelGraph;
-  initMapPanZoom();
+  WorldAtlas.bind($("#map-wrap"), mapCanvas, atlasKey, (zoom) => {
+    shell.dataset.zoomBand = zoom < 1.35 ? 'world' : zoom < 2.2 ? 'regional' : 'local';
+    const pill = $('#map-view-pill'); if (pill) pill.textContent = `${shell.dataset.zoomBand.toUpperCase()} VIEW`;
+  });
+  paintMapRoutes($("#map-route-canvas"), nodes, travelGraph);
+  requestAnimationFrame(() => WorldAtlas.labels());
   wireMainLivingMap(host, world, mapPayload);
 }
 
@@ -4694,6 +4713,16 @@ function focusApprovedLivingMap() {
 }
 
 function wireMainLivingMap(host, world, mapPayload) {
+  const search = host.querySelector('.atlas-search');
+  if (search) search.onsubmit = event => {
+    event.preventDefault();
+    const input = search.querySelector('input'), value = input.value.trim().toLowerCase();
+    const node = (APP.mapNodes || []).find(n => n.name.toLowerCase() === value) || (value && (APP.mapNodes || []).find(n=>n.name.toLowerCase().includes(value)));
+    input.setCustomValidity(node ? '' : 'Choose a location on this map.');
+    if (!node) { input.reportValidity(); return; }
+    WorldAtlas.focus(node.x,node.y); showLivingMapNode(node.name);
+  };
+  search?.querySelector('input')?.addEventListener('input', event => event.target.setCustomValidity(''));
   host.querySelector("#map-board-select")?.addEventListener("change", (event) => {
     APP.mapBoardSelectionByWorld ||= {};
     APP.mapBoardSelectionByWorld[world] = event.target.value;
@@ -4706,17 +4735,23 @@ function wireMainLivingMap(host, world, mapPayload) {
   }));
   host.querySelectorAll("[data-map-node]").forEach((button) => button.addEventListener("click", () => showLivingMapNode(button.dataset.mapNode)));
   host.querySelectorAll("[data-map-person]").forEach((button) => button.addEventListener("click", () => showLivingMapPerson(button.dataset.mapPerson)));
-  host.addEventListener("click", (event) => {
+  host.onclick = (event) => {
+    if (event.target.closest('[data-atlas-close]')) { $('#map-detail')?.classList.remove('open'); return; }
+    if (event.target.closest('[data-atlas-info]')) {
+      const detail = $('#map-detail'); detail.classList.add('open');
+      detail.innerHTML = `<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button><b>About this atlas</b><p>${escapeHtml(mapPayload.meta?.accuracy_note || '')}</p><p>All displayed land has a preset controller. Boundaries and distances are schematic where canon is incomplete. Adjacent holdings with the same owner share one border.</p><p>Select any landmark for its current controller. Political changes repaint the land locally without an AI call.</p>`;
+      return;
+    }
     const wrap = $("#map-wrap"); if (!wrap) return;
     const rect = wrap.getBoundingClientRect(), cx = rect.width / 2, cy = rect.height / 2;
-    if (event.target.closest("[data-map-zoom-in]")) setMapZoom(wrap, mapView.scale * 1.3, cx, cy);
-    else if (event.target.closest("[data-map-zoom-out]")) setMapZoom(wrap, mapView.scale / 1.3, cx, cy);
-    else if (event.target.closest("[data-map-zoom-reset]")) { mapView.scale = 1; mapView.x = 0; mapView.y = 0; applyMapView(); }
+    if (event.target.closest("[data-map-zoom-in]")) WorldAtlas.zoom(1.3);
+    else if (event.target.closest("[data-map-zoom-out]")) WorldAtlas.zoom(1/1.3);
+    else if (event.target.closest("[data-map-zoom-reset]")) WorldAtlas.reset();
     else if (event.target.closest("[data-map-focus]")) {
       const current = (APP.mapNodes || []).find((node) => node.current);
-      if (current) focusMapPoint(wrap, current.x, current.y, Math.max(2.2, mapView.scale));
+      if (current) WorldAtlas.focus(current.x, current.y);
     }
-  });
+  };
 }
 
 function showLivingMapPerson(name) {
@@ -4725,6 +4760,7 @@ function showLivingMapPerson(name) {
   detail.classList.add("open");
   detail.innerHTML = `<div class="map-person-heading">${personPortraitHtml(person.name, person, { size: "md" })}<div><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.label || "Known person")}</small></div></div><p>${escapeHtml(person.goal || "No current goal is known.")}</p><dl><dt>Relationship</dt><dd>${escapeHtml(person.score ?? 0)}</dd><dt>Last known</dt><dd>${escapeHtml(person.last_known_location || "Unknown")}</dd><dt>Knowledge</dt><dd>${person.knowledge?.length ? person.knowledge.map(escapeHtml).join(", ") : "Nothing reliably established"}</dd></dl>`;
   detail.focus({ preventScroll: true });
+  detail.insertAdjacentHTML('afterbegin','<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button>');
 }
 
 async function showLivingMapNode(name) {
@@ -4735,6 +4771,7 @@ async function showLivingMapNode(name) {
   detail.classList.add("open");
   detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes || "No additional local notes recorded.")}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller || "Unknown")}</dd>${node.danger_level ? `<dt>Danger</dt><dd>${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Known people</dt><dd>${peopleRow}</dd><dt>Related</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "No active connection"}</dd></dl><div id="map-route-preview" class="map-route-preview">Checking the route from your current location…</div>`;
   detail.focus({ preventScroll: true });
+  detail.insertAdjacentHTML('afterbegin','<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button>');
   try {
     const route = await apiGet(`/api/travel/route?destination=${encodeURIComponent(node.name)}`), preview = $("#map-route-preview");
     if (preview) preview.innerHTML = route.reachable ? `<b>Route from ${escapeHtml(route.origin)}</b><p>${(route.route || []).map(escapeHtml).join(" → ")}</p><small>About ${escapeHtml(formatDuration(route.minutes))}</small>` : `<b>No established route</b><p>${escapeHtml(route.reason || "This destination is not connected yet.")}</p>`;

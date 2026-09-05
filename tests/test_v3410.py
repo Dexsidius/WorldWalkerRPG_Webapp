@@ -19,7 +19,7 @@ from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 class WorldwalkerV3410Tests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.58.0")
+        self.assertEqual(APP_VERSION, "3.59.0")
 
     def test_long_skip_updates_are_dated_in_order(self):
         rows = normalize_dated_updates([
