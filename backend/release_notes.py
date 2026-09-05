@@ -1,6 +1,17 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    '3.61.0': {
+        'title':'Narrative-to-gameplay consistency',
+        'summary':'Story outcomes reach the correct character records, equipment and rosters, with safer review of older campaigns.',
+        'highlights':[
+            {'title':'Discovery is not travel','example':'A scout revealing a watchtower no longer teleports you out of Konoha.'},
+            {'title':'Abilities go to their owner','example':'Kaito learning Fireball updates Kaito—not your skill list. Capitalization no longer creates duplicate skills.'},
+            {'title':'Battle outcomes persist','example':'A confirmed named casualty is marked dead across memory and rosters; destroyed equipment is no longer left equipped.'},
+            {'title':'Uncertainty stays uncertain','example':'A rumored death cannot kill your character, and “repairs are not completed” cannot finish a quest.'},
+            {'title':'Review old records safely','example':'Missing skill mechanics are offered for review. Confirmed NPC death corrections require a preview before applying.'},
+        ],
+    },
     '3.60.0': {
         'title':'Living World: Persistent Plans',
         'summary':'Important people and factions can pursue staged plans between your actions, with quiet local progress and causal narrative resolution.',

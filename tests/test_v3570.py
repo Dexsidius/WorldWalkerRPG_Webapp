@@ -47,7 +47,10 @@ def test_bleach_realm_assets_are_4k():
 def test_solo_overview_does_not_pretend_floors_are_land_territories():
     assert WORLD_TERRITORIES["Solo Max-Level Newbie"] == {}
     nodes = map_snapshot(_state("Solo Max-Level Newbie", "Earth — Tower Entrance"), WORLD_DATA["Solo Max-Level Newbie"]["map"], "Solo Max-Level Newbie")["nodes"]
-    assert political_regions_for_map(_state("Solo Max-Level Newbie", "Earth — Tower Entrance"), nodes) == []
+    regions = political_regions_for_map(_state("Solo Max-Level Newbie", "Earth — Tower Entrance"), nodes)
+    # Later atlas releases shade the actual Earth entrance under local civil
+    # control; that must not expose tower floors as neighboring countries.
+    assert all(region['name'] == 'Earth — Tower Entrance' for region in regions)
 
 
 def test_removed_generic_locations_are_not_reintroduced():

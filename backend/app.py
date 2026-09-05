@@ -1459,9 +1459,22 @@ def correction_preview(payload):
     for key in ("location", "inventory", "currency", "hp", "resource", "quests", "skills", "location_details", "political_regions"):
         if scratch.get(key) != game.state.get(key):
             changes.append({"field": key, "before": copy.deepcopy(game.state.get(key)), "after": copy.deepcopy(scratch.get(key))})
+    if payload.get('type') == 'npc_status':
+        target = str(payload.get('target') or '').casefold()
+        for key in ('npc_memories', 'contacts', 'organizations'):
+            old = game.state.get(key) if isinstance(game.state.get(key), dict) else {}
+            new = scratch.get(key) if isinstance(scratch.get(key), dict) else {}
+            for name, value in new.items():
+                if old.get(name) != value:
+                    changes.append({'field': f'{key}.{name}', 'before': copy.deepcopy(old.get(name)), 'after': copy.deepcopy(value)})
+        if scratch.get('companions') != game.state.get('companions'):
+            matching = lambda rows: [r for r in rows or [] if isinstance(r, dict) and str(r.get('name', '')).casefold() == target]
+            changes.append({'field':'companions', 'before':matching(game.state.get('companions')), 'after':matching(scratch.get('companions'))})
     from turn_recovery import guard
     return {"fact": record["fact"], "changes": changes,
-            "preview_token": fingerprint([guard(game.state), game.state.get('location_details'), game.state.get('political_regions'), {k: v for k, v in payload.items() if k != "preview_token"}])}
+            "preview_token": fingerprint([guard(game.state), game.state.get('location_details'), game.state.get('political_regions'),
+                                           [game.state.get(k) for k in ('npc_memories','contacts','organizations','companions')] if payload.get('type') == 'npc_status' else None,
+                                           {k: v for k, v in payload.items() if k != "preview_token"}])}
 
 
 @app.route("/api/campaign/correct/preview", methods=["POST"])
@@ -1484,8 +1497,8 @@ def api_campaign_correct():
     try:
         if game.busy:
             return busy_error()
-        if d.get('type') == 'territory' and not d.get('preview_token'):
-            return jsonify({'error':'Preview this territory correction before applying it.'}),409
+        if d.get('type') in {'territory', 'npc_status'} and not d.get('preview_token'):
+            return jsonify({'error':'Preview this correction before applying it.'}),409
         if d.get("preview_token") and d["preview_token"] != correction_preview(d)["preview_token"]:
             return jsonify({"error": "The campaign or correction changed. Preview it again before applying."}), 409
         record = apply_player_correction(game.state, d.get("type"), d.get("target"), d.get("value"), d.get("explanation", ""))

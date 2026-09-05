@@ -486,9 +486,20 @@ def apply_player_correction(state, correction_type, target, value, explanation="
             detail=details.get(place)
             details[place]={**(detail if isinstance(detail,dict) else {}),'controlling_faction':value}
         applied=f"Control of {target} belongs to {value}. Existing borders are preserved; local control does not grant the surrounding country."
+    elif kind == "npc_status":
+        if target.casefold() in {"player", "the player", ai_text(state.get('name')).casefold()}:
+            raise ValueError("Choose an NPC, not the player character.")
+        if value.casefold() != "dead":
+            raise ValueError("This correction records a confirmed death. Use a story fact for uncertain reports or other status changes.")
+        from narrative_state import record_npc_death
+        if not record_npc_death(state, target, explanation or "Player-confirmed campaign correction"):
+            raise ValueError("Choose an exact established NPC name.")
+        applied = f"{target} is confirmed dead. Existing membership records retain their history."
     elif kind == "skill":
         if not target: raise ValueError("Enter the skill name in Target.")
-        previous = state.setdefault("skills", {}).get(target)
+        skills = state.setdefault("skills", {})
+        target = next((name for name in skills if str(name).casefold() == target.casefold()), target)
+        previous = skills.get(target)
         state["skills"][target] = {**(previous if isinstance(previous, dict) else {}), "description": value, "effect": value}
         applied = f"{target}: {value}"
     else:

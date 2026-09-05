@@ -57,6 +57,9 @@ body{
   transition:background .6s ease;
 }
 
+.correction-value-diff{white-space:pre-wrap;overflow-wrap:anywhere;font-size:13px;line-height:1.5;max-width:100%;}
+#gm-correction-form button,#review-campaign-records{min-height:44px;}
+
 /* World-specific desktop pointers. Touch devices retain their native input
    behavior, while text fields, drag surfaces, and resize affordances keep the
    cursor that communicates their actual function. */

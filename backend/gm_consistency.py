@@ -235,6 +235,10 @@ def prepare_request(state, payload):
     if re.search(r"\b(?:her|him|them)\b", query, re.I) and not packet["command_contracts"]:
         packet["reference_resolution"] = "ambiguous unless the current conversation clearly identifies the referent; do not guess"
     schema = mapping(packet.get("schema"))
+    for claim in rows(schema.get("consequence_manifest")):
+        if isinstance(claim, dict):
+            claim["subject"] = "player or exact NPC who owns this gain/loss; never give NPC gains to the player"
+            claim["change"] = "explicit settled transition: gained|lost|destroyed|completed|in_progress|discovered|arrived|died; suspected/planned outcomes are not settled"
     schema["organization_updates"] = [{"group": "established group name", "event": "establish|invite|join|position|leave|retire|expel|death|away|return|development|life|birth|succession_plan", "name": "person", "reason": "actual narrative cause", "accepted": "true only after agreement", "position": "world-appropriate role", "reports_to": "recognized superior", "unit": "existing unit", "activity": "for development: established practice", "discipline": "actual world stat, combat or noncombat specialty", "mentor": "known mentor or empty", "rate": "routine|focused|exceptional", "method": "established acceleration if exceptional"}]
     schema["organization_updates"][0].update(kind="crew|marine|squad|organization|guild|division|clan|team|nation|company", leader="recognized leader, for establishment or leadership change", independent="true only for an independent ally", terms="agreed recruitment terms", loyalty_basis="established reason for loyalty", parents=["known parent"], aging_mode="mortal|ageless|immortal|spiritual|arrested", maturity_age="only when established", active="false to end ongoing development")
     if isinstance(schema.get("causal_outcome"), dict):

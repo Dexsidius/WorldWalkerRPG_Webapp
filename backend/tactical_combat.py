@@ -1029,6 +1029,11 @@ def record_outcome(game, board, outcome):
                      'rewards_status':'none_awarded_locally'})
     del receipts[:-30]
     combat['result_receipt']=copy.deepcopy(receipts[-1])
+    from narrative_state import record_npc_death
+    actual_people = {u['name'] for u in board['units'] if not u.get('clone') and not u.get('summon')}
+    for casualty in receipts[-1]['casualties']:
+        if casualty.get('outcome') == 'killed' and casualty.get('name') in actual_people:
+            record_npc_death(game.state, casualty['name'], f"Confirmed killed in battle {receipt_id}.")
     if game.state.get('world')=='One Piece':
         evidence=game.state.setdefault('one_piece_combat_evidence',[])
         evidence.append({'id':receipt_id,'turn':game.state.get('turn'),'outcome':outcome,

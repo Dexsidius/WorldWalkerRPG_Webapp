@@ -499,12 +499,28 @@ def reconcile_narrated_consequences(before, state, data, actions=None, elapsed_m
         change = ai_text(raw.get("change") or raw.get("status") or raw.get("result"))[:120]
         # Attempting/planning a gain is not ownership. Reconciliation must never
         # turn a refused purchase or failed lesson into a reward.
-        if change.lower() in {"attempted", "failed", "refused", "planned", "possible", "rumored"}:
+        if change.lower() in {"attempted", "failed", "refused", "planned", "possible", "rumored", "rumoured", "suspected", "unconfirmed", "pending", "offered", "invited"}:
             continue
         evidence = ai_text(raw.get("evidence") or raw.get("reason") or data.get("narrative"))[:500]
+        subject = ai_text(raw.get("subject") or raw.get("owner") or "player").strip()
+        player_subject = subject.casefold() in {"player", "the player", "you", ai_text(state.get("name")).casefold()}
         applied, status, reason = False, "verified", "Already reflected in state"
         removing = change.lower() in {"lost", "removed", "spent", "consumed", "destroyed", "gave away", "forgotten", "cured", "healed", "cleared"}
-        if removing and target and kind in {"skill", "title", "condition", "injury"}:
+        if not player_subject and kind != "death":
+            memories = state.get("npc_memories") if isinstance(state.get("npc_memories"), dict) else {}
+            actor = next((name for name in memories if name.casefold() == subject.casefold()), None)
+            details = raw.get("details") if isinstance(raw.get("details"), dict) else {}
+            if kind == "skill" and actor and isinstance(memories[actor], dict) and (removing or details.get("effect") or details.get("description")):
+                skills = memories[actor].setdefault("skills", {})
+                if isinstance(skills, dict):
+                    existing = next((n for n in skills if str(n).casefold() == target.casefold()), None)
+                    if removing and existing is not None: del skills[existing]; applied = True
+                    elif not removing and existing is None: skills[target] = copy.deepcopy(details); applied = True
+                    reason = "Recorded ability on the named NPC, not the player"
+                else: status, reason = "needs_detail", "NPC skill record requires review"
+            else:
+                status, reason = "needs_detail", "Non-player consequence needs an explicit NPC or organization update; never award it to the player"
+        elif removing and target and kind in {"skill", "title", "condition", "injury"}:
             collection = {"skill": "skills", "title": "titles", "condition": "conditions", "injury": "conditions"}[kind]
             values = state.get(collection, {} if collection == "skills" else [])
             if isinstance(values, dict):
@@ -522,17 +538,24 @@ def reconcile_narrated_consequences(before, state, data, actions=None, elapsed_m
             if removing:
                 old_len = len(state.get("inventory", [])); state["inventory"] = [item for item in state.get("inventory", []) if _item_name(item).casefold() != target.casefold()]
                 applied = len(state["inventory"]) != old_len; reason = "Removed narrated item" if applied else "Item was not present"
+                equipment = state.get("equipment")
+                if isinstance(equipment, dict):
+                    for slot, item in list(equipment.items()):
+                        if _item_name(item).casefold() == target.casefold():
+                            equipment[slot] = "None"; applied = True
             elif target.casefold() not in names:
                 state.setdefault("inventory", []).append({"name": target, "description": ai_text(raw.get("description")) or "A notable item established by the Chronicle."})
                 applied = True; reason = "Added omitted notable item"
         elif kind == "location" and target:
-            if state.get("location") != target:
+            if target not in state.setdefault("discovered_locations", []):
+                state["discovered_locations"].append(target); applied = True
+            if change.lower() in {"arrived", "moved", "travelled", "traveled", "relocated", "entered", "visited", "reached"} and state.get("location") != target:
                 state["location"] = target
-                if target not in state.setdefault("discovered_locations", []): state["discovered_locations"].append(target)
                 applied = True; reason = "Synchronized narrated travel"
+            else: reason = "Recorded a discovered place without inventing travel"
         elif kind == "quest" and target:
             quest = _quest_by_name(state, target)
-            completed = bool(re.search(r"\b(?:complete|completed|resolved|finished|cleared)\b", change + " " + evidence, re.I))
+            completed = change.lower() in {"complete", "completed", "resolved", "finished", "cleared"}
             if quest and completed and str(quest.get("status", "")).lower() not in {"complete", "completed", "resolved"}:
                 quest["status"] = "Completed"; applied = True; reason = "Closed narrated quest"
             elif not quest and not completed:
@@ -543,7 +566,7 @@ def reconcile_narrated_consequences(before, state, data, actions=None, elapsed_m
                 })
                 applied = True; reason = "Added omitted narrative agenda"
         elif kind == "skill" and target:
-            if target not in (state.get("skills") or {}):
+            if target.casefold() not in {str(name).casefold() for name in (state.get("skills") or {})}:
                 details = raw.get("details") if isinstance(raw.get("details"), dict) else {}
                 if details.get("effect") or details.get("description"):
                     state.setdefault("skills", {})[target] = copy.deepcopy(details); applied = True; reason = "Added omitted fully described skill"
@@ -554,15 +577,20 @@ def reconcile_narrated_consequences(before, state, data, actions=None, elapsed_m
             if target.casefold() not in names:
                 state.setdefault("conditions", []).append({"name": target, "description": evidence or change, "source": "Chronicle"})
                 applied = True; reason = "Applied omitted condition"
-        elif kind == "death" and target and target.casefold() in {ai_text(state.get("name")).casefold(), "player", "the player"}:
-            if state.get("alive", True): state["alive"], state["hp"], applied, reason = False, 0, True, "Synchronized narrated player death"
+        elif kind == "death" and target and change.lower() in {"died", "dead", "killed", "deceased"} and evidence:
+            if target.casefold() in {ai_text(state.get("name")).casefold(), "player", "the player"}:
+                if state.get("alive", True): state["alive"], state["hp"], applied, reason = False, 0, True, "Synchronized narrated player death"
+            else:
+                from narrative_state import record_npc_death
+                applied = record_npc_death(state, target, evidence)
+                status, reason = ("verified", "Synchronized confirmed NPC death") if applied else ("recorded", "No matching established NPC; no identity invented")
         else:
             status = "recorded"; reason = "Claim retained for grounding; no safe deterministic mutation"
         row = {"turn": turn, "kind": kind or "consequence", "target": target, "change": change,
                "evidence": evidence, "status": status, "applied_repair": applied, "reason": reason,
-               "elapsed_minutes": int(elapsed_minutes or 0)}
+               "elapsed_minutes": int(elapsed_minutes or 0), "subject": subject}
         rows.append(row)
-        if status == "needs_detail": notes.append(f"Consequence needs mechanics: {target}")
+        if status == "needs_detail": notes.append(f"Consequence needs review: {target} — {reason}")
 
     # Always record exact mechanical deltas, even when the narrator supplied
     # no manifest.  This becomes the next turn's verified evidence.
