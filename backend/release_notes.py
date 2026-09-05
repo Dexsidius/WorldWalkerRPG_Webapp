@@ -1,6 +1,20 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    "3.58.0": {
+        "title": "The Map Becomes the World",
+        "summary": "The approved Living Map is now the main play layout, with strict world-specific geography and the current scene beside the action controls.",
+        "highlights": [
+            {"title": "Map-first main game", "example": "The active world map fills the center of the normal game instead of opening as a separate replacement screen."},
+            {"title": "Every world keeps its own geography", "example": "A One Piece campaign shows its sea chart, factions and islands; Naruto borders and landmarks can no longer leak into it."},
+            {"title": "Scene beside decisions", "example": "Current-location artwork and its label sit directly above Action Chat and time controls on the right."},
+            {"title": "Nothing removed", "example": "Character information, Chronicle, messages, world systems, action entry and time advancement remain available in the reorganized layout."},
+            {"title": "Meaningful map pieces", "example": "Named people appear only when they have a sufficient relationship, are a nemesis, or belong to the player's tracked group."},
+            {"title": "Semantic zoom", "example": "World, regional and local zoom levels reveal progressively finer map information while preserving smooth pan and movement."},
+            {"title": "Phone Map tab", "example": "On mobile, Map is a dedicated bottom tab while actions retain the scene, textbox and time controls together."},
+            {"title": "Narrative territory support", "example": "Faction ownership, custom player land and Bleach realm boards continue to come from the active campaign state."},
+        ],
+    },
     "3.57.2": {
         "title": "The Approved Living Map",
         "summary": "The shipped Map tab now uses the approved prototype renderer and its full semantic zoom system.",

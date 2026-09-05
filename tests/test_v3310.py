@@ -16,7 +16,7 @@ from portrait_generator import portrait_signature
 
 class WorldwalkerV3310MobileTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.57.2")
+        self.assertEqual(APP_VERSION, "3.58.0")
 
     def test_approved_mobile_navigation_and_persistent_controls_ship(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
@@ -25,7 +25,7 @@ class WorldwalkerV3310MobileTests(unittest.TestCase):
         for element_id in ("mobile-status-ribbon", "mobile-advance-dock", "mobile-bottom-nav",
                            "mobile-combat-dock", "modal-mobile-more", "mobile-chronicle-tools"):
             self.assertIn(f'id="{element_id}"', html)
-        for view in ("chronicle", "actions", "character", "world", "more"):
+        for view in ("chronicle", "actions", "character", "map", "more"):
             self.assertIn(f'data-mobile-view="{view}"', html)
         self.assertIn('body[data-mobile-view="chronicle"] .col-center', css)
         self.assertIn("position:fixed; left:0; right:0", css)

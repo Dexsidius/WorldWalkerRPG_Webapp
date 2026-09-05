@@ -1709,7 +1709,7 @@ function mobileVibrate(pattern = 12) {
 }
 
 function setMobileView(view, focus = true) {
-  const allowed = new Set(["chronicle", "actions", "character"]);
+  const allowed = new Set(["chronicle", "actions", "character", "map"]);
   if (isMobileLayout() && APP.mobileView) {
     try { localStorage.setItem(mobileCampaignKey(`scroll_${APP.mobileView}`), String(window.scrollY || 0)); } catch (_) {}
   }
@@ -1724,6 +1724,7 @@ function setMobileView(view, focus = true) {
   try { saved = Number(localStorage.getItem(mobileCampaignKey(`scroll_${APP.mobileView}`)) || 0); } catch (_) {}
   requestAnimationFrame(() => window.scrollTo({ top: saved, behavior: "auto" }));
   if (APP.mobileView === "actions") requestAnimationFrame(() => $("#action-input")?.focus({ preventScroll: true }));
+  if (APP.mobileView === "map") requestAnimationFrame(() => { clampMapPan($("#map-wrap")); applyMapView(); });
 }
 
 function mobileTimeText() {
@@ -2148,6 +2149,7 @@ function renderState(state) {
 
   // scene
   updateScene(s);
+  scheduleLivingMapRefresh(s);
 
   // stat summary
   $("#stat-level").textContent = "Level " + (s.level ?? 1);
@@ -4558,50 +4560,191 @@ function setJournalAdvancedOpen(open) {
   $("#btn-journal-advanced-toggle").textContent = open ? "Less ▴" : "More ▾";
 }
 
-function openApprovedLivingMap() {
-  if (window.WorldwalkerLivingMap) return window.WorldwalkerLivingMap.open();
-  let shell = document.getElementById("living-map-shell");
-  if (!shell) {
-    shell = document.createElement("section");
-    shell.id = "living-map-shell";
-    shell.className = "living-map-shell";
-    shell.setAttribute("aria-label", "Living world map");
-    shell.innerHTML = `<iframe id="living-map-frame" class="living-map-frame" src="/living-map/index.html?v=3.57.2" title="Worldwalker Living Map"></iframe>`;
-    document.body.appendChild(shell);
+let livingMapRefreshTimer = 0;
+let livingMapRefreshSequence = 0;
+
+function scheduleLivingMapRefresh(state) {
+  window.clearTimeout(livingMapRefreshTimer);
+  const signature = `${state?.campaign_id || state?.name || ""}|${state?.world || "Custom World"}|${state?.turn || 0}|${state?.location || ""}`;
+  if (APP.livingMapSignature === signature && $("#map-canvas")) return;
+  livingMapRefreshTimer = window.setTimeout(() => refreshMainLivingMap(signature), 0);
+}
+
+async function refreshMainLivingMap(signature = "") {
+  const host = $("#living-map-main-body");
+  if (!host) return;
+  const sequence = ++livingMapRefreshSequence;
+  try {
+    const data = await apiGet("/api/panels");
+    if (sequence !== livingMapRefreshSequence) return;
+    const activeWorld = APP.state?.world || "Custom World";
+    if (data.world !== activeWorld) throw new Error(`Map data mismatch: expected ${activeWorld}, received ${data.world || "unknown"}.`);
+    renderMainLivingMap(data);
+    APP.livingMapSignature = signature || `${APP.state?.campaign_id || APP.state?.name || ""}|${activeWorld}|${APP.state?.turn || 0}|${APP.state?.location || ""}`;
+  } catch (error) {
+    host.innerHTML = `<div class="living-map-unavailable"><b>${escapeHtml(APP.state?.world || "World")} MAP UNAVAILABLE</b><span>${escapeHtml(error.message || "This world's map could not be loaded.")}</span><button type="button" class="btn-ghost" data-map-retry>TRY AGAIN</button></div>`;
+    host.querySelector("[data-map-retry]")?.addEventListener("click", () => refreshMainLivingMap());
   }
-  if (!shell.dataset.bridgeBound) {
-    shell.dataset.bridgeBound = "true";
-    window.addEventListener("message", (event) => {
-      if (event.source !== document.getElementById("living-map-frame")?.contentWindow || !event.data) return;
-      if (event.data.type === "worldwalker-map-close") {
-        shell.hidden = true;
-        document.body.classList.remove("living-map-open");
-      } else if (event.data.type === "worldwalker-map-action") {
-        shell.hidden = true;
-        document.body.classList.remove("living-map-open");
-        const input = document.getElementById("action-input");
-        if (input && event.data.action) {
-          input.value = String(event.data.action);
-          input.dispatchEvent(new Event("input", { bubbles: true }));
-          input.focus();
-        }
-        if (isMobileLayout()) setMobileView("actions");
-      }
-    });
-  }
-  shell.hidden = false;
-  document.body.classList.add("living-map-open");
-  if (isMobileLayout()) {
-    APP.mobileView = "map";
-    document.getElementById("mobile-advance-dock")?.style.setProperty("display", "none", "important");
-  }
+}
+
+function selectedLivingMapBoard(mapPayload, world) {
+  const boards = Array.isArray(mapPayload.boards) ? mapPayload.boards : [];
+  const saved = APP.mapBoardSelectionByWorld?.[world];
+  return boards.find((board) => board.name === saved)
+    || boards.find((board) => board.name === mapPayload.active_board) || boards[0] || null;
+}
+
+function trackedLivingMapPeople(data, nodes) {
+  const rosterNames = new Set();
+  (data.organization_roster?.groups || []).forEach((group) => (group.members || []).forEach((member) => {
+    if (member?.name && !["left", "dead", "deceased", "expelled"].includes(String(member.status || "active").toLowerCase())) rosterNames.add(normalizePersonName(member.name));
+  }));
+  const locate = (location) => {
+    const key = normalizePersonName(location);
+    if (!key || key === "unknown") return null;
+    return nodes.find((node) => {
+      const candidate = normalizePersonName(node.name);
+      return candidate === key || candidate.includes(key) || key.includes(candidate);
+    }) || null;
+  };
+  return (data.relationships_view?.people || []).filter((person) => {
+    const score = Math.abs(Number(person.score) || 0);
+    return score >= 20 || person.nemesis || rosterNames.has(normalizePersonName(person.name));
+  }).map((person, index) => {
+    const node = locate(person.last_known_location);
+    if (!node) return null;
+    const angle = (index % 8) * Math.PI / 4, radius = 1.15 + (index % 3) * .35;
+    return { ...person, x: Number(node.x) + Math.cos(angle) * radius, y: Number(node.y) + Math.sin(angle) * radius };
+  }).filter(Boolean);
+}
+
+function renderMainLivingMap(data) {
+  const host = $("#living-map-main-body"), shell = $("#living-map-main");
+  if (!host || !shell) return;
+  APP.latestMapData = data;
+  const world = data.world || APP.state?.world || "Custom World";
+  const mapPayload = data.map_data || {};
+  const boards = Array.isArray(mapPayload.boards) ? mapPayload.boards : [];
+  const selectedBoard = selectedLivingMapBoard(mapPayload, world);
+  const nodes = selectedBoard?.nodes || mapPayload.nodes || [];
+  const regions = selectedBoard?.regions || mapPayload.regions || [];
+  const mapImage = selectedBoard?.image || data.map_image || "";
+  const mapMeta = mapPayload.meta || {};
+  const travelGraph = data.travel_graph || { edges: {} };
+  if (!mapImage || !nodes.length) throw new Error(`No ${world} geography is installed in this build.`);
+  const knownCount = nodes.filter((node) => node.discovered).length;
+  const legendChips = groupNodesByController(regions.length ? regions : nodes)
+    .map((entry) => `<span class="territory-chip" style="--tc:${entry.color}"><i></i>${escapeHtml(entry.controller)}</span>`).join("");
+  const boardPicker = boards.length ? `<label class="map-board-picker"><span>Realm map</span><select id="map-board-select">${boards.map((board) => `<option value="${escapeHtml(board.name)}"${board.name === selectedBoard?.name ? " selected" : ""}>${escapeHtml(board.name)}${board.name === mapPayload.active_board ? " · current realm" : ""}</option>`).join("")}</select></label>` : "";
+  const mode = APP.mainMapMode || "political";
+  host.innerHTML = `<div class="map-heading"><div><span class="map-kicker">${escapeHtml(mapMeta.projection || "LIVING ATLAS")}</span><b>${escapeHtml(selectedBoard?.name || world)}</b><small>${nodes.length} landmarks · ${knownCount} discovered · ${escapeHtml(APP.state?.world_time || "Current campaign")}</small></div>${boardPicker}<div class="map-mode-tabs" role="tablist" aria-label="Map view"><button data-main-map-mode="political">Political</button><button data-main-map-mode="danger">Danger</button><button data-main-map-mode="relationships">Relations</button><button data-main-map-mode="events">Events</button></div></div>` +
+    (legendChips ? `<div class="territory-legend">${legendChips}</div>` : "") +
+    `<div class="map-layout"><div class="map-wrap" id="map-wrap"><div class="map-canvas" id="map-canvas" data-map-render="living" data-world="${escapeHtml(world)}" style="--map-image:url('${escapeHtml(mapImage)}')"><canvas class="map-territories" id="map-territory-canvas"></canvas><canvas class="map-routes" id="map-route-canvas"></canvas><div class="map-faction-labels" id="map-faction-labels" aria-hidden="true"></div><div id="map-ambient" class="map-ambient" aria-hidden="true"></div></div><div class="map-view-pill" id="map-view-pill">WORLD VIEW</div><div class="map-zoom-controls"><button type="button" data-map-zoom-in title="Zoom in" aria-label="Zoom in">+</button><button type="button" data-map-zoom-out title="Zoom out" aria-label="Zoom out">−</button><button type="button" data-map-focus title="Focus current location" aria-label="Focus current location">◉</button><button type="button" data-map-zoom-reset title="Reset view" aria-label="Reset map view">⤢</button></div><div class="map-ribbon">The map shows the active ${escapeHtml(world)} campaign and changes with its narrative.</div></div><aside class="map-detail" id="map-detail" tabindex="-1"><b>Select a landmark</b><p>${escapeHtml(mapMeta.accuracy_note || "Borders repaint whenever the story changes control.")}</p><small>Drag to pan. Scroll or use the controls to zoom.${boards.length ? " Change realm above without moving the character." : ""}</small></aside></div>`;
+  shell.dataset.mapMode = mode;
+  shell.dataset.mapWorld = world;
+  $$("[data-main-map-mode]", host).forEach((button) => button.classList.toggle("active", button.dataset.mainMapMode === mode));
+  const territoryData = regions.length ? regions : nodes;
+  const territoryLayout = paintMapTerritories($("#map-territory-canvas"), territoryData);
+  paintMapRoutes($("#map-route-canvas"), nodes, travelGraph);
+  renderMapFactionLabels($("#map-faction-labels"), territoryLayout, nodes);
+  applyNativeMapFx(nodes);
+  const mapCanvas = $("#map-canvas");
+  const previousPlayer = APP.lastLivingMapPlayer;
+  nodes.forEach((node) => {
+    const dot = document.createElement("button");
+    const majorKinds = new Set(["capital", "city", "village", "nation", "region", "realm", "island", "kingdom", "empire", "floor"]);
+    const major = majorKinds.has(String(node.kind || "").toLowerCase());
+    dot.type = "button";
+    dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
+    dot.style.left = `${node.current && previousPlayer?.world === world ? previousPlayer.x : node.x}%`;
+    dot.style.top = `${node.current && previousPlayer?.world === world ? previousPlayer.y : node.y}%`;
+    dot.title = `${node.name} · ${node.kind || "landmark"}${node.controller && node.controller !== "Unknown" ? ` · ${node.controller}` : ""}`;
+    dot.dataset.mapNode = node.name;
+    dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.name)}</span>`;
+    mapCanvas.appendChild(dot);
+    if (node.current) {
+      requestAnimationFrame(() => requestAnimationFrame(() => { dot.style.left = `${node.x}%`; dot.style.top = `${node.y}%`; }));
+      APP.lastLivingMapPlayer = { world, x: Number(node.x), y: Number(node.y) };
+    }
+  });
+  const previousPeople = APP.lastLivingMapPeople || {};
+  const nextPeople = {};
+  trackedLivingMapPeople(data, nodes).forEach((person) => {
+    const marker = document.createElement("button"), key = `${world}:${normalizePersonName(person.name)}`;
+    const previous = previousPeople[key];
+    marker.type = "button"; marker.className = `map-person${person.nemesis ? " nemesis" : ""}`;
+    marker.style.left = `${previous?.x ?? person.x}%`; marker.style.top = `${previous?.y ?? person.y}%`;
+    marker.dataset.mapPerson = person.name;
+    marker.title = `${person.name} · ${person.label || "Known person"} · last known at ${person.last_known_location}`;
+    marker.innerHTML = `${personPortraitHtml(person.name, person, { size: "sm" })}<span>${escapeHtml(person.name)}</span>`;
+    mapCanvas.appendChild(marker);
+    requestAnimationFrame(() => requestAnimationFrame(() => { marker.style.left = `${person.x}%`; marker.style.top = `${person.y}%`; }));
+    nextPeople[key] = { x: person.x, y: person.y };
+  });
+  APP.lastLivingMapPeople = nextPeople;
+  APP.mapNodes = nodes; APP.mapRegions = regions; APP.travelGraph = travelGraph;
+  initMapPanZoom();
+  wireMainLivingMap(host, world, mapPayload);
+}
+
+function focusApprovedLivingMap() {
+  closeModal("modal-journal");
+  if (isMobileLayout()) setMobileView("map");
+  else $("#living-map-main")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
+function wireMainLivingMap(host, world, mapPayload) {
+  host.querySelector("#map-board-select")?.addEventListener("change", (event) => {
+    APP.mapBoardSelectionByWorld ||= {};
+    APP.mapBoardSelectionByWorld[world] = event.target.value;
+    refreshMainLivingMap();
+  });
+  host.querySelectorAll("[data-main-map-mode]").forEach((button) => button.addEventListener("click", () => {
+    APP.mainMapMode = button.dataset.mainMapMode;
+    $("#living-map-main").dataset.mapMode = APP.mainMapMode;
+    host.querySelectorAll("[data-main-map-mode]").forEach((peer) => peer.classList.toggle("active", peer === button));
+  }));
+  host.querySelectorAll("[data-map-node]").forEach((button) => button.addEventListener("click", () => showLivingMapNode(button.dataset.mapNode)));
+  host.querySelectorAll("[data-map-person]").forEach((button) => button.addEventListener("click", () => showLivingMapPerson(button.dataset.mapPerson)));
+  host.addEventListener("click", (event) => {
+    const wrap = $("#map-wrap"); if (!wrap) return;
+    const rect = wrap.getBoundingClientRect(), cx = rect.width / 2, cy = rect.height / 2;
+    if (event.target.closest("[data-map-zoom-in]")) setMapZoom(wrap, mapView.scale * 1.3, cx, cy);
+    else if (event.target.closest("[data-map-zoom-out]")) setMapZoom(wrap, mapView.scale / 1.3, cx, cy);
+    else if (event.target.closest("[data-map-zoom-reset]")) { mapView.scale = 1; mapView.x = 0; mapView.y = 0; applyMapView(); }
+    else if (event.target.closest("[data-map-focus]")) {
+      const current = (APP.mapNodes || []).find((node) => node.current);
+      if (current) focusMapPoint(wrap, current.x, current.y, Math.max(2.2, mapView.scale));
+    }
+  });
+}
+
+function showLivingMapPerson(name) {
+  const person = (APP.latestMapData?.relationships_view?.people || []).find((row) => row.name === name), detail = $("#map-detail");
+  if (!person || !detail) return;
+  detail.classList.add("open");
+  detail.innerHTML = `<div class="map-person-heading">${personPortraitHtml(person.name, person, { size: "md" })}<div><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.label || "Known person")}</small></div></div><p>${escapeHtml(person.goal || "No current goal is known.")}</p><dl><dt>Relationship</dt><dd>${escapeHtml(person.score ?? 0)}</dd><dt>Last known</dt><dd>${escapeHtml(person.last_known_location || "Unknown")}</dd><dt>Knowledge</dt><dd>${person.knowledge?.length ? person.knowledge.map(escapeHtml).join(", ") : "Nothing reliably established"}</dd></dl>`;
+  detail.focus({ preventScroll: true });
+}
+
+async function showLivingMapNode(name) {
+  const node = (APP.mapNodes || []).find((row) => row.name === name), detail = $("#map-detail");
+  if (!node || !detail) return;
+  const people = (node.notable_individuals || []).map((person) => typeof person === "object" ? person : { name: person });
+  const peopleRow = people.length ? `<div class="location-people">${people.slice(0, 4).map((person) => { const label = person.name || person.display_name || "Unknown"; return `<span>${personPortraitHtml(label, person, { size: "sm" })}<b>${escapeHtml(label)}</b></span>`; }).join("")}</div>` : "None recorded yet";
+  detail.classList.add("open");
+  detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes || "No additional local notes recorded.")}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller || "Unknown")}</dd>${node.danger_level ? `<dt>Danger</dt><dd>${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Known people</dt><dd>${peopleRow}</dd><dt>Related</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "No active connection"}</dd></dl><div id="map-route-preview" class="map-route-preview">Checking the route from your current location…</div>`;
+  detail.focus({ preventScroll: true });
+  try {
+    const route = await apiGet(`/api/travel/route?destination=${encodeURIComponent(node.name)}`), preview = $("#map-route-preview");
+    if (preview) preview.innerHTML = route.reachable ? `<b>Route from ${escapeHtml(route.origin)}</b><p>${(route.route || []).map(escapeHtml).join(" → ")}</p><small>About ${escapeHtml(formatDuration(route.minutes))}</small>` : `<b>No established route</b><p>${escapeHtml(route.reason || "This destination is not connected yet.")}</p>`;
+  } catch (_) { const preview = $("#map-route-preview"); if (preview) preview.textContent = "Route details are not currently available."; }
 }
 
 async function openJournal(tab) {
   if (tab === "map") {
     APP.journalTab = "map";
-    closeModal("modal-journal");
-    return openApprovedLivingMap();
+    return focusApprovedLivingMap();
   }
   APP.journalTab = tab;
   // The atlas is a primary play surface, not a card-sized journal entry.
@@ -5272,8 +5415,13 @@ let mapView = { scale: 1, x: 0, y: 0, dragging: false, lastX: 0, lastY: 0 };
 function applyMapView() {
   const canvas = $("#map-canvas");
   if (canvas) canvas.style.transform = `translate(${mapView.x}px, ${mapView.y}px) scale(${mapView.scale})`;
+  const shell = $("#living-map-main"), pill = $("#map-view-pill");
+  const band = mapView.scale >= 2.2 ? "local" : mapView.scale >= 1.35 ? "regional" : "world";
+  if (shell) shell.dataset.zoomBand = band;
+  if (pill) pill.textContent = `${band.toUpperCase()} VIEW`;
 }
 function clampMapPan(wrap) {
+  if (!wrap) return;
   const w = wrap.clientWidth, h = wrap.clientHeight;
   const scaledW = w * mapView.scale, scaledH = h * mapView.scale;
   const slackX = Math.max(0, (scaledW - w) / 2) + w * 0.4;
@@ -5286,6 +5434,15 @@ function setMapZoom(wrap, newScale, cx, cy) {
   mapView.x = cx - ((cx - mapView.x) / mapView.scale) * clamped;
   mapView.y = cy - ((cy - mapView.y) / mapView.scale) * clamped;
   mapView.scale = clamped;
+  clampMapPan(wrap);
+  applyMapView();
+}
+function focusMapPoint(wrap, xPercent, yPercent, scale) {
+  if (!wrap) return;
+  const targetScale = Math.max(.6, Math.min(4, Number(scale) || 2.2));
+  mapView.scale = targetScale;
+  mapView.x = wrap.clientWidth / 2 - (Number(xPercent) / 100) * wrap.clientWidth * targetScale;
+  mapView.y = wrap.clientHeight / 2 - (Number(yPercent) / 100) * wrap.clientHeight * targetScale;
   clampMapPan(wrap);
   applyMapView();
 }
@@ -6420,11 +6577,7 @@ function initMobileExperience() {
   $$("#mobile-bottom-nav [data-mobile-view]").forEach((button) => button.addEventListener("click", async () => {
     const view = button.getAttribute("data-mobile-view");
     mobileVibrate(8);
-    if (view === "world") {
-      $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
-      APP.mobileView = "map";
-      await openApprovedLivingMap();
-    } else if (view === "more") {
+    if (view === "more") {
       $$("#mobile-bottom-nav [data-mobile-view]").forEach((peer) => peer.setAttribute("aria-selected", String(peer === button)));
       openModal("modal-mobile-more");
     } else setMobileView(view);

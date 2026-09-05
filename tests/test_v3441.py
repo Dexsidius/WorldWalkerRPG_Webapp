@@ -22,7 +22,7 @@ class WorldwalkerV3441EconomyTests(unittest.TestCase):
         return state
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.57.2")
+        self.assertEqual(APP_VERSION, "3.58.0")
         self.assertEqual(BASE_STATE["schema_version"], 21)
 
     def test_fractional_prices_are_not_rounded_down_to_free(self):

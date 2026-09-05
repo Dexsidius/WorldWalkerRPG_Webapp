@@ -34,22 +34,49 @@ class MapWorkspaceTests(unittest.TestCase):
         for name in ("Kusagakure", "Takigakure", "Yugakure", "Otogakure", "Uzushiogakure Ruins", "Five Kage Summit"):
             self.assertIn(name, names)
 
-    def test_approved_living_map_replaces_the_journal_renderer(self):
+    def test_approved_living_map_is_the_main_layout_not_a_separate_screen(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        living_js = (ROOT / "frontend" / "js" / "living-map.js").read_text(encoding="utf-8")
-        living_css = (ROOT / "frontend" / "css" / "living-map.css").read_text(encoding="utf-8")
-        self.assertIn('window.WorldwalkerLivingMap.open()', js)
-        prototype_html = (ROOT / "frontend" / "living-map" / "index.html").read_text(encoding="utf-8")
-        prototype_js = (ROOT / "frontend" / "living-map" / "js" / "prototype.js").read_text(encoding="utf-8")
-        prototype_css = (ROOT / "frontend" / "living-map" / "css" / "prototype.css").read_text(encoding="utf-8")
-        self.assertIn('/js/living-map.js?v=3.57.2-map4', html)
-        self.assertIn('src="/living-map/index.html?v=3.57.2"', living_js)
-        self.assertIn('grid-template-columns: 304px minmax(0,1fr) 348px', prototype_css)
-        self.assertIn('width:100%; height:100%', prototype_css)
-        self.assertIn('data-mode="political"', prototype_html)
-        self.assertNotIn('paintMapTerritories', living_js)
-        self.assertIn('data-mobile-view="world" aria-selected="false"><span>⌖</span>Map', html)
+        css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
+        self.assertIn('id="living-map-main"', html)
+        self.assertIn('class="panel scene-card location-scene-card"', html)
+        self.assertLess(html.index('id="living-map-main"'), html.index('class="panel story-card'))
+        self.assertGreater(html.index('location-scene-card'), html.index('class="col col-right"'))
+        self.assertNotIn('living-map-shell', html)
+        self.assertNotIn('/living-map/index.html', html)
+        self.assertIn('renderMainLivingMap(data)', js)
+        self.assertIn('if (data.world !== activeWorld)', js)
+        self.assertIn('data-mobile-view="map" aria-selected="false"><span>⌖</span>Map', html)
+        self.assertIn('body[data-mobile-view="map"] .col-center', css)
+
+    def test_main_map_uses_only_active_world_payload_and_supports_semantic_zoom(self):
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('const mapPayload = data.map_data || {}', js)
+        self.assertIn('const mapImage = selectedBoard?.image || data.map_image', js)
+        self.assertIn('shell.dataset.mapWorld = world', js)
+        self.assertIn('mapView.scale >= 2.2 ? "local"', js)
+        self.assertNotIn('naruto_location_registry', js)
+
+    def test_each_world_map_snapshot_contains_only_that_worlds_landmarks(self):
+        snapshots = {}
+        for world, data in WORLD_DATA.items():
+            if world == "Custom World":
+                continue
+            state = copy.deepcopy(BASE_STATE)
+            state.update(world=world, location=data["map"][0][0])
+            snapshots[world] = {
+                row["name"] for row in map_snapshot(state, data["map"], world)["nodes"]
+            }
+
+        self.assertIn("Konohagakure", snapshots["Naruto"])
+        for world, names in snapshots.items():
+            if world != "Naruto":
+                self.assertNotIn("Konohagakure", names, world)
+
+        self.assertIn("Foosha Village", snapshots["One Piece"])
+        for world, names in snapshots.items():
+            if world != "One Piece":
+                self.assertNotIn("Foosha Village", names, world)
 
     def test_living_map_preserves_tracking_and_world_layer_rules(self):
         js = (ROOT / "frontend" / "living-map" / "js" / "prototype.js").read_text(encoding="utf-8")

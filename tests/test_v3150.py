@@ -24,7 +24,7 @@ class WorldwalkerV3150Tests(unittest.TestCase):
         )
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.57.2")
+        self.assertEqual(APP_VERSION, "3.58.0")
 
     def test_creation_wording_has_sharply_graduated_open_ended_power(self):
         ordinary = self.profile("I studied at the academy.")

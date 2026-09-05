@@ -116,7 +116,7 @@ input,select,textarea{ font-family:inherit; }
   position:relative;
   z-index:2;
   display:grid;
-  grid-template-columns:300px 1fr 320px;
+  grid-template-columns:300px minmax(520px,1fr) 360px;
   grid-template-rows:56px 1fr;
   grid-template-areas:"top top top" "left center right";
   height:100vh;
@@ -137,7 +137,7 @@ input,select,textarea{ font-family:inherit; }
 }
 .col.col-center{ overflow:hidden; height:100%; min-height:0; }
 @media (max-width:1180px){
-  .app-shell{ grid-template-columns:260px 1fr 280px; }
+  .app-shell{ grid-template-columns:250px minmax(440px,1fr) 310px; }
 }
 
 /* ==========================================================================
@@ -540,6 +540,9 @@ body[data-world="Naruto"] .portrait-loading span{
    Scene card
    ========================================================================== */
 .scene-card{ flex-shrink:0; }
+.location-scene-card .scene-viewport{ aspect-ratio:16/9; min-height:150px; max-height:205px; }
+.location-scene-card .scene-head{ min-height:34px; padding-block:6px; }
+.location-scene-card .scene-loc{ max-width:78%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .scene-head{ padding-right:10px; }
 .scene-viewport{
   position:relative; width:100%; aspect-ratio:16/5; min-height:150px; max-height:220px;
@@ -1903,6 +1906,73 @@ body[data-world="Reincarnated as a Slime"] .percentile-tray{ background:radial-g
 .map-detail dl{ display:grid; grid-template-columns:68px 1fr; gap:7px; font-size:11px; }
 .map-detail dt{ color:var(--muted); text-transform:uppercase; }
 .map-detail dd{ margin:0; color:var(--text); }
+
+/* ========================================================================
+   Living Map — the approved atlas is the central play surface, not a modal.
+   It consumes every pixel left by the character/action rails, while the
+   Chronicle remains immediately below it. All geography comes from the
+   active world's /api/panels payload; there is no world-specific fallback.
+   ======================================================================== */
+.living-map-main{
+  flex:1 1 64%; min-height:300px; overflow:hidden; display:flex; flex-direction:column;
+  padding:0; background:rgba(10,9,7,.96); border-color:rgba(var(--accent-rgb),.34);
+}
+.living-map-main-body{ flex:1 1 auto; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+.living-map-loading,.living-map-unavailable{ flex:1; display:grid; place-content:center; gap:7px; padding:24px; text-align:center; color:var(--sub); }
+.living-map-loading b,.living-map-unavailable b{ color:var(--gold); font:700 15px var(--font-display); letter-spacing:.08em; }
+.living-map-main .map-heading{
+  flex:0 0 auto; align-items:center; min-height:47px; margin:0; padding:7px 10px;
+  border-bottom:1px solid rgba(var(--accent-rgb),.24); background:rgba(15,12,8,.94);
+}
+.living-map-main .map-heading b{ font-size:16px; }
+.living-map-main .map-heading small{ font-size:9.5px; }
+.living-map-main .map-board-picker{ margin-left:auto; }
+.living-map-main .territory-legend{
+  flex:0 0 auto; margin:0; padding:5px 9px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:thin;
+}
+.living-map-main .map-layout{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns:minmax(0,1fr) clamp(190px,20vw,260px); gap:0; }
+.living-map-main .map-wrap{ width:100%; height:100%; min-height:0; aspect-ratio:auto; border:0; border-radius:0; }
+.living-map-main .map-wrap::before{ inset:7px; border-color:rgba(var(--accent-rgb),.28); }
+.living-map-main .map-detail{ min-height:0; height:100%; overflow:auto; border:0; border-left:1px solid rgba(var(--accent-rgb),.24); border-radius:0; padding:12px; }
+.living-map-main .map-canvas{ background-size:cover; background-position:center; transition:filter .25s ease; }
+.living-map-main .map-view-pill{
+  position:absolute; top:10px; left:10px; z-index:9; padding:5px 9px; border:1px solid rgba(var(--accent-rgb),.35);
+  border-radius:999px; background:rgba(8,7,5,.86); color:var(--gold); font:800 9px var(--font-mono); letter-spacing:.08em;
+}
+.living-map-main .map-ribbon{
+  position:absolute; z-index:8; left:50%; bottom:8px; transform:translateX(-50%); width:max-content; max-width:72%;
+  padding:4px 10px; border:1px solid rgba(var(--accent-rgb),.26); border-radius:3px; background:rgba(7,6,4,.80);
+  color:var(--sub); font:10px var(--font-display); text-align:center; pointer-events:none;
+}
+.living-map-main .map-node{ transition:left .7s var(--ease-out),top .7s var(--ease-out),opacity .18s ease; }
+.living-map-main .map-person{
+  position:absolute; z-index:7; display:grid; place-items:center; width:28px; height:28px; padding:0; border:0;
+  border-radius:50%; background:transparent; transform:translate(-50%,-50%); transition:left .8s var(--ease-out),top .8s var(--ease-out),opacity .18s ease;
+}
+.living-map-main .map-person .person-portrait{ width:27px; height:27px; border:2px solid var(--accent2); box-shadow:0 3px 10px #000c,0 0 0 2px rgba(5,8,10,.72); }
+.living-map-main .map-person>span:last-child{ position:absolute; top:31px; left:50%; transform:translateX(-50%); width:max-content; max-width:120px; padding:2px 5px; border:1px solid var(--border-soft); border-radius:3px; background:rgba(4,7,10,.9); color:var(--text); font:700 8px var(--font-mono); opacity:0; pointer-events:none; }
+.living-map-main .map-person:hover>span:last-child,.living-map-main .map-person:focus-visible>span:last-child{ opacity:1; }
+.living-map-main .map-person.nemesis .person-portrait{ border-color:var(--danger); box-shadow:0 0 13px rgba(var(--danger-rgb),.65),0 3px 10px #000c; }
+.living-map-main[data-zoom-band="world"] .map-person{ opacity:0; pointer-events:none; }
+.living-map-main[data-zoom-band="world"] .map-node:not(.map-major):not(.here){ opacity:0; pointer-events:none; }
+.living-map-main[data-zoom-band="regional"] .map-node:not(.map-major):not(.known):not(.here) .map-label{ opacity:0; }
+.living-map-main[data-map-mode="danger"] .map-territories{ opacity:.45; filter:saturate(.55); }
+.living-map-main[data-map-mode="danger"] .map-node[class*="danger-"] .map-pip{ transform:scale(1.35); }
+.living-map-main[data-map-mode="events"] .map-node:not(.territory-changed):not(.here){ opacity:.38; }
+.living-map-main[data-map-mode="relationships"] .map-territories{ opacity:.72; filter:saturate(.72) hue-rotate(18deg); }
+.living-map-main .map-mode-tabs{ display:flex; gap:2px; padding:2px; border:1px solid var(--border-soft); border-radius:7px; }
+.living-map-main .map-mode-tabs button{ min-height:29px; padding:4px 8px; border:0; border-radius:5px; background:transparent; color:var(--sub); font-size:9px; }
+.living-map-main .map-mode-tabs button.active{ color:#171009; background:linear-gradient(var(--gold),#c58e35); font-weight:900; }
+.col-center>.story-card{ flex:0 1 35%; min-height:210px; }
+.col-right>.location-scene-card{ order:0; }
+.col-right>#combat-panel{ order:1; }
+.col-right>.composer-card{ order:2; }
+.col-right>.time-control-card{ order:3; }
+.col-right>.messages-card{ order:4; }
+.col-right>.panel:not(.location-scene-card):not(#combat-panel):not(.composer-card):not(.time-control-card):not(.messages-card){ order:5; }
+.map-person-heading{ display:flex; align-items:center; gap:9px; }
+.map-person-heading b,.map-person-heading small{ display:block; }
+.map-person-heading small{ color:var(--sub); margin-top:2px; }
 .lore-import{ display:grid; grid-template-columns:1fr 180px auto; align-items:end; gap:8px; margin-bottom:12px; padding:12px; border:1px solid var(--border-soft); border-radius:9px; }
 .lore-import label{ margin:0; }
 .lore-import input{ margin-top:5px; width:100%; }
@@ -2734,18 +2804,30 @@ body[data-world="Reincarnated as a Slime"] .quick-nav button:active, body[data-w
   body[data-mobile-view] .col{ display:none; order:2; }
   body[data-mobile-view="chronicle"] .col-center,
   body[data-mobile-view="actions"] .col-right,
-  body[data-mobile-view="character"] .col-left{ display:flex; }
-  body[data-mobile-view="actions"] .col-right>.panel:not(.composer-card):not(#combat-panel){ display:none; }
+  body[data-mobile-view="character"] .col-left,
+  body[data-mobile-view="map"] .col-center{ display:flex; }
+  body[data-mobile-view="chronicle"] .living-map-main{ display:none; }
+  body[data-mobile-view="map"] .story-card{ display:none; }
+  body[data-mobile-view="map"] .living-map-main{ display:flex; flex:1 1 auto; min-height:calc(100dvh - 230px); }
+  body[data-mobile-view="map"] .mobile-advance-dock{ display:none!important; }
+  body[data-mobile-view="actions"] .col-right>.panel:not(.composer-card):not(#combat-panel):not(.location-scene-card):not(.time-control-card){ display:none; }
   body[data-mobile-view="actions"] .col-right{ gap:8px; }
   body[data-mobile-view="character"] .col-left{ gap:8px; }
   body[data-mobile-view="character"] .quick-nav,
   body[data-mobile-view="character"] #btn-open-advisor{ display:none; }
-  body[data-mobile-view="chronicle"] .scene-card{ display:block; }
   .story-card{ min-height:calc(100dvh - 250px); }
   .story-feed{ height:auto; min-height:calc(100dvh - 430px); max-height:none; overflow:visible; padding:10px; }
   .story-beat{ content-visibility:auto; contain-intrinsic-size:320px; }
   .story-entry{ padding:12px 2px; }
   .story-entry-copy{ overflow-wrap:anywhere; }
+  .location-scene-card .scene-viewport{ min-height:145px; max-height:190px; }
+  .living-map-main .map-heading{ align-items:flex-start; flex-wrap:wrap; }
+  .living-map-main .map-heading .map-mode-tabs{ order:3; width:100%; overflow-x:auto; }
+  .living-map-main .map-heading .map-mode-tabs button{ flex:1 0 auto; min-height:36px; }
+  .living-map-main .map-layout{ display:block; position:relative; }
+  .living-map-main .map-wrap{ min-height:calc(100dvh - 310px); }
+  .living-map-main .map-detail{ position:absolute; left:0; right:0; bottom:0; height:auto; max-height:30dvh; border-left:0; border-top:2px solid var(--accent); background:rgba(var(--glass-rgb),.97); transform:translateY(calc(100% - 42px)); transition:transform .2s ease; }
+  .living-map-main .map-detail:focus-within,.living-map-main .map-detail.open{ transform:translateY(0); }
   .mobile-chronicle-tools{
     display:flex; gap:6px; overflow-x:auto; padding:8px 10px 2px; scrollbar-width:none;
     border-bottom:1px solid var(--border-soft); background:rgba(0,0,0,.08);

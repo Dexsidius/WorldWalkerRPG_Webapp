@@ -1,9 +1,9 @@
-WORLDWALKER RPG 3.57.2 - LOCAL PHONE PLAY
+WORLDWALKER RPG 3.58.0 - LOCAL PHONE PLAY
 =========================================
 
 MOBILE INTERFACE
 ----------------
-- Use the bottom bar to switch between Chronicle, Actions, Character, World,
+- Use the bottom bar to switch between Chronicle, Actions, Character, Map,
   and More without losing your place.
 - The fixed Advance bar shows the selected time step and queued-action count.
 - More contains the full-screen Advisor, world-specific group roster, Quests, Relationships,
