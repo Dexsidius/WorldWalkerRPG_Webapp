@@ -44,10 +44,13 @@ def test_outcome_variety_is_recorded_locally():
     assert [row["kind"] for row in value["living_world"]["outcome_history"]] == ["clean_success", "mixed"]
 
 
-def test_known_npc_can_initiate_contact_from_recorded_goal():
+def test_recorded_goal_is_not_pasted_into_fabricated_dialogue():
     value = state()
     value["turn"] = 4
     value["npc_memories"] = {"Kakashi": {"recurring": True, "goal": "your next team exercise"}}
     result = advance(value, [], 5, [])
-    assert result["incoming_chats"][0]["sender"] == "Kakashi"
-    assert "team exercise" in result["incoming_chats"][0]["message"]
+    assert result["incoming_chats"] == []
+    # v3.62 uses shared-experience candidates in the existing narrator call.
+    # A generic goal, without a resolved exchange or delivery route, is not one.
+    from relationship_life import candidates
+    assert candidates(value) == []

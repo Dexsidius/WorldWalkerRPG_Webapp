@@ -687,6 +687,9 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         with self.lock:
             thread = data.get("thread") or data.get("sender")
             sender = data.get("sender") or thread
+            from relationship_life import route
+            if not route(self.state, str(sender or '')):
+                return None
             self.ensure_contact(thread, "group" if data.get("contact_patch", {}).get("kind") == "group" else "person", data.get("contact_patch") or {})
             self.add_chat_message(thread, sender, data.get("message", ""), "incoming")
             self.append(f"[MESSAGE — {thread}]\n{sender}: {data.get('message', '')}", "system")
@@ -728,7 +731,8 @@ You never alter game state; this is a conversation only. Return ONLY valid JSON,
         recent = " ".join(str(row.get("text") or row.get("summary") or row) for row in (self.state.get("world_events") or [])[-3:] if isinstance(row, (dict, str))).lower()
         if recent:
             candidates.extend(str(name) for name in (self.state.get("contacts") or {}) if str(name).lower() in recent)
-        return list(dict.fromkeys(candidates))[:8]
+        from relationship_life import route
+        return [name for name in dict.fromkeys(candidates) if route(self.state, name)][:8]
 
     def create_world_event_if_due(self):
         current_day = int(self.state.get("canon_day", 0) or 0)

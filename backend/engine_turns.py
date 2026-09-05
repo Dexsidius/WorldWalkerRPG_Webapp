@@ -707,17 +707,19 @@ Return ONLY valid JSON."""
             record_causal_outcome(self.state, data, turn_actions, int(context.get("elapsed_minutes", 5) or 5))
             if not is_opening:
                 from living_world import advance as advance_living_world, record_outcome as record_living_outcome
+                from relationship_life import resolve as resolve_relationships
+                relationship_messages = resolve_relationships(before, self.state, data)
                 living = advance_living_world(self.state, turn_actions, int(context.get("elapsed_minutes", 5) or 5), data.get("events", []), data.get('world_plan_updates'))
                 record_living_outcome(self.state, data, turn_actions)
                 for event in living.get("events", []):
                     data.setdefault("events", []).append(event)
                     from chronicle_prose import beat_body
                     self.append(f"[LIVING WORLD — {event.get('title', 'FOLLOW-UP')}]\n{beat_body(event)}", "system")
-                for message in living.get("incoming_chats", []):
+                for message in [*living.get("incoming_chats", []), *relationship_messages]:
                     thread = message.get("thread") or message.get("sender")
                     if thread:
                         self.ensure_contact(thread)
-                        self.add_chat_message(thread, message.get("sender"), message.get("message", ""), "incoming")
+                        self.add_chat_message(thread, message.get("sender"), message.get("message", ""), "incoming", message.get("metadata"))
                 from arc_director import advance as advance_campaign_arcs
                 arc_result = advance_campaign_arcs(self.state, turn_actions, data.get("events", []), int(context.get("elapsed_minutes", 5) or 5))
                 for beat in arc_result.get("beats", []):

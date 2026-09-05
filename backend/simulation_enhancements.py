@@ -253,6 +253,9 @@ def reactive_communication(state, events, elapsed_minutes, existing=None):
     for name in companion_names + list((state.get("contacts") or {}).keys()):
         if not name or name in candidates:
             continue
+        from relationship_life import available
+        if not available(state, name):
+            continue
         contact = (state.get("contacts") or {}).get(name, {})
         if isinstance(contact, dict) and contact.get("can_contact", True) is False:
             continue
@@ -284,7 +287,8 @@ def reactive_communication(state, events, elapsed_minutes, existing=None):
             context = f"{contact} {memory}".casefold()
             direct = name.casefold() in blob
             overlap = len(event_words & {word for word in re.findall(r"[a-z0-9'-]+", context) if len(word) >= 4})
-            score = (120 if direct else 0) + min(30, overlap * 5) + (20 if public_news else 0)
+            # Shared vocabulary is not evidence that somebody knows a secret.
+            score = (120 if direct else 0) + (min(30, overlap * 5) if direct or public_news else 0) + (20 if public_news else 0)
             if score and (best is None or score > best[0]):
                 best = (score, name, row)
     if not best:

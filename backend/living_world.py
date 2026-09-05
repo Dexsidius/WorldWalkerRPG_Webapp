@@ -141,10 +141,9 @@ def _event_for(state, kind, count, target=""):
                 "why_it_matters": "Authority now produces a grounded public response instead of an automatic crisis.",
                 "next_pressure": "Listen to the people affected or continue the established policy."}
     if kind in {"social", "communication"} and target:
-        return {"title": f"{target} Follows Up", "type": "npc_reaction",
-                "narrative": f"Because you have repeatedly made time for {target}, they have reason to initiate the next exchange and refer to what the two of you actually discussed or did.",
-                "why_it_matters": "The relationship is becoming reciprocal rather than waiting for every player prompt.",
-                "next_pressure": f"Hear what {target} wants to discuss."}
+        # Shared-experience candidates now reach the normal narrator. A generic
+        # instruction about what an NPC should do is not a player-facing event.
+        return None
     if kind in {"crafting", "finance"}:
         return {"title": "Practical Work Creates an Opening", "type": "opportunity",
                 "narrative": f"Your repeated practical work in {location} creates a credible new customer, collaborator, improvement, or reuse opportunity. Trivial ingredients remain narrative; only memorable results need inventory records.",
@@ -154,32 +153,9 @@ def _event_for(state, kind, count, target=""):
 
 
 def _npc_contact(state, living):
-    turn = int(state.get("turn", 0) or 0)
-    if turn <= 0 or turn % 4:
-        return None
-    recent = {ai_text(row.get("name")).casefold() for row in living["npc_contact_history"][-4:] if isinstance(row, dict)}
-    candidates = []
-    for name, detail in _known_people(state):
-        if name.casefold() in recent or detail.get("deceased"):
-            continue
-        topic = ai_text(detail.get("immediate_goal") or detail.get("goal"))
-        promises = detail.get("promises") if isinstance(detail.get("promises"), list) else []
-        if not topic and promises:
-            topic = ai_text(promises[0])
-        if not topic:
-            continue
-        score = 3 if detail.get("recurring") else 0
-        score += 2 if promises else 0
-        candidates.append((score, name, topic))
-    if not candidates:
-        return None
-    _, name, topic = max(candidates, key=lambda row: (row[0], row[1].casefold()))
-    channel = "message" if ai_text(state.get("world")) not in {"Naruto", "Bleach"} else "lore-appropriate message or visit"
-    message = f"I wanted to follow up about {topic}. When you have time, I would like to talk."
-    living["npc_contact_history"].append({"name": name, "topic": topic[:240], "turn": turn})
-    living["npc_contact_history"] = living["npc_contact_history"][-80:]
-    return {"thread": name, "sender": name, "message": message, "channel": channel,
-            "reason": f"{name} has an unresolved recorded goal or promise involving the player."}
+    # Compatibility entry point: never fabricate dialogue by pasting a goal.
+    # relationship_life prepares evidence for the already-budgeted GM turn.
+    return None
 
 
 def record_outcome(state, data, actions):

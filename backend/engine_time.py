@@ -1880,6 +1880,8 @@ class TimeSkipMixin:
                 int(self.state.get("canon_day", before.get("canon_day", 0)) or 0), elapsed_minutes,
             )
             incoming_chats = [m for m in (data.get("incoming_chats", []) or []) if isinstance(m, dict)]
+            from relationship_life import resolve as resolve_relationships
+            incoming_chats.extend(resolve_relationships(before, self.state, data))
             incoming_chats.extend(living.get("incoming_chats", []))
             incoming_chats.extend(reactive_communication(self.state, updates, elapsed_minutes, incoming_chats))
             for m in incoming_chats:
@@ -1887,7 +1889,7 @@ class TimeSkipMixin:
                 if not thread:
                     continue
                 self.ensure_contact(thread)
-                self.add_chat_message(thread, m.get("sender"), m.get("message", ""), "incoming")
+                self.add_chat_message(thread, m.get("sender"), m.get("message", ""), "incoming", m.get("metadata"))
             record_simulation_events(self.state, updates, "narrator")
             # Canon-event notes (from fire_canon_events, day-anchored but not
             # authored by this turn's narrator) are merged into the SAME

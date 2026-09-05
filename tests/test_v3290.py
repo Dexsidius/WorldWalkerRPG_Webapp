@@ -21,7 +21,7 @@ from worlds import APP_VERSION, BASE_STATE, abilities_for
 
 class WorldwalkerV3290Tests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.61.0")
+        self.assertEqual(APP_VERSION, "3.62.0")
 
     def test_durable_commands_become_hidden_persistent_intents(self):
         care = infer_standing_intent("Ensure Konan is cared for until she recovers", 4)

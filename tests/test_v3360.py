@@ -19,7 +19,7 @@ class WorldwalkerV3360Tests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.61.0")
+        self.assertEqual(APP_VERSION, "3.62.0")
 
     def test_legacy_multiplayer_combat_shapes_cannot_lock_buttons(self):
         state = copy.deepcopy(BASE_STATE)

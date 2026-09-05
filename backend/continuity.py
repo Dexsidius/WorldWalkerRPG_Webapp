@@ -183,6 +183,12 @@ def update_continuity(before, after, action="", narrative=""):
             continue
         old_memory = before_npc.get(name) if isinstance(before_npc.get(name), dict) else {}
         chain = memory.setdefault("chain", [])
+        if not isinstance(chain, list):
+            chain = []
+        normalized_reason = re.sub(r"\W+", " ", str(reason).casefold()).strip()
+        if any(re.sub(r"\W+", " ", str(row.get('event', '') if isinstance(row, dict) else row).casefold()).strip() == normalized_reason for row in chain):
+            memory['chain'] = chain[-12:]
+            continue
         chain.append({"event": str(reason)[:300], "turn": turn, "canon_day": after.get("canon_day")})
         memory["chain"] = chain[-12:]
         if memory.get("attitude") != old_memory.get("attitude"):

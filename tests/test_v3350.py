@@ -13,7 +13,7 @@ from worlds import APP_VERSION, BASE_STATE
 
 class WorldwalkerV3350CanonCinematicTests(unittest.TestCase):
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.61.0")
+        self.assertEqual(APP_VERSION, "3.62.0")
 
     def test_every_canon_notice_gets_cached_scene_art(self):
         for world, location in (

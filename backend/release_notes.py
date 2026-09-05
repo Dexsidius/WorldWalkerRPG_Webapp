@@ -1,6 +1,17 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    '3.62.0': {
+        'title':'Living Relationships and Rivalries',
+        'summary':'Specific shared memories can lead to natural NPC follow-ups, with fewer repeated or disconnected messages.',
+        'highlights':[
+            {'title':'Relationships can initiate','example':'After helping at a clinic, its medic can send a personal thank-you or offer a lesson through the existing chat.'},
+            {'title':'Quiet moments count','example':'A friendly invitation can simply be pleasant; it need not become a crisis or another quest.'},
+            {'title':'Remember the reason','example':'Kept promises and shared victories remain relationship memories without requiring an attitude change.'},
+            {'title':'Grounded rivals','example':'A nemesis acts on established goals and knowledge, not automatic stat matching or compulsory sabotage.'},
+            {'title':'Safer messages','example':'Dead or unreachable contacts cannot send new follow-ups, and the same remembered experience is not repeatedly pitched.'},
+        ],
+    },
     '3.61.0': {
         'title':'Narrative-to-gameplay consistency',
         'summary':'Story outcomes reach the correct character records, equipment and rosters, with safer review of older campaigns.',

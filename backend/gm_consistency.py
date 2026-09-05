@@ -104,6 +104,7 @@ def decision_profiles(state, names):
             "loyalties": compact_values(memory.get("loyalties") or intention.get("loyalties")),
             "fears": compact_values(memory.get("fears") or intention.get("fears")),
             "temperament": text(memory.get("temperament") or memory.get("personality")),
+            "nemesis": memory.get("nemesis") is True,
             "recent_experiences": copy.deepcopy(rows(memory.get("chain"))[-3:]),
             "beliefs": {key: copy.deepcopy(rows(mapping(memory.get("knowledge")).get(key))[-4:])
                         for key in ("confirmed", "heard", "suspected", "false_beliefs")},
@@ -232,6 +233,8 @@ def prepare_request(state, payload):
     packet["continuity_guidance"] = REFINEMENT_RULE + ORGANIZATION_RULE
     from chronicle_prose import WRITING_RULE
     packet["chronicle_writing"] = WRITING_RULE
+    from relationship_life import prepare as prepare_relationships
+    prepare_relationships(state, packet)
     if re.search(r"\b(?:her|him|them)\b", query, re.I) and not packet["command_contracts"]:
         packet["reference_resolution"] = "ambiguous unless the current conversation clearly identifies the referent; do not guess"
     schema = mapping(packet.get("schema"))
