@@ -161,13 +161,14 @@ def _clean_region(raw, index):
         return None
     scale = str(raw.get("scale") or raw.get("scope") or "").strip().lower()
     default_size = CLAIM_SIZES.get(scale, 12.5)
-    authored_hexes = max(0, min(900, int(raw.get("hex_count", 0) or 0)))
+    authored_hexes = int(_number(raw.get("hex_count"), 0, 0, 900))
     if raw.get("player_founded"):
         authored_hexes = max(1, authored_hexes)
     cleaned = {
         "id": str(raw.get("id") or f"{_slug(controller)}-{_slug(name)}-{index}")[:100],
         "name": name[:160],
         "controller": controller[:160],
+        "status": str(raw.get("status") or "active").lower()[:40],
         "anchor": str(raw.get("anchor") or raw.get("source_location") or name)[:160],
         "scale": scale if scale in CLAIM_SIZES else "region",
         "size": _number(raw.get("size"), default_size, 4.0, 42.0),
@@ -251,14 +252,15 @@ def normalize_political_state(state, before=None):
         region = _clean_region(raw, index)
         if not region:
             continue
-        # Location ownership is the story-facing source of truth. Keep the
-        # atlas region synchronized even when a narrator only updates the
-        # location_details route (the most common narrative control change).
+        # Synchronize newly changed location control, never stale details on
+        # load. Substring matching can annex a distinct neighboring holding.
         anchor_key = str(region.get("anchor") or region.get("name") or "").strip().lower()
         detail = detail_by_name.get(anchor_key)
-        if detail is None and anchor_key:
-            detail = next((row for name, row in detail_by_name.items() if anchor_key in name or name in anchor_key), None)
-        if isinstance(detail, dict) and ("controlling_faction" in detail or detail.get("faction")):
+        old_details = before.get("location_details", {}) if isinstance(before, dict) else {}
+        old_detail = next((v for k,v in old_details.items() if str(k).strip().lower()==anchor_key), None) if isinstance(old_details,dict) else None
+        detail_turn=detail.get('controller_changed_turn') if isinstance(detail,dict) else None
+        newer=isinstance(detail_turn,(int,float)) and detail_turn > region.get('controller_changed_turn',-1)
+        if isinstance(detail, dict) and ("controlling_faction" in detail or detail.get("faction")) and ((isinstance(before,dict) and detail != old_detail) or newer):
             region["controller"] = str(detail.get("controlling_faction") or detail.get("faction") or "Unclaimed").strip()[:160]
             if isinstance(detail.get("controller_changed_turn"), (int, float)):
                 region["controller_changed_turn"] = detail["controller_changed_turn"]

@@ -169,8 +169,13 @@ def travel_route(state, destination, origin=None):
     destination = ai_text(destination)
     def closest(value):
         low = value.lower()
+        if not low.strip(): return ""
         exact = next((n for n in names if n.lower() == low), None)
-        return exact or next((n for n in names if n.lower() in low or low in n.lower()), "")
+        if exact: return exact
+        contained = [n for n in names if re.search(r'(?<!\w)' + re.escape(n.lower()) + r'(?!\w)',low)]
+        if contained: return max(contained,key=len)
+        partial = [n for n in names if low in n.lower()]
+        return partial[0] if len(partial)==1 else ""
     start, target = closest(origin), closest(destination)
     if not start or not target:
         return {"reachable": False, "origin": origin, "destination": destination,
@@ -195,13 +200,16 @@ def travel_route(state, destination, origin=None):
 
 def travel_plan_for_actions(state, actions):
     plans = []
+    origin = state.get('location')
     names = [row["name"] for row in _map_nodes(state.get("world", "Custom World"))]
     for index, action in enumerate(actions or []):
         text = ai_text(action)
         if not TRAVEL_WORDS.search(text): continue
         destination = next((name for name in sorted(names, key=len, reverse=True) if name.lower() in text.lower()), "")
         if destination:
-            plans.append({"action_index": index, "action": text, **travel_route(state, destination)})
+            route = travel_route(state, destination, origin=origin)
+            plans.append({"action_index": index, "action": text, **route})
+            if route.get('reachable'): origin = route['destination']
     return plans
 
 
@@ -455,6 +463,23 @@ def apply_player_correction(state, correction_type, target, value, explanation="
         quest = next((q for q in state.get("quests", []) if isinstance(q, dict) and ai_text(q.get("name")).lower() == target.lower()), None)
         if not quest: raise ValueError("No active quest with that exact name was found.")
         quest["status"] = value; applied = f"Quest {quest['name']} is {value}."
+    elif kind == "territory":
+        if not target: raise ValueError("Enter an exact mapped location or holding name.")
+        claims=state.get('political_regions',[])
+        claims=claims if isinstance(claims,list) else []
+        matches=[c for c in claims if isinstance(c,dict) and str(c.get('name','')).casefold()==target.casefold()]
+        places=[n['name'] for n in _map_nodes(state.get('world','Custom World'))]
+        place=next((n for n in places if n.casefold()==target.casefold()),None)
+        if not matches and not place: raise ValueError("Use an exact existing location or holding; a story fact cannot safely guess its borders.")
+        for claim in matches:
+            claim['controller']=value
+            claim['status']='active'
+            claim['controller_changed_turn']=int(state.get('turn',0) or 0)
+        if place:
+            details=state.setdefault('location_details',{})
+            detail=details.get(place)
+            details[place]={**(detail if isinstance(detail,dict) else {}),'controlling_faction':value}
+        applied=f"Control of {target} belongs to {value}. Existing borders are preserved; local control does not grant the surrounding country."
     elif kind == "skill":
         if not target: raise ValueError("Enter the skill name in Target.")
         previous = state.setdefault("skills", {}).get(target)

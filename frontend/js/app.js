@@ -4808,6 +4808,24 @@ async function openJournal(tab) {
     const corrections = [...(data.simulation?.integrity?.corrections || [])].reverse();
     const currencyCorrection = data.tracks_currency === false ? "" : `<option value="currency">Currency amount</option>`;
     panel.innerHTML = `<div class="system-summary"><b>CORRECT THE GM</b><span>Your correction becomes an authoritative campaign fact, previews the selected change before applying it, and is included in future GM context. This makes no AI call and does not advance time.</span></div>${APP.correctionSource ? `<blockquote class="correction-source"><small>${escapeHtml(APP.correctionSource.time || "Selected Chronicle entry")}</small><p>${escapeHtml(APP.correctionSource.text)}</p></blockquote>` : ""}<form id="gm-correction-form" class="gm-correction-form"><label>What needs correcting<select id="correction-type"><option value="fact">Story fact</option><option value="location">Current location</option><option value="inventory_add">Missing inventory item</option><option value="inventory_remove">Item you no longer own</option>${currencyCorrection}<option value="hp">Current health</option><option value="resource">Current energy pool</option><option value="quest_status">Quest status</option><option value="skill">Skill description</option></select></label><label>Target or name<input id="correction-target" type="text" placeholder="Sword, quest name, skill name, character…"></label><label>Correct value<textarea id="correction-value" rows="3" placeholder="Write the correct fact or value" required></textarea></label><label>Why, if useful<textarea id="correction-explanation" rows="2" placeholder="Optional context that helps the GM preserve this correction"></textarea></label><button class="btn-primary" type="submit">PREVIEW CORRECTION</button><div id="correction-preview" aria-live="polite"></div></form><h3>Correction history</h3>${corrections.length ? corrections.map((row) => `<article class="correction-card"><header><b>${escapeHtml(row.target || humanLabel(row.type))}</b><span>Turn ${escapeHtml(row.turn ?? 0)}</span></header><p>${escapeHtml(row.fact)}</p>${row.explanation ? `<small>${escapeHtml(row.explanation)}</small>` : ""}</article>`).join("") : '<div class="jrow hint">No player corrections have been needed.</div>'}`;
+    $('#correction-type').insertAdjacentHTML('beforeend','<option value="territory">Territory controller (existing borders)</option>');
+    panel.insertAdjacentHTML('afterbegin','<details class="correction-card"><summary>Review possible missing campaign records</summary><p>Local evidence search only. Historical gains may have been lost later. Nothing changes until you preview and confirm.</p><button type="button" id="review-campaign-records">CHECK RECENT RECORDS</button><div id="campaign-review-results" aria-live="polite"></div></details>');
+    $('#review-campaign-records').onclick = async (event) => {
+      event.target.disabled=true;
+      try {
+        const review=await apiGet('/api/campaign/review');
+        const box=$('#campaign-review-results');
+        box.innerHTML=(review.candidates || []).map((row,index)=>`<article class="correction-card"><b>${escapeHtml(row.target)}</b><p>${escapeHtml(row.note)}</p><blockquote>${escapeHtml(row.text)}</blockquote><button type="button" data-review-index="${index}">REVIEW THIS RECORD</button></article>`).join('') || '<p>No explicit acquisition statements found in the last 500 records. Use Search Campaign or enter a correction below for other wording.</p>';
+        box.querySelectorAll('[data-review-index]').forEach(button=>button.onclick=()=>{
+          const row=review.candidates[Number(button.dataset.reviewIndex)];
+          $('#correction-type').value=row.type; $('#correction-target').value=row.target;
+          $('#correction-value').value=row.value; $('#correction-explanation').value=row.note;
+          $('#correction-preview').innerHTML=''; APP.correctionSource={text:row.text,time:`Turn ${row.turn ?? '?'}`};
+          $('#gm-correction-form').scrollIntoView({block:'start',behavior:'smooth'});
+        });
+      } catch(error){showToast(error.message,'danger');}
+      finally {event.target.disabled=false;}
+    };
   } else if (tab === "simulation") {
     const integrity = data.simulation?.integrity || {}, reports = [...(integrity.recent_validation || [])].reverse();
     const schedules = Object.entries(integrity.npc_schedules || {}), packets = [...(integrity.information_packets || [])].reverse();

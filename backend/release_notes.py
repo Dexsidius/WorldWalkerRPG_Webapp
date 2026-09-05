@@ -1,6 +1,16 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    '3.59.2': {
+        'title':'Map and campaign-record reliability',
+        'summary':'Safer ownership updates, chained travel estimates and optional local review of missing records.',
+        'highlights':[
+            {'title':'Holdings stay consistent','example':'Lost or retired claims no longer repaint territory. Older location records cannot undo newer ownership changes.'},
+            {'title':'Travel legs connect','example':'Konoha to Suna, then Amegakure, estimates the second journey from Suna—not Konoha.'},
+            {'title':'Review missing records','example':'Correct the GM can find explicit learned-ability and conquest statements in recent records. Review, edit and preview before saving.'},
+            {'title':'Correct ownership safely','example':'Set the controller of an existing holding without guessing new borders or automatically granting a surrounding country.'},
+        ],
+    },
     '3.59.1': {
         'title': 'Campaign-aware political maps',
         'summary': 'Country borders, local authority and starting-era history now have separate roles. Your campaign outcomes take precedence over canon defaults.',

@@ -27,7 +27,7 @@ def fresh_state(world="Naruto"):
 
 class WorldwalkerV3400GMTests(unittest.TestCase):
     def test_version_and_patch_notes_contract(self):
-        self.assertEqual(APP_VERSION, "3.59.1")
+        self.assertEqual(APP_VERSION, "3.59.2")
         notes = notes_for(APP_VERSION)
         self.assertEqual(notes["version"], APP_VERSION)
         # A hotfix may have one change; it still needs useful player-facing notes.

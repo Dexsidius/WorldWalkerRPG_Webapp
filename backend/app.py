@@ -1445,16 +1445,23 @@ def api_campaign_search():
     return jsonify({"query": query, "results": campaign_search(game.state, query, request.args.get("limit", 30))})
 
 
+@app.route('/api/campaign/review')
+def api_campaign_review():
+    if not game.campaign_active: return jsonify({'error':'Start or load a campaign first.'}),400
+    from campaign_review import review_candidates
+    return jsonify({'candidates':review_candidates(game.state)})
+
+
 def correction_preview(payload):
     scratch = copy.deepcopy(game.state)
     record = apply_player_correction(scratch, payload.get("type"), payload.get("target"), payload.get("value"), payload.get("explanation", ""))
     changes = []
-    for key in ("location", "inventory", "currency", "hp", "resource", "quests", "skills"):
+    for key in ("location", "inventory", "currency", "hp", "resource", "quests", "skills", "location_details", "political_regions"):
         if scratch.get(key) != game.state.get(key):
             changes.append({"field": key, "before": copy.deepcopy(game.state.get(key)), "after": copy.deepcopy(scratch.get(key))})
     from turn_recovery import guard
     return {"fact": record["fact"], "changes": changes,
-            "preview_token": fingerprint([guard(game.state), {k: v for k, v in payload.items() if k != "preview_token"}])}
+            "preview_token": fingerprint([guard(game.state), game.state.get('location_details'), game.state.get('political_regions'), {k: v for k, v in payload.items() if k != "preview_token"}])}
 
 
 @app.route("/api/campaign/correct/preview", methods=["POST"])
@@ -1477,6 +1484,8 @@ def api_campaign_correct():
     try:
         if game.busy:
             return busy_error()
+        if d.get('type') == 'territory' and not d.get('preview_token'):
+            return jsonify({'error':'Preview this territory correction before applying it.'}),409
         if d.get("preview_token") and d["preview_token"] != correction_preview(d)["preview_token"]:
             return jsonify({"error": "The campaign or correction changed. Preview it again before applying."}), 409
         record = apply_player_correction(game.state, d.get("type"), d.get("target"), d.get("value"), d.get("explanation", ""))

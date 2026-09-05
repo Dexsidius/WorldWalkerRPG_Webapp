@@ -214,6 +214,7 @@ def political_atlas(state,nodes,world,board=""):
     raw_claims=state.get("political_regions",[])
     for claim in raw_claims if isinstance(raw_claims,list) else []:
         if not isinstance(claim,dict) or not isinstance(claim.get("controller"),str): continue
+        if str(claim.get('status','active')).lower() in {'lost','inactive','removed','abandoned','dissolved','retired'}: continue
         scope=claim.get("board") or claim.get("realm")
         if scope and _key(scope) not in {_key(board),_key(atlas["id"])}: continue
         if claim.get("world") and claim["world"]!=world: continue
