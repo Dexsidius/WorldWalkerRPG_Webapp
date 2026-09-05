@@ -84,7 +84,7 @@ APP_OWNED = {
     # entry the mechanical system is about to append anyway, and a weaker
     # local model burning its limited output budget re-typing these back
     # verbatim is a real contributor to truncated, invalid JSON.
-    "campaign_canon", "continuity_ledger", "chapter_summaries", "chapter_buffer",
+    "campaign_canon", "continuity_ledger", "chapter_summaries", "chapter_buffer", "world_plans", "world_benefits",
     "verified_memory_archive", "memory_consolidation", "consequence_ledger",
     "canon_events_fired", "pending_minor_events",
     # Fixed once at campaign creation to whatever start_day this campaign

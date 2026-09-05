@@ -1,6 +1,19 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    '3.60.0': {
+        'title':'Living World: Persistent Plans',
+        'summary':'Important people and factions can pursue staged plans between your actions, with quiet local progress and causal narrative resolution.',
+        'highlights':[
+            {'title':'Connected developments','example':'A funded clinic can organize its staff before seeking permission to serve a neighboring district.'},
+            {'title':'Standing orders stay connected','example':'A project linked to a training or care order stops progressing when that order is cancelled or blocked.'},
+            {'title':'No automatic victories','example':'A rival can prepare an expedition, but a timer cannot grant it a conquered country.'},
+            {'title':'Quiet, informed reports','example':'At most two local plan reports arrive per turn, and hidden progress requires a believable information source before it reaches you.'},
+            {'title':'Success can last','example':'A confirmed road improvement can reduce that route’s travel estimate until a recorded disruption removes the benefit.'},
+            {'title':'Clearer Chronicle','example':'Separate facts no longer get glued into one closing paragraph, and exact repeated explanations are removed.'},
+            {'title':'One Piece inscriptions','example':'Regular updates appear on blue-gray stone; discoveries and major events use red stone with the approved engraved lettering.'},
+        ],
+    },
     '3.59.2': {
         'title':'Map and campaign-record reliability',
         'summary':'Safer ownership updates, chained travel estimates and optional local review of missing records.',

@@ -280,6 +280,8 @@ class JournalMixin:
         # Governance bookkeeping powers narrative reports and map changes,
         # but is intentionally not a visible management dashboard.
         s.pop("polity_state", None)
+        s.pop('world_plans',None)
+        s.pop('world_benefits',None)
         # Latent Nen is fixed at creation so later awakening is consistent,
         # but its category/name/mechanics must not leak through the state API
         # before the character discovers Nen in the story.

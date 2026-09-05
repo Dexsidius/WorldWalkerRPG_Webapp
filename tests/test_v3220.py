@@ -19,7 +19,7 @@ from worlds import (APP_VERSION, BASE_STATE, WORLD_DATA, abilities_for,
 
 class WorldwalkerV3220JujutsuKaisenTests(unittest.TestCase):
     def test_release_world_and_complete_start_matrix(self):
-        self.assertEqual(APP_VERSION, "3.59.2")
+        self.assertEqual(APP_VERSION, "3.60.0")
         self.assertEqual(BASE_STATE["schema_version"], 21)
         self.assertIn("Jujutsu Kaisen", WORLD_DATA)
         self.assertEqual(len(abilities_for("Jujutsu Kaisen")), 7)

@@ -651,6 +651,13 @@ function storyEntryParts(entry) {
   return { tag, label, body: body || raw, hasOwnTitle: !!bracket };
 }
 
+function poneglyphTone(entry) {
+  if (entry.detail?.chronicle_tone === "special" || ["canon_event", "danger", "reward", "discovery", "achievement"].includes(entry.tag)) return "special";
+  // Legacy saves: classify explicit headings, never incidental words in prose.
+  const heading = String(entry.text || "").match(/^\[([^\]]+)\]/)?.[1] || "";
+  return /^(?:MAJOR (?:CANON )?EVENT|CANON EVENT|REWARD|LOOT|DISCOVERY|ACHIEVEMENT|TITLE ACQUIRED|LEVEL UP|BREAKTHROUGH)(?:\b|$)/i.test(heading) ? "special" : "standard";
+}
+
 function storyBeatLabel(entries) {
   const tags = new Set((entries || []).map((entry) => entry.tag || "narrative"));
   if (tags.has("danger")) return "Critical development";
@@ -789,8 +796,9 @@ function appendStoryEntries(entries, options = {}) {
   cleanEntries.forEach((entry) => {
     const day = entry.canon_day;
     const current = runs[runs.length - 1];
-    if (current && (day === undefined || day === null || day === current.day)) { current.entries.push(entry); return; }
-    runs.push({ day, entries: [entry] });
+    const tone = presentationWorld === "One Piece" ? poneglyphTone(entry) : "standard";
+    if (current && current.tone === tone && (day === undefined || day === null || day === current.day)) { current.entries.push(entry); return; }
+    runs.push({ day, tone, entries: [entry] });
   });
   runs.forEach((run) => {
     const beat = document.createElement("section");
@@ -903,7 +911,7 @@ function appendStoryEntries(entries, options = {}) {
       }
       div.append(label, bodyWrap);
       entriesWrap.appendChild(div);
-      if (part.tag === "narrative" && APP.animationsEnabled && presentationWorld !== "Naruto") {
+      if (part.tag === "narrative" && APP.animationsEnabled && !themedChronicle) {
         typeText(body, part.body);
       } else if (part.tag === "narrative" || part.tag === "system" || part.tag === "canon_event") {
         renderBoldedText(body, part.body);
@@ -959,9 +967,14 @@ function appendStoryEntries(entries, options = {}) {
         metaEntries.map((part) => `<div class="story-beat-system-row"><b>${escapeHtml(part.label)}</b><span>${escapeHtml(part.body)}</span></div>`).join("");
       entriesWrap.appendChild(strip);
     }
-    (turnEnvelope || feed).appendChild(beat);
+    if (presentationWorld === "One Piece") {
+      const stone = turnEnvelope.cloneNode(false);
+      stone.dataset.tone = run.tone;
+      stone.appendChild(beat);
+      feed.appendChild(stone);
+    } else (turnEnvelope || feed).appendChild(beat);
   });
-  if (turnEnvelope) feed.appendChild(turnEnvelope);
+  if (turnEnvelope && presentationWorld !== "One Piece") feed.appendChild(turnEnvelope);
   pruneStoryFeed(feed);
   applyMobileStoryFilter(APP.mobileStoryFilter || "all");
   if (options.focusNew && firstNewBeat) {

@@ -80,7 +80,7 @@ class WorldwalkerV3361Tests(unittest.TestCase):
         self.assertIn("Do not display generic", profile["player_facing"]["rule"])
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.59.2")
+        self.assertEqual(APP_VERSION, "3.60.0")
 
 
 if __name__ == "__main__":

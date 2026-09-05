@@ -27,7 +27,7 @@ class CompactCombatAI:
 
 class WorldwalkerV3411Tests(unittest.TestCase):
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.59.2")
+        self.assertEqual(APP_VERSION, "3.60.0")
 
     def test_compact_enemy_string_is_normalized(self):
         combat = normalize_combat_payload({"active": True, "enemy": "Tunnel Guard"})

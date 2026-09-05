@@ -22,7 +22,7 @@ class WorldwalkerV3441EconomyTests(unittest.TestCase):
         return state
 
     def test_release_metadata(self):
-        self.assertEqual(APP_VERSION, "3.59.2")
+        self.assertEqual(APP_VERSION, "3.60.0")
         self.assertEqual(BASE_STATE["schema_version"], 21)
 
     def test_fractional_prices_are_not_rounded_down_to_free(self):
@@ -80,7 +80,8 @@ class WorldwalkerV3441EconomyTests(unittest.TestCase):
     def test_approved_one_piece_poneglyph_skin_is_shipped(self):
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("/art/one-piece/poneglyph-chronicle.png", css)
+        self.assertIn('/fonts/nova-square.ttf', css)
+        self.assertIn('[data-tone="special"]', css)
         self.assertIn('turnEnvelope.dataset.presentation = presentationWorld === "Naruto" ? "scroll" : "poneglyph"', js)
         self.assertTrue((ROOT / "frontend" / "art" / "one-piece" / "poneglyph-chronicle.png").is_file())
 

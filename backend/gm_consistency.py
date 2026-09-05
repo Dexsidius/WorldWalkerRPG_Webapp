@@ -230,6 +230,8 @@ def prepare_request(state, payload):
     from organizations import organization_context, ORGANIZATION_RULE
     packet["organization_context"] = organization_context(state, query)
     packet["continuity_guidance"] = REFINEMENT_RULE + ORGANIZATION_RULE
+    from chronicle_prose import WRITING_RULE
+    packet["chronicle_writing"] = WRITING_RULE
     if re.search(r"\b(?:her|him|them)\b", query, re.I) and not packet["command_contracts"]:
         packet["reference_resolution"] = "ambiguous unless the current conversation clearly identifies the referent; do not guess"
     schema = mapping(packet.get("schema"))

@@ -364,6 +364,7 @@ class TurnsMixin:
              "intent_contract": parse_player_intent(action, self.state),
              "temporal_budget": temporal_budget("moment"),
              "schema": {"narrative": "1 short paragraph, 2-5 sentences — a few sentences is enough, only go longer for a genuinely major moment",
+                        "world_plan_updates": "Optional commands following world_plan_context; omit unchanged plans.",
                         "state_patch": "ALL persistent changes including combat, npc_memories, shops, hidden_quests, ability_progress, world time, sublocations, and portrait_traits when applicable",
                         "consequence_manifest": [{"kind":"skill|title|item|quest|location|condition|reputation|affiliation|other", "target":"exact name", "change":"gained|lost|started|completed|changed", "evidence":"short sentence from this result", "details":"complete skill mechanics only when kind is skill"}],
                         "commitment_updates": [{"owner":"who made the promise/debt", "owed_to":"who expects it", "promise":"specific commitment", "due_canon_day":"integer or empty", "trigger":"condition or empty", "status":"active|fulfilled|broken|cancelled", "consequence":"what follows if relevant"}],
@@ -706,11 +707,12 @@ Return ONLY valid JSON."""
             record_causal_outcome(self.state, data, turn_actions, int(context.get("elapsed_minutes", 5) or 5))
             if not is_opening:
                 from living_world import advance as advance_living_world, record_outcome as record_living_outcome
-                living = advance_living_world(self.state, turn_actions, int(context.get("elapsed_minutes", 5) or 5), data.get("events", []))
+                living = advance_living_world(self.state, turn_actions, int(context.get("elapsed_minutes", 5) or 5), data.get("events", []), data.get('world_plan_updates'))
                 record_living_outcome(self.state, data, turn_actions)
                 for event in living.get("events", []):
                     data.setdefault("events", []).append(event)
-                    self.append(f"[LIVING WORLD — {event.get('title', 'FOLLOW-UP')}]\n{event.get('narrative', '')}\nWhy now: {event.get('why_it_matters', 'Your earlier choices created this opening.')}", "system")
+                    from chronicle_prose import beat_body
+                    self.append(f"[LIVING WORLD — {event.get('title', 'FOLLOW-UP')}]\n{beat_body(event)}", "system")
                 for message in living.get("incoming_chats", []):
                     thread = message.get("thread") or message.get("sender")
                     if thread:

@@ -202,7 +202,7 @@ def record_outcome(state, data, actions):
     return kind
 
 
-def advance(state, actions=None, elapsed_minutes=0, updates=None):
+def advance(state, actions=None, elapsed_minutes=0, updates=None, plan_updates=None):
     """Advance local patterns and return eligible follow-ups for this turn."""
     actions = [ai_text(x).strip() for x in actions or [] if ai_text(x).strip()]
     living = _living(state)
@@ -234,8 +234,10 @@ def advance(state, actions=None, elapsed_minutes=0, updates=None):
             _record_generated(state, "causal_event", event["title"], action)
             events.append(event)
     living["event_history"] = living["event_history"][-200:]
+    from world_plans import advance as advance_plans
+    plan_events = advance_plans(state,elapsed_minutes,plan_updates)
     contact = _npc_contact(state, living)
-    return {"events": events[:2], "incoming_chats": [contact] if contact else [],
+    return {"events": [*plan_events,*events][:2], "incoming_chats": [contact] if contact else [],
             "patterns": copy.deepcopy(living["patterns"]), "elapsed_minutes": max(0, int(elapsed_minutes or 0))}
 
 

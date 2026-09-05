@@ -381,7 +381,7 @@ class CoreMixin:
     # temptation at all rather than trust it to resist one it can see.
     AI_HIDDEN_FIELDS = ("living_world", "generated_content_history", "continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log", "prompt_budget_log", "fact_history")
 
-    AI_HIDDEN_FIELDS = ("campaign_arcs", "campaign_arc_archive", "campaign_arc_director", "life_simulation") + AI_HIDDEN_FIELDS
+    AI_HIDDEN_FIELDS = ("world_plans", "world_benefits", "campaign_arcs", "campaign_arc_archive", "campaign_arc_director", "life_simulation") + AI_HIDDEN_FIELDS
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -469,6 +469,8 @@ class CoreMixin:
         if not canon:
             snapshot.pop("campaign_canon", None)
             compiled = compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
+            from world_plans import context as world_plan_context
+            if purpose != 'chat': compiled['world_plan_context']=world_plan_context(self.state)
             return self._prune_ai_context(apply_prompt_budget(compiled, self.state, query, purpose, self.simulation_mode()))
         chapters = self.state.get("chapter_summaries") or []
         if chapters:
@@ -481,7 +483,10 @@ class CoreMixin:
         # recent tail so a fresh campaign's first few requests aren't already
         # carrying unnecessary bulk.
         snapshot["campaign_canon"] = canon[-15:]
+        snapshot.pop('world_plans',None); snapshot.pop('world_benefits',None)
         compiled = compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
+        from world_plans import context as world_plan_context
+        if purpose != 'chat': compiled['world_plan_context']=world_plan_context(self.state)
         from atlas_context import gm_map_context
         compiled['map_history'] = gm_map_context(self.state)
         # Polygon vertices, UI caches and empty defaults are saved locally but

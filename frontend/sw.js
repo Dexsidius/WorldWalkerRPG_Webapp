@@ -1,8 +1,8 @@
-const CACHE = "worldwalker-v3592-shell-1";
+const CACHE = "worldwalker-v3600-shell-1";
 const SHELL = [
-  "/", "/css/style.css?v=3.59.2", "/js/app.js?v=3.59.2", "/css/world-atlas.css?v=3.59.2&revision=2", "/js/world-atlas.js?v=3.59.2", "/manifest.webmanifest",
+  "/", "/css/style.css?v=3.60.0", "/js/app.js?v=3.60.0", "/css/world-atlas.css?v=3.60.0&revision=2", "/js/world-atlas.js?v=3.60.0", "/manifest.webmanifest",
   "/assets/branding/worldwalker-emblem.png", "/cursors/naruto-kunai.svg", "/cursors/naruto-shuriken.svg",
-  "/cursors/bleach-zanpakuto.svg", "/cursors/jjk-sukuna-finger.svg", "/cursors/one-piece-strawhat-jolly-roger.svg"
+  "/cursors/bleach-zanpakuto.svg", "/cursors/jjk-sukuna-finger.svg", "/cursors/one-piece-strawhat-jolly-roger.svg", "/fonts/nova-square.ttf"
 ];
 
 self.addEventListener("install", (event) => {

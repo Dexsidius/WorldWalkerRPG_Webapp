@@ -155,6 +155,12 @@ def build_travel_graph(state):
     for a, b in pairs:
         distance = math.hypot(a["x"] - b["x"], a["y"] - b["y"])
         travel_minutes = max(30, int(round((distance * 38 + abs(a["tier"] - b["tier"]) * 12) * scale)))
+        # Improvements are endpoint-specific, durable and non-stacking.
+        from world_plans import obj, number
+        factors=[number(v.get('factor'),1) for v in obj(state.get('world_benefits')).values()
+                 if isinstance(v,dict) and v.get('active') is True and v.get('kind')=='safer_route'
+                 and {v.get('origin'),v.get('destination')}=={a['name'],b['name']}]
+        if factors: travel_minutes=max(1,int(round(travel_minutes*max(.5,min(1,min(factors))))))
         requirement = _route_requirement(a, b, world)
         for source, target in ((a, b), (b, a)):
             graph[source["name"]].append({"to": target["name"], "minutes": travel_minutes,

@@ -896,6 +896,7 @@ class TimeSkipMixin:
                 ,"completed_actions": "ordered actions completed or meaningfully attempted",
                 "deferred_actions": "unfinished/unstarted actions retained for the next Advance",
                 "standing_intent_updates": [{"id":"exact persistent_intents id", "status":"active|temporarily_blocked|completed|cancelled|failed|impossible", "reason":"short in-world reason; omit unchanged intents"}],
+                "world_plan_updates": "Optional commands following world_plan_context; omit unchanged plans.",
                 "suggested_actions": ["exactly 3 concrete optional actions written as verb + target + purpose: strongest lead, growth/preparation, alternate hook. Each must name a SPECIFIC person, place, faction, item, or thread that actually exists in this campaign right now — never generic filler like 'look for rumors' or 'train' with no real target. Vary the scale honestly: one can be a single moment, another can openly span several days or a longer project ('spend the next few days...', 'seek out ... over the coming weeks') when that's genuinely what the lead calls for — don't force everything into an instant."]
             }
         }
@@ -1796,9 +1797,12 @@ class TimeSkipMixin:
             if text:
                 clean_quote = {"text": text, "speaker": speaker}
         delivery = ai_text(update.get("delivery_channel") or update.get("information_source") or "")
-        if not entities and not map_changes and not clean_quote and not delivery:
+        special = (update.get("type") in {"canon_event", "interruption", "discovery", "reward", "achievement"}
+                   or update.get("significance") in {"milestone", "decision"} or bool(update.get("rewards")))
+        if not entities and not map_changes and not clean_quote and not delivery and not special:
             return None
-        return {"entities": entities[:6], "map_changes": map_changes, "quote": clean_quote, "delivery": delivery}
+        return {"entities": entities[:6], "map_changes": map_changes, "quote": clean_quote, "delivery": delivery,
+                "chronicle_tone": "special" if special else "standard"}
 
     def apply_time_skip(self, data, requested_amount, requested_unit, progression_context=None):
         with self.lock:
@@ -1855,7 +1859,7 @@ class TimeSkipMixin:
             npc_growth_events = advance_npc_development(self.state, elapsed_minutes)
             downtime_events = world_downtime_events(self.state, elapsed_minutes, context.get("actions", []))
             from living_world import advance as advance_living_world, record_outcome as record_living_outcome
-            living = advance_living_world(self.state, context.get("actions", []), elapsed_minutes, data.get("updates", []))
+            living = advance_living_world(self.state, context.get("actions", []), elapsed_minutes, data.get("updates", []), data.get('world_plan_updates'))
             record_living_outcome(self.state, data, context.get("actions", []))
             from arc_director import advance as advance_campaign_arcs
             arc_result = advance_campaign_arcs(self.state, context.get("actions", []), [*data.get("updates", []), *living.get("events", [])], elapsed_minutes)
@@ -1918,20 +1922,11 @@ class TimeSkipMixin:
                         continue
                     update = entry["data"]
                     title = str(update.get("title") or update.get("type") or "Update").replace("_", " ").upper()
-                    sections = [str(update.get("narrative")).strip()]
-                    # These three used to print as their own separately-labeled
-                    # lines ("Why it matters: ...", "What you know: ...",
-                    # "Pressure: ..."), which read like a status report bolted
-                    # onto the scene rather than part of it. Folding whichever
-                    # of them are present into one plain closing sentence reads
-                    # far closer to how a narrator would actually say it.
-                    tail_bits = [str(update.get(key)).strip() for key in ("why_it_matters", "player_knowledge", "next_pressure") if update.get(key)]
-                    if tail_bits:
-                        sections.append(" ".join(bit if bit.endswith((".", "!", "?", '"', "”")) else bit + "." for bit in tail_bits))
+                    from chronicle_prose import beat_body
                     canon_day = entry["canon_day"]
                     try: canon_day = int(canon_day) if canon_day is not None else None
                     except (TypeError, ValueError): canon_day = None
-                    body = "\n\n".join(sections)
+                    body = beat_body(update)
                     self.append(f"[{title}]\n" + body, "system" if update.get("type") != "action" else "narrative",
                                 canon_day=canon_day, detail=self._beat_detail(update, body))
             else:
