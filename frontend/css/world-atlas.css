@@ -17,7 +17,12 @@
 .atlas-search input{min-width:0;flex:1;max-width:260px;height:28px;border:1px solid #8b9a8466;border-radius:3px;background:#203b3f;color:#e8eadb;padding:4px 8px;font:12px Arial}
 .atlas-search button{height:28px;padding:3px 10px;border:1px solid #8b9a8466;background:#203b3f;color:#e8eadb;font:12px Arial;cursor:pointer}
 .atlas-search small{margin-left:auto;font:10px Arial;color:#b5c4b7}
-.living-map-main .map-node .map-label.atlas-collided{opacity:0}
+.living-map-main .map-node .map-label.atlas-collided{opacity:0;pointer-events:none}
+.living-map-main .map-node.here{z-index:6}
+.living-map-main .map-heading{flex-wrap:wrap}
+.living-map-main .map-heading>div:first-child{flex:1 1 180px;min-width:0}
+.living-map-main .map-board-picker{flex:1 1 200px;min-width:0;max-width:100%}
+.living-map-main .map-board-picker select{width:100%;min-width:0}
 .living-map-main .map-node:hover .map-label,.living-map-main .map-node:focus-visible .map-label{opacity:1!important;z-index:20}
 .living-map-main .map-node:hover,.living-map-main .map-node:focus-visible{z-index:14}
 .atlas-polity-label{position:absolute;max-width:155px;transform:translate(-50%,-50%) scale(var(--atlas-inverse,1));font:700 12px/1.4 Georgia,serif;letter-spacing:1.1px;text-align:center;text-transform:uppercase;color:#182b28;text-shadow:0 1px 0 #f6eccca6,1px 0 #f6eccca6,-1px 0 #f6eccca6,0 -1px #f6eccca6;pointer-events:none}

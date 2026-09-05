@@ -74,6 +74,7 @@ def _compile_skill_mechanics(state):
 
 
 APP_OWNED = {
+    'atlas_start_day',
     "turn", "campaign_id", "campaign_created_version", "campaign_last_saved_version",
     "schema_version", "validation_log", "diagnostics", "last_autosave",
     # Mechanically maintained bookkeeping (continuity.py, systems.py, the

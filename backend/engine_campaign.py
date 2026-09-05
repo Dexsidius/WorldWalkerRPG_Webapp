@@ -3055,6 +3055,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
             # calendar, or every date the player sees reads as a nonsense
             # negative year.
             self.state["calendar_anchor_day"] = start_day
+            self.state['atlas_start_day'] = start_day
             self.state["world_time"] = f"{format_calendar_date(world, start_day, self.state.get('calendar_epoch'), start_day)} — Morning, 08:00"
             clean_anchor = str(self.state["canon_anchor"] or "").strip().rstrip(" .!?")
             self.state["timeline"] = [f"{self.state['name']} enters the story at {start}. {clean_anchor}." ]
@@ -3251,10 +3252,12 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                     }
             # A fresh campaign always has useful direction, even before the
             # opening narration model is available.
+            from starting_holdings import initialize_starting_holdings
+            starting_land_facts = initialize_starting_holdings(self.state)
             self.state["suggested_actions"] = self.guided_suggestions([])
             motivation = (profile.get("background_details") or {}).get("motivation", "")
             self.state["memory_updates"] = {
-                "established_facts": [f"{self.state['name']} begins in {start} as a {origin} {archetype}."],
+                "established_facts": [f"{self.state['name']} begins in {start} as a {origin} {archetype}."] + starting_land_facts,
                 "player_goals": [motivation] if motivation else [],
             }
             update_narrative_memory(BASE_STATE, self.state, "Campaign beginning", "")
@@ -3272,6 +3275,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
         needs_name = self.state.get("name", "").strip().lower() in ("", "traveler")
         needs_age = not str(self.state.get("age", "")).strip()
         requirements = []
+        requirements.append("If the background establishes present ownership/rulership (not an ambition or merely clan membership), preserve any initialized political_regions and record any remaining holdings with controller, exact anchor, scale and board/realm where applicable; set polity_state[controller].player_led=true. Small unnamed estates start at one hex, not a country. If the place is new, add custom_locations with world-consistent coordinates. Becoming Hokage grants village command, not the Land of Fire. Never grant territory just for a powerful class, famous name, inherited technique or future canon achievement.")
         if needs_name:
             requirements.append("The player didn't choose a name — invent one that fits the world, origin and archetype, and set it in state_patch.name. Never leave it as 'Traveler'.")
         if needs_age:

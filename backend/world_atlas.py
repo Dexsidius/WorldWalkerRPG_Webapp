@@ -10,6 +10,8 @@ import math
 import re
 from collections import deque
 from functools import lru_cache
+from atlas_context import contextualize, explicitly_established, VILLAGE_COUNTRIES
+from atlas_districts import AUTHORED_DISTRICTS
 
 STEP = 1.5
 DY = STEP * math.sqrt(3) / 2
@@ -37,7 +39,7 @@ JAPAN = [
 
 def preset(world, board=""):
     """Seeds define districts; identical owners have no internal border."""
-    positions, seeds, lands, labels = {}, [], [], []
+    positions, seeds, lands, labels, structures = {}, [], [], [], []
     def seed(name, owner, x, y):
         seeds.append(dict(name=name, owner=owner, x=x, y=y))
     if world == "Naruto":
@@ -74,18 +76,24 @@ def preset(world, board=""):
         # Colonies are barriers, not sovereign nations. Never seed them as owners.
         labels=[("SEA OF JAPAN",44,34),("PACIFIC OCEAN",79,81)]
     elif world == "Bleach":
+        # Regional realm diagrams have no invented ocean coastline. They
+        # remain full land boards with the same claim coordinates.
+        realm_extent = [[1,1],[99,1],[99,99],[1,99]]
         if board == "World of the Living":
-            lands=[land(CONTINENT,"Japan","Karakura / Naruki district",50,50)]
+            lands=[land(realm_extent,"Japan","Karakura / Naruki district",50,50)]
+            structures=[{'kind':'river','points':[[68,0],[64,23],[70,42],[66,65],[75,100]],'name':'Local river corridor'}]
         elif board == "Hueco Mundo":
-            lands=[land(CONTINENT,"Hollow dominions","Hueco Mundo",45,56,"sand")]
+            lands=[land(realm_extent,"Hollow dominions","Hueco Mundo",45,56,"sand")]
             seed("Las Noches","Las Noches court",72,25)
+            structures=[{'kind':'enclosure','x':72,'y':25,'rx':12,'ry':10,'name':'Las Noches'}]
         elif board == "Royal Realm":
             lands=[land(island(50,44,17,19),"Royal Guard","Soul King Palace",50,44,"stone"),land(island(28,28,10,11),"Royal Guard","Royal Guard Domains",28,28,"stone")]
         elif board == "Hell":
-            lands=[land(CONTINENT,"Hell wardens","Hell",50,50,"stone")]
+            lands=[land(realm_extent,"Hell wardens","Hell",50,50,"stone")]
         else:
-            lands=[land(CONTINENT,"Soul Society","Soul Society",50,50)]
+            lands=[land(realm_extent,"Soul Society","Soul Society",50,50)]
             labels=[("NORTH RUKONGAI",50,18),("WEST RUKONGAI",21,49),("EAST RUKONGAI",79,49),("SOUTH RUKONGAI",50,80),("SEIREITEI",50,39)]
+            structures=[{'kind':'enclosure','x':50,'y':40,'rx':18,'ry':22,'name':'Seireitei walls'}]
     elif world == "Solo Max-Level Newbie":
         lands=[land(CONTINENT,"Tower administration" if board != "Earth" else "Local civil authorities",board or "Earth",50,50,"stone")]
     else:
@@ -110,7 +118,7 @@ def preset(world, board=""):
                 noise=((i*17+part*13+index*7)%11-5)*.045 if part else 0
                 detailed.append([max(0,min(100,round(a[0]+dx*t-dy/length*noise,3))),max(0,min(100,round(a[1]+dy*t+dx/length*noise,3)))])
         l['polygon']=detailed
-    return {"id":world+":"+board, "version":1, "land":lands,"seeds":seeds,"positions":positions,"labels":labels,"relief":relief}
+    return {"id":world+":"+board, "version":2, "land":lands,"seeds":seeds,"positions":positions,"labels":labels,"relief":relief,"structures":structures}
 
 
 def inside(x,y,poly):
@@ -144,6 +152,10 @@ def base_atlas(world,board=""):
             seeds=[s for s in atlas["seeds"] if inside(s["x"],s["y"],l["polygon"])]
             if seeds and not any(s['owner']==l['owner'] for s in seeds): seeds.append(l)
             owner=min(seeds,key=lambda s:(s["x"]-x)**2+(s["y"]-y)**2) if seeds else l
+            if idx == 0:
+                authored = next((name for name, polygon in reversed(AUTHORED_DISTRICTS.get(world, [])) if inside(x,y,polygon)), None)
+                if authored:
+                    owner = next((s for s in atlas['seeds'] if s['name']==authored), l)
             cells.append({"id":f"{col}:{row}","x":round(x,4),"y":round(y,4),"land":idx,"district":owner["name"],"owner":owner.get("owner",l["owner"])})
     atlas["cells"]=cells
     return atlas
@@ -158,12 +170,13 @@ def _key(s): return str(s or "").strip().casefold()
 
 
 def political_atlas(state,nodes,world,board=""):
-    """Read-only overlay: preset -> explicit location control -> authored claims.
+    """Read-only overlay: era preset -> explicit location control -> authored claims.
 
-    A changed village owns its associated country in Naruto. Smaller landmarks
-    only claim a local district. Unanchored claims are never placed at the player.
+    Village command is local; only explicit national claims transfer a country.
+    Unanchored claims are never placed at the player.
     """
     atlas=copy.deepcopy(base_atlas(world,board))
+    node_context = contextualize(atlas,state,world,board)
     cells=atlas["cells"]
     lookup={c["id"]:c for c in cells}
     node_by_name={_key(n["name"]):n for n in nodes}
@@ -179,18 +192,24 @@ def political_atlas(state,nodes,world,board=""):
         owner=d["controlling_faction"].strip() or "Unclaimed"
         n=node_by_name.get(_key(name))
         district=next((s["name"] for s in atlas["seeds"] if _key(s["name"])==_key(name)),None)
+        # Island countries need not have seeds. Match the authored land name.
+        if not district:
+            district=next((l['name'] for l in atlas['land'] if _key(l['name'])==_key(name)),None)
+        local_only = world == 'Naruto' and name in VILLAGE_COUNTRIES
         if not district and n:
             nearest=min(cells,key=lambda c:(c["x"]-_number(n["x"]))**2+(c["y"]-_number(n["y"]))**2)
             district=nearest["district"]
             # A city or island anchor can transfer its preset district. Minor
             # facilities do not annex an entire sovereign nation accidentally.
-            if n.get("kind") not in {"nation","kingdom","region","village","island","city","capital","empire","floor","government"}:
+            if local_only or n.get("kind") not in {"nation","kingdom","region","island","empire","floor"}:
                 for c in cells:
                     if c["land"]==nearest["land"] and (c["x"]-n["x"])**2+(c["y"]-n["y"])**2<=4: owners[c["id"]]=owner
                 continue
         if district:
             for c in cells:
-                if c["district"]==district: owners[c["id"]]=owner
+                if c["district"]==district:
+                    owners[c["id"]]=owner
+                    c['sovereignty']=owner
     for c in cells: c["owner"]=owners.get(c["id"],c["owner"])
     raw_claims=state.get("political_regions",[])
     for claim in raw_claims if isinstance(raw_claims,list) else []:
@@ -230,19 +249,42 @@ def political_atlas(state,nodes,world,board=""):
             selected=[c for c in cells if c["land"]==first["land"] and (c["x"]-x)**2+(c["y"]-y)**2<=radius**2]
         for c in selected:
             c["owner"]=claim["controller"]
+            if claim.get('scale') in {'country','nation','realm','continent','island'}:
+                c['sovereignty']=claim['controller']
             c["claim"]=str(claim.get("name") or claim["controller"])
     for n in nodes:
         c=min(cells,key=lambda c:(c["x"]-n["x"])**2+(c["y"]-n["y"])**2)
         n["controller"]=c["owner"]
+        n['sovereignty']=c['sovereignty']
+        context = node_context.get(n['name'], {})
+        n.update({k:v for k,v in context.items() if k not in {'sovereignty','era_unavailable'}})
+        if context.get('era_unavailable') and not explicitly_established(state,n['name']):
+            n['era_unavailable']=True
+        if world == 'Naruto' and n['name'] in VILLAGE_COUNTRIES:
+            n['local_authority'] = details.get(n['name'],{}).get('controlling_faction', n.get('local_authority')) if isinstance(details.get(n['name'],{}),dict) else n.get('local_authority')
+            if c.get('claim'): n['local_authority']=c['owner']
+        if world == 'Overgeared' and n['name']=='Valhalla' and (c.get('claim') or explicitly_established(state,'Valhalla')):
+            n.pop('display_name',None)
+            n['local_authority']=n['controller']
         n["atlas_district"]=c.get("claim",c["district"])
         n["offshore"]=not any(inside(n["x"],n["y"],l["polygon"]) for l in atlas["land"])
         if n.get('kind') in {'sky','dimension','otherworld','mobile kingdom','sea','hidden realm'}: n['offshore']=True
         if n["offshore"]: n["controller"]=details.get(n["name"],{}).get("controlling_faction","Not a surface territory") if isinstance(details.get(n["name"],{}),dict) else "Not a surface territory"
         if world=='One Piece' and n['name']=='Fishman Island':
-            n.update(controller='Ryugu Kingdom',offshore=True,protection='Whitebeard Pirates')
+            n.update(controller='Ryugu Kingdom',offshore=True,sovereignty='Ryugu Kingdom')
             if isinstance(details.get(n['name']),dict) and 'controlling_faction' in details[n['name']]:
                 n['controller']=details[n['name']]['controlling_faction'] or 'Unclaimed'
+        # Political metadata written in the campaign supersedes historical
+        # defaults too. Do not leave a defeated occupier in the details panel.
+        detail = details.get(n['name'],{})
+        if isinstance(detail,dict):
+            for key in ('sovereignty','local_authority','protection'):
+                if key in detail and isinstance(detail[key],str): n[key]=detail[key]
+            if 'controlling_faction' in detail and 'local_authority' not in detail:
+                n['local_authority']=n['controller']
+        if c.get('claim'): n['local_authority']=c['owner']
     atlas["warnings"]=notes
+    nodes[:] = [n for n in nodes if not n.get('era_unavailable')]
     atlas["revision"]=hashlib.sha256(repr([(c["id"],c["owner"],c.get("claim")) for c in cells]).encode()).hexdigest()[:16]
     # No AI prompt pays for the tile grid; map_snapshot alone receives this.
     atlas.pop("positions",None)

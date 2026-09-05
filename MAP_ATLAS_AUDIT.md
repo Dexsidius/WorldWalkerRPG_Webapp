@@ -1,5 +1,20 @@
 # Political atlas — v3.59.0
 
+## v3.59.1 superseding corrections
+
+The notes below this section describe the previous release. The following changes supersede them:
+
+- Naruto: country shading and village command are distinct. Country transfers require explicit national scope; city/village control is local. Authored regional polygons replace Voronoi wedges. Official manga geography reference inspected: [publisher interview and reference panel](https://naruto-official.com/en/news/01_1401). Fine borders remain game extrapolations.
+- Era: `atlas_start_day`, or the old save's `calendar_anchor_day`, determines baseline history. Current `canon_day` never silently triggers conquests. Explicit location/region records overlay the baseline. No recovered start means default-era fallback, exposed in Map information.
+- Slime: existing game event anchor "Tempest emerges" separates early/late starting scenarios. This is a game chronology, not an asserted manga date. Later campaign founding requires authored ownership. [Federation history](https://tensura.fandom.com/wiki/Jura-Tempest_Federation). Authored country polygons preserve a central Jura, northern Dwargon, western Falmuth, southwestern Thalion and eastern empire.
+- One Piece: starting baselines distinguish occupation from kingdom sovereignty, and protection from both. Existing Arlong/Dressrosa/Wano event anchors inform starts after those outcomes, not ongoing campaigns. Roger-era defaults use pre-Arlong Conomi and pre-Donquixote Dressrosa. Exact takeover dates not present in the game are not invented.
+- Overgeared: early Valhalla footprint is Belto, its documented predecessor. [Belto](https://overgeared.fandom.com/wiki/Belto_Kingdom), [Saharan Empire](https://overgeared.fandom.com/wiki/Saharan_Empire). The [GosanzaK fan-map discussion](https://www.reddit.com/r/Overgeared/comments/lgbrnq/overgeared_west_continent_map_update_2021_02_10/) supplies useful regional context; it is fan-authored, and direct image access was blocked by Reddit. No claim is made to have traced that image. Territory extent is extrapolated; a reference may depict a much later era than a playable start.
+- HxH: estates, Meteor City, Yorknew and Association headquarters use small local domains within their larger civic regions. The full planetary shape and precise undisclosed placements remain schematic; they are not blank in-game.
+- Bleach: Living World, Soul Society, Hueco Mundo and Hell use bounded local realm diagrams, not continent-shaped islands in an invented ocean. Seireitei and Las Noches gain enclosure landmarks. [Realm structure](https://bleach.fandom.com/wiki/Soul_Society). The Living World's river corridor is explicitly game-authored context, not surveyed canon.
+- JJK: city/facility control is local and cannot accidentally annex Japan. Solo: floor isolation remains; detailed floor terrain is deferred. Custom worlds retain consistent inferred regional governments.
+- Creation: a conservative local parser supports explicit current rulers of known places and small estates near known places. Complex statements and original places still require GM initialization; no claim of universal natural-language parsing is made. Old backgrounds are not replayed into ownership.
+- User policy: well-made fan references and contextual extrapolation are permitted wherever canon is unclear. Filled, usable game geography is preferred to blank/mysterious regions. References are evidence, not game instructions.
+
 ## What is guaranteed
 
 - Every displayed surface-land tile has exactly one preset controller, independent of character start. Presets never use the player's location as a geography seed.

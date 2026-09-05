@@ -7,6 +7,7 @@ window.WorldAtlas = (() => {
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const palette = ['#81a56d','#d5ad68','#74aab2','#c58678','#ae99b7','#c3bc82','#8babc2','#b49772','#90bda2','#d8b29a','#a9b0ca','#c3a652'];
   const fixed = {'Konohagakure':'#76a36a','Sunagakure':'#d8b36e','Iwagakure':'#b38361','Kumogakure':'#d8c479','Kirigakure':'#7bacbb','Amegakure':'#9586a5','Iron Country':'#bfc5c8','Japan':'#95b1a1','World Government':'#adc3ce','Saharan Empire':'#b4827b','Eternal Kingdom':'#83a8be'};
+  Object.assign(fixed, {'Land of Fire':'#76a36a','Land of Wind':'#d8b36e','Land of Earth':'#b38361','Land of Lightning':'#d8c479','Land of Water':'#7bacbb','Land of Rain':'#9586a5','Jura Forest communities':'#84a56e','Jura Tempest Federation':'#6dad98','Hollow dominions':'#b8b6a5','Soul Society':'#c6c5af','Belto Kingdom':'#c3bc82'});
   function hash(s) { let h=2166136261; for(const c of s) h=Math.imul(h^c.charCodeAt(0),16777619); return h>>>0; }
   function color(name) { return fixed[name] || palette[hash(String(name))%palette.length]; }
   function vertices(c) {
@@ -17,6 +18,7 @@ window.WorldAtlas = (() => {
   const path = poly => 'M'+poly.map(point).join('L')+'Z';
   const edgeKey = (a,b) => [a.join(','),b.join(',')].sort().join('|');
   function render(plane, atlas, key) {
+    const diagram = String(atlas.context?.extent || '').includes('diagram');
     const previous=histories.get(key), owners=new Map(), edges=new Map(), changed=[];
     const ownerAt=new Map();
     for(const c of atlas.cells) {
@@ -47,23 +49,33 @@ window.WorldAtlas = (() => {
     // Deterministic engraved relief. Never changes with saves, starts or zoom.
     for(const c of atlas.cells) {
       const h=hash(atlas.id+c.id), x=c.x*16, y=c.y*10;
+      const ground = atlas.land[c.land]?.terrain || 'green';
       if(h%29===0) terrain+=`<path d="M${x-8},${y+4}l8,-13 9,13 -9,-6z" fill="#253b36" fill-opacity=".18" stroke="#29372d" stroke-opacity=".25" stroke-width=".7"/>`;
-      else if(h%13===0) terrain+=`<path d="M${x-4},${y+2}l4,-9 4,9M${x},${y+2}v3" fill="#264c3d" fill-opacity=".2" stroke="#294a37" stroke-opacity=".25" stroke-width=".6"/>`;
+      else if(h%13===0 && ground==='green') terrain+=`<path d="M${x-4},${y+2}l4,-9 4,9M${x},${y+2}v3" fill="#264c3d" fill-opacity=".2" stroke="#294a37" stroke-opacity=".25" stroke-width=".6"/>`;
       else if(h%7===0) terrain+=`<path d="M${x-8},${y}q6,-3 12,0" fill="none" stroke="#283f32" stroke-opacity=".13" stroke-width=".8"/>`;
     }
+    const structures=(atlas.structures || []).map(s=>s.kind==='enclosure'
+      ? `<ellipse cx="${s.x*16}" cy="${s.y*10}" rx="${s.rx*16}" ry="${s.ry*10}" fill="#e1d9bd" fill-opacity=".15" stroke="#363632" stroke-width="8"/><ellipse cx="${s.x*16}" cy="${s.y*10}" rx="${s.rx*16-8}" ry="${s.ry*10-8}" fill="none" stroke="#e8dfbe" stroke-width="3"/>`
+      : s.kind==='river' ? `<path d="M${s.points.map(point).join('L')}" fill="none" stroke="#5598ab" stroke-width="14" stroke-linejoin="round"/>` : '').join('');
     plane.querySelector('#map-territory-canvas')?.remove();
     plane.querySelector('#map-faction-labels')?.remove();
     plane.querySelector('#map-ambient')?.remove();
     const svg=document.createElementNS(ns,'svg');
     svg.classList.add('atlas-geography'); svg.setAttribute('viewBox','0 0 1600 1000'); svg.setAttribute('aria-label',atlas.id+' political map');
     svg.innerHTML=`<defs><clipPath id="atlas-land-clip"><path d="${coast}"/></clipPath><pattern id="atlas-sea" width="100" height="80" patternUnits="userSpaceOnUse"><path d="M0,40h100M50,0v80" stroke="#acd3d4" stroke-opacity=".055" fill="none"/><path d="M12,16q6,-3 12,0t12,0M65,61q6,-3 12,0t12,0" fill="none" stroke="#bed8d6" stroke-opacity=".12"/></pattern><linearGradient id="atlas-ocean" x2="0" y2="1"><stop stop-color="#17343b"/><stop offset="1" stop-color="#294d53"/></linearGradient><pattern id="atlas-paper" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M0,1h7M0,4h7" stroke="#fff" stroke-opacity=".04"/></pattern></defs>
-      <rect width="1600" height="1000" fill="url(#atlas-ocean)"/><rect width="1600" height="1000" fill="url(#atlas-sea)"/>
+      <rect width="1600" height="1000" fill="${diagram?'#242b32':'url(#atlas-ocean)'}"/><rect width="1600" height="1000" fill="${diagram?'none':'url(#atlas-sea)'}"/>
       <path d="${coast}" fill="none" stroke="#739b96" stroke-opacity=".15" stroke-width="22"/><path d="${coast}" fill="none" stroke="#91b3a5" stroke-opacity=".3" stroke-width="9"/>
       <g clip-path="url(#atlas-land-clip)"><path d="${coast}" fill="#a9ac80"/>${[...owners].map(([name,o])=>`<path class="atlas-country" data-owner="${escape(name)}" d="${o.paths.join('')}" fill="${color(name)}" stroke="${color(name)}" stroke-width=".45"><title>${escape(name)}</title></path>`).join('')}${terrain}${ridges}<path d="${borders}" fill="none" stroke="#f6e7b4" stroke-opacity=".62" stroke-width="3.4"/><path d="${borders}" fill="none" stroke="#343e36" stroke-opacity=".85" stroke-width="1.3"/><rect width="1600" height="1000" fill="url(#atlas-paper)"/>${changed.length?`<path class="atlas-control-change" d="${changed.join('')}" fill="#fff2b7"/>`:''}</g>
       <path d="${coast}" fill="none" stroke="#162f32" stroke-width="2.2"/>
       <g fill="#b6ccbf" fill-opacity=".65" font-family="Georgia,serif" font-size="17" letter-spacing="4" text-anchor="middle">${atlas.labels.map(([s,x,y])=>`<text x="${x*16}" y="${y*10}">${escape(s)}</text>`).join('')}</g>
       <g transform="translate(1450 870)" stroke="#b7c8b1" fill="none" opacity=".6"><circle r="32"/><path d="M0,-45V45M-45,0H45M-15,20L0,-37 15,20 0,12Z"/><text y="-52" text-anchor="middle" stroke="none" fill="#ced9c6" font-family="Georgia" font-size="18">N</text></g>`;
     plane.prepend(svg); plane.classList.add('atlas-plane');
+    if (structures) {
+      const features=document.createElementNS(ns,'g');
+      features.setAttribute('clip-path','url(#atlas-land-clip)');
+      features.innerHTML=structures;
+      svg.append(features);
+    }
     const labelLayer=document.createElement('div'); labelLayer.className='atlas-polity-labels';
     for(const [name,o] of owners) {
       if(o.cells.length<20) continue;
@@ -115,8 +127,9 @@ window.WorldAtlas = (() => {
   function labels(){
     const a=active;if(!a)return;
     const placed=[];
-    const labels=[...a.plane.querySelectorAll('.map-node .map-label')].sort((x,y)=>Number(y.parentElement.classList.contains('here'))-Number(x.parentElement.classList.contains('here')));
-    labels.push(...[...a.plane.querySelectorAll('.atlas-polity-label')].sort((x,y)=>Number(y.dataset.weight)-Number(x.dataset.weight)));
+    const landmarks=[...a.plane.querySelectorAll('.map-node .map-label')].sort((x,y)=>Number(y.parentElement.classList.contains('here'))-Number(x.parentElement.classList.contains('here')));
+    const countries=[...a.plane.querySelectorAll('.atlas-polity-label')].sort((x,y)=>Number(y.dataset.weight)-Number(x.dataset.weight));
+    const labels=a.z<1.8 ? [...landmarks.filter(x=>x.parentElement.classList.contains('here')), ...countries, ...landmarks.filter(x=>!x.parentElement.classList.contains('here'))] : [...landmarks,...countries];
     for(const el of labels){
       el.classList.remove('atlas-collided');
       const hidden=getComputedStyle(el.parentElement).opacity==='0';

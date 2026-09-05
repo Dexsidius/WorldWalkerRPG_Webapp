@@ -4657,7 +4657,7 @@ function renderMainLivingMap(data) {
   const mapCanvas = $("#map-canvas");
   const atlasResult = WorldAtlas.render(mapCanvas, atlas, atlasKey);
   const ribbon = host.querySelector('.map-ribbon');
-  if (ribbon) ribbon.textContent = atlasResult.changed ? `Territory changed · ${atlasResult.changed} land tiles repainted` : 'Schematic geography · campaign-controlled borders';
+  if (ribbon) ribbon.textContent = atlasResult.changed ? `Territory changed · ${atlasResult.changed} land tiles repainted` : 'Campaign borders · canon-informed geography';
   const previousPlayer = APP.lastLivingMapPlayer;
   nodes.forEach((node) => {
     const dot = document.createElement("button");
@@ -4667,9 +4667,9 @@ function renderMainLivingMap(data) {
     dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
     dot.style.left = `${node.x}%`;
     dot.style.top = `${node.y}%`;
-    dot.title = `${node.name} · ${node.kind || "landmark"}${node.controller && node.controller !== "Unknown" ? ` · ${node.controller}` : ""}`;
+    dot.title = `${node.display_name || node.name} · ${node.kind || "landmark"}${node.controller && node.controller !== "Unknown" ? ` · ${node.controller}` : ""}`;
     dot.dataset.mapNode = node.name;
-    dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.name)}</span>`;
+    dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.display_name || node.name)}</span>`;
     mapCanvas.appendChild(dot);
     if (node.current) {
       const piece = document.createElement('span');
@@ -4717,7 +4717,7 @@ function wireMainLivingMap(host, world, mapPayload) {
   if (search) search.onsubmit = event => {
     event.preventDefault();
     const input = search.querySelector('input'), value = input.value.trim().toLowerCase();
-    const node = (APP.mapNodes || []).find(n => n.name.toLowerCase() === value) || (value && (APP.mapNodes || []).find(n=>n.name.toLowerCase().includes(value)));
+    const node = (APP.mapNodes || []).find(n => [n.name,n.display_name].some(s=>s?.toLowerCase()===value)) || (value && (APP.mapNodes || []).find(n=>[n.name,n.display_name].some(s=>s?.toLowerCase().includes(value))));
     input.setCustomValidity(node ? '' : 'Choose a location on this map.');
     if (!node) { input.reportValidity(); return; }
     WorldAtlas.focus(node.x,node.y); showLivingMapNode(node.name);
@@ -4739,7 +4739,8 @@ function wireMainLivingMap(host, world, mapPayload) {
     if (event.target.closest('[data-atlas-close]')) { $('#map-detail')?.classList.remove('open'); return; }
     if (event.target.closest('[data-atlas-info]')) {
       const detail = $('#map-detail'); detail.classList.add('open');
-      detail.innerHTML = `<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button><b>About this atlas</b><p>${escapeHtml(mapPayload.meta?.accuracy_note || '')}</p><p>All displayed land has a preset controller. Boundaries and distances are schematic where canon is incomplete. Adjacent holdings with the same owner share one border.</p><p>Select any landmark for its current controller. Political changes repaint the land locally without an AI call.</p>`;
+      const context = atlas.context || {};
+      detail.innerHTML = `<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button><b>About this atlas</b>${(context.notes || []).map(note=>`<p>${escapeHtml(note)}</p>`).join('')}<p>Canon and well-supported fan references guide the geography. Unspecified borders are extrapolated for consistent play. All land has an assigned controller.</p><p>Starting history: ${escapeHtml(context.basis || 'world preset')}. Passing a canon date does not override your campaign’s conquests or prevented events.</p>${(context.sources || []).map(source=>`<p><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></p>`).join('')}`;
       return;
     }
     const wrap = $("#map-wrap"); if (!wrap) return;
@@ -4769,7 +4770,7 @@ async function showLivingMapNode(name) {
   const people = (node.notable_individuals || []).map((person) => typeof person === "object" ? person : { name: person });
   const peopleRow = people.length ? `<div class="location-people">${people.slice(0, 4).map((person) => { const label = person.name || person.display_name || "Unknown"; return `<span>${personPortraitHtml(label, person, { size: "sm" })}<b>${escapeHtml(label)}</b></span>`; }).join("")}</div>` : "None recorded yet";
   detail.classList.add("open");
-  detail.innerHTML = `<b>${escapeHtml(node.name)}</b><small>${escapeHtml(node.kind || "landmark")}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes || "No additional local notes recorded.")}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller || "Unknown")}</dd>${node.danger_level ? `<dt>Danger</dt><dd>${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Known people</dt><dd>${peopleRow}</dd><dt>Related</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "No active connection"}</dd></dl><div id="map-route-preview" class="map-route-preview">Checking the route from your current location…</div>`;
+  detail.innerHTML = `<b>${escapeHtml(node.display_name || node.name)}</b><small>${escapeHtml(node.kind || "landmark")}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes || "No additional local notes recorded.")}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller || "Unknown")}</dd>${['sovereignty','local_authority','protection'].filter(k=>node[k] && node[k]!==node.controller).map(k=>`<dt>${({sovereignty:'Country',local_authority:'Local authority',protection:'Protection'})[k]}</dt><dd>${escapeHtml(node[k])}</dd>`).join('')}${node.danger_level ? `<dt>Danger</dt><dd>${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Known people</dt><dd>${peopleRow}</dd><dt>Related</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "No active connection"}</dd></dl><div id="map-route-preview" class="map-route-preview">Checking the route from your current location…</div>`;
   detail.focus({ preventScroll: true });
   detail.insertAdjacentHTML('afterbegin','<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button>');
   try {

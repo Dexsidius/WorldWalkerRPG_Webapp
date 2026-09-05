@@ -482,6 +482,8 @@ class CoreMixin:
         # carrying unnecessary bulk.
         snapshot["campaign_canon"] = canon[-15:]
         compiled = compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
+        from atlas_context import gm_map_context
+        compiled['map_history'] = gm_map_context(self.state)
         # Polygon vertices, UI caches and empty defaults are saved locally but
         # do not help a stateless narrator. Keep only the territorial facts;
         # the frontend reconstructs/draws exact geometry from the real state.
@@ -1689,6 +1691,7 @@ NON-NEGOTIABLE RULES
 - The map is not limited to canon locations — freely introduce an original place (a village, a hidden camp, a ruin, an island, an outpost) whenever the story naturally calls for one, exactly like any other original content. The moment the player or narration establishes a new named place worth remembering, add it to state_patch.custom_locations as {{"name": "...", "x": 0-100, "y": 0-100, "kind": "village|region|landmark|training|nation|dungeon|other", "tier": 1-10 prominence/danger}} so it actually appears on the interactive map, not just in prose. Place x/y sensibly relative to the world's existing geography — near the established locations it's actually described as being near, on the correct side of the map for its described direction/region, not a random point. Always include the full current list of custom_locations (not just the new one) when updating this field, the same as other list fields. Skip any name that would collide with an existing canon location.
 - Land control updates location_details.controlling_faction and the full political_regions list; same owners merge. A player-founded landholding becomes a real polity with faction/clock, leadership and polity_state public feeling. Ruler commands work but NPCs may resist. Do not turn government into a visible spreadsheet: governance stays narrative; public shifts become one-line reports.
 - Founded land needs real authority: begin at 1 hex; grow political_regions.hex_count narratively. Preserve id and exact location anchor; include board/realm for Bleach or Solo. Never move claims with the player. Whole transfers use scale country/nation/island; small holdings do not annex surrounding nations. Preset owners need no restating. Civil sovereignty differs from protection/influence: JJK schools do not own Japan.
+- Canon dates never override campaign control. Naruto villages are not countries. One Piece location_details separates controlling_faction, sovereignty, local_authority and protection.
 - recent_chat_context is history.
 - companion_combinations require compatible powers, trust and practice; store use, limits and mastery.
 - Propose keepsakes in trophy_proposals only; the player decides.

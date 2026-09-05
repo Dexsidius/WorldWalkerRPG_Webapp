@@ -17,7 +17,7 @@ class WorldwalkerV3330VisualFeedbackTests(unittest.TestCase):
         cls.css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
 
     def test_version(self):
-        self.assertEqual(APP_VERSION, "3.59.0")
+        self.assertEqual(APP_VERSION, "3.59.1")
 
     def test_visual_layers_are_present(self):
         for element_id in ("world-atmosphere", "world-lighting", "portrait-form-fx", "scene-lighting", "music-visualizer"):

@@ -7,6 +7,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'backend'))
 from world_atlas import base_atlas, political_atlas, inside
 from systems import map_snapshot
 from worlds import WORLD_DATA
+from atlas_context import VILLAGE_COUNTRIES
 
 
 class WorldAtlasTests(unittest.TestCase):
@@ -38,7 +39,8 @@ class WorldAtlasTests(unittest.TestCase):
     def test_naruto_places_have_the_right_polity(self):
         nodes={n['name']:n for n in self.snapshot()['nodes']}
         for name in ['Konohagakure','Sunagakure','Kirigakure','Kumogakure','Iwagakure','Amegakure','Kusagakure','Takigakure']:
-            self.assertEqual(nodes[name]['controller'],name)
+            self.assertEqual(nodes[name]['controller'],VILLAGE_COUNTRIES[name])
+            self.assertEqual(nodes[name]['local_authority'],name)
 
     def test_country_transfer_updates_markers_and_every_district_tile(self):
         before=self.snapshot()['atlas']

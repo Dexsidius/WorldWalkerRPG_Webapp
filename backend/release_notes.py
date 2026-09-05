@@ -1,6 +1,17 @@
 """Player-facing release notes shown once per browser/account and version."""
 
 RELEASE_NOTES = {
+    '3.59.1': {
+        'title': 'Campaign-aware political maps',
+        'summary': 'Country borders, local authority and starting-era history now have separate roles. Your campaign outcomes take precedence over canon defaults.',
+        'highlights': [
+            {'title':'Countries and villages', 'example':'Naruto shades the Land of Fire separately from Konoha’s command. Capturing a village is not automatically conquering its country.'},
+            {'title':'History fits the start', 'example':'Rimuru’s cave start has no pre-existing Tempest nation. Passing a date alone cannot force that nation to appear.'},
+            {'title':'One Piece control', 'example':'Dressrosa can be a kingdom occupied by the Donquixote Pirates; Fish-Man Island’s protection is separate from its government.'},
+            {'title':'Grounded map regions', 'example':'Authored borders, smaller HxH estates, early Belto territory and separate Bleach realm diagrams replace misleading ownership assumptions.'},
+            {'title':'Starting holdings', 'example':'A clear starting estate statement can establish one tile. Being powerful or merely wishing to rule never grants a country.'},
+        ],
+    },
     "3.59.0": {
         "title": "Living Political Atlas",
         "summary": "A vector atlas replaces the cropped artwork and overlapping territory blobs. Starting control is preset per world; campaign claims repaint the same land.",
