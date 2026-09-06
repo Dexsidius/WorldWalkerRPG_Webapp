@@ -144,3 +144,18 @@ window.WorldAtlas = (() => {
   function reset(){if(!active)return;Object.assign(active,{z:1,px:.5,py:.5});apply();}
   return {render,bind,color,zoom,focus,reset,labels,refresh:apply};
 })();
+
+// Optional workspace presentation, loaded independently of the atlas renderer.
+// This entry point is already shipped by both desktop and browser shells.
+(() => {
+  if (!document.querySelector('.col-center #living-map-main') || document.getElementById('workspace-tabs-script')) return;
+  const script = document.createElement('script');
+  script.id = 'workspace-tabs-script';
+  script.src = '/js/workspace-tabs.js?v=3.62.0-workspace-1';
+  script.async = true;
+  script.addEventListener('error', () => {
+    script.remove();
+    console.warn('Workspace tabs could not load; retaining the original layout.');
+  }, { once: true });
+  document.head.append(script);
+})();
