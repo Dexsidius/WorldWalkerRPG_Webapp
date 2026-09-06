@@ -115,10 +115,11 @@ def ui(browser,tmp_path,monkeypatch):
     page.fixture_memory=memory
     page.wait_for_function('typeof APP !== "undefined" && APP.state && APP.state.name === "Ari"')
     page.wait_for_selector('[data-workspace-ready]')
-    page.evaluate('document.querySelectorAll(".modal-backdrop.open").forEach(e=>e.classList.remove("open"))')
-    # Dismiss patch notes after their asynchronous boot fetch as well.
-    page.wait_for_timeout(200)
-    page.evaluate('document.querySelectorAll(".modal-backdrop.open").forEach(e=>e.classList.remove("open"))')
+    # Wait for the actual boot request, not a fixed sleep: Windows can deliver
+    # the first-launch notes after the game state and workspace are ready.
+    page.wait_for_selector('#modal-patch-notes.open')
+    page.locator('#btn-patch-notes-done').click()
+    page.wait_for_selector('#modal-patch-notes.open', state='hidden')
     yield page,game,calls
     assert not errors, errors
     context.close()

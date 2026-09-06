@@ -119,9 +119,16 @@ def mechanic_signature(package):
 def semantic_similarity(left, right):
     left_tokens, right_tokens = _semantic_tokens(left), _semantic_tokens(right)
     jaccard = len(left_tokens & right_tokens) / max(1, len(left_tokens | right_tokens))
-    sequence = SequenceMatcher(None, " ".join(sorted(left_tokens)), " ".join(sorted(right_tokens))).ratio()
-    phrase_sequence = SequenceMatcher(None, _normalized_text(_semantic_core_text(left)),
-                                      _normalized_text(_semantic_core_text(right))).ratio()
+
+    def symmetric_ratio(a, b):
+        # SequenceMatcher is order-sensitive. The archive checks new/old while
+        # callers can compare old/new; use the more conservative result in
+        # either direction so a reroll cannot slip through merely by ordering.
+        return max(SequenceMatcher(None, a, b).ratio(), SequenceMatcher(None, b, a).ratio())
+
+    sequence = symmetric_ratio(" ".join(sorted(left_tokens)), " ".join(sorted(right_tokens)))
+    phrase_sequence = symmetric_ratio(_normalized_text(_semantic_core_text(left)),
+                                      _normalized_text(_semantic_core_text(right)))
     return round(max(jaccard, sequence * .9, phrase_sequence * .95), 4)
 
 
