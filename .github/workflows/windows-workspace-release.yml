@@ -1,0 +1,138 @@
+name: Build Windows - Chronicle and Map tabs
+
+# Build once when this workflow is added/changed, or on explicit manual request.
+# Ordinary gameplay/code commits do not automatically publish new releases.
+on:
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/windows-workspace-release.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-workspace-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    if: github.ref == 'refs/heads/master'
+    runs-on: windows-2022
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      WORLDWALKER_DATA_DIR: ${{ runner.temp }}\worldwalker-build-test
+      PYTHONUTF8: '1'
+    steps:
+      - name: Check out requested revision
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime and build dependencies
+        run: python -m pip install -r requirements.txt "pyinstaller>=6.16,<7" pytest playwright
+
+      - name: Install test browser
+        run: python -m playwright install chromium
+
+      - name: Check UI JavaScript syntax
+        shell: python
+        run: |
+          import subprocess
+          for path in ['frontend/js/workspace-tabs.js', 'frontend/js/world-atlas.js', 'frontend/js/app.js', 'frontend/sw.js']:
+              subprocess.run(['node', '--check', path], check=True)
+
+      - name: Run isolated workspace browser regressions
+        run: python -m pytest tools/check_workspace_tabs.py -q
+
+      - name: Build Windows executable and bundled files
+        run: python -m PyInstaller --noconfirm --clean WorldwalkerRPG.spec
+
+      - name: Verify executable starts with a fresh isolated data directory
+        shell: python
+        run: |
+          import subprocess
+          from pathlib import Path
+          exe = Path('dist/WorldwalkerRPG/WorldwalkerRPG.exe').resolve()
+          assert exe.is_file(), 'Windows executable is missing'
+          with exe.open('rb') as f:
+              assert f.read(2) == b'MZ', 'Not a Windows executable'
+          subprocess.run([str(exe), '--self-test'], check=True, timeout=90)
+
+      - name: Verify bundled tab fix and package portable game
+        shell: python
+        run: |
+          import os, shutil, subprocess
+          from pathlib import Path
+          root = Path('dist/WorldwalkerRPG')
+          frontend = root / '_internal' / 'frontend'
+          for relative in ['js/workspace-tabs.js', 'js/world-atlas.js', 'sw.js']:
+              source = Path('frontend') / relative
+              packaged = frontend / relative
+              assert packaged.is_file(), f'Missing bundled file: {relative}'
+              assert packaged.read_bytes() == source.read_bytes(), f'Stale bundled file: {relative}'
+          index = (frontend / 'index.html').read_text(encoding='utf-8')
+          atlas = (frontend / 'js/world-atlas.js').read_text(encoding='utf-8')
+          assert 'workspace-tabs.js' in index or 'workspace-tabs.js' in atlas, 'Tab controller is not loaded'
+          shutil.copytree('music', root / 'music', dirs_exist_ok=True)
+          for name in ['WorldwalkerRPG.exe.config', 'PHONE_PLAY_README.txt', 'WORKSPACE_TABS.md']:
+              if Path(name).is_file():
+                  shutil.copy2(name, root / name)
+          (root / 'Start Phone Mode.bat').write_text('@echo off\r\ncd /d "%~dp0"\r\nstart "" "%~dp0WorldwalkerRPG.exe" --lan\r\n', encoding='utf-8')
+          dependencies = subprocess.check_output(['python', '-m', 'pip', 'freeze'], text=True)
+          (root / 'BUILD_INFO.txt').write_text(
+              'Worldwalker RPG - Chronicle / Living Map workspace update\n'
+              + 'Source commit: ' + os.environ['GITHUB_SHA'] + '\n'
+              + 'Build run: ' + os.environ['GITHUB_RUN_ID'] + '\n'
+              + 'Extract the entire ZIP, then open WorldwalkerRPG.exe. Keep _internal beside the EXE.\n'
+              + 'No Python or Codex access is needed to run the packaged game.\n'
+              + 'This executable is unsigned. Full interactive gameplay has not been tested on your PC.\n'
+              + 'Validation: JS syntax, isolated workspace browser regressions, packaged fresh-launch self-test.\n\n'
+              + dependencies, encoding='utf-8')
+          shutil.make_archive('WorldwalkerRPG-Workspace-Tabs-Windows', 'zip', 'dist', 'WorldwalkerRPG')
+
+      - name: Upload downloadable Windows build
+        uses: actions/upload-artifact@v7
+        with:
+          name: WorldwalkerRPG-Workspace-Tabs-Windows
+          path: WorldwalkerRPG-Workspace-Tabs-Windows.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Publish separate preview release without replacing the stable release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: python
+        run: |
+          import os, subprocess
+          from pathlib import Path
+          tag = 'workspace-tabs-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          notes = Path('windows-release-notes.md')
+          notes.write_text(
+              'Windows build including the animated Chronicle / Living Map tabs.\n\n'
+              'Download WorldwalkerRPG-Workspace-Tabs-Windows.zip, extract the entire folder, '
+              'then open WorldwalkerRPG.exe. Keep the _internal folder beside the executable.\n\n'
+              'Includes all current source changes at commit ' + os.environ['GITHUB_SHA'] + '.\n\n'
+              'Validated by JavaScript syntax checks, isolated workspace browser regressions, '
+              'and the packaged fresh-launch self-test. This is an unsigned preview build; '
+              'full interactive gameplay on a user PC has not been verified.\n\n'
+              'The existing stable release and player saves are not replaced by publishing this build.\n',
+              encoding='utf-8')
+          subprocess.run([
+              'gh', 'release', 'create', tag, 'WorldwalkerRPG-Workspace-Tabs-Windows.zip',
+              '--repo', os.environ['GITHUB_REPOSITORY'], '--target', os.environ['GITHUB_SHA'],
+              '--title', 'Windows preview - Chronicle and Living Map tabs',
+              '--notes-file', str(notes), '--prerelease', '--latest=false'
+          ], check=True)
+          url = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/releases/tag/' + tag
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('## Windows build ready\n\n[Download the release](' + url + ')\n')
