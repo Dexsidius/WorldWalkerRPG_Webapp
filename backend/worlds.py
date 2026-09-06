@@ -11,7 +11,7 @@ from power_benchmarks import benchmark_tier, benchmark_context
 
 DEFAULT_MODEL = "gpt-5.6-luna"
 SECONDARY_MODEL = "gpt-4o-mini"
-APP_VERSION = "3.62.0"
+APP_VERSION = "3.63.0"
 APP_NAME = "Worldwalker RPG"
 
 # A world-agnostic power-level anchor for the Advisor. None of Worldwalker's
@@ -763,9 +763,9 @@ def starting_era_by_id(world, era_id):
 # with something that reads like a real place's dates — not a claim that
 # this is documented source-material canon. Every invented calendar uses a
 # uniform 30-day month / 12-month year, matching the schema the app already
-# tracks internally (state.calendar). Solo Max-Level Newbie is contemporary
-# real-world Earth and gets an actual Gregorian date instead — see
-# format_calendar_date.
+# uses internally for legacy age tracking (state.calendar). Player-facing dates
+# now come from the fixed civil profiles in assets/data/world_calendars.json.
+# calendar_anchor_day describes when a campaign began, never a per-era date reset.
 _REAL_MONTHS = ["January", "February", "March", "April", "May", "June",
                 "July", "August", "September", "October", "November", "December"]
 WORLD_CALENDARS = {
@@ -783,64 +783,15 @@ _CAL_DAYS_PER_YEAR = _CAL_DAYS_PER_MONTH * _CAL_MONTHS_PER_YEAR
 
 
 def canon_day_to_calendar_parts(world, canon_day, anchor_day=None):
-    """Convert a canon_day offset into (year, month, day), 1-indexed, using
-    a fixed 30-day-month/12-month-year scheme anchored so a start day lands
-    on Year 1, Month 1, Day 1 — the same convention state.calendar already
-    tracks live, but computable for any arbitrary day (a future scheduled
-    event, a past beat) without needing that campaign's current state.
-    anchor_day is the specific start_day THIS campaign actually began on
-    (a canon character's start, a chosen starting era, or the world's
-    default) — it can differ from the world's default start_day, so it must
-    be passed explicitly rather than re-derived from CANON_TIMELINES, or a
-    campaign starting somewhere other than the default reads absurd
-    negative-year dates. Falls back to the world's default only when no
-    anchor is given (an old save from before per-campaign anchors existed)."""
-    start_day = anchor_day if anchor_day is not None else CANON_TIMELINES.get(world, CANON_TIMELINES["Custom World"]).get("start_day", -7)
-    absolute_day = int(canon_day) - int(start_day)
-    year, month_day = divmod(absolute_day, _CAL_DAYS_PER_YEAR)
-    month, day = divmod(month_day, _CAL_DAYS_PER_MONTH)
-    return year + 1, month + 1, day + 1
+    from world_calendar import parts_for
+    p = parts_for(world, canon_day, anchor_day=anchor_day)
+    return (p['year'], p['month'], p['day']) if p else (0, 1, 1)
 
 
 def format_calendar_date(world, canon_day, calendar_epoch=None, anchor_day=None):
-    """The player-facing date string for a given canon_day — a real
-    Gregorian date for Solo Max-Level Newbie (actual present-day Earth), an
-    invented but consistent named-month date for worlds with a
-    WORLD_CALENDARS entry, and a plain Year/Month/Day count for anything
-    else (Custom World, an unrecognized world pack)."""
-    # Bleach never supplies a dependable numbered civil year for these story
-    # beats.  Re-anchoring every selectable era to "Year 1" made the one-year
-    # start look identical to the one-week start and, worse, made players
-    # reasonably believe Ichigo's awakening was due immediately.  Keep its
-    # dates honest and useful by naming their distance from the day Ichigo
-    # receives Soul Reaper powers (canon day zero).
-    if world == "Bleach":
-        relative_day = int(canon_day)
-        if relative_day == 0:
-            return "The day Ichigo receives Soul Reaper powers"
-        distance = abs(relative_day)
-        if distance == 365:
-            span = "1 year"
-        elif distance >= 365 and distance % 365 == 0:
-            span = f"{distance // 365} years"
-        else:
-            span = f"{distance} day{'s' if distance != 1 else ''}"
-        direction = "before" if relative_day < 0 else "after"
-        return f"{span} {direction} Ichigo receives Soul Reaper powers"
+    from world_calendar import format_date
+    return format_date(world, canon_day, calendar_epoch, anchor_day)
 
-    year, month, day = canon_day_to_calendar_parts(world, canon_day, anchor_day)
-    if world == "Solo Max-Level Newbie":
-        try:
-            epoch = datetime.date.fromisoformat(calendar_epoch) if calendar_epoch else datetime.date.today()
-        except (TypeError, ValueError):
-            epoch = datetime.date.today()
-        elapsed_days = (year - 1) * _CAL_DAYS_PER_YEAR + (month - 1) * _CAL_DAYS_PER_MONTH + (day - 1)
-        real_date = epoch + datetime.timedelta(days=elapsed_days)
-        return f"{real_date.strftime('%B')} {real_date.day}, {real_date.year}"
-    months = WORLD_CALENDARS.get(world)
-    if months:
-        return f"{months[(month - 1) % len(months)]} {day}, Year {year}"
-    return f"Year {year}, Month {month}, Day {day}"
 
 
 # A spoiler-free, hand-written "what you're getting into" primer for each

@@ -27,7 +27,7 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.game.settings["autosave"] = False
 
     def test_v310_schema_declares_owned_memory_and_progression_ledgers(self):
-        self.assertEqual(APP_VERSION, "3.62.0")
+        self.assertEqual(APP_VERSION, "3.63.0")
         self.assertEqual(BASE_STATE["schema_version"], 21)
         self.assertIn("narrative_memory", BASE_STATE)
         self.assertIn("progression_ledger", BASE_STATE)
@@ -192,7 +192,7 @@ class WorldwalkerV310Tests(unittest.TestCase):
         self.assertIn("progression_ledger", data)
 
     def test_frontend_contains_rerolls_memory_art_confidence_and_all_world_themes(self):
-        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+        js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8") + (ROOT / "frontend" / "js" / "living-adventures.js").read_text(encoding="utf-8")
         css = (ROOT / "frontend" / "css" / "style.css").read_text(encoding="utf-8")
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         for marker in ("data-preview-reroll", "LONG-TERM NARRATIVE MEMORY", "_scene_confidence", "canon_event_tracker"):

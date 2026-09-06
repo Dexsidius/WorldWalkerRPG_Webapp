@@ -2967,7 +2967,7 @@ The background is authoritative data. Shikai and Bankai must be two stages of on
                 name=name.strip() or "Traveler", world=world, difficulty=difficulty,
                 background=profile.get("expanded_background", background), appearance_desc=appearance_desc, custom_world=custom_world,
                 race=profile.get("race", "") if world_supports_races(world) else "",
-                calendar_epoch=datetime.today().date().isoformat(),
+                calendar_epoch="",  # Fixed world civil epoch; never the host computer date.
                 location=start, resource_name=wd["resource"],
                 factions=copy.deepcopy(wd["factions"]), reputation=copy.deepcopy(wd["factions"]),
                 special=copy.deepcopy(wd["special"]), discovered_locations=[start],

@@ -269,6 +269,9 @@ class JournalMixin:
 
     def public_state(self):
         s = copy.deepcopy(self.state)
+        from world_calendar import view as calendar_view, time_label
+        s['_world_calendar'] = calendar_view(self.state)
+        s['world_time'] = time_label(self.state)
         s.pop("_request_receipts", None)
         from turn_recovery import guard
         s["_recovery_guard"] = guard(self.state)

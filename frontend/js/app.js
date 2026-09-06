@@ -679,31 +679,7 @@ const WORLD_CALENDAR_MONTHS = {
 };
 
 function formatCalendarDate(world, canonDay, calendarEpoch, anchorDay) {
-  if (world === "Bleach") {
-    const relativeDay = Math.trunc(Number(canonDay) || 0);
-    if (relativeDay === 0) return "The day Ichigo receives Soul Reaper powers";
-    const distance = Math.abs(relativeDay);
-    const span = distance === 365 ? "1 year" :
-      (distance >= 365 && distance % 365 === 0 ? `${distance / 365} years` : `${distance} day${distance === 1 ? "" : "s"}`);
-    return `${span} ${relativeDay < 0 ? "before" : "after"} Ichigo receives Soul Reaper powers`;
-  }
-  const startDay = (anchorDay !== undefined && anchorDay !== null) ? anchorDay : (WORLD_START_DAY[world] ?? -7);
-  const daysPerMonth = 30, daysPerYear = 360;
-  const absoluteDay = Number(canonDay) - startDay;
-  let year = Math.floor(absoluteDay / daysPerYear);
-  const monthDay = absoluteDay - year * daysPerYear;
-  let month = Math.floor(monthDay / daysPerMonth);
-  const day = monthDay - month * daysPerMonth + 1;
-  year += 1; month += 1;
-  if (world === "Solo Max-Level Newbie") {
-    const epoch = calendarEpoch ? new Date(calendarEpoch + "T00:00:00") : new Date();
-    const elapsedDays = (year - 1) * daysPerYear + (month - 1) * daysPerMonth + (day - 1);
-    const real = new Date(epoch.getTime() + elapsedDays * 86400000);
-    return `${REAL_MONTH_NAMES[real.getMonth()]} ${real.getDate()}, ${real.getFullYear()}`;
-  }
-  const months = WORLD_CALENDAR_MONTHS[world];
-  if (months) return `${months[(month - 1) % months.length]} ${day}, Year ${year}`;
-  return `Year ${year}, Month ${month}, Day ${day}`;
+  return WorldCalendar.format(world, canonDay, calendarEpoch, anchorDay);
 }
 
 function dayLabel(canonDay) {
@@ -2063,6 +2039,7 @@ function renderState(state) {
   reasonBox.hidden = !reasons.length;
   $("#change-reasons-list").innerHTML = reasons.map((row) => `<div class="change-reason"><b>${escapeHtml(row.target || row.category || "Change")}</b><span>${escapeHtml(row.change || "Changed")}</span><small>${escapeHtml(row.because || "The resolved turn changed this.")}</small></div>`).join("");
   if (APP.music.world !== (s.world || "Custom World")) refreshMusic(s.world, APP.music.userStarted);
+  LivingAdventures.onState();
   renderCombatPanel(s);
   if (s.status_window_due && !APP.statusWindowOpen) { APP.statusWindowOpen = true; renderStatusWindow(s); openModal("modal-status-window"); }
   const chapters = Array.isArray(s.chapter_summaries) ? s.chapter_summaries : [];
@@ -3196,7 +3173,7 @@ function renderCombatPanel(s) {
   const panel = $("#combat-panel");
   const combat = s.combat || {};
   const actionInput = $("#action-input");
-  const tacticalWorld = ['Naruto','One Piece','Bleach'].includes(s.world);
+  const tacticalWorld = ['Naruto','One Piece','Bleach'].includes(s.world) || !!combat.adventure_objective;
   const tactical = tacticalWorld && combat.active;
   actionInput.disabled = !!tactical;
   if (tactical) {
@@ -4454,7 +4431,8 @@ function renderMainLivingMap(data) {
   });
   paintMapRoutes($("#map-route-canvas"), nodes, travelGraph);
   requestAnimationFrame(() => WorldAtlas.labels());
-  wireMainLivingMap(host, world, mapPayload);
+  wireMainLivingMap(host, world, mapPayload, atlas || {});
+  LivingAdventures.wireMap(host);
 }
 
 function focusApprovedLivingMap() {
@@ -4463,7 +4441,7 @@ function focusApprovedLivingMap() {
   else $("#living-map-main")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
 }
 
-function wireMainLivingMap(host, world, mapPayload) {
+function wireMainLivingMap(host, world, mapPayload, atlas = {}) {
   const search = host.querySelector('.atlas-search');
   if (search) search.onsubmit = event => {
     event.preventDefault();
@@ -4487,8 +4465,9 @@ function wireMainLivingMap(host, world, mapPayload) {
   host.querySelectorAll("[data-map-node]").forEach((button) => button.addEventListener("click", () => showLivingMapNode(button.dataset.mapNode)));
   host.querySelectorAll("[data-map-person]").forEach((button) => button.addEventListener("click", () => showLivingMapPerson(button.dataset.mapPerson)));
   host.onclick = (event) => {
-    if (event.target.closest('[data-atlas-close]')) { $('#map-detail')?.classList.remove('open'); return; }
+    if (event.target.closest('[data-atlas-close]')) { LivingAdventures.cancelSelection(); $('#map-detail')?.classList.remove('open'); return; }
     if (event.target.closest('[data-atlas-info]')) {
+      LivingAdventures.cancelSelection();
       const detail = $('#map-detail'); detail.classList.add('open');
       const context = atlas.context || {};
       detail.innerHTML = `<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button><b>About this atlas</b>${(context.notes || []).map(note=>`<p>${escapeHtml(note)}</p>`).join('')}<p>Canon and well-supported fan references guide the geography. Unspecified borders are extrapolated for consistent play. All land has an assigned controller.</p><p>Starting history: ${escapeHtml(context.basis || 'world preset')}. Passing a canon date does not override your campaign’s conquests or prevented events.</p>${(context.sources || []).map(source=>`<p><a href="${escapeHtml(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.title)}</a></p>`).join('')}`;
@@ -4507,6 +4486,7 @@ function wireMainLivingMap(host, world, mapPayload) {
 }
 
 function showLivingMapPerson(name) {
+  LivingAdventures.cancelSelection();
   const person = (APP.latestMapData?.relationships_view?.people || []).find((row) => row.name === name), detail = $("#map-detail");
   if (!person || !detail) return;
   detail.classList.add("open");
@@ -4516,18 +4496,7 @@ function showLivingMapPerson(name) {
 }
 
 async function showLivingMapNode(name) {
-  const node = (APP.mapNodes || []).find((row) => row.name === name), detail = $("#map-detail");
-  if (!node || !detail) return;
-  const people = (node.notable_individuals || []).map((person) => typeof person === "object" ? person : { name: person });
-  const peopleRow = people.length ? `<div class="location-people">${people.slice(0, 4).map((person) => { const label = person.name || person.display_name || "Unknown"; return `<span>${personPortraitHtml(label, person, { size: "sm" })}<b>${escapeHtml(label)}</b></span>`; }).join("")}</div>` : "None recorded yet";
-  detail.classList.add("open");
-  detail.innerHTML = `<b>${escapeHtml(node.display_name || node.name)}</b><small>${escapeHtml(node.kind || "landmark")}${node.current ? " · current location" : ""}</small><p>${escapeHtml(node.notes || "No additional local notes recorded.")}</p><dl><dt>Control</dt><dd>${escapeHtml(node.controller || "Unknown")}</dd>${['sovereignty','local_authority','protection'].filter(k=>node[k] && node[k]!==node.controller).map(k=>`<dt>${({sovereignty:'Country',local_authority:'Local authority',protection:'Protection'})[k]}</dt><dd>${escapeHtml(node[k])}</dd>`).join('')}${node.danger_level ? `<dt>Danger</dt><dd>${escapeHtml(node.danger_level)}</dd>` : ""}<dt>Known people</dt><dd>${peopleRow}</dd><dt>Related</dt><dd>${node.quests?.length ? node.quests.map(escapeHtml).join(", ") : "No active connection"}</dd></dl><div id="map-route-preview" class="map-route-preview">Checking the route from your current location…</div>`;
-  detail.focus({ preventScroll: true });
-  detail.insertAdjacentHTML('afterbegin','<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button>');
-  try {
-    const route = await apiGet(`/api/travel/route?destination=${encodeURIComponent(node.name)}`), preview = $("#map-route-preview");
-    if (preview) preview.innerHTML = route.reachable ? `<b>Route from ${escapeHtml(route.origin)}</b><p>${(route.route || []).map(escapeHtml).join(" → ")}</p><small>About ${escapeHtml(formatDuration(route.minutes))}</small>` : `<b>No established route</b><p>${escapeHtml(route.reason || "This destination is not connected yet.")}</p>`;
-  } catch (_) { const preview = $("#map-route-preview"); if (preview) preview.textContent = "Route details are not currently available."; }
+  return LivingAdventures.showLocation(name);
 }
 
 async function openJournal(tab) {
@@ -4763,20 +4732,7 @@ async function openJournal(tab) {
       return `<details class="quest-card prereq-card"${index === 0 ? " open" : ""}><summary>${escapeHtml(track.name || "Capability")} <small class="prereq-status ${escapeHtml(track.status || "")}">— ${escapeHtml(status)}</small></summary><div class="quest-details"><p>${escapeHtml(track.source_feat || "")}</p>${list("Requirements met", track.met_requirements, "met")}${list("Still missing", track.missing_requirements, "missing")}${list("Next steps", track.next_steps, "next")}<div class="quest-detail-label">Notes</div><p>${escapeHtml(track.notes || "No additional notes.")}</p></div></details>`;
     }).join("") : `<div class="jrow"><b>No tracked capability yet.</b><br/>Tell the GM what canon feat, technique, class, item, transformation, or position you want to pursue. The requirements will appear here.</div>`;
   } else if (tab === "timeline") {
-    const currentDay = Number(data.canon_day ?? -7);
-    const fired = new Set(data.canon_events_fired || []);
-    const rows = (data.canon_dependencies?.events || data.canon_event_tracker || data.canon_events || []).map((event) => {
-      const id = `day:${event.day || 0}:${event.title || "event"}`;
-      const occurred = fired.has(id) || Number(event.day) < currentDay;
-      const current = Number(event.day) === currentDay;
-      const world = data.world || "Custom World";
-      const status = event.status || (occurred ? "occurred" : "likely");
-      const effectiveDay = event.effective_day ?? event.day;
-      const confidence = event.confidence || {};
-      const involved = mentionedPortraitsHtml(`${event.title || ""} ${event.summary || ""}`, knownPersonRecords(s), 3, "xs");
-      return `<div class="timeline-row ${escapeHtml(status)} ${current ? "current" : ""}"><div class="timeline-day">${escapeHtml(formatCalendarDate(world, effectiveDay, data.calendar_epoch, data.calendar_anchor_day))}</div><div><header><span class="timeline-title-with-portraits">${involved}<b>${escapeHtml(event.title || "World event")}</b></span><span class="canon-status ${escapeHtml(status)}">${escapeHtml(status)}</span></header><small>${escapeHtml(event.location || "")}${confidence.label ? ` · ${escapeHtml(confidence.label)}` : ""}</small><p>${escapeHtml(event.summary || "")}</p>${(event.requires || []).length ? `<p class="timeline-dependencies"><b>Depends on:</b> ${event.requires.map(escapeHtml).join(" → ")}</p>` : ""}${event.reason && !["likely","upcoming","occurred"].includes(status) ? `<p class="timeline-reason"><b>Why changed:</b> ${escapeHtml(event.reason)}</p>` : ""}${event.replacement ? `<p class="timeline-replacement"><b>What may happen instead:</b> ${escapeHtml(event.replacement)}</p>` : ""}${confidence.note ? `<p class="timeline-confidence">${escapeHtml(confidence.note)}</p>` : ""}</div></div>`;
-    }).join("");
-    panel.innerHTML = `<div class="timeline-anchor"><b>Current: ${escapeHtml(formatCalendarDate(data.world || "Custom World", currentDay, data.calendar_epoch, data.calendar_anchor_day))}</b><span>${escapeHtml(data.canon_anchor || "Before the main story")}</span></div>${rows || '<div class="jrow">No fixed canon timeline for this world.</div>'}<div class="jrow hint">Canon events are scheduled pressures, not rails. Player-caused divergences can alter or prevent their original form.</div>`;
+    LivingAdventures.timeline(panel, data);
   } else if (tab === "schedule") {
     const events = data.scheduled_events || [];
     panel.innerHTML = events.length ? events.map((event) => `<div class="timeline-row upcoming"><div class="timeline-day">${escapeHtml(event.when || event.day || event.time || "Upcoming")}</div><div><b>${escapeHtml(event.title || event.name || "Scheduled event")}</b><p>${escapeHtml(event.summary || event.description || event.notes || "Known details will develop as the date approaches.")}</p></div></div>`).join("") : '<div class="jrow">No visible deadlines or scheduled events. Hidden events remain hidden until your character could know them.</div>';

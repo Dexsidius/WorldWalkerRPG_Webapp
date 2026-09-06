@@ -37,7 +37,7 @@ def state_for(world="Naruto"):
 
 class WorldwalkerV3390ReliabilityTests(unittest.TestCase):
     def test_version_and_schema(self):
-        self.assertEqual(APP_VERSION, "3.62.0")
+        self.assertEqual(APP_VERSION, "3.63.0")
         self.assertEqual(BASE_STATE["schema_version"], 21)
 
     def test_grounding_packet_prioritizes_current_state_and_named_context(self):
@@ -147,9 +147,10 @@ class WorldwalkerV3390ReliabilityTests(unittest.TestCase):
     def test_journal_more_only_contains_player_facing_history_tools(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
         advanced = html.split('id="journal-tabs-advanced"', 1)[1].split("</div>", 1)[0]
-        self.assertEqual(advanced.count("data-tab="), 4)
-        for label in ("Progress", "Chapters", "NPC Knowledge", "Timeline"):
+        self.assertEqual(advanced.count("data-tab="), 3)
+        for label in ("Progress", "Chapters", "NPC Knowledge"):
             self.assertIn(label, advanced)
+        self.assertIn('data-tab="timeline">Canon Timeline', html.split('id="journal-tabs-advanced"')[0])
         for removed in ("Simulation Checks", "Campaign Health", "Model Evaluations", "Lore Sources", "Long-Term Memory"):
             self.assertNotIn(removed, advanced)
 

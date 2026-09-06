@@ -25,7 +25,7 @@ class WorldwalkerV3160Tests(unittest.TestCase):
         return state
 
     def test_release_version(self):
-        self.assertEqual(APP_VERSION, "3.62.0")
+        self.assertEqual(APP_VERSION, "3.63.0")
 
     def test_every_bundled_world_passes_the_shared_depth_gate(self):
         report = audit_all_worlds()
@@ -112,9 +112,9 @@ class WorldwalkerV3160Tests(unittest.TestCase):
 
     def test_bleach_dates_name_the_story_anchor_instead_of_fake_year_one(self):
         self.assertEqual(format_calendar_date("Bleach", -365, None, -365),
-                         "1 year before Ichigo receives Soul Reaper powers")
+                         "May 18, 2000")
         self.assertEqual(format_calendar_date("Bleach", 0, None, -365),
-                         "The day Ichigo receives Soul Reaper powers")
+                         "May 18, 2001")
 
     def test_special_ability_cards_are_expandable(self):
         js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")

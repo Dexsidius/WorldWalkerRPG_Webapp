@@ -712,6 +712,8 @@ class TimeSkipMixin:
                 "time_budget": budget}
 
     def run_time_skip(self, amount, unit, orders, intensity, assessment, confirmed_lethal=False, confirmed_power_goal=False, manual_rolls=None, challenge_modes=None, challenge_resolution_mode="continue", danger_warning_acknowledged=False):
+        if isinstance(self.state.get('combat'),dict) and self.state['combat'].get('active') and self.state['combat'].get('adventure_objective'):
+            raise ValueError('Resolve the active tactical objective before advancing campaign time.')
         from naruto_tactics import require_narrative_available
         require_narrative_available(self.state)
         assessment = assessment if isinstance(assessment, dict) else {}
@@ -1500,17 +1502,13 @@ class TimeSkipMixin:
             self.state[max_key] = new_max
             self.state[current_key] = min(new_max, max(0, int(self.state.get(current_key, new_max) or 0) + delta))
 
-    @staticmethod
-    def duration_minutes(amount, unit):
-        multipliers = {"moment": 1, "minutes": 1, "hours": 60, "days": 1440, "weeks": 10080, "months": 43200}
-        try:
-            value = max(0, float(amount))
-        except (TypeError, ValueError):
-            value = 0
-        return int(round(value * multipliers.get(str(unit), 1)))
+    def duration_minutes(self, amount, unit):
+        from world_calendar import duration_minutes
+        return duration_minutes(self.state, amount, unit)
 
     def advance_clock(self, before, amount, unit):
-        minutes = self.duration_minutes(amount, unit)
+        from world_calendar import duration_minutes
+        minutes = duration_minutes(before, amount, unit)
         base_total = int(before.get("world_clock_minutes", 480) or 0)
         total = base_total + minutes
         self.state["world_clock_minutes"] = total
@@ -1532,7 +1530,8 @@ class TimeSkipMixin:
         canon_day = canon_after // 1440
         self.state["canon_day"] = canon_day
         date_str = format_calendar_date(self.state.get("world", "Custom World"), canon_day, self.state.get("calendar_epoch"), self.state.get("calendar_anchor_day"))
-        self.state["world_time"] = f"{date_str} — {period}, {hour:02d}:{minute:02d}"
+        from world_calendar import time_label
+        self.state["world_time"] = time_label(self.state)
         pending_canon_appends = self.fire_canon_events(canon_before, canon_after)
         age_change = advance_character_age(self.state, before)
         if age_change:
@@ -1814,7 +1813,7 @@ class TimeSkipMixin:
             self.ensure_combat_numbers()
             if not uses_xp_for(self.state.get("world"), self.state.get("custom_world", "")):
                 self.state["xp"], self.state["level"], self.state["xp_next"] = before.get("xp", 0), before.get("level", 1), before.get("xp_next", 100)
-            else:
+            elif not context.get("local_rules") or context.get("local_award_xp"):
                 self.apply_system_xp(before, context.get("actions", []), context.get("rolls", []),
                                      context.get("elapsed_minutes", self.duration_minutes(requested_amount, requested_unit)),
                                      context.get("intensity", "normal"), data.get("events", []))
@@ -1823,8 +1822,9 @@ class TimeSkipMixin:
             elapsed = data.get("elapsed") if isinstance(data.get("elapsed"), dict) else {}
             elapsed_amount = elapsed.get("amount", requested_amount)
             elapsed_unit = elapsed.get("unit", requested_unit)
+            from world_calendar import duration_minutes
+            elapsed_minutes = duration_minutes(before, elapsed_amount, elapsed_unit)
             pending_canon_appends = self.advance_clock(before, elapsed_amount, elapsed_unit)
-            elapsed_minutes = self.duration_minutes(elapsed_amount, elapsed_unit)
             jjk_notes = advance_jjk_state(
                 self.state, before, context.get("actions", []), data.get("narrative", ""),
                 data.get("events", []), elapsed_minutes,
@@ -2104,7 +2104,7 @@ class TimeSkipMixin:
             for note in self.state.pop("_pending_chronicle_notes", []):
                 self.append(note, "meta")
             new_warnings = [w for w in continuity_warnings if w not in prior_warnings]
-            if new_warnings:
+            if new_warnings and not context.get("local_rules"):
                 self.request_continuity_correction(new_warnings, data.get("narrative", ""))
             from turn_recovery import remember_commands
             remember_commands(self.state, data)

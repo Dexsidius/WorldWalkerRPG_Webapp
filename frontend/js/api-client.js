@@ -2,6 +2,7 @@
 /* Network boundary and explicit, receipt-checked recovery. No automatic action
    resubmission: an unreadable response may belong to a successfully committed turn. */
 const GAME_REQUEST_ROUTES = Object.freeze({
+  "/api/adventures/resolve":"adventure_resolve",
   "/api/time/resolve": "time_resolve",
   "/api/combat/action": "combat_action",
   "/api/combat/narrate": "combat_narrate",

@@ -858,7 +858,7 @@ class CombatMixin:
         mercy_shown = bool(combat.get("non_lethal") or combat.get("spare_enemy"))
         death_prevented = bool(enemy.get("death_prevented") or enemy.get("immortal") or enemy.get("cannot_die"))
         enemy_died = outcome in {"victory", "overwhelmed"} and not mercy_shown and not death_prevented
-        tactical = combat.get('tactical_enabled') and self.state.get('world') in {'Naruto','One Piece','Bleach'}
+        tactical = combat.get('tactical_enabled') and (self.state.get('world') in {'Naruto','One Piece','Bleach'} or combat.get('adventure_objective'))
         if tactical:
             enemy_died = any(r.get('side')=='enemy' and r.get('outcome')=='killed' for r in combat.get('casualties',[]))
         if outcome in {"victory", "overwhelmed"} and not tactical:
@@ -880,6 +880,8 @@ class CombatMixin:
         # mechanical outcome, later unrelated hard actions must be allowed to
         # receive their own warning instead of inheriting stale consent.
         self.clear_danger_scenario()
+        from living_adventures import combat_finished
+        combat_finished(self, outcome)
         self.autosave()
         log = combat.get("log", [])
         # The frontend mirrors this tail into the Chronicle.  Returning the
@@ -970,7 +972,7 @@ class CombatMixin:
         lethal_ending = f"{enemy} was killed." if combat.get("enemy_died") else f"{enemy} was defeated but survived."
         if combat.get('tactical_enabled'):
             lethal_ending=' '.join(f"{r['name']} was {r['outcome']}." for r in combat.get('casualties',[]) if r.get('side')=='enemy') or 'The encounter ended.'
-        endings = {"victory": lethal_ending, "overwhelmed": lethal_ending,
+        endings = {"objective_complete":"The encounter objective was secured; surviving opponents remain alive.", "objective_failed":"The encounter objective was lost.", "victory": lethal_ending, "overwhelmed": lethal_ending,
                    "fled": "You escaped the fight.", "defeat": "You were defeated.", "yielded": "You yielded the nonlethal bout."}
         if outcome in endings:
             phrases.append(endings[outcome])

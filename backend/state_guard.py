@@ -74,6 +74,7 @@ def _compile_skill_mechanics(state):
 
 
 APP_OWNED = {
+    "adventures", "travel_access", "_world_calendar",
     "_request_receipts", "_recovery_guard",
     'relationship_life',
     'atlas_start_day',
@@ -539,6 +540,15 @@ def _repair_bleach_mechanics(state, before):
 def apply_guarded_patch(state, patch, allow_time=False, source="gm"):
     before = copy.deepcopy(state)
     safe, accepted, rejected = _normalize_patch(patch, state, allow_time, source)
+    if isinstance(before.get("combat"), dict) and before["combat"].get("adventure_objective") and before["combat"].get("active"):
+        if "combat" in safe:
+            safe.pop("combat")
+            rejected.append("combat: objective encounters are resolved by the tactical rules")
+    for field in ("quests", "quest_archive"):
+        owned = [copy.deepcopy(q) for q in before.get(field, []) if isinstance(q, dict) and q.get("adventure_id")]
+        if owned and field in safe:
+            safe[field] = [q for q in safe[field] if not isinstance(q, dict) or
+                           (not q.get("adventure_id") and q.get("id") not in {r.get("id") for r in owned})] + owned
     merge(state, safe)
     _compile_skill_mechanics(state)
     repairs = _repair(state)

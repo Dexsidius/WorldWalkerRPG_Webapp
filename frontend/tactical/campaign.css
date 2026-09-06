@@ -10,3 +10,5 @@ body[data-world="One Piece"] .primary,body[data-world="One Piece"] .form-button{
 body[data-world="Bleach"]{--bg:#0b0c0d;--panel:#17191b;--accent:#e7e2d5;--sub:#a9c4cc;--line:#5d6265;background:linear-gradient(135deg,#090a0b,#202326)}
 body[data-world="Bleach"] .game-header{border-bottom:3px double #e7e2d5}body[data-world="Bleach"] .board-scroll{background:#25282a}
 body[data-world="Bleach"] .primary,body[data-world="Bleach"] .form-button{border-color:#e7e2d5;color:#fff;background:#17191b}
+
+.objective-panel{margin:10px 24px;padding:14px 18px;border:1px solid #bda269;border-radius:12px;background:#202723;color:#efe9da}.objective-panel header{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.objective-panel p{font-size:13px;line-height:1.6;margin:7px 0}.objective-panel details{font-size:12px}.objective-panel[hidden]{display:none}#tiles button.objective-exit{box-shadow:inset 0 0 0 5px #49c5b5!important}#tiles button.objective-target{box-shadow:inset 0 0 0 5px #f2c359!important}#tiles button.objective-exit::after{content:'EXIT';font-size:9px;color:#bdfaf1}#tiles button.objective-target::after{content:'◆';font-size:24px;color:#ffe39c}

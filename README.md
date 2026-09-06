@@ -6,8 +6,14 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.62.0** (schema 21).
-Current reliability preview build: **3.62.0-reliability-1**.
+Current app version: **3.63.0** (compatible with save schema 21).
+Current preview build: **3.63.0-adventures-1**.
+
+Living Adventures adds confirmed, timed location activities, route and companion
+choices, retrieval/protection/escape encounters, persistent local aftermaths,
+fixed world calendar anchors and an openly accessible canon reference.
+See `LIVING_ADVENTURES.md` and `WORLD_CALENDARS.md` for controls, provenance,
+compatibility and tested scope. The original freeform composer remains available.
 
 This build adds durable request recovery, expandable recorded-outcome entries,
 contextual action suggestions, bounded AI repairs, safer map cameras and

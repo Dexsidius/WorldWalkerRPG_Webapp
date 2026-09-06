@@ -148,7 +148,7 @@ def _cache_control_for(path, version=""):
     if path in {"/", "/sw.js", "/manifest.webmanifest"}:
         return "no-cache, max-age=0, stale-if-error=86400"
     if path.startswith(("/css/", "/js/")):
-        if version == APP_VERSION:
+        if version in {APP_VERSION, BUILD_ID}:
             return "public, max-age=31536000, immutable"
         return "public, max-age=300, stale-while-revalidate=86400, stale-if-error=86400"
     if path.startswith("/assets/"):
@@ -264,7 +264,7 @@ def tactical_feature_enabled():
 
 def request_public_state():
     """Shared world plus the signed-in member's own character and plan."""
-    tactical_local=(game.state.get('world') in TACTICAL_COMBAT_WORLDS and game.combat_active())
+    tactical_local=((game.state.get('world') in TACTICAL_COMBAT_WORLDS or (game.state.get('combat') or {}).get('adventure_objective')) and game.combat_active())
     if tactical_local:
         game.state['combat']['tactical_enabled']=True
     state = game.public_state()
@@ -376,7 +376,7 @@ def api_action_status():
     from request_receipts import status
     request_id = request.args.get("request_id", "")
     route = request.args.get("route", "")
-    if not request_id or len(request_id) > 100 or route not in {"time_resolve", "combat_action", "combat_narrate", "event_respond"}:
+    if not request_id or len(request_id) > 100 or route not in {"time_resolve", "combat_action", "combat_narrate", "event_respond", "adventure_resolve"}:
         return jsonify({"error": "A valid request ID and operation are required."}), 400
     if getattr(g, "worldwalker_room", None):
         return jsonify({"error": "Shared rounds use the multiplayer coordinator."}), 409
@@ -963,7 +963,7 @@ def api_naruto_tactical():
     user=getattr(g,'worldwalker_user',None)
     if room and (not user or not _multiplayer_store):
         return jsonify({'error':'Sign in to the shared room first.'}),409
-    if not game.campaign_active or game.state.get('world') not in TACTICAL_COMBAT_WORLDS:
+    if not game.campaign_active or (game.state.get('world') not in TACTICAL_COMBAT_WORLDS and not (game.state.get('combat') or {}).get('adventure_objective')):
         return jsonify({'error':'Load a supported tactical test campaign first.'}),400
     from tactical_combat import ensure_board, board_view, submit_naruto_action
     if not acquire_busy(): return busy_error()
@@ -1036,7 +1036,7 @@ def api_combat_mercy():
         return jsonify({"error": "Start or load a campaign first."}), 400
     if not game.combat_active():
         return jsonify({"error": "Not in combat."}), 400
-    if game.state.get("world") in TACTICAL_COMBAT_WORLDS:
+    if game.state.get("world") in TACTICAL_COMBAT_WORLDS or (game.state.get("combat") or {}).get("adventure_objective"):
         return jsonify({"error": "Use the tactical battlefield for this combat.",
                         "tactical_url": "/tactical-preview/designs/campaign.html"}), 409
     d = request.get_json(force=True)
@@ -1052,7 +1052,7 @@ def api_combat_action():
         return jsonify({"error": "Start or load a campaign first."}), 400
     if not game.combat_active():
         return jsonify({"error": "Not in combat."}), 400
-    if game.state.get("world") in TACTICAL_COMBAT_WORLDS:
+    if game.state.get("world") in TACTICAL_COMBAT_WORLDS or (game.state.get("combat") or {}).get("adventure_objective"):
         return jsonify({"error": "Legacy combat is unavailable in this world. Continue on the tactical battlefield.",
                         "tactical_url": "/tactical-preview/designs/campaign.html"}), 409
     d = request.get_json(force=True)
@@ -1350,24 +1350,8 @@ def api_panels():
     canon_events = timeline_for(world).get("events", [])
     tracker = canon_event_tracker(s, canon_events)
     dependencies = canon_dependency_graph(s)
-    if not game.settings.get("canon_foreknowledge", False):
-        now = int(s.get("canon_day", -7) or -7)
-        secret_keys = {(int(event.get("day", 0) or 0), str(event.get("title", "")))
-                       for event in canon_events if event.get("spoiler") and int(event.get("day", 0) or 0) > now}
-        def spoiler_safe(rows):
-            safe = []
-            for raw in rows:
-                row = dict(raw)
-                if (int(row.get("day", 0) or 0), str(row.get("title", ""))) in secret_keys:
-                    row.update(title="Unrevealed future pressure", location="Unknown",
-                               summary="Details remain hidden until the campaign can discover them.",
-                               requires=[], reason="Character-knowledge mode is hiding future canon spoilers.", replacement="")
-                safe.append(row)
-            return safe
-        canon_events = spoiler_safe(canon_events)
-        tracker = spoiler_safe(tracker)
-        dependencies = dict(dependencies)
-        dependencies["events"] = spoiler_safe(dependencies.get("events", []))
+    # Player reference is intentionally spoiler-visible. Character/NPC knowledge
+    # and narrator foreknowledge settings remain independent of this read view.
     return jsonify({
         "currency": s.get("currency", {"name": ex["currency"], "amount": 0}),
         "currencies": s.get("currencies", {}),
@@ -1418,6 +1402,8 @@ def api_panels():
         "location": s.get("location", ""),
         "prerequisite_tracks": s.get("prerequisite_tracks", []),
         "canon_day": s.get("canon_day", -7),
+        "calendar_view": __import__("world_calendar").view(s),
+        "canon_reference_visible": True,
         "canon_anchor": s.get("canon_anchor", ""), "calendar_epoch": s.get("calendar_epoch", ""),
         "calendar_anchor_day": s.get("calendar_anchor_day"),
         "canon_events": canon_events,
@@ -2083,6 +2069,114 @@ def api_evaluations_compare():
 def api_world_packs():
     return jsonify({"loaded": WORLD_PACKS_LOADED, "errors": WORLD_PACK_ERRORS,
                     "folder": str(DATA_DIR / "world_packs")})
+
+
+
+
+# ---------- Living Adventures: server-quoted, confirmed timed actions ----------
+def _adventure_identity():
+    return str((getattr(g, 'worldwalker_user', None) or {}).get('id') or 'local')
+
+
+def _adventure_allowed():
+    if not game.campaign_active:
+        raise ValueError('Start or load a campaign first.')
+    if getattr(g, 'worldwalker_room', None):
+        raise ValueError('Timed location actions currently use a single-player clock. Shared campaigns must use the multiplayer plan coordinator.')
+
+
+@app.get('/api/adventures/location')
+def api_adventure_location():
+    from living_adventures import location_view
+    try:
+        _adventure_allowed()
+        with game.lock:
+            return jsonify(location_view(game.state, request.args.get('place')))
+    except ValueError as exc:
+        return err(exc,400)
+
+
+@app.get('/api/adventures/routes')
+def api_adventure_routes():
+    from living_adventures import route_options
+    try:
+        _adventure_allowed()
+        with game.lock:
+            return jsonify(route_options(game.state, request.args.get('destination'),request.args.get('preparation','normal'),request.args.get('companion','')))
+    except ValueError as exc:
+        return err(exc,400)
+
+
+@app.get('/api/adventures/aftermath')
+def api_adventure_aftermath():
+    try:
+        _adventure_allowed()
+        ident=request.args.get('story_id','')
+        with game.lock:
+            linked=next((r for r in (game.state.get('adventures') or {}).get('aftermath',[]) if r.get('story_id')==ident),None)
+            if not linked:raise ValueError('This aftermath does not belong to the current campaign.')
+            entry=next((r for r in game.story_log if r.get('id')==ident),None)
+            if entry is None:
+                entry={'id':ident,'text':linked.get('description','')+' '+ '; '.join(linked.get('changes',[])),'world_time':linked.get('world_time','')}
+            return jsonify({'entry':entry})
+    except ValueError as exc:return err(exc,400)
+
+
+@app.post('/api/adventures/preview')
+def api_adventure_preview():
+    from living_adventures import quote
+    from turn_recovery import guard
+    from request_receipts import campaign
+    try:
+        _adventure_allowed()
+        raw=request.get_json(force=True)
+        if not isinstance(raw,dict):raise ValueError('An activity object is required.')
+        payload={k:raw[k] for k in ('place','action','destination','route_id','preparation','companion') if k in raw}
+        with game.lock:
+            result=quote(game.state,payload)
+            ticket={'account':_adventure_identity(),'campaign':campaign(game.state),'guard':guard(game.state),'payload':payload,'spec':result['spec']}
+            result['token']=URLSafeTimedSerializer(app.secret_key,salt='adventure-confirmation-v1').dumps(ticket)
+            result['expected_campaign']=ticket['campaign'];result['expected_guard']=ticket['guard']
+        return jsonify(result)
+    except (ValueError,TypeError) as exc:
+        return err(exc,400)
+
+
+@app.post('/api/adventures/resolve')
+def api_adventure_resolve():
+    from living_adventures import action_spec, resolve
+    from request_receipts import campaign, completed
+    from turn_recovery import guard
+    if not acquire_busy():return busy_error()
+    try:
+        _adventure_allowed()
+        payload=request.get_json(force=True)
+        if not isinstance(payload,dict) or payload.get('confirmed') is not True or not payload.get('request_id'):
+            raise ValueError('Confirm the preview and supply a request ID before resolving.')
+        # Receipt recovery must work even after the confirmation ticket expires.
+        with game.lock:
+            cached=completed(game,payload['request_id'],'adventure_resolve',payload)
+            if cached is not None:return jsonify(cached)
+            try:ticket=URLSafeTimedSerializer(app.secret_key,salt='adventure-confirmation-v1').loads(payload.get('token',''),max_age=600)
+            except (BadSignature,SignatureExpired):raise ValueError('This confirmation expired. Review the activity again.')
+            if ticket.get('account')!=_adventure_identity() or ticket.get('campaign')!=campaign(game.state):
+                raise ValueError('This confirmation belongs to another player or campaign.')
+            failed=game.state.get('last_failed_turn') or {}
+            resumable=(failed.get('route')=='adventure_resolve' and failed.get('payload')==payload and
+                       (failed.get('work') or {}).get('guard')==guard(game.state))
+            if ticket.get('guard')!=guard(game.state) and not resumable:
+                raise ValueError('The campaign changed after this quote. Review the activity again.')
+            if payload.get('expected_campaign')!=ticket['campaign'] or payload.get('expected_guard')!=ticket['guard']:
+                raise ValueError('The confirmation does not match the prepared campaign state.')
+            spec=action_spec(game.state,ticket['payload'])
+            if spec!=ticket['spec']:raise ValueError('The available activity changed. Review it again.')
+            return jsonify(atomic_game_call('adventure_resolve',payload,lambda:resolve(game,ticket['payload'],spec)))
+    except (ValueError,TypeError) as exc:
+        return err(exc,400)
+    except Exception as exc:
+        return err(exc)
+    finally:
+        release_busy()
 
 
 if __name__ == "__main__":

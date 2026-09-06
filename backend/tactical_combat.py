@@ -404,7 +404,7 @@ def ensure_board(state):
                            if k not in {'statuses', 'debuffs', 'buffs', 'cooldowns', 'alive'}})
         # Migrate already-running single-player boards: friendly companions are
         # choices for the player, never hidden AI actors.
-        if not existing.get('owners'):
+        if not existing.get('owners') and state.get('world') in {'Naruto','One Piece','Bleach'}:
             if state.get('world')=='One Piece':from one_piece_tactics import compile_skill
             elif state.get('world')=='Bleach':from bleach_tactics import compile_skill
             else:from naruto_tactics import compile_skill
@@ -439,7 +439,7 @@ def ensure_board(state):
         if row.get('name') == state.get('name'):
             continue
         ally=combat_profile(state, row, 'ally', f'ally-{len(units)}')
-        ally.update(player_controlled=True,character=copy.deepcopy(row))
+        ally.update(player_controlled=state.get('world') in {'Naruto','One Piece','Bleach'},character=copy.deepcopy(row))
         units.append(ally)
     board = make_board(state, units)
     board['world_rules'] = state.get('world') if combat.get('tactical_enabled') else ''
@@ -459,6 +459,8 @@ def ensure_board(state):
                     unit['skills']={a.get('name',f"Ability {i+1}"):copy.deepcopy(a)
                                     for i,a in enumerate(unit['abilities']) if a.get('name')}
     combat['tactical'] = board
+    from encounter_objectives import initialize as initialize_objective
+    initialize_objective(state, board)
     refresh_movement(state, board)
     # Existing conditions survive converting an in-progress fight.
     if len([u for u in units if u['side']=='enemy']) == 1:
@@ -488,7 +490,8 @@ def board_view(state):
     combat = obj(state.get('combat'))
     if state.get('world')=='One Piece':from one_piece_tactics import saved_skill_details
     elif state.get('world')=='Bleach':from bleach_tactics import saved_skill_details
-    else:from naruto_tactics import saved_skill_details
+    elif state.get('world')=='Naruto':from naruto_tactics import saved_skill_details
+    else:from reliability import visible_skills as saved_skill_details
     options = (saved_skill_details(state) if not actor or actor.get('player') else
                copy.deepcopy(obj(actor.get('skills'))))
     board['ability_shapes'] = {'': ability_footprint('', {}, board['width'])}
@@ -502,7 +505,11 @@ def board_view(state):
         board['ability_shapes'] = {'':ability_footprint('',{},board['width']), **{
             name:ability_footprint(name,detail,board['width']) for name,detail in board['skill_profiles'].items()
             if not detail.get('tactical_disabled')}}
+    if state.get('world') not in {'Naruto','One Piece','Bleach'}:
+        board['skill_profiles']=copy.deepcopy(options)
     view=copy.deepcopy(board)
+    from encounter_objectives import public_view as objective_view
+    view['objective'] = objective_view(state, board)
     if state.get('world') in {'Naruto','One Piece','Bleach'}:
         from portrait_generator import portrait_view
         for unit in view['units']:
@@ -571,6 +578,8 @@ def _outcome(game, board, log_start):
     lost = (not any(u.get('human') for u in live_units(board)) if board.get('owners') else
             not any(u['side']=='ally' and (u.get('player') or u.get('player_controlled')) for u in live_units(board)))
     outcome = 'defeat' if lost else 'victory' if not any(u['side']=='enemy' for u in live_units(board)) else None
+    from encounter_objectives import outcome as objective_outcome
+    outcome = objective_outcome(game.state, board, outcome)
     if outcome:
         if outcome=='defeat' and combat.get('non_lethal'):
             outcome = 'yielded'
@@ -766,6 +775,8 @@ def _npc_effect(game, board, actor, attack, target):
 
 
 def _npc_activation(game,board,actor):
+    from encounter_objectives import npc_action
+    if npc_action(game,board,actor):return
     combat=game.state['combat']
     if _blocked(game,actor):
         combat['log'].append({'round':combat['round'],'actor':'enemy' if actor['side']=='enemy' else 'ally',
@@ -881,7 +892,7 @@ def _end_activation(game,board,log_start):
             combat.pop('bonus_turn_pending',None);combat.pop('bonus_turn_reason',None)
             return None
         # Enemy AI acts only after every player-controlled ally has finished.
-        for enemy in sorted([u for u in live_units(board) if u['side']=='enemy'],key=lambda u:-u['speed']):
+        for enemy in sorted([u for u in live_units(board) if u['side']=='enemy' or (u['side']=='ally' and not u.get('player') and not u.get('player_controlled'))],key=lambda u:-u['speed']):
             _status_damage(game,enemy)
             outcome=_outcome(game,board,log_start)
             if outcome:return outcome
@@ -991,6 +1002,9 @@ def resolve_tactical_action(game,payload):
             actor['buffs']=[r for r in seq(actor.get('buffs')) if not obj(r).get('form')]
             clear_active_portrait_form(actor)
         refresh_movement(state,board);combat['log'].append({'actor':'player','unit_id':actor['id'],'name':actor['name'],'action':'revert','round':combat['round']})
+    elif action=='objective':
+        from encounter_objectives import interact
+        interact(game,board,actor)
     elif action=='defend':
         if actor['action_used']: raise ValueError('This ally’s action is already spent.')
         if _blocked(game,actor): raise ValueError('This ally cannot act while incapacitated. End this turn to continue.')
@@ -1026,7 +1040,7 @@ def record_outcome(game, board, outcome):
                      'casualties':copy.deepcopy(combat.get('casualties',[])),
                      'combatants':[{'name':u['name'],'hp':u['hp'],'alive':u.get('alive',True),
                                    'side':u['side']} for u in board['units'] if not u.get('clone')],
-                     'rewards_status':'none_awarded_locally'})
+                     'rewards_status':('recorded_in_adventure_aftermath' if combat.get('adventure_objective',{}).get('mission_id') and outcome=='objective_complete' else 'none_awarded_locally')})
     del receipts[:-30]
     combat['result_receipt']=copy.deepcopy(receipts[-1])
     from narrative_state import record_npc_death
@@ -1055,7 +1069,7 @@ def record_outcome(game, board, outcome):
 def submit_tactical_action(game, payload):
     """Persist retry IDs with the board so reconnect/restart cannot replay a cast."""
     import json
-    if game.state.get('world') not in {'Naruto','One Piece','Bleach'} or not obj(game.state.get('combat')).get('tactical_enabled'):
+    if (game.state.get('world') not in {'Naruto','One Piece','Bleach'} and not obj(game.state.get('combat')).get('adventure_objective')) or not obj(game.state.get('combat')).get('tactical_enabled'):
         raise ValueError('Tactical combat is not enabled for this encounter.')
     request_id=str(payload.get('request_id') or '')[:100]
     if not request_id or 'revision' not in payload:

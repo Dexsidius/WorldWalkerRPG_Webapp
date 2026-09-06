@@ -243,7 +243,8 @@ def cleanup_combat_state(state):
         reason = "the player is no longer able to fight"
     elif active and not enemy_name:
         reason = "no valid opponent remained"
-    elif active and (enemy_hp <= 0 or enemy_status in _COMBAT_END):
+    elif active and (enemy_hp <= 0 or enemy_status in _COMBAT_END) and not (
+            isinstance(combat.get('adventure_objective'),dict) and not combat['adventure_objective'].get('settled')):
         reason = f"{enemy_name or 'the opponent'} was already resolved"
     if reason:
         state["last_combat"] = {

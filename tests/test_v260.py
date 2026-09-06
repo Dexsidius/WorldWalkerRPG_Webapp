@@ -217,28 +217,27 @@ class WorldwalkerV260Tests(unittest.TestCase):
     def test_starting_era_and_canon_character_anchor_their_own_calendar(self):
         """A campaign that begins somewhere other than the world's default
         start_day (a chosen starting era, or a canon character born/starting
-        far from that default) must read Year 1 on its own opening day, not
-        some nonsense negative year computed against a start_day it never
-        actually used."""
+        far from that default) must preserve its fixed world date rather than restarting on January 1.
+        Negative era years are explicitly marked relative to the chosen story epoch."""
         stats = {name: 30 for name in abilities_for("Naruto")}
         era_game = GameSession()
         era_game.new_campaign("Kagome", "Naruto", "Adventurer", "", "", "", "Academy Student",
                                "Ninjutsu Student", stats, starting_era_id="third_shinobi_war")
         self.assertEqual(era_game.state["canon_day"], -4900)
         self.assertEqual(era_game.state["calendar_anchor_day"], -4900)
-        self.assertIn("Year 1", era_game.state["world_time"])
+        self.assertIn(format_calendar_date("Naruto", -4900), era_game.state["world_time"])
 
         canon_game = GameSession()
         canon_game.new_campaign("unused", "Naruto", "Adventurer", "", "", "", "Academy Student",
                                  "Ninjutsu Student", stats, canon_character_id="naruto_birth")
         self.assertEqual(canon_game.state["calendar_anchor_day"], -4380)
-        self.assertIn("Year 1", canon_game.state["world_time"])
+        self.assertIn("October 10, Birth era 0", canon_game.state["world_time"])
 
         default_game = GameSession()
         default_game.new_campaign("Ari", "Naruto", "Adventurer", "", "", "", "Academy Student",
                                    "Ninjutsu Student", stats)
         self.assertEqual(default_game.state["calendar_anchor_day"], -7)
-        self.assertIn("Year 1", default_game.state["world_time"])
+        self.assertIn("September 30, Birth era 12", default_game.state["world_time"])
 
     def test_old_save_without_calendar_anchor_falls_back_to_world_default(self):
         state = copy.deepcopy(BASE_STATE)
@@ -246,7 +245,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         del state["calendar_anchor_day"]
         migrated = migrate_state(state)
         self.assertIsNone(migrated["calendar_anchor_day"])
-        self.assertEqual(format_calendar_date("Naruto", -7, None, migrated["calendar_anchor_day"]), "January 1, Year 1")
+        self.assertEqual(format_calendar_date("Naruto", -7, None, migrated["calendar_anchor_day"]), "September 30, Birth era 12")
 
     def test_calendar_and_starting_era_smoke_markers(self):
         html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
@@ -2042,8 +2041,11 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertEqual(one_piece.state["titles"], ["Aspiring Pirate Swordsman"])
 
     def test_calendars_use_real_month_names_everywhere(self):
-        for world in ("One Piece", "Naruto", "Hunter x Hunter", "Overgeared", "Reincarnated as a Slime"):
-            self.assertEqual(format_calendar_date(world, 0, None, 0), "January 1, Year 1")
+        expected={"One Piece":"February 1, 1522","Naruto":"October 7, Birth era 12",
+                  "Hunter x Hunter":"December 31, 1998","Overgeared":"September 1, Satisfy era 2",
+                  "Reincarnated as a Slime":"April 1, Rimuru era 1"}
+        for world,label in expected.items():
+            self.assertEqual(format_calendar_date(world,0,None,0),label)
 
     def test_one_piece_offers_a_year_before_departure_starting_era(self):
         era = starting_era_by_id("One Piece", "year_before_departure")
