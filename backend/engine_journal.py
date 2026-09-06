@@ -269,6 +269,11 @@ class JournalMixin:
 
     def public_state(self):
         s = copy.deepcopy(self.state)
+        s.pop("_request_receipts", None)
+        from turn_recovery import guard
+        s["_recovery_guard"] = guard(self.state)
+        from build_info import BUILD_ID
+        s["_build_id"] = BUILD_ID
         from organizations import roster_view
         s["_organization_roster"] = roster_view(self.state)
         s.pop("organizations", None)

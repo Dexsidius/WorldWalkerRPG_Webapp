@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_action_deck_preserves_freeform_and_adds_contextual_actions():
     html = (ROOT / "frontend" / "index.html").read_text(encoding="utf-8")
-    js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+    js = "\n".join((ROOT / "frontend" / "js" / name).read_text(encoding="utf-8") for name in ("app.js", "action-deck.js"))
     assert 'id="modal-action-deck"' in html
     assert 'id="action-deck-write"' in html
     assert "Rest and recover" in js
@@ -16,7 +16,7 @@ def test_action_deck_preserves_freeform_and_adds_contextual_actions():
 
 
 def test_relationship_portraits_open_person_specific_actions():
-    js = (ROOT / "frontend" / "js" / "app.js").read_text(encoding="utf-8")
+    js = "\n".join((ROOT / "frontend" / "js" / name).read_text(encoding="utf-8") for name in ("app.js", "action-deck.js"))
     assert "data-interact-person" in js
     assert "personInteractionChoices" in js
     assert "openActionDeck(personName = \"\")" in js

@@ -5,6 +5,7 @@ from gm_refinements import fingerprint, obj
 
 def guard(state):
     keys = ("campaign_id", "world", "name", "turn", "canon_day", "canon_time_minutes", "world_time", "location", "position",
+            "level", "xp", "xp_next", "equipment", "ability_progress", "ability_evolution", "quest_archive",
             "hp", "hp_max", "resource", "resource_max", "stats", "skills", "titles", "inventory", "currency",
             "conditions", "combat", "special", "world_systems", "class_profile", "npc_memories", "contacts",
             "chat_threads", "quests", "relationships", "companions", "affiliations", "standing_orders", "queued_actions",

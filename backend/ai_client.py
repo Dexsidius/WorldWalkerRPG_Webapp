@@ -1,7 +1,8 @@
 """AI client: ported 1:1 from the original Tkinter build. Talks to a local
 OpenAI-compatible server (LM Studio, etc.) or OpenAI cloud, preferring the
 Responses API and falling back to Chat Completions."""
-import copy, json, re, urllib.request, urllib.error
+import copy, json, re, socket, time, urllib.request, urllib.error
+from ai_budget import AIBudgetError, reserve, consume_retry
 from worlds import DEFAULT_MODEL
 
 # $ per 1M tokens, (input, output). Anything not listed just shows token
@@ -101,6 +102,32 @@ def repair_truncated_json(text):
         if result is not None:
             return result
     return None
+
+
+class AIResponseError(RuntimeError):
+    """Transport succeeded but the model output was unusable."""
+
+
+class AIHTTPError(RuntimeError):
+    def __init__(self, status, detail, retry_after=0):
+        self.status = int(status)
+        self.detail = str(detail)[:1000]
+        try:
+            self.retry_after = max(0, float(retry_after or 0))
+        except (TypeError, ValueError):
+            self.retry_after = 0
+        super().__init__(f"AI HTTP {status}: {self.detail[:350]}")
+
+
+def classify_error(error):
+    if isinstance(error, urllib.error.HTTPError):
+        return AIHTTPError(error.code, error.read().decode("utf-8", errors="replace"), error.headers.get("Retry-After", 0) if error.headers else 0)
+    # Older compatible subclasses may still surface typed HTTP status in text.
+    if type(error) is RuntimeError:
+        match = re.search(r"(?:/responses |/chat/completions )?HTTP (\d{3}): (.*)", str(error), re.S)
+        if match:
+            return AIHTTPError(int(match[1]), match[2])
+    return error
 
 
 class AI:
@@ -247,7 +274,7 @@ class AI:
     def _parse_json_payload(self, text):
         text = text.strip()
         if not text:
-            raise RuntimeError("The AI server returned no usable text.")
+            raise AIResponseError("The AI server returned no usable text.")
         try:
             return json.loads(clean_json(text))
         except Exception:
@@ -261,18 +288,31 @@ class AI:
             if repaired is not None:
                 return repaired
             if self.provider == "cloud":
-                raise RuntimeError(
+                raise AIResponseError(
                     "The model responded, but its response was cut off or malformed before it finished writing valid JSON "
                     "(often just an oversized reply for the request's token budget). This is usually a one-off — try again.\n\n"
                     + text[:1000]
                 )
-            raise RuntimeError(
+            raise AIResponseError(
                 "The local model responded, but did not return valid structured JSON.\n\n"
                 "Try an instruction/chat model with good JSON compliance, or lower the model temperature in the local server.\n\n"
                 + text[:1000]
             )
 
+    def _reserve_transport(self, body):
+        if self.provider != "cloud":
+            reserve(0.0)
+            return
+        price = MODEL_PRICING_PER_1M.get(str(self.model))
+        estimate = None
+        if price:
+            input_size = len(json.dumps({k: v for k, v in body.items() if k not in {"max_tokens", "max_output_tokens"}}, ensure_ascii=False))
+            output = int(body.get("max_output_tokens", body.get("max_tokens", 700)))
+            estimate = (max(1, input_size // 4) * price[0] + max(1, output) * price[1]) / 1_000_000
+        reserve(estimate)
+
     def _post_responses(self, body, timeout):
+        self._reserve_transport(body)
         req = urllib.request.Request(
             self.endpoint("/responses"),
             data=json.dumps(body).encode("utf-8"),
@@ -329,9 +369,10 @@ class AI:
                 del body["text"]
                 retry_needed = True
             if retry_needed:
+                consume_retry()
                 data = self._post_responses(body, timeout)
             else:
-                raise RuntimeError(f"/responses HTTP {e.code}: {details[:350]}")
+                raise AIHTTPError(e.code, details, e.headers.get("Retry-After", 0) if e.headers else 0)
         self._record_usage(data)
         parts = []
         for item in data.get("output", []):
@@ -370,6 +411,7 @@ class AI:
         if getattr(self, "_json_mode_ok", True):
             body["response_format"] = {"type": "json_object"}
         def _send(payload_body):
+            self._reserve_transport(payload_body)
             req = urllib.request.Request(
                 self.endpoint("/chat/completions"),
                 data=json.dumps(payload_body).encode("utf-8"),
@@ -385,13 +427,14 @@ class AI:
             if e.code == 400 and "response_format" in body and ("response_format" in details.lower() or "json_object" in details.lower()):
                 self._json_mode_ok = False
                 del body["response_format"]
+                consume_retry()
                 data = _send(body)
             else:
                 raise
         self._record_usage(data)
         choices = data.get("choices", [])
         if not choices:
-            raise RuntimeError("The local chat endpoint returned no choices.")
+            raise AIResponseError("The local chat endpoint returned no choices.")
         content = choices[0].get("message", {}).get("content", "")
         if isinstance(content, list):
             content = "\n".join(x.get("text", "") if isinstance(x, dict) else str(x) for x in content)
@@ -400,87 +443,59 @@ class AI:
 
     def request(self, instructions, payload, timeout=240, max_output_tokens=700):
         self._active_task = str((payload or {}).get("task") or "general") if isinstance(payload, dict) else "general"
+        # Transport receipts never belong in a narrator's context.
+        def clean(value):
+            if isinstance(value, dict):
+                return {k: clean(v) for k, v in value.items() if k not in {"_request_receipts", "_recovery_guard", "expected_guard", "expected_campaign"}}
+            if isinstance(value, list):
+                return [clean(v) for v in value]
+            return value
+        payload = clean(payload)
         if self.provider == "cloud":
             payload = self._bounded_cloud_payload(instructions, payload, max_output_tokens)
         projected = self.estimate_request_cost(instructions, payload, max_output_tokens)
         self.usage["last_projected_cost_usd"] = round(projected, 6) if projected is not None else None
         if self.max_estimated_cost_usd and projected is not None and projected > self.max_estimated_cost_usd:
-            raise RuntimeError(
-                f"This AI request is estimated at ${projected:.3f}, above your ${self.max_estimated_cost_usd:.3f} per-request limit. "
-                "Raise the limit, choose a cheaper model, or shorten the requested output in AI & Portrait Setup."
-            )
+            raise AIBudgetError(f"This AI request is estimated at ${projected:.3f}, above your ${self.max_estimated_cost_usd:.3f} per-request limit.")
         if self.provider == "cloud" and not self.key:
             raise RuntimeError("Cloud mode is selected but no OpenAI API key is configured.")
-
-        errors = []
-
-        # Local OpenAI-compatible servers (LM Studio, Ollama, etc.) essentially
-        # never implement the Responses API correctly — worse, some (observed
-        # with LM Studio) accept POST /v1/responses without a fast 404 and
-        # actually run a full, slow generation before we discover the response
-        # shape doesn't match, silently doubling every request's latency. Cloud
-        # (OpenAI) genuinely supports Responses, so only skip it locally.
-        if self.provider == "cloud":
+        if self.provider not in {"cloud", "local"}:
+            raise RuntimeError("Select a supported AI provider before resolving the turn.")
+        send = self._responses_request if self.provider == "cloud" else self._chat_request
+        for attempt in range(2):
             try:
-                return self._responses_request(instructions, payload, timeout, max_output_tokens)
-            except urllib.error.HTTPError as e:
-                details = e.read().decode("utf-8", errors="replace")
-                raise RuntimeError(f"/responses HTTP {e.code}: {details[:350]}")
-            except urllib.error.URLError as e:
-                raise RuntimeError("Could not contact OpenAI: " + str(e))
-            except RuntimeError as error:
-                detail = str(error)
-                if "HTTP 429" in detail and re.search(r"request too large|tokens per min|\bTPM\b|input or output tokens", detail, re.I):
-                    smaller_payload = self._bounded_cloud_payload(
-                        instructions, payload, min(int(max_output_tokens), 1000), token_cap=60_000)
-                    recovery = (
-                        "Return ONLY a compact valid JSON object. No reasoning, no markdown, no preamble. "
-                        "Use only the supplied current facts and finish within the reduced token budget.\n\n" + instructions
-                    )
-                    try:
-                        return self._responses_request(recovery, smaller_payload, timeout, min(int(max_output_tokens), 1000))
-                    except RuntimeError as retry_error:
-                        if "HTTP 429" in str(retry_error):
-                            raise RuntimeError(
-                                "The AI account's rolling token limit is temporarily full. Your campaign and queued actions are safe. "
-                                "Wait about one minute, then choose Retry Failed Turn; Worldwalker has already reduced the request size."
-                            ) from retry_error
-                        raise
-                # Malformed JSON is usually a one-off sampling slip, not a
-                # systemic problem — cloud calls are fast, so just retry once
-                # before surfacing an error to the player. Reinforce the JSON
-                # requirement on the retry itself: a model that just wrote
-                # free-form prose needs to be told to stop, not just asked
-                # the same way again.
-                recovery = (
-                    "Return ONLY a compact valid JSON object. No reasoning, no markdown, no preamble. "
-                    "Keep prose concise and finish the JSON before the token limit.\n\n" + instructions
-                )
-                return self._responses_request(recovery, payload, timeout, max_output_tokens)
-
-        if self.provider == "local":
-            try:
-                return self._chat_request(instructions, payload, timeout, max_output_tokens)
-            except urllib.error.HTTPError as e:
-                details = e.read().decode("utf-8", errors="replace")
-                errors.append(f"/chat/completions HTTP {e.code}: {details[:350]}")
-            except urllib.error.URLError as e:
-                errors.append("Chat endpoint unavailable: " + str(e))
-            except Exception as e:
-                errors.append("Chat endpoint: " + str(e))
-
-            try:
-                recovery = (
-                    "Return ONLY a compact valid JSON object. No reasoning, no markdown, no preamble. "
-                    "Keep prose concise and finish the JSON before the token limit.\n\n" + instructions
-                )
-                return self._chat_request(recovery, payload, min(timeout, 150), min(int(max_output_tokens), 500))
-            except Exception as e:
-                errors.append("Recovery attempt: " + str(e))
-            raise RuntimeError(
-                "Worldwalker can see your local AI configuration, but could not get a usable response.\n\n"
-                "The model may be overthinking or failing to close its JSON response.\n"
-                f"Server: {self.base_url}\nModel: {self.model}\n\n"
-                + "\n".join(errors[-3:])
-            )
+                return send(instructions, payload, timeout, max_output_tokens)
+            except AIBudgetError:
+                raise
+            except (RuntimeError, urllib.error.URLError, TimeoutError, socket.timeout, json.JSONDecodeError) as original:
+                error = classify_error(original)
+                retryable = isinstance(error, (AIResponseError, json.JSONDecodeError, TimeoutError, socket.timeout))
+                delay = 0.25
+                if isinstance(error, AIHTTPError):
+                    code, detail = error.status, error.detail.lower()
+                    if code in {401, 403}:
+                        raise RuntimeError(f"AI HTTP {code}: authentication or access was rejected. Check the selected provider's credentials and model permissions; this was not retried.") from original
+                    if code == 429 and any(word in detail for word in ("insufficient_quota", "billing", "quota exceeded", "exceeded your current quota")):
+                        raise RuntimeError("AI HTTP 429: the account's quota or billing limit was reached. Resolve that account issue before retrying.") from original
+                    retryable = code in {408, 429, 500, 502, 503, 504}
+                    if code == 429 and re.search(r"request too large|tokens per min|\bTPM\b|input or output tokens", error.detail, re.I):
+                        max_output_tokens = min(int(max_output_tokens), 1000)
+                        payload = self._bounded_cloud_payload(instructions, payload, max_output_tokens, token_cap=60_000)
+                        delay = 0
+                    elif code == 429 or error.retry_after > 2:
+                        # Do not hammer a rolling quota, or hold the UI for a long sleep.
+                        raise RuntimeError(f"AI HTTP {code}: the provider asked for a pause. No immediate repeat was sent. Retry after the provider's rate-limit window has cleared.") from original
+                    else:
+                        delay = min(2.0, max(delay, error.retry_after))
+                elif isinstance(error, urllib.error.URLError):
+                    retryable = True
+                if not retryable or attempt:
+                    raise error from original
+                consume_retry()
+                if delay:
+                    time.sleep(delay)
+                if isinstance(error, (AIResponseError, json.JSONDecodeError)):
+                    instructions = "Return ONLY a compact valid JSON object. Finish the JSON within the output limit; retain all required fields.\n\n" + instructions
+                # At most one transport/output retry per call; the turn-wide
+                # scope also counts feature negotiation and semantic repairs.
         raise RuntimeError("AI request failed.")

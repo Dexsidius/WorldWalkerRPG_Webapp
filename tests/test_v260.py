@@ -930,11 +930,11 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # cache layer at once, regardless of which one was misbehaving.
         sys.path.insert(0, str(ROOT / "backend"))
         from app import app as flask_app
-        from worlds import APP_VERSION
+        from build_info import BUILD_ID
         client = flask_app.test_client()
         html = client.get("/").get_data(as_text=True)
-        self.assertIn(f'href="/css/style.css?v={APP_VERSION}"', html)
-        self.assertIn(f'src="/js/app.js?v={APP_VERSION}"', html)
+        self.assertIn(f'href="/css/style.css?v={BUILD_ID}"', html)
+        self.assertIn(f'src="/js/app.js?v={BUILD_ID}"', html)
 
     def test_same_place_recognizes_common_hidden_village_aliases(self):
         # Canon-timeline data always uses the Japanese village name

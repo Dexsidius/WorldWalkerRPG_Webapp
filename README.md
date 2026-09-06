@@ -6,7 +6,13 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app/save version: **3.57.2** (schema 21).
+Current app/save version: **3.62.0** (schema 21).
+Current reliability preview build: **3.62.0-reliability-1**.
+
+This build adds durable request recovery, expandable recorded-outcome entries,
+contextual action suggestions, bounded AI repairs, safer map cameras and
+conservative NPC identity linking. See `RELIABILITY_UPDATE.md` for scope, tests
+and limitations. The build identifier is visible in patch notes and Diagnostics.
 
 Version 3.57.2 directly integrates the approved Living Map prototype renderer, including its
 World/Regional/Local semantic zoom and dominant center-stage layout. Version 3.57.1 integrated an interim Living Map presentation while retaining

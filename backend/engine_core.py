@@ -54,6 +54,8 @@ DEFAULT_SETTINGS = {
     "creative_model": "",
     "creative_provider": "inherit",
     "max_ai_cost_per_request_usd": 0.0,
+    "max_ai_cost_per_turn_usd": 0.0,
+    "max_ai_retries_per_turn": 2,
     "session_budget_warning_usd": 5.0,
     "narration": "Concise",
     "autosave": True,
@@ -291,17 +293,27 @@ class CoreMixin:
             pass
         return row
 
-    def complete_turn_transaction(self, transaction):
+    def complete_turn_transaction(self, transaction, save=True, include_receipt=True):
+        from turn_feedback import build_turn_receipt
+        receipt = build_turn_receipt(transaction.get("state", {}), self.state, transaction.get("route", "turn"),
+                                     transaction.get("payload", {}).get("request_id", ""),
+                                     len(self.story_log) > transaction.get("story_count", len(self.story_log))) if include_receipt else None
+        entry = None
+        if receipt:
+            self.append(receipt["label"], "receipt", canon_day=self.state.get("canon_day"), detail=receipt)
+            entry = copy.deepcopy(self.story_log[-1])
         self._turn_work = None
         self.state["last_failed_turn"] = {}
         timeline = self.state.setdefault("recovery_timeline", [])
         timeline.append({"route": transaction.get("route", "turn"), "turn": int(self.state.get("turn", 0) or 0),
                          "time": datetime.now().isoformat(timespec="seconds"), "status": "completed"})
         self.state["recovery_timeline"] = timeline[-24:]
-        try:
-            self.autosave()
-        except Exception:
-            pass
+        if save:
+            try:
+                self.autosave()
+            except Exception:
+                pass
+        return entry
 
     def load_settings(self):
         try:
@@ -352,6 +364,19 @@ class CoreMixin:
         return bool(self.settings.get("api_key", "") and (self.settings.get("secondary_model", "") or self.settings.get("model", "")))
 
     def update_settings(self, patch):
+        import math
+        patch = dict(patch)
+        for field in ("max_ai_cost_per_request_usd", "max_ai_cost_per_turn_usd"):
+            if field in patch:
+                value = float(patch[field])
+                if not math.isfinite(value) or value < 0:
+                    raise ValueError("AI cost limits must be finite, nonnegative amounts.")
+                patch[field] = value
+        if "max_ai_retries_per_turn" in patch:
+            value = float(patch["max_ai_retries_per_turn"])
+            if not math.isfinite(value) or value != int(value) or not 0 <= value <= 5:
+                raise ValueError("Automatic repair limit must be an integer from 0 to 5.")
+            patch["max_ai_retries_per_turn"] = int(value)
         self.settings.update(patch)
         self.save_settings()
         self.ai = self.make_client(self.settings["model"])
@@ -381,7 +406,7 @@ class CoreMixin:
     # temptation at all rather than trust it to resist one it can see.
     AI_HIDDEN_FIELDS = ("living_world", "generated_content_history", "continuity_ledger", "validation_log", "diagnostics", "canon_events_fired", "pending_minor_events", "calendar_anchor_day", "last_protagonist_tick_day", "active_canon_event", "last_major_beat_day", "progression_ledger", "causality_ledger", "knowledge_audit", "health_repairs", "simulation_events", "local_background_turn", "simulation_validation", "correction_log", "canon_event_states", "advisor_thread", "canon_integrity_repairs", "verified_memory_archive", "memory_consolidation", "consequence_ledger", "scene_history", "outcome_scale_ledger", "lore_confidence_log", "prompt_budget_log", "fact_history")
 
-    AI_HIDDEN_FIELDS = ("relationship_life", "world_plans", "world_benefits", "campaign_arcs", "campaign_arc_archive", "campaign_arc_director", "life_simulation") + AI_HIDDEN_FIELDS
+    AI_HIDDEN_FIELDS = ("_request_receipts", "_recovery_guard", "relationship_life", "world_plans", "world_benefits", "campaign_arcs", "campaign_arc_archive", "campaign_arc_director", "life_simulation") + AI_HIDDEN_FIELDS
 
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
@@ -505,13 +530,13 @@ class CoreMixin:
         """Recursively omit token-heavy empty/default scaffolding."""
         if isinstance(value, dict):
             return {str(key): cls._prune_ai_context(item) for key, item in value.items()
-                    if item not in (None, "", [], {})}
+                    if key not in {"_request_receipts", "_recovery_guard"} and item not in (None, "", [], {})}
         if isinstance(value, list):
             return [cls._prune_ai_context(item) for item in value if item not in (None, "", [], {})]
         return value
 
     def append(self, text, tag=None, canon_day=None, detail=None):
-        entry = {"text": text, "tag": tag, "time": datetime.now().isoformat(timespec="seconds"),
+        entry = {"id": secrets.token_hex(12), "text": text, "tag": tag, "time": datetime.now().isoformat(timespec="seconds"),
                  "world_time": str(self.state.get("world_time") or "")}
         if canon_day is not None:
             entry["canon_day"] = canon_day
@@ -857,6 +882,8 @@ class CoreMixin:
                 reminder += "\n\nREMINDER: your previous attempt has a specific problem that must be fixed in this response: " + " ".join(violations)
             if quality_issues:
                 reminder += "\n\nQUALITY REPAIR: keep every valid fact and outcome from the first attempt, but correct these locally verified omissions or contradictions: " + " ".join(quality_issues)
+            from ai_budget import consume_retry
+            consume_retry()
             repair_payload = {**payload, "repair_draft": copy.deepcopy(data), "repair_issues": quality_issues + violations}
             data = normalize_turn_response(client.request(instructions + reminder, repair_payload, max_output_tokens=max_output_tokens), payload.get("task"))
             record["draft"] = copy.deepcopy(data)

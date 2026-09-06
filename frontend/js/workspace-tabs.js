@@ -120,8 +120,8 @@
         .workspace-tab-indicator, .workspace-tablist > .workspace-tab { transition: none !important; }
         [data-workspace-ready][data-workspace-animate] > .workspace-panel.is-workspace-active { animation: none !important; }
       }
-      body.no-animations .workspace-tab-indicator { transition: none !important; }
-      body.no-animations [data-workspace-ready] > .workspace-panel { animation: none !important; }
+      body.mobile-low-data .workspace-tab-indicator, body.motion-off .workspace-tab-indicator { transition: none !important; }
+      body.mobile-low-data [data-workspace-ready] > .workspace-panel, body.motion-off [data-workspace-ready] > .workspace-panel { animation: none !important; }
     `;
     document.head.append(style);
 

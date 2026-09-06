@@ -10,6 +10,7 @@ from werkzeug.local import LocalProxy
 
 from worlds import APP_VERSION, WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, WORLD_PACKS_LOADED, WORLD_PACK_ERRORS, expansion_for, abilities_for, stat_style_for, start_options_for, gear_style_for, timeline_for, playable_characters_for, uses_xp_for, starting_eras_for, power_profile_for
 from release_notes import notes_for
+from build_info import BUILD_ID, PATCH_NOTES
 from chapter_recaps import chapter_view
 from organizations import roster_view
 from gm_refinements import fingerprint
@@ -171,6 +172,7 @@ def apply_client_cache_policy(response):
         response.headers.pop("Pragma", None)
         response.headers.pop("Expires", None)
     response.headers["X-Worldwalker-Version"] = APP_VERSION
+    response.headers["X-Worldwalker-Build"] = BUILD_ID
     return response
 
 _bg_lock = threading.Lock()
@@ -317,38 +319,71 @@ def err(e, code=500):
 
 
 def atomic_game_call(route, payload, callback):
-    """Resolve a mutation as all-or-nothing and preserve a retry payload."""
-    from gm_refinements import fingerprint
-    request_id = str(payload.get("request_id") or "")[:100] if isinstance(payload, dict) else ""
-    campaign_key = game.state.get("campaign_id") or (game.state.get("world"), game.state.get("name"))
-    completed = getattr(game, "_completed_requests", {})
-    if request_id and request_id in completed:
-        cached = completed[request_id]
-        if cached.get("campaign") != campaign_key:
-            raise ValueError("This saved request belongs to another campaign. Submit a new action here.")
-        if cached["route"] != route or cached["input"] != fingerprint(payload):
-            raise ValueError("This request ID was already used for a different action.")
-        result = copy.deepcopy(cached["result"])
-        result["state"] = game.public_state()
-        result["replayed_request"] = True
-        return result
-    transaction = game.begin_turn_transaction(route, payload)
+    """Resolve once, retain a receipt, and preserve a resumable failure snapshot."""
+    from request_receipts import completed, remember, campaign
+    from turn_recovery import guard
+    payload = payload if isinstance(payload, dict) else {}
+    request_id = str(payload.get("request_id") or "")
+    if len(request_id) > 100:
+        raise ValueError("Request ID is too long.")
+    if not game.lock.acquire(blocking=False):
+        raise ValueError("Another campaign update is still resolving.")
+    transaction = None
     try:
-        result = callback()
-        game.complete_turn_transaction(transaction)
-        # Callbacks usually build their response before the transaction is
-        # finalized. Refresh the returned state so a successful retry cannot
-        # leave the client showing the now-cleared failure marker.
-        if isinstance(result, dict) and "state" in result:
-            result["state"] = game.public_state()
-        if request_id and isinstance(result, dict):
-            compact_result = {k: copy.deepcopy(v) for k, v in result.items() if k != "state"}
-            completed[request_id] = {"route": route, "input": fingerprint(payload), "result": compact_result, "campaign": campaign_key}
-            game._completed_requests = dict(list(completed.items())[-16:])
+        cached = completed(game, request_id, route, payload) if request_id else None
+        if cached is not None:
+            return cached
+        if payload.get("expected_campaign") and payload["expected_campaign"] != campaign(game.state):
+            raise ValueError("This request belongs to another campaign. Reload before submitting it.")
+        if payload.get("expected_guard") and payload["expected_guard"] != guard(game.state):
+            failed = game.state.get("last_failed_turn") or {}
+            recoverable = (failed.get("route") == route and failed.get("payload") == payload and
+                           (failed.get("work") or {}).get("guard") == guard(game.state))
+            if not recoverable:
+                raise ValueError("The campaign changed since this action was prepared. Reload and review it before submitting again.")
+        game._inflight_request = {"id": request_id, "route": route}
+        transaction = game.begin_turn_transaction(route, payload)
+        from ai_budget import turn_budget
+        with turn_budget(game.settings.get("max_ai_cost_per_turn_usd", 0),
+                         game.settings.get("max_ai_retries_per_turn", 2)):
+            result = callback()
+        is_confirmation = isinstance(result, dict) and str(result.get("status", "")).endswith("_required")
+        entry = game.complete_turn_transaction(transaction, save=False, include_receipt=not is_confirmation)
+        if isinstance(result, dict):
+            if entry is not None:
+                result["story"] = list(result.get("story") or []) + [copy.deepcopy(entry)]
+            if "state" in result:
+                result["state"] = game.public_state()
+            remember(game, request_id, route, payload, result)
+        game.autosave()
+        if isinstance(result, dict):
+            if "state" in result:
+                result["state"] = game.public_state()
+            result["_recovery_guard"] = guard(game.state)
         return result
     except Exception as exc:
-        game.rollback_turn_transaction(transaction, exc)
+        if transaction is not None:
+            game.rollback_turn_transaction(transaction, exc)
         raise
+    finally:
+        game._inflight_request = None
+        game.lock.release()
+
+
+@app.route("/api/action/status")
+def api_action_status():
+    """Read a request's result without starting another simulation or AI call."""
+    from request_receipts import status
+    request_id = request.args.get("request_id", "")
+    route = request.args.get("route", "")
+    if not request_id or len(request_id) > 100 or route not in {"time_resolve", "combat_action", "combat_narrate", "event_respond"}:
+        return jsonify({"error": "A valid request ID and operation are required."}), 400
+    if getattr(g, "worldwalker_room", None):
+        return jsonify({"error": "Shared rounds use the multiplayer coordinator."}), 409
+    try:
+        return jsonify(status(game, request_id, route))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 409
 
 
 # ---------- shared two-player campaign coordinator ----------
@@ -736,7 +771,7 @@ def api_multiplayer_resolve():
 # ---------- world / campaign data ----------
 @app.route("/api/version")
 def api_version():
-    return jsonify({"version": APP_VERSION, "patch_notes": notes_for(APP_VERSION)})
+    return jsonify({"version": APP_VERSION, "build_id": BUILD_ID, "patch_notes": PATCH_NOTES})
 
 
 @app.route("/api/worlds")
@@ -882,7 +917,7 @@ def api_event_respond():
     if not game.campaign_active:
         return jsonify({"error": "Start or load a campaign first."}), 400
     try:
-        return jsonify(atomic_game_call("event_respond", {"action": action}, lambda: game.respond_to_event(action)))
+        return jsonify(atomic_game_call("event_respond", {**d, "action": action}, lambda: game.respond_to_event(action)))
     except Exception as e:
         return err(e, 400)
 
@@ -1025,7 +1060,7 @@ def api_combat_action():
     if action not in ("attack", "defend", "flee", "overwhelm"):
         action = "attack"
     try:
-        result = atomic_game_call("combat_action", {"action": action, "ability": d.get("ability")},
+        result = atomic_game_call("combat_action", {**d, "action": action, "ability": d.get("ability")},
                                   lambda: game.resolve_combat_round(action, ability_name=d.get("ability")))
         return jsonify(result)
     except Exception as e:
@@ -1039,7 +1074,7 @@ def api_combat_narrate():
     if not acquire_busy():
         return busy_error()
     try:
-        result = atomic_game_call("combat_narrate", {}, lambda: game.narrate_combat())
+        result = atomic_game_call("combat_narrate", request.get_json(silent=True) or {}, lambda: game.narrate_combat())
         return jsonify(result)
     except Exception as e:
         return err(e)
@@ -1118,6 +1153,10 @@ def api_time_assess():
     try:
         result = game.assess_time_skip(d.get("amount", 1), d.get("unit", "moment"), d.get("orders", ""),
                                        d.get("intensity", "normal"), use_model=False)
+        # Assessment records standing orders. Return its post-assessment guard
+        # so the subsequent resolving request is not based on stale UI state.
+        from turn_recovery import guard
+        result["_recovery_guard"] = guard(game.state)
         return jsonify(result)
     except Exception as e:
         return err(e)
@@ -1757,7 +1796,7 @@ def api_settings_post():
     patch = {k: d[k] for k in [
         "provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model",
         "advisor_model", "advisor_provider", "creative_model", "creative_provider",
-        "max_ai_cost_per_request_usd", "session_budget_warning_usd",
+        "max_ai_cost_per_request_usd", "max_ai_cost_per_turn_usd", "max_ai_retries_per_turn", "session_budget_warning_usd",
         "narration", "autosave", "sound_enabled", "music_enabled", "music_volume", "animations_enabled",
         "portrait_generation_enabled", "portrait_auto_generate", "image_model", "image_provider", "local_image_base_url", "local_image_model", "portrait_quality", "developer_mode",
         "onboarding_seen", "simulation_mode", "canon_foreknowledge", "local_reentry_recap", "local_combat_recap", "local_message_gate"
@@ -1765,7 +1804,10 @@ def api_settings_post():
     settings_game = getattr(g, "worldwalker_personal_game", None) or game
     if any(key in patch for key in ("provider", "local_base_url", "local_token", "api_key", "model", "secondary_model", "major_event_model", "advisor_model", "advisor_provider", "creative_model", "creative_provider")):
         patch.update(ai_connection_status="untested", ai_validated_model="", ai_validated_provider="")
-    settings_game.update_settings(patch)
+    try:
+        settings_game.update_settings(patch)
+    except (ValueError, TypeError) as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify({"ok": True})
 
 

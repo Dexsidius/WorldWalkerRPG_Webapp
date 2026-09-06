@@ -74,6 +74,7 @@ def _compile_skill_mechanics(state):
 
 
 APP_OWNED = {
+    "_request_receipts", "_recovery_guard",
     'relationship_life',
     'atlas_start_day',
     "turn", "campaign_id", "campaign_created_version", "campaign_last_saved_version",

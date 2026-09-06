@@ -1,36 +1,28 @@
 # Worldwalker contributor instructions
 
-## Required update destinations
+## Publishing
 
-Richard requested on September 6, 2026 that future authorized game updates be
-published to both of these destinations:
+Approved implementation updates go to `richardmadden1030-dot/worldwalker-rpg`,
+branch `master`. Richard superseded the earlier dual-push instruction on
+September 6, 2026: he will handle `Dexsidius/WorldWalkerRPG_Webapp` -> `web_prod`
+himself. Do not retry, configure, or push to that repository without a new request.
+Read the latest source tip before changes, preserve unrelated work, use non-force
+writes, run relevant checks, and verify the actual resulting commit.
+Never include credentials, API keys, player saves, or personal data in commits.
 
-- `richardmadden1030-dot/worldwalker-rpg` — branch `master`.
-- `Dexsidius/WorldWalkerRPG_Webapp` — branch `web_prod`.
+## Reliability and presentation
 
-For each requested implementation update:
-
-1. Read the current tips of both branches and compare their relevant files.
-2. Preserve destination-specific deployment configuration and unrelated work.
-   When histories diverge, port the intended changes rather than replacing the
-   destination tree or force-pushing it.
-3. Run relevant available checks and publish the update to both branches using
-   non-force writes. A successful account permission read is not proof that the
-   active integration can write to the second repository.
-4. Verify each resulting branch tip and report the actual commit or failure
-   separately. Never describe a failed secondary push as synchronized.
-5. If GitHub denies access, stop writes to that destination and request the
-   repository owner's approval for the connected integration. Do not bypass
-   access controls or search for credentials.
-
-The `Dexsidius` repository is public. Publish only approved project changes;
-never include local credentials, API keys, player saves or personal data.
-These instructions are a publishing workflow, not an unattended sync service.
+Preserve saves and freeform actions. Report gameplay changes from committed
+state, not from prose guesses. A lost HTTP response does not prove a failed
+turn: check its request receipt before replaying it. Keep IDs stable on retry.
+Do not expose concealed skills, classes, NPC secrets, or request bookkeeping in
+player-visible receipts or prompts. Suggestions are editable proposals, never
+automatic commands. Keep the Chronicle and Map mounted when changing tabs.
 
 ## Windows distribution
 
 When an executable is requested, build and verify a Windows package containing
 that update, or provide a verified existing download with its limitations.
-Do not present GitHub's source-code ZIP or an older release as the updated EXE.
-Keep the full portable folder together, including `_internal`; preserve player
-saves and settings and do not replace the stable release without authorization.
+Do not present a source ZIP or older executable as the new build. Keep the
+portable folder, including `_internal`, together. Publish previews separately
+from stable releases unless promotion is explicitly requested.

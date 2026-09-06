@@ -87,22 +87,31 @@ window.WorldAtlas = (() => {
     plane.append(labelLayer);
     return {owners:[...owners.keys()],changed:changed.length};
   }
+  let bindingController;
+  function usableCamera(a) {
+    return a && [a.w, a.h, a.wrap.clientWidth, a.wrap.clientHeight].every(n => Number.isFinite(n) && n > 0);
+  }
   function bind(wrap,plane,key,onZoom=()=>{}) {
     observer?.disconnect();
-    const saved=views.get(key)||{z:1,px:.5,py:.5};
+    bindingController?.abort();
+    bindingController = new AbortController();
+    const listen = (type, fn, options = {}) => wrap.addEventListener(type, fn, { ...options, signal: bindingController.signal });
+    const candidate=views.get(key);
+    const saved=candidate && [candidate.z,candidate.px,candidate.py].every(Number.isFinite)
+      ? {...candidate,z:Math.max(1,Math.min(8,candidate.z))} : {z:1,px:.5,py:.5};
     active={wrap,plane,key,z:saved.z,px:saved.px,py:saved.py,w:0,h:0,onZoom};
     const pointers=new Map(); let last=null, moved=false;
     function measure() {
-      if (!wrap.clientWidth || !wrap.clientHeight) return;
+      if (active?.wrap !== wrap || !wrap.clientWidth || !wrap.clientHeight) return;
       const s=Math.min(wrap.clientWidth/1600,wrap.clientHeight/1000);
       active.w=1600*s;active.h=1000*s;
       plane.style.width=active.w+'px';plane.style.height=active.h+'px';
       apply();
     }
     function pose(){ const p=[...pointers.values()];return p.length>1?{x:(p[0].x+p[1].x)/2,y:(p[0].y+p[1].y)/2,d:Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)}:p[0]; }
-    wrap.addEventListener('pointerdown',e=>{if(e.target.closest('.map-zoom-controls'))return; pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,d:0});last=pose();moved=false;});
-    wrap.addEventListener('pointermove',e=>{
-      if(!pointers.has(e.pointerId))return;
+    listen('pointerdown',e=>{if(e.target.closest('.map-zoom-controls'))return; pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,d:0});last=pose();moved=false;});
+    listen('pointermove',e=>{
+      if(!pointers.has(e.pointerId) || !usableCamera(active))return;
       pointers.set(e.pointerId,{x:e.clientX,y:e.clientY,d:0});const p=pose();
       if(last){const dx=p.x-last.x,dy=p.y-last.y;
         if(Math.abs(dx)+Math.abs(dy)>2||p.d) {moved=true;wrap.setPointerCapture(e.pointerId);}
@@ -111,13 +120,15 @@ window.WorldAtlas = (() => {
       last=p;
     });
     const end=e=>{pointers.delete(e.pointerId);last=pose();};
-    wrap.addEventListener('pointerup',end);wrap.addEventListener('pointercancel',end);
-    wrap.addEventListener('click',e=>{if(moved){e.preventDefault();e.stopImmediatePropagation();moved=false;}},true);
-    wrap.addEventListener('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect();zoom(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top);},{passive:false});
+    listen('pointerup',end);listen('pointercancel',end);
+    listen('click',e=>{if(moved){e.preventDefault();e.stopImmediatePropagation();moved=false;}},{capture:true});
+    listen('wheel',e=>{e.preventDefault();const r=wrap.getBoundingClientRect();zoom(e.deltaY<0?1.15:1/1.15,e.clientX-r.left,e.clientY-r.top);},{passive:false});
     observer=new ResizeObserver(measure);observer.observe(wrap);measure();
   }
   function apply(){
-    if(!active)return;const a=active,w=a.wrap.clientWidth,h=a.wrap.clientHeight;
+    if(!usableCamera(active))return;
+    const a=active,w=a.wrap.clientWidth,h=a.wrap.clientHeight;
+    if (![a.z,a.px,a.py].every(Number.isFinite)) Object.assign(a,{z:1,px:.5,py:.5});
     const bx=Math.min(.5,w/(2*a.w*a.z)),by=Math.min(.5,h/(2*a.h*a.z));
     a.px=Math.max(bx,Math.min(1-bx,a.px));a.py=Math.max(by,Math.min(1-by,a.py));
     a.plane.style.transform=`translate(${w/2-a.px*a.w*a.z}px,${h/2-a.py*a.h*a.z}px) scale(${a.z})`;
@@ -127,6 +138,7 @@ window.WorldAtlas = (() => {
   function labels(){
     const a=active;if(!a)return;
     const placed=[];
+    const viewport=a.wrap.getBoundingClientRect();
     const landmarks=[...a.plane.querySelectorAll('.map-node .map-label')].sort((x,y)=>Number(y.parentElement.classList.contains('here'))-Number(x.parentElement.classList.contains('here')));
     const countries=[...a.plane.querySelectorAll('.atlas-polity-label')].sort((x,y)=>Number(y.dataset.weight)-Number(x.dataset.weight));
     const labels=a.z<1.8 ? [...landmarks.filter(x=>x.parentElement.classList.contains('here')), ...countries, ...landmarks.filter(x=>!x.parentElement.classList.contains('here'))] : [...landmarks,...countries];
@@ -134,13 +146,13 @@ window.WorldAtlas = (() => {
       el.classList.remove('atlas-collided');
       const hidden=getComputedStyle(el.parentElement).opacity==='0';
       if(hidden)continue;
-      const r=el.getBoundingClientRect(),v=a.wrap.getBoundingClientRect();
+      const r=el.getBoundingClientRect(),v=viewport;
       const overlap=placed.some(p=>r.left<p.right+5&&r.right>p.left-5&&r.top<p.bottom+4&&r.bottom>p.top-4);
       if(overlap||r.left<v.left||r.right>v.right||r.top<v.top||r.bottom>v.bottom)el.classList.add('atlas-collided');else placed.push(r);
     }
   }
-  function zoom(factor,x,y){if(!active)return;const a=active,old=a.z,next=Math.max(1,Math.min(8,old*factor));x??=a.wrap.clientWidth/2;y??=a.wrap.clientHeight/2;a.px+=(x-a.wrap.clientWidth/2)/a.w*(1/old-1/next);a.py+=(y-a.wrap.clientHeight/2)/a.h*(1/old-1/next);a.z=next;apply();}
-  function focus(x,y){if(!active)return;active.z=Math.max(2.4,active.z);active.px=x/100;active.py=y/100;apply();}
+  function zoom(factor,x,y){if(!usableCamera(active)||!Number.isFinite(factor)||factor<=0)return;const a=active,old=a.z,next=Math.max(1,Math.min(8,old*factor));x??=a.wrap.clientWidth/2;y??=a.wrap.clientHeight/2;a.px+=(x-a.wrap.clientWidth/2)/a.w*(1/old-1/next);a.py+=(y-a.wrap.clientHeight/2)/a.h*(1/old-1/next);a.z=next;apply();}
+  function focus(x,y){if(!active||![x,y].every(Number.isFinite))return;active.z=Math.max(2.4,active.z);active.px=x/100;active.py=y/100;apply();}
   function reset(){if(!active)return;Object.assign(active,{z:1,px:.5,py:.5});apply();}
   return {render,bind,color,zoom,focus,reset,labels,refresh:apply};
 })();
@@ -151,7 +163,7 @@ window.WorldAtlas = (() => {
   if (!document.querySelector('.col-center #living-map-main') || document.getElementById('workspace-tabs-script')) return;
   const script = document.createElement('script');
   script.id = 'workspace-tabs-script';
-  script.src = '/js/workspace-tabs.js?v=3.62.0-workspace-1';
+  script.src = '/js/workspace-tabs.js?v=3.62.0-reliability-1';
   script.async = true;
   script.addEventListener('error', () => {
     script.remove();
