@@ -8,6 +8,8 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/windows-workspace-release.yml'
+      - 'tools/check_reliability_browser.py'
+      - 'tests/test_ability_similarity_order.py'
 
 permissions:
   contents: read
@@ -52,7 +54,7 @@ jobs:
               subprocess.run(['node', '--check', path], check=True)
 
       - name: Run recovery, outcome and full-interface regressions
-        run: python -m pytest tests/test_reliability_update.py tools/check_workspace_tabs.py tools/check_reliability_browser.py -q
+        run: python -m pytest tests/test_reliability_update.py tests/test_ability_similarity_order.py tools/check_workspace_tabs.py tools/check_reliability_browser.py -q
 
       - name: Build Windows executable and bundled files
         run: python -m PyInstaller --noconfirm --clean WorldwalkerRPG.spec
