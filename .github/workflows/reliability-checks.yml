@@ -12,8 +12,9 @@ jobs:
     timeout-minutes: 15
     env:
       WORLDWALKER_DATA_DIR: ${{ github.workspace }}/.build-test-data
-      PYTHONPATH: backend:tests
+      PYTHONPATH: backend:tests:tools
       PYTHONUTF8: '1'
+      WORLDWALKER_ADVENTURE_SCREENSHOT: ${{ github.workspace }}/qa/living-adventures.png
       WORLDWALKER_QA_SCREENSHOT: ${{ github.workspace }}/qa/workspace.png
     steps:
       - uses: actions/checkout@v7
@@ -28,11 +29,11 @@ jobs:
         run: python -m playwright install --with-deps chromium
       - name: Check JavaScript
         run: |
-          for file in frontend/js/*.js frontend/sw.js; do node --check "$file"; done
+          for file in frontend/js/*.js frontend/sw.js frontend/tactical/campaign.js; do node --check "$file"; done
       - name: Run campaign and real-shell tests without paid models
         run: |
           mkdir -p qa
-          python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py -q --junitxml=qa/results.xml
+          python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py tools/check_adventures_browser.py -q --junitxml=qa/results.xml
       - uses: actions/upload-artifact@v7
         if: always()
         with:
