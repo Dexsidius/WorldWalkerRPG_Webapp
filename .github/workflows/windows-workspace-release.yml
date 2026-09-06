@@ -1,4 +1,4 @@
-name: Build Windows - Chronicle and Map tabs
+name: Build Windows - Reliability preview
 
 # Build once when this workflow is added/changed, or on explicit manual request.
 # Ordinary gameplay/code commits do not automatically publish new releases.
@@ -26,6 +26,7 @@ jobs:
     env:
       WORLDWALKER_DATA_DIR: ${{ github.workspace }}/.build-test-data
       PYTHONUTF8: '1'
+      PYTHONPATH: '${{ github.workspace }}/backend;${{ github.workspace }}/tests'
     steps:
       - name: Check out requested revision
         uses: actions/checkout@v7
@@ -38,7 +39,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install runtime and build dependencies
-        run: python -m pip install -r requirements.txt "pyinstaller>=6.16,<7" pytest playwright
+        run: python -m pip install -r requirements.txt "pyinstaller>=6.16,<7" pytest playwright pillow
 
       - name: Install test browser
         run: python -m playwright install chromium
@@ -47,11 +48,11 @@ jobs:
         shell: python
         run: |
           import subprocess
-          for path in ['frontend/js/workspace-tabs.js', 'frontend/js/world-atlas.js', 'frontend/js/app.js', 'frontend/sw.js']:
+          for path in ['frontend/js/workspace-tabs.js', 'frontend/js/world-atlas.js', 'frontend/js/app.js', 'frontend/js/api-client.js', 'frontend/js/action-deck.js', 'frontend/js/turn-feedback.js', 'frontend/sw.js']:
               subprocess.run(['node', '--check', path], check=True)
 
-      - name: Run isolated workspace browser regressions
-        run: python -m pytest tools/check_workspace_tabs.py -q
+      - name: Run recovery, outcome and full-interface regressions
+        run: python -m pytest tests/test_reliability_update.py tools/check_workspace_tabs.py tools/check_reliability_browser.py -q
 
       - name: Build Windows executable and bundled files
         run: python -m PyInstaller --noconfirm --clean WorldwalkerRPG.spec
@@ -74,7 +75,7 @@ jobs:
           from pathlib import Path
           root = Path('dist/WorldwalkerRPG')
           frontend = root / '_internal' / 'frontend'
-          for relative in ['js/workspace-tabs.js', 'js/world-atlas.js', 'sw.js']:
+          for relative in ['js/workspace-tabs.js', 'js/world-atlas.js', 'js/app.js', 'js/api-client.js', 'js/action-deck.js', 'js/turn-feedback.js', 'css/turn-feedback.css', 'css/compact-workspace.css', 'sw.js']:
               source = Path('frontend') / relative
               packaged = frontend / relative
               assert packaged.is_file(), f'Missing bundled file: {relative}'
@@ -83,27 +84,27 @@ jobs:
           atlas = (frontend / 'js/world-atlas.js').read_text(encoding='utf-8')
           assert 'workspace-tabs.js' in index or 'workspace-tabs.js' in atlas, 'Tab controller is not loaded'
           shutil.copytree('music', root / 'music', dirs_exist_ok=True)
-          for name in ['WorldwalkerRPG.exe.config', 'PHONE_PLAY_README.txt', 'WORKSPACE_TABS.md']:
+          for name in ['WorldwalkerRPG.exe.config', 'PHONE_PLAY_README.txt', 'WORKSPACE_TABS.md', 'RELIABILITY_UPDATE.md']:
               if Path(name).is_file():
                   shutil.copy2(name, root / name)
           (root / 'Start Phone Mode.bat').write_text('@echo off\r\ncd /d "%~dp0"\r\nstart "" "%~dp0WorldwalkerRPG.exe" --lan\r\n', encoding='utf-8')
           dependencies = subprocess.check_output(['python', '-m', 'pip', 'freeze'], text=True)
           (root / 'BUILD_INFO.txt').write_text(
-              'Worldwalker RPG - Chronicle / Living Map workspace update\n'
+              'Worldwalker RPG - 3.62.0-reliability-1\n'
               + 'Source commit: ' + os.environ['GITHUB_SHA'] + '\n'
               + 'Build run: ' + os.environ['GITHUB_RUN_ID'] + '\n'
               + 'Extract the entire ZIP, then open WorldwalkerRPG.exe. Keep _internal beside the EXE.\n'
               + 'No Python or Codex access is needed to run the packaged game.\n'
               + 'This executable is unsigned. Full interactive gameplay has not been tested on your PC.\n'
-              + 'Validation: JS syntax, isolated workspace browser regressions, packaged fresh-launch self-test.\n\n'
+              + 'Validation: JS syntax, recovery/outcome and full-interface browser regressions, packaged fresh-launch self-test.\n\n'
               + dependencies, encoding='utf-8')
-          shutil.make_archive('WorldwalkerRPG-Workspace-Tabs-Windows', 'zip', 'dist', 'WorldwalkerRPG')
+          shutil.make_archive('WorldwalkerRPG-Reliability-Preview-Windows', 'zip', 'dist', 'WorldwalkerRPG')
 
       - name: Upload downloadable Windows build
         uses: actions/upload-artifact@v7
         with:
-          name: WorldwalkerRPG-Workspace-Tabs-Windows
-          path: WorldwalkerRPG-Workspace-Tabs-Windows.zip
+          name: WorldwalkerRPG-Reliability-Preview-Windows
+          path: WorldwalkerRPG-Reliability-Preview-Windows.zip
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -115,22 +116,22 @@ jobs:
         run: |
           import os, subprocess
           from pathlib import Path
-          tag = 'workspace-tabs-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
+          tag = 'reliability-' + os.environ['GITHUB_RUN_ID'] + '-' + os.environ['GITHUB_RUN_ATTEMPT']
           notes = Path('windows-release-notes.md')
           notes.write_text(
-              'Windows build including the animated Chronicle / Living Map tabs.\n\n'
-              'Download WorldwalkerRPG-Workspace-Tabs-Windows.zip, extract the entire folder, '
+              'Windows reliability preview: safe request recovery, recorded turn outcomes, contextual suggestions, bounded AI repairs and map safeguards. Build 3.62.0-reliability-1.\n\n'
+              'Download WorldwalkerRPG-Reliability-Preview-Windows.zip, extract the entire folder, '
               'then open WorldwalkerRPG.exe. Keep the _internal folder beside the executable.\n\n'
               'Includes all current source changes at commit ' + os.environ['GITHUB_SHA'] + '.\n\n'
-              'Validated by JavaScript syntax checks, isolated workspace browser regressions, '
+              'Validated by JavaScript syntax checks, recovery/outcome and full-interface browser regressions, '
               'and the packaged fresh-launch self-test. This is an unsigned preview build; '
               'full interactive gameplay on a user PC has not been verified.\n\n'
               'The existing stable release and player saves are not replaced by publishing this build.\n',
               encoding='utf-8')
           subprocess.run([
-              'gh', 'release', 'create', tag, 'WorldwalkerRPG-Workspace-Tabs-Windows.zip',
+              'gh', 'release', 'create', tag, 'WorldwalkerRPG-Reliability-Preview-Windows.zip',
               '--repo', os.environ['GITHUB_REPOSITORY'], '--target', os.environ['GITHUB_SHA'],
-              '--title', 'Windows preview - Chronicle and Living Map tabs',
+              '--title', 'Windows preview - Reliable turns and clearer outcomes',
               '--notes-file', str(notes), '--prerelease', '--latest=false'
           ], check=True)
           url = 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/releases/tag/' + tag

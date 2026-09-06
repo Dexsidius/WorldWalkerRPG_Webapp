@@ -1,0 +1,41 @@
+name: Campaign reliability checks
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      WORLDWALKER_DATA_DIR: ${{ github.workspace }}/.build-test-data
+      PYTHONPATH: backend:tests
+      PYTHONUTF8: '1'
+      WORLDWALKER_QA_SCREENSHOT: ${{ github.workspace }}/qa/workspace.png
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install web and test dependencies
+        run: python -m pip install flask cryptography pillow pytest playwright
+      - name: Install browser
+        run: python -m playwright install --with-deps chromium
+      - name: Check JavaScript
+        run: |
+          for file in frontend/js/*.js frontend/sw.js; do node --check "$file"; done
+      - name: Run campaign and real-shell tests without paid models
+        run: |
+          mkdir -p qa
+          python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py -q --junitxml=qa/results.xml
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: campaign-reliability-results
+          path: qa/
+          retention-days: 7
