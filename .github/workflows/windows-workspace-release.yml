@@ -24,7 +24,7 @@ jobs:
     permissions:
       contents: write
     env:
-      WORLDWALKER_DATA_DIR: ${{ runner.temp }}\worldwalker-build-test
+      WORLDWALKER_DATA_DIR: ${{ github.workspace }}/.build-test-data
       PYTHONUTF8: '1'
     steps:
       - name: Check out requested revision
