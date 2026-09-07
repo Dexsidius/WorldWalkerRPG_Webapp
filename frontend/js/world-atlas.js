@@ -163,7 +163,7 @@ window.WorldAtlas = (() => {
   if (!document.querySelector('.col-center #living-map-main') || document.getElementById('workspace-tabs-script')) return;
   const script = document.createElement('script');
   script.id = 'workspace-tabs-script';
-  script.src = '/js/workspace-tabs.js?v=3.63.0-adventures-1';
+  script.src = '/js/workspace-tabs.js?v=3.64.0-membership-truth-1';
   script.async = true;
   script.addEventListener('error', () => {
     script.remove();

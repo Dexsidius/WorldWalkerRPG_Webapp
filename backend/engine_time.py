@@ -1249,6 +1249,11 @@ class TimeSkipMixin:
         fired = set(self.state.get("canon_events_fired", []))
         candidates = []
         dependency_rows = {row["id"]: row for row in canon_dependency_graph(self.state).get("events", [])}
+        try:
+            from canon_divergence import active as active_canon_interventions
+            targeted_minor = {str(row.get("event_id")) for row in active_canon_interventions(self.state) if isinstance(row, dict)}
+        except Exception:
+            targeted_minor = set()
         for event in timeline_for(self.state.get("world", "Custom World")).get("events", []):
             if event.get("historical_only"):
                 continue
@@ -1256,16 +1261,20 @@ class TimeSkipMixin:
             # the many smaller scripted beats still fire (see
             # fire_canon_events) as background texture without interrupting
             # a skip over something the player may not even be present for.
-            if not event.get("major", True):
+            event_id = str(event.get("id") or f"day:{event.get('day', 0)}:{event.get('title', 'event')}")
+            # A player-targeted future minor event is intentionally promoted to
+            # a stop boundary. Targeting does not guarantee success or presence;
+            # it only prevents a long skip/narrative from silently passing it.
+            if not event.get("major", True) and event_id not in targeted_minor:
                 continue
-            event_id = f"day:{event.get('day', 0)}:{event.get('title', 'event')}"
             dependency = dependency_rows.get(event_id, {})
             if dependency.get("status") in {"impossible", "replaced"}:
                 continue
             minute = int(dependency.get("effective_day", event.get("day", 0)) or 0) * 1440 + 480
             if before <= minute <= after and event_id not in fired:
-                candidates.append((minute, {**event, "day": dependency.get("effective_day", event.get("day", 0)),
-                                             "dependency_status": dependency.get("status", "upcoming")}))
+                candidates.append((minute, {**event, "id": event_id, "day": dependency.get("effective_day", event.get("day", 0)),
+                                             "dependency_status": dependency.get("status", "upcoming"),
+                                             "targeted_minor": event_id in targeted_minor}))
         for index, sched in enumerate(self.state.get("scheduled_events", [])):
             if not isinstance(sched, dict) or str(sched.get("visibility", "confirmed")).lower() == "hidden":
                 continue

@@ -277,7 +277,8 @@ class CombatMixin:
             technique = (system.get("birth_slot") or {}).get("name")
             if isinstance(detail, dict) and detail.get("parent_technique") == technique:
                 disclosure_bonus = int((system.get("technique_disclosure") or {}).get("active_bonus", 0) or 0)
-        return stat_bonus + sb + tb + disclosure_bonus, sb
+        mastery_bonus = int((detail or {}).get('mastery_bonus', 0) or 0) if isinstance(detail, dict) else 0
+        return stat_bonus + sb + tb + disclosure_bonus + mastery_bonus, sb
 
     def _player_defense_bonus(self, combat):
         ability = combat.get("player_defense_ability") or abilities_for(self.state.get("world", "Custom World"))[0]
@@ -490,14 +491,21 @@ class CombatMixin:
                 raise RuntimeError(f"{display_skill} is still recovering — usable again in {ready_at - combat['round']} more round(s).")
         elif swing_skill and resource_type == "pool":
             resource_cost = self._ability_resource_cost(sb_used)
+            skill_detail = self._combat_skill_detail(swing_skill) or {}
+            efficiency = max(0, min(40, float(skill_detail.get('resource_efficiency_pct', 0) or 0)))
+            resource_cost = max(1, round(resource_cost * (1 - efficiency / 100.0)))
             available = int(self.state.get("resource", 0) or 0)
             if resource_cost > available:
                 raise RuntimeError(f"Not enough {self.state.get('resource_name', 'Energy')} to use {display_skill} ({resource_cost} needed, {available} available).")
 
         metadata = self._ability_metadata(swing_skill) if swing_skill else self._ability_metadata(None)
         effect_type = metadata.get("effect_type", "damage") if swing_skill else "damage"
-        mechanics = metadata.get("mechanics", {}) or {}
-        duration = max(1, int(metadata.get("duration_rounds", 0) or 3))
+        mechanics = dict(metadata.get("mechanics", {}) or {})
+        skill_detail = self._combat_skill_detail(swing_skill) or {}
+        potency = max(0, min(25, int(skill_detail.get('mastery_potency_bonus', 0) or 0)))
+        for key in ('heal_pct','shield_pct','power_pct','defense_pct','speed_pct','status_potency'):
+            if key in mechanics and isinstance(mechanics[key], (int, float)): mechanics[key] = mechanics[key] + potency
+        duration = max(1, int(metadata.get("duration_rounds", 0) or 3) + int(skill_detail.get('mastery_duration_bonus', 0) or 0))
         status_name = metadata.get("status_effect")
         eff = self._effective_enemy_numbers(enemy, combat)
         event = {"actor": "player", "ability": display_skill, "target": enemy["name"],

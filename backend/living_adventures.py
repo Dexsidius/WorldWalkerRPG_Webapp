@@ -94,9 +94,13 @@ def companions_here(s,place):
     """Only agreed companions can accompany a journey; contacts are not party members."""
     known={p['name'].casefold():p for p in available_people(s,place)}
     companions=[]
+    try:
+        from organization_command import active_assignment_members
+        delegated=active_assignment_members(s)
+    except Exception: delegated=set()
     for row in seq(s.get('companions')):
         name=text(row.get('name') if isinstance(row,dict) else row)
-        if name.casefold() in known and (not isinstance(row,dict) or (row.get('alive') is not False and text(row.get('status')).lower() not in UNAVAILABLE)):
+        if name.casefold() in known and name.casefold() not in delegated and (not isinstance(row,dict) or (row.get('alive') is not False and text(row.get('status')).lower() not in UNAVAILABLE)):
             companions.append(known[name.casefold()])
     return companions
 
@@ -114,6 +118,10 @@ def catalog(s,place):
             if isinstance(item.get('stock'),(int,float)) and item['stock']<=0:continue
             price=_shop_item_price(item)
             if price is None or not math.isfinite(price) or price<0:continue
+            try:
+                from property_economy import purchase_price
+                price=purchase_price(s,shop.get('name'),item.get('name'),price)
+            except Exception: pass
             out.append({'id':'purchase:'+key(shop.get('name'),item['name'],index),'shop':shop['name'],'item':item['name'],
                         'label':f"Buy {item['name']} from {shop['name']}", 'minutes':10,'cost':price,
                         'currency':_shop_item_currency(s,item),'stock':copy.deepcopy(item)})
@@ -171,6 +179,28 @@ def action_list(s,place):
                 {'id':'mission:confront','label':'Enter the objective encounter','minutes':15,'description':f"Starts a tactical battle against {min(60,20+node.get('tier',1)*5)}-power opponents. Damage can be lethal. Victory depends on the marked objective, not killing everyone."},
                 {'id':'mission:withdraw','label':'Withdraw from this assignment','minutes':15,'description':'Closes this local adventure without rewards. No unrelated punishment.'},
             ])
+    # Reusable systems extend the same confirmed timed-action surface.
+    try:
+        from character_paths import actions as path_actions
+        out.extend(path_actions(s,available_people(s,place)))
+    except Exception: pass
+    try:
+        from world_conflict import actions as conflict_actions
+        out.extend(conflict_actions(s,place))
+    except Exception: pass
+    try:
+        from expeditions import actions as expedition_actions
+        out.extend(expedition_actions(s,place))
+    except Exception: pass
+    try:
+        from property_economy import actions as property_actions
+        out.extend(property_actions(s,place))
+    except Exception: pass
+    try:
+        from reputation_system import public_view as reputation_view
+        if any(float(j.get('heat',0) or 0)>0 for j in reputation_view(s).get('jurisdictions',[])):
+            out.append({'id':'reputation:laylow','label':'Lay low and reduce public attention','minutes':240,'description':'Keep a low profile for four hours. This can cool local heat; it does not erase established faction standing.'})
+    except Exception: pass
     return out
 
 
@@ -188,6 +218,10 @@ def location_view(s,place=None):
             'aftermath':[copy.deepcopy(r) for r in seq(store(s).get('aftermath')) if r.get('location')==name][-12:],
             'journey':copy.deepcopy(obj(store(s).get('journey'))),'calendar':calendar_view(s),
             'preparation':copy.deepcopy(obj(store(s).get('preparation'))),
+            'conflict':(__import__('world_conflict').location_status(s,name)),
+            'property_economy':({**__import__('property_economy').public_view(s),'market':__import__('property_economy').market_view(s,name)}),
+            'reputation':__import__('reputation_system').public_view(s),
+            'expedition':(__import__('expeditions').offer(s,name) or (__import__('expeditions').public_view(s).get('active') if obj(__import__('expeditions').public_view(s).get('active')).get('origin')==name else None)),
             'known':name in seq(s.get('discovered_locations')) or name==location_node(s)['name'],
             'warning':'Remote information is a reference. Travel here before using local services.' if name!=location_node(s)['name'] else ''}
 
@@ -306,12 +340,15 @@ def action_spec(s,payload):
     if action=='activity:resume':
         pending=obj(store(s).get('pending_activity')); original=copy.deepcopy(pending.get('spec',{}))
         if original.get('place')!=place:raise ValueError('Return to the activity location or cancel the unfinished activity.')
+        if original.get('id','').startswith(('property:','craft:')):
+            from property_economy import refresh_spec
+            original=refresh_spec(s,original)
         if original.get('id','').startswith('purchase:'):
             item=next((a for a in catalog(s,place) if a['shop']==original.get('shop') and a['item']==original.get('item')),None)
             if item is None:raise ValueError('That item is no longer available. Cancel the unfinished purchase.')
             original={**item,'place':place}
         row.update(resume_spec=original,cost=original.get('cost',0),currency=original.get('currency'))
-    if action.startswith('train:') and float(s.get('resource',0))<math.ceil(float(s.get('resource_max',100))*.1):raise ValueError('Recover energy before starting this training session.')
+    if (action.startswith('train:') or action.startswith('path:')) and float(s.get('resource',0))<math.ceil(float(s.get('resource_max',100))*.1):raise ValueError('Recover energy before starting this training session.')
     if row.get('cost',0)>balance(s,row.get('currency')):raise ValueError('There is not enough currency for this action.')
     return row
 
@@ -332,6 +369,15 @@ def boundary(s,minutes):
         if f"scheduled:{i}:{e.get('title','event')}" in fired:continue
         minute=int(e['due_canon_day'])*1440+480
         if start<minute<end:found.append((minute,e.get('title','Appointment')))
+    # A player-targeted future minor canon event becomes a real intervention stop
+    # when its established time falls inside this activity window.
+    try:
+        from canon_divergence import next_target_in_window
+        target=next_target_in_window(s,start,end)
+        if target:
+            minute,row=target
+            if not row.get('location') or row.get('location') in {here,s.get('location')}: found.append((minute,row.get('title','Targeted canon event')))
+    except Exception: pass
     # The Tower deadline cannot be bypassed by a long journey/rest.
     deadline=s.get('tower_floor_deadline_day')
     if s.get('world')=='Solo Max-Level Newbie' and isinstance(deadline,(int,float)) and start<int(deadline)*1440<end:
@@ -343,7 +389,7 @@ def quote(s,payload):
     spec=action_spec(s,payload);duration=int(spec['minutes']);stop=boundary(s,duration)
     return {'spec':spec,'minutes':duration,'start':time_label(s),'end':time_label(s,now(s)+duration),
             'interruption':{'after_minutes':stop[0]-now(s),'title':stop[1]} if stop else None,
-            'warnings':(['This approach may begin a potentially lethal encounter; the battle will not auto-resolve.'] if spec['id'] in {'mission:confront','mission:stealth','mission:negotiate'} else [])+
+            'warnings':(['This approach may begin a potentially lethal encounter; the battle will not auto-resolve.'] if (spec['id'] in {'mission:confront','mission:stealth','mission:negotiate'} or spec['id'].startswith(('expedition:elite:','expedition:boss:')))  else [])+
                        (['Any queued actions and standing plans remain unchanged.'] if s.get('queued_actions') or s.get('standing_orders') else []),
             'calendar':calendar_view(s)}
 
@@ -417,6 +463,11 @@ def _finish(game,mission,method,successful=True):
 def combat_finished(game,outcome):
     combat=obj(game.state.get('combat'));objective=obj(combat.get('adventure_objective'))
     if not objective or objective.get('settled'):return
+    if objective.get('expedition_id'):
+        from expeditions import combat_finished as expedition_combat_finished
+        expedition_combat_finished(game,outcome)
+        objective['settled']=True
+        return
     objective['settled']=True
     mission=obj(store(game.state).get('active'))
     if mission and mission.get('id')==objective.get('mission_id'):
@@ -501,6 +552,8 @@ def resolve(game,payload,spec):
         if cost>int(s.get('resource',0)):raise ValueError('Recover energy before resuming training.')
         patch['resource']=max(0,int(s.get('resource',0))-cost)
         label=f"Practice {action.split(':',1)[1]} at {place} for {elapsed} minutes. The session uses {cost} {s.get('resource_name','energy')}."
+    elif action.startswith(('path:','conflict:','expedition:','property:','craft:','reputation:')):
+        label=f"{spec['label']} progresses for {elapsed} minutes." if not complete else spec['label']
     elif not complete:label=f"{spec['label']} is interrupted after {elapsed} minutes by {stop[1]}. The unfinished part can be resumed; no completion reward is granted yet."
     # Apply ordinary world time first. Only a fully completed service gets its
     # purchase, information or mission effect; the transaction protects both.
@@ -508,6 +561,23 @@ def resolve(game,payload,spec):
     s=game.state;ad=writable(s)
     if not complete:
         ad['pending_activity']={'label':spec['label'],'spec':copy.deepcopy(spec),'remaining_minutes':duration-elapsed}
+    elif action.startswith('path:'):
+        from character_paths import resolve_session
+        from property_economy import training_bonus
+        outcome=resolve_session(s,action,elapsed,complete,training_bonus(s,place))
+        game.append(f"{spec['label']} — mastery +{outcome['mastery_gain']:g}; {outcome['path']['stage']}.",'narrative',canon_day=s.get('canon_day'))
+    elif action.startswith('conflict:'):
+        from world_conflict import resolve_intervention
+        game.append(resolve_intervention(s,action,elapsed)['message'],'narrative',canon_day=s.get('canon_day'))
+    elif action.startswith('expedition:'):
+        from expeditions import resolve as resolve_expedition
+        game.append(resolve_expedition(s,action,elapsed,game).get('message','Expedition advanced.'),'narrative',canon_day=s.get('canon_day'))
+    elif action.startswith(('property:','craft:')):
+        from property_economy import resolve as resolve_property
+        game.append(resolve_property(s,spec)['message'],'narrative',canon_day=s.get('canon_day'))
+    elif action=='reputation:laylow':
+        from reputation_system import lay_low
+        game.append(lay_low(s,place,elapsed/60).get('summary','You keep a low profile.'),'narrative',canon_day=s.get('canon_day'))
     elif action=='scout':
         neighbors=build_travel_graph(s)['edges'].get(place,[])
         discovered=s.setdefault('discovered_locations',[])

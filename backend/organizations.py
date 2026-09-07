@@ -20,6 +20,13 @@ LABELS = {
     "Reincarnated as a Slime": "Nation & Retainers", "Custom World": "Company",
 }
 
+MEMBERSHIP_ENGINE_VERSION = 2
+NARUTO_SQUAD_DELAY_DAYS = 4
+_MEMBERSHIP_POSITIVE = re.compile(r"\b(?:join(?:ed|s|ing)?|recruit(?:ed|s|ing)?|member|founder|accepted into|part of|belongs to|serves in|asks? to join|offers? to join|agrees? to join|invited? to join|assigned to|added to|recognized(?: as| as an?)?(?: [a-z-]+){0,4} operative|confirmed(?: as| as an?)?(?: [a-z-]+){0,4} operative|inner[- ]circle (?:member|operative))\b", re.I)
+_MEMBERSHIP_NEGATIVE = re.compile(r"\b(?:refus(?:e|ed|es|ing)|declin(?:e|ed|es|ing)|reject(?:ed|s|ing)?|failed to join|did not join|didn't join|has not joined|hasn't joined|never joined|has not accepted|hasn't accepted|not accepted|not (?:a )?(?:formal )?member|isn't (?:a )?(?:formal )?member|rather than (?:a )?(?:formal )?member|independent (?:research )?partner|research partner rather than|outside (?:the )?(?:formal )?(?:roster|membership)|left|leaves|departed|expelled|exiled|former member|no longer (?:a )?member|quit|retired|defected)\b", re.I)
+_ENTITY_NAME_WORDS = re.compile(r"\b(?:village|city|town|country|kingdom|empire|republic|federation|forest|island|mountain|district|province|region|territory|headquarters|hq|academy|school|shrine|temple|organization|organisation|guild|crew|clan|faction|army|forces|battalion|division|squad|team|party|unit|hideout|base|camp|road|route|bridge|tower|floor|realm|world|memorial|hospital|clinic|shop|office|gate|compound|estate|palace|castle|harbor|port|sea|ocean|river|lake)\b", re.I)
+_GAKURE_NAME = re.compile(r"(?:^|\b)[a-z-]*gakure\b", re.I)
+
 
 def text(value):
     return str(value or "").strip()
@@ -91,8 +98,310 @@ def member_status(row):
     return status if status in ACTIVE | FORMER | {"candidate"} else "active"
 
 
-def ensure_organizations(state):
-    """Add legacy memberships once; omissions/proximity never remove members."""
+def _entity_names(state):
+    names = set()
+    def add(value):
+        value = text(value)
+        if value: names.add(value.casefold())
+    add(state.get("location"))
+    for value in seq(state.get("discovered_locations")): add(value)
+    for name in obj(state.get("location_details")): add(name)
+    for name in obj(state.get("faction_rosters")): add(name)
+    for group in obj(state.get("organizations")).values():
+        if isinstance(group, dict): add(group.get("name"))
+    for row in seq(state.get("political_regions")):
+        if isinstance(row, dict): add(row.get("name")); add(row.get("controller"))
+    return names
+
+
+def _canon_people(state):
+    try:
+        from canon_integrity import active_canon_identities
+        return {text(alias).casefold(): record for record in active_canon_identities(state.get("world"), state)
+                for alias in [record.get("name"), *seq(record.get("aliases"))] if text(alias)}
+    except Exception:
+        return {}
+
+
+def _looks_like_person(state, name, row=None, people=None, canon_people=None):
+    """Reject places/factions while preserving established custom characters."""
+    name = text(name)
+    if not name: return False
+    if name.casefold() == text(state.get("name")).casefold(): return True
+    entities = _entity_names(state)
+    if name.casefold() in entities: return False
+    if _ENTITY_NAME_WORDS.search(name) or _GAKURE_NAME.search(name): return False
+    people = people if people is not None else known_people(state)
+    canon_people = canon_people if canon_people is not None else _canon_people(state)
+    if name.casefold() in {text(n).casefold() for n in people}: return True
+    if name.casefold() in canon_people: return True
+    row = obj(row)
+    # An explicit person/member record can stand alone in old custom saves, but
+    # generic relationship-only records cannot manufacture a person.
+    return bool(row.get("person_id") or row.get("character_id") or row.get("npc_id") or
+                any(text(row.get(k)) for k in ("position", "rank", "role", "reports_to", "unit")))
+
+
+def _latest_membership_evidence(state, person, group):
+    """Return (is_member, text) from the latest explicit campaign evidence."""
+    person_cf, group_cf = text(person).casefold(), text(group).casefold()
+    latest = None
+    sources = []
+    for key in ("campaign_canon", "continuity_facts", "canon_changes"):
+        for i, raw in enumerate(seq(state.get(key))):
+            if isinstance(raw, dict):
+                blob = text(raw.get("fact") or raw.get("text") or raw.get("summary") or raw.get("description"))
+                order = (number(raw.get("turn"), -1), number(raw.get("canon_day"), -1), i)
+            else:
+                blob = text(raw); order = (-1, -1, i)
+            if blob and person_cf in blob.casefold() and group_cf in blob.casefold(): sources.append((order, blob))
+    # Current Chronicle/history evidence may be stored in compact fact ledgers.
+    for i, raw in enumerate(seq(obj(state.get("continuity_ledger")).get("facts"))):
+        blob = text(raw.get("text") if isinstance(raw, dict) else raw)
+        if blob and person_cf in blob.casefold() and group_cf in blob.casefold():
+            sources.append(((number(raw.get("turn"), -1) if isinstance(raw, dict) else -1, -1, i), blob))
+    for order, blob in sources:
+        if not (_MEMBERSHIP_POSITIVE.search(blob) or _MEMBERSHIP_NEGATIVE.search(blob)): continue
+        if latest is None or order >= latest[0]: latest = (order, blob)
+    if latest is None: return None, ""
+    blob = latest[1]
+    if _MEMBERSHIP_NEGATIVE.search(blob): return False, blob
+    return bool(_MEMBERSHIP_POSITIVE.search(blob)), blob
+
+
+def _member_row(state, name, memory=None, basis="Recorded campaign membership", position=""):
+    memory = obj(memory)
+    return {"name": name,
+            "position": text(position or memory.get("position") or memory.get("rank") or memory.get("role")) or "Member",
+            "status": member_status(memory), "joined_day": campaign_day(state),
+            "reports_to": text(memory.get("reports_to") or memory.get("commander")),
+            "unit": text(memory.get("unit") or memory.get("squad")), "membership_basis": text(basis) or "Recorded campaign membership"}
+
+
+def _prune_and_recover_group(state, group, legacy_mode=False):
+    """One-way repair: remove non-people, recover only affirmative real people."""
+    if not isinstance(group, dict): return
+    people = known_people(state); canon_people = _canon_people(state)
+    members = obj(group.get("members")); group["members"] = members
+    group_name = text(group.get("name"))
+    player = text(state.get("name"))
+    # Remove polluted entity rows and any explicitly contradicted old member.
+    entity_names = _entity_names(state)
+    for name in list(members):
+        row = obj(members.get(name))
+        # Existing ledger rows are already character records unless their name
+        # is demonstrably a world entity. Do not require an NPC-memory record;
+        # large crews and generated organizations may have lightweight members.
+        if text(name).casefold() in entity_names or _ENTITY_NAME_WORDS.search(text(name)) or _GAKURE_NAME.search(text(name)):
+            members.pop(name, None); continue
+        verdict, evidence = _latest_membership_evidence(state, name, group_name)
+        if verdict is False and name.casefold() != player.casefold():
+            members.pop(name, None)
+    if not legacy_mode: return
+    candidates = {}
+    for raw in seq(obj(state.get("faction_rosters")).get(group_name)):
+        row = raw if isinstance(raw, dict) else {"name": raw}
+        if text(row.get("name")): candidates[text(row["name"])] = row
+    for name, memory in people.items():
+        assigned = text(memory.get("organization") or memory.get("group") or memory.get("faction") or memory.get("team"))
+        if assigned.casefold() == group_name.casefold(): candidates[name] = memory
+    # Campaign evidence can recover a member even if legacy roster bookkeeping
+    # omitted them (the exact failure seen in old Yahiko campaigns).
+    for name, memory in people.items():
+        verdict, evidence = _latest_membership_evidence(state, name, group_name)
+        if verdict is True:
+            row = dict(memory); row["_membership_evidence"] = evidence; candidates[name] = row
+    if player:
+        candidates.setdefault(player, {"name": player, "position": state.get("position") or "Member"})
+    for name, candidate in candidates.items():
+        name = text(name)
+        if not _looks_like_person(state, name, candidate, people, canon_people): continue
+        verdict, evidence = _latest_membership_evidence(state, name, group_name)
+        if verdict is False: continue
+        # New engine-owned campaigns require explicit confirmation; legacy
+        # recovery is only for facts that predate the membership truth engine.
+        if name not in members:
+            strong = verdict is True or text(obj(candidate).get("organization") or obj(candidate).get("group") or obj(candidate).get("faction")).casefold() == group_name.casefold()
+            # Legacy faction_roster itself is sufficient only before the truth
+            # engine started; after that it is a mirror, not an authority.
+            if not strong and state.get("team_membership_engine_version") == MEMBERSHIP_ENGINE_VERSION: continue
+            memory = {**obj(canon_people.get(name.casefold())), **obj(people.get(name)), **obj(candidate)}
+            members[name] = _member_row(state, name, memory, evidence or "Recovered from established pre-engine membership")
+
+
+def _pending_offers(state):
+    rows = state.get("team_membership_offers")
+    if not isinstance(rows, list): rows = state["team_membership_offers"] = []
+    return rows
+
+
+def _queue_offer(state, kind, group, person, reason, members=None, leader="", title="", prompt=""):
+    group, person = text(group), text(person)
+    if not group or not person: return None
+    gid = group_id(group)
+    current = obj(obj(state.get("organizations")).get(gid)).get("members", {})
+    if kind == "recruit" and any(text(n).casefold() == person.casefold() and obj(r).get("status") in ACTIVE for n, r in obj(current).items()): return None
+    for row in _pending_offers(state):
+        if isinstance(row, dict) and row.get("status") == "pending" and text(row.get("kind")) == kind and text(row.get("group")).casefold() == group.casefold() and text(row.get("person")).casefold() == person.casefold():
+            return row
+    ident = fingerprint(f"membership|{state.get('campaign_id')}|{state.get('turn')}|{kind}|{group}|{person}|{reason}")[:20]
+    row = {"id": ident, "kind": kind, "group": group, "person": person, "reason": text(reason)[:900],
+           "status": "pending", "requires_player_choice": True, "created_turn": state.get("turn", 0),
+           "created_day": state.get("canon_day", 0)}
+    if members: row["members"] = copy.deepcopy(members)
+    if leader: row["leader"] = text(leader)
+    if title: row["title"] = text(title)
+    if prompt: row["prompt"] = text(prompt)
+    _pending_offers(state).append(row)
+    state["team_membership_offers"] = state["team_membership_offers"][-30:]
+    return row
+
+
+def _exact_group(state, name):
+    ensure_organizations(state)
+    return next((g for g in obj(state.get("organizations")).values() if isinstance(g, dict) and text(g.get("name")).casefold() == text(name).casefold()), None)
+
+
+def resolve_membership_offer(state, offer_id, decision):
+    offer = next((r for r in _pending_offers(state) if isinstance(r, dict) and text(r.get("id")) == text(offer_id)), None)
+    if not offer or offer.get("status") != "pending": raise ValueError("That team membership decision is no longer pending.")
+    accepted = text(decision).casefold() in {"accept", "accepted", "yes", "join", "recruit"}
+    if not accepted:
+        offer.update(status="declined", resolved_turn=state.get("turn", 0))
+        return f"Membership in {offer['group']} was declined."
+    group_name = text(offer.get("group")); gid = group_id(group_name)
+    groups = ensure_organizations(state)
+    group = groups.setdefault(gid, {"id": gid, "name": group_name, "kind": "", "leader": text(offer.get("leader")), "members": {}, "history": []})
+    members = group.setdefault("members", {})
+    if offer.get("kind") == "naruto_squad":
+        for raw in seq(offer.get("members")):
+            row = raw if isinstance(raw, dict) else {"name": raw}
+            name = text(row.get("name"))
+            if not name: continue
+            members[name] = _member_row(state, name, row, offer.get("reason"), row.get("position"))
+        if text(offer.get("leader")): group["leader"] = text(offer["leader"])
+        state["official_party_group_id"] = gid
+        assignment = obj(state.get("naruto_squad_assignment")); assignment["status"] = "accepted"; assignment["group"] = group_name; state["naruto_squad_assignment"] = assignment
+    else:
+        person = text(offer.get("person"))
+        memory = obj(known_people(state).get(person)) if person.casefold() != text(state.get("name")).casefold() else state
+        members[person] = _member_row(state, person, memory, offer.get("reason"))
+        if person.casefold() == text(state.get("name")).casefold(): state["official_party_group_id"] = gid
+    offer.update(status="accepted", resolved_turn=state.get("turn", 0))
+    history(group, state, "join", text(offer.get("person")), offer.get("reason") or "Player-confirmed membership")
+    sync_memberships(state, groups)
+    return f"Official membership in {group_name} was confirmed."
+
+
+def resolve_direct_player_join(state, group_name, decision):
+    group = _exact_group(state, group_name)
+    if not group: raise ValueError("That organization is not established in this campaign.")
+    if text(decision).casefold() not in {"accept", "accepted", "yes", "join"}:
+        return f"You did not join {group['name']}."
+    player = text(state.get("name")); members = group.setdefault("members", {})
+    existing = next((n for n in members if n.casefold() == player.casefold()), player)
+    members[existing] = {**obj(members.get(existing)), **_member_row(state, player, state, "Player-confirmed direct join")}
+    members[existing]["status"] = "active"
+    state["official_party_group_id"] = group.get("id") or group_id(group.get("name"))
+    history(group, state, "join", player, "Player explicitly confirmed joining this established team.")
+    sync_memberships(state, state["organizations"])
+    return f"You officially joined {group['name']}."
+
+
+def authoritative_active_rosters(state):
+    view = roster_view(state)
+    return {g["name"]: [r["name"] for r in g["members"] if r.get("status") in ACTIVE] for g in view.get("groups", [])}
+
+
+def _rank_text(state):
+    special = obj(state.get("special")); profile = obj(special.get("Shinobi Profile"))
+    return text(state.get("rank") or state.get("position") or profile.get("rank") or special.get("Shinobi Rank") or special.get("Rank"))
+
+
+def _schedule_naruto_squad(before, state):
+    if state.get("world") != "Naruto": return
+    before_rank, now_rank = _rank_text(before).casefold(), _rank_text(state).casefold()
+    assignment = state.get("naruto_squad_assignment") if isinstance(state.get("naruto_squad_assignment"), dict) else None
+    if assignment is None and ("academy" in before_rank and "student" in before_rank) and "genin" in now_rank:
+        due = int(number(state.get("canon_day"))) + NARUTO_SQUAD_DELAY_DAYS
+        assignment = {"status":"scheduled", "graduated_day":int(number(state.get("canon_day"))), "due_day":due}
+        state["naruto_squad_assignment"] = assignment
+        events = state.setdefault("scheduled_events", [])
+        if not any(isinstance(e, dict) and e.get("kind") == "ninja_squad_assignment" and not e.get("resolved") for e in events):
+            events.append({"title":"Ninja squad assignment", "kind":"ninja_squad_assignment", "due_canon_day":due,
+                           "location":state.get("location"), "visibility":"visible", "resolved":False})
+
+
+def _naruto_squad_offer(state):
+    assignment = obj(state.get("naruto_squad_assignment"))
+    if state.get("world") != "Naruto" or assignment.get("status") != "scheduled" or number(state.get("canon_day")) < number(assignment.get("due_day"), 10**9): return None
+    player = text(state.get("name")); low = player.casefold()
+    canon = {
+        "naruto": ("Team 7", ["Naruto", "Sasuke Uchiha", "Sakura Haruno", "Kakashi Hatake"], "Kakashi Hatake"),
+        "naruto uzumaki": ("Team 7", ["Naruto Uzumaki", "Sasuke Uchiha", "Sakura Haruno", "Kakashi Hatake"], "Kakashi Hatake"),
+        "sasuke uchiha": ("Team 7", ["Naruto Uzumaki", "Sasuke Uchiha", "Sakura Haruno", "Kakashi Hatake"], "Kakashi Hatake"),
+        "sakura haruno": ("Team 7", ["Naruto Uzumaki", "Sasuke Uchiha", "Sakura Haruno", "Kakashi Hatake"], "Kakashi Hatake"),
+    }
+    if low in canon:
+        group, names, leader = canon[low]
+    else:
+        seed = int(fingerprint(f"{state.get('campaign_id')}|{player}|squad")[:8], 16)
+        number_id = 1 + seed % 20; group = f"Genin Squad {number_id}"
+        names = [player, f"Genin Teammate {chr(65 + seed % 12)}", f"Genin Teammate {chr(78 + seed % 10)}", f"Jonin Instructor {1 + seed % 9}"]
+        leader = names[-1]
+    members = [{"name": n, "position": "Jōnin Instructor" if n == leader else "Genin"} for n in names]
+    offer = _queue_offer(state, "naruto_squad", group, player,
+                         f"Your academy graduation has reached its scheduled ninja-squad assignment {NARUTO_SQUAD_DELAY_DAYS} days later.",
+                         members=members, leader=leader, title=f"Join {group}?",
+                         prompt=f"You have been assigned to {group}. Accepting makes this your official Party/Team display.")
+    if offer: assignment["status"] = "offered"; assignment["offer_id"] = offer["id"]; state["naruto_squad_assignment"] = assignment
+    return offer
+
+
+def _membership_updates_to_offers(state, data):
+    """GM may establish an opportunity; the engine owns the actual join."""
+    filtered = []
+    player = text(state.get("name"))
+    for event in seq(data.get("organization_updates")):
+        if not isinstance(event, dict): continue
+        action = text(event.get("event")).casefold(); group = text(event.get("group")); person = text(event.get("name"))
+        if action == "join" and group and person and event.get("accepted") is True:
+            kind = "join_team" if person.casefold() == player.casefold() else "recruit"
+            _queue_offer(state, kind, group, person, event.get("reason") or f"{person} agreed to join {group}.")
+            continue
+        filtered.append(event)
+    data["organization_updates"] = filtered
+    narrative = text(data.get("narrative"))
+    if not narrative: return
+    groups = [g for g in obj(state.get("organizations")).values() if isinstance(g, dict) and text(g.get("name"))]
+    people = known_people(state)
+    for group in groups:
+        gname = text(group.get("name"))
+        if gname.casefold() not in narrative.casefold(): continue
+        for name in people:
+            if name.casefold() not in narrative.casefold() or name in obj(group.get("members")): continue
+            # Require affirmative person+group language and no refusal/qualified nonmembership.
+            sentences = [x.strip() for x in re.split(r"(?<=[.!?])\\s+", narrative) if name.casefold() in x.casefold() and gname.casefold() in x.casefold()]
+            evidence = next((x for x in reversed(sentences) if _MEMBERSHIP_POSITIVE.search(x) or _MEMBERSHIP_NEGATIVE.search(x)), "")
+            if evidence and _MEMBERSHIP_POSITIVE.search(evidence) and not _MEMBERSHIP_NEGATIVE.search(evidence):
+                _queue_offer(state, "recruit", gname, name, evidence)
+
+
+def _merge_legacy_memberships(state, source=None):
+    """Migrate old saves once, then stop treating mirrors as authorities."""
+    source = source if isinstance(source, dict) else state
+    # Work from current ledger plus the old save's explicit evidence.
+    if source is not state:
+        for key in ("faction_rosters", "campaign_canon", "npc_memories", "companions", "affiliations", "location_details"):
+            if key not in state and key in source: state[key] = copy.deepcopy(source[key])
+    ensure_organizations(state, legacy_mode=True)
+    state["team_membership_engine_version"] = MEMBERSHIP_ENGINE_VERSION
+    state.setdefault("team_membership_truth_started_turn", state.get("turn", 0))
+    sync_memberships(state, state["organizations"])
+
+
+def ensure_organizations(state, legacy_mode=False):
+    """Add/repair memberships; omissions/proximity never remove members."""
     groups = state.get("organizations")
     if not isinstance(groups, dict): groups = state["organizations"] = {}
     for gid, group in list(groups.items()):
@@ -167,6 +476,8 @@ def ensure_organizations(state):
             memory = obj(people.get(name))
             if memory and member_status(memory) in FORMER: member["status"] = member_status(memory)
             if name == player and state.get("alive") is False: member["status"] = "dead"
+    for group in groups.values():
+        if isinstance(group, dict): _prune_and_recover_group(state, group, legacy_mode=legacy_mode)
     state["organization_lives"] = {text(n): row for n, row in obj(state.get("organization_lives")).items() if isinstance(row, dict)}
     return groups
 
@@ -463,16 +774,52 @@ def advance_lives(state, elapsed_minutes, before=None):
 
 
 def process_organizations(before, state, data, elapsed_minutes=0):
-    # Preserve old memberships before a new nearby-companion list replaces them.
-    if not state.get("organizations") and before.get("world") == state.get("world"):
-        prior = membership_copy(before); ensure_organizations(prior)
-        state["organizations"] = copy.deepcopy(prior.get("organizations", {}))
+    """Shared post-turn hook and sole authority for official membership."""
+    # Freeze all pre-engine facts into the official ledger once. This is how
+    # old campaigns recover real recruits without asking the player to rejoin.
+    if state.get("team_membership_engine_version") != MEMBERSHIP_ENGINE_VERSION:
+        _merge_legacy_memberships(state, before if before.get("world") == state.get("world") else state)
+    else:
+        ensure_organizations(state)
+    _schedule_naruto_squad(before, state)
+    _membership_updates_to_offers(state, data)
     apply_updates(state, data, campaign_day(before))
-    return advance_lives(state, elapsed_minutes, before)
-
+    _naruto_squad_offer(state)
+    notices = advance_lives(state, elapsed_minutes, before)
+    actions = []
+    for key in ("completed_actions", "deferred_actions"):
+        actions.extend(text(x) for x in seq(data.get(key)) if text(x))
+    if text(data.get("narrative")): actions.append(text(data.get("narrative")))
+    try:
+        from character_paths import record_turn
+        record_turn(before, state, actions, elapsed_minutes)
+    except Exception:
+        pass
+    try:
+        from world_conflict import refresh as refresh_world_conflict
+        refresh_world_conflict(state, elapsed_minutes)
+    except Exception:
+        pass
+    try:
+        from reputation_system import sync as sync_reputation, advance as advance_reputation
+        sync_reputation(before, state, source=text(data.get("narrative")), events=seq(data.get("events")))
+        advance_reputation(state, elapsed_minutes)
+    except Exception:
+        pass
+    try:
+        from property_economy import bootstrap_established_holdings, advance as advance_property_economy
+        bootstrap_established_holdings(state); advance_property_economy(state, elapsed_minutes)
+    except Exception:
+        pass
+    try:
+        from organization_command import advance as advance_organization_command
+        advance_organization_command(state, elapsed_minutes)
+    except Exception:
+        pass
+    return notices
 
 def roster_view(state):
-    local = membership_copy(state); groups = ensure_organizations(local); output = []
+    local = membership_copy(state); groups = ensure_organizations(local, legacy_mode=True); output = []
     people = known_people(local)
     for group in groups.values():
         if not isinstance(group, dict): continue
@@ -491,8 +838,10 @@ def roster_view(state):
         output.append({"id": group.get("id"), "name": group.get("name"), "type": label_for(local.get("world"), group.get("name", ""), group.get("kind", "")),
                        "leader": group.get("leader", ""), "members": rows, "history": seq(group.get("history"))[-12:],
                        "successor": obj(group.get("succession")).get("successor", "")})
+    official = text(local.get("official_party_group_id"))
+    if official: output.sort(key=lambda g: (text(g.get("id")) != official, text(g.get("name")).casefold()))
     label = output[0]["type"] if len(output) == 1 else "Groups" if output else LABELS.get(state.get("world"), "Company")
-    return {"label": label, "groups": output}
+    return {"label": label, "groups": output, "official_group_id": official, "source": "canonical_organization_ledger_v2"}
 
 
 def organization_context(state, query=""):
@@ -505,6 +854,34 @@ def organization_context(state, query=""):
                             for r in sorted(g["members"], key=lambda r: (r["name"].casefold() not in query.casefold(), not r["player"]))[:16]]} for g in selected],
             "life_development": {name: {k: copy.deepcopy(v[-4:] if k == "history" and isinstance(v, list) else v) for k, v in obj(row).items()}
                                  for name, row in list(obj(state.get("organization_lives")).items())[:100] if name.casefold() in query.casefold()}}
+
+
+def _install_shared_membership_truth():
+    """Give every GM/Advisor task the same official roster used by the UI."""
+    try:
+        from engine_core import CoreMixin
+    except Exception:
+        return
+    original = getattr(CoreMixin, "task_state_for_ai", None)
+    if not callable(original) or getattr(original, "_membership_truth_v2", False): return
+    def task_state_for_ai(self, purpose="moment", query=""):
+        result = original(self, purpose, query)
+        if isinstance(result, dict):
+            result["organization_roster"] = organization_context(self.state, query)
+            result["faction_rosters"] = authoritative_active_rosters(self.state)
+            result["organization_membership_rule"] = "organization_roster is authoritative for official membership; do not infer members from relationships, contacts, places, faction names or contradictory old prose."
+            try:
+                from canon_divergence import gm_context
+                target_context = gm_context(self.state)
+                if target_context: result["player_canon_intervention_targets"] = target_context
+            except Exception:
+                pass
+        return result
+    task_state_for_ai._membership_truth_v2 = True
+    CoreMixin.task_state_for_ai = task_state_for_ai
+
+
+_install_shared_membership_truth()
 
 
 ORGANIZATION_RULE = """

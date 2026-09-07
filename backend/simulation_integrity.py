@@ -495,6 +495,14 @@ def apply_player_correction(state, correction_type, target, value, explanation="
         if not record_npc_death(state, target, explanation or "Player-confirmed campaign correction"):
             raise ValueError("Choose an exact established NPC name.")
         applied = f"{target} is confirmed dead. Existing membership records retain their history."
+    elif kind == "organization_membership_choice":
+        from organizations import resolve_membership_offer
+        result = resolve_membership_offer(state, target, value)
+        applied = result
+    elif kind == "organization_direct_join":
+        from organizations import resolve_direct_player_join
+        result = resolve_direct_player_join(state, target, value)
+        applied = result
     elif kind == "skill":
         if not target: raise ValueError("Enter the skill name in Target.")
         skills = state.setdefault("skills", {})

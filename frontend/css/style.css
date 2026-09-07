@@ -1902,6 +1902,10 @@ body[data-world="Reincarnated as a Slime"] .percentile-tray{ background:radial-g
   border:2px solid var(--accent2); animation:territoryChangeRing 1.6s ease-out infinite;
 }
 @keyframes territoryChangeRing{ 0%{ transform:scale(.6); opacity:.9; } 100%{ transform:scale(1.9); opacity:0; } }
+.map-node.territory-contested:not(.here) .map-pip{
+  border-color:var(--danger); box-shadow:0 0 0 3px rgba(212,75,75,.18),0 0 12px rgba(212,75,75,.8);
+}
+.map-node.territory-contested .map-label::after{ content:" · CONTESTED"; color:var(--danger); font-weight:900; }
 .danger-label{ font-weight:700; }
 .danger-label.danger-calm{ color:var(--success); }
 .danger-label.danger-uneasy{ color:var(--sub); }
@@ -3602,3 +3606,13 @@ body[data-world="Custom World"] #attributes-panel .hidden-stats-label{ color:#8a
 @keyframes hakiTitle{0%{opacity:0;filter:blur(12px);transform:translate(-50%,-50%) scale(1.5)}35%,72%{opacity:1;filter:none;transform:translate(-50%,-50%) scale(1)}100%{opacity:0;transform:translate(-50%,-50%) scale(.96)}}
 @keyframes hakiBolt{0%{opacity:0;scale:.05 1}20%,60%{opacity:1;scale:1 1}100%{opacity:0;scale:1.18 .3}}
 @media(prefers-reduced-motion:reduce){.haoshoku-cinematic{animation:hakiScene .65s ease-out forwards}.haoshoku-cinematic::before,.haoshoku-bolt{animation:none}.haoshoku-cinematic::after{animation:hakiTitle .65s ease-out both}}
+
+/* v3.64 organization command, reputation, property/economy */
+.organization-command-card,.org-assignment,.property-card,.reputation-row,.public-reputation-summary{border:1px solid var(--line,rgba(255,255,255,.14));border-radius:14px;background:rgba(10,14,22,.62);padding:12px;margin:10px 0;display:grid;gap:8px}
+.organization-command-card>header,.org-assignment>header,.property-card>header,.reputation-row>header{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.organization-command-card form{display:grid;gap:10px;margin-top:6px}
+.organization-command-card label,.organization-command-card fieldset{display:grid;gap:5px}.organization-command-card fieldset{border:1px solid var(--line,rgba(255,255,255,.12));border-radius:10px;padding:8px}
+.org-command-member{display:flex!important;grid-template-columns:none!important;gap:8px!important;align-items:center}.org-command-member span{display:grid}.org-command-member small{opacity:.72}
+.org-project-form{border-top:1px solid var(--line,rgba(255,255,255,.12));padding-top:10px}.public-reputation-summary b{font-size:1.05rem}.public-reputation-summary span,.public-reputation-summary small{opacity:.82}
+.reputation-row p,.property-card p,.org-assignment p{margin:0}.reputation-row span{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+@media(max-width:720px){.organization-command-card>header,.org-assignment>header,.property-card>header,.reputation-row>header{align-items:flex-start;flex-direction:column}.organization-command-card select,.organization-command-card input{width:100%}}

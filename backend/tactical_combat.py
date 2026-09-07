@@ -215,7 +215,7 @@ def ability_footprint(name='', detail=None, board_size=12):
         origin = 'target'
     limit = max(8, board_size * 2)
     return {'shape': shape, 'origin': origin,
-            'range': int(max(0, min(limit, number(raw.get('range'), reach)))),
+            'range': int(max(0, min(limit, number(raw.get('range'), reach) + number(detail.get('mastery_range_bonus'), 0)))),
             'radius': int(max(0, min(board_size, number(raw.get('radius'), radius)))),
             'length': int(max(1, min(limit, number(raw.get('length'), length)))),
             'width': int(max(1, min(board_size, number(raw.get('width'), width)))),
@@ -510,6 +510,12 @@ def board_view(state):
     view=copy.deepcopy(board)
     from encounter_objectives import public_view as objective_view
     view['objective'] = objective_view(state, board)
+    if not view['objective']:
+        try:
+            from expeditions import objective_public as expedition_objective
+            view['objective'] = expedition_objective(state, board)
+        except Exception:
+            pass
     if state.get('world') in {'Naruto','One Piece','Bleach'}:
         from portrait_generator import portrait_view
         for unit in view['units']:
@@ -908,6 +914,11 @@ def _end_activation(game,board,log_start):
             _tick_actor(enemy)
         combat.pop('bonus_turn_pending',None);combat.pop('bonus_turn_reason',None);combat.pop('bonus_turn_first_action',None)
         combat['round']+=1;board['activation']+=1;board['bonus_activation']=False;board['forms_used']=[]
+        try:
+            from expeditions import tactical_tick
+            tactical_tick(game.state, board)
+        except Exception:
+            pass
         controlled=[u for u in live_units(board) if u['side']=='ally' and (u.get('player') or u.get('player_controlled'))]
         if controlled:
             board['active_id']=controlled[0]['id']
@@ -963,6 +974,11 @@ def _end_activation(game,board,log_start):
         else: clear_active_portrait_form(game.state)
     combat.pop('bonus_turn_pending',None);combat.pop('bonus_turn_reason',None);combat.pop('bonus_turn_first_action',None)
     combat['round']+=1;board['activation']+=1;board['bonus_activation']=False;board['forms_used']=[]
+    try:
+        from expeditions import tactical_tick
+        tactical_tick(game.state, board)
+    except Exception:
+        pass
     refresh_movement(game.state,board)
     player['movement_left']=player['movement_max'];player['action_used']=False;player['guarding']=False
     return None

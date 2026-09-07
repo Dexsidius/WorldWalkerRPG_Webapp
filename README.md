@@ -6,8 +6,11 @@ Naruto, Hunter x Hunter, Solo Max-Level Newbie, Overgeared, Reincarnated as a Sl
 now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
-Current app version: **3.63.0** (compatible with save schema 21).
-Current preview build: **3.63.0-adventures-1**.
+Current app version: **3.64.0** (compatible with save schema 21).
+Current preview build: **3.64.0-membership-truth-1**.
+
+
+Version 3.64.0 adds character mastery paths, persistent faction operations, multi-stage expeditions and boss phases, player-targeted minor canon-event intervention, organization delegation, public reputation/wanted status, property/economy/production, and engine-owned official team membership. The Team screen, GM and Advisor now consume the same canonical organization ledger; relationships, locations and faction names cannot become members. Named recruitment and player join decisions require explicit local confirmation.
 
 Living Adventures adds confirmed, timed location activities, route and companion
 choices, retrieval/protection/escape encounters, persistent local aftermaths,

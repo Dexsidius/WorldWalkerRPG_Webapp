@@ -1225,6 +1225,11 @@ def resolve_shop_purchase(state, shop_name, item_name):
     price = _shop_item_price(item)
     if price is None:
         return False, f"'{item_name}' doesn't have a clear price and can't be bought this way.", None
+    try:
+        from property_economy import purchase_price
+        price = purchase_price(state, shop.get("name", shop_name), _shop_item_name(item), price)
+    except Exception:
+        pass
     currency_name = _shop_item_currency(state, item)
     amount = currency_balance(state, currency_name)
     if amount < price:

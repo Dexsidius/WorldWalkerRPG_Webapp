@@ -75,6 +75,10 @@ def _compile_skill_mechanics(state):
 
 APP_OWNED = {
     "adventures", "travel_access", "_world_calendar",
+    "character_paths", "world_conflict", "expeditions", "canon_interventions",
+    "organization_command", "public_reputation", "property_economy",
+    "team_membership_offers", "team_membership_engine_version", "team_membership_truth_started_turn",
+    "official_party_group_id", "naruto_squad_assignment",
     "_request_receipts", "_recovery_guard",
     'relationship_life',
     'atlas_start_day',

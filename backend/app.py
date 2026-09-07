@@ -1350,6 +1350,23 @@ def api_panels():
     canon_events = timeline_for(world).get("events", [])
     tracker = canon_event_tracker(s, canon_events)
     dependencies = canon_dependency_graph(s)
+    dep_by_id = {str(row.get("id")): row for row in dependencies.get("events", []) if isinstance(row, dict)}
+    canon_events_view = []
+    for event in canon_events:
+        if not isinstance(event, dict):
+            continue
+        event_id = str(event.get("id") or f"day:{event.get('day', 0)}:{event.get('title', 'event')}")
+        row = copy.deepcopy(event); row["id"] = event_id
+        resolved = dep_by_id.get(event_id, {})
+        for key in ("status", "reason", "replacement", "effective_day", "requires"):
+            if key in resolved: row[key] = copy.deepcopy(resolved[key])
+        canon_events_view.append(row)
+    from character_paths import public_view as character_paths_view
+    from canon_divergence import public_view as canon_interventions_view
+    from world_conflict import public_view as world_conflict_view
+    from organization_command import public_view as organization_command_view
+    from reputation_system import public_view as public_reputation_view
+    from property_economy import public_view as property_economy_view, market_shops_view
     # Player reference is intentionally spoiler-visible. Character/NPC knowledge
     # and narrator foreknowledge settings remain independent of this read view.
     return jsonify({
@@ -1359,7 +1376,7 @@ def api_panels():
         "finance_debts": s.get("finance_debts", []),
         "tracks_currency": bool(ex.get("tracks_currency", True)),
         "gear_style": gear_style_for(s.get("world", "Custom World")),
-        "shops": s.get("shops", []),
+        "shops": market_shops_view(s),
         "shop_types": ex["shop_types"],
         "training_options": ex["training"],
         "ability_progress": s.get("ability_progress", {}),
@@ -1406,7 +1423,8 @@ def api_panels():
         "canon_reference_visible": True,
         "canon_anchor": s.get("canon_anchor", ""), "calendar_epoch": s.get("calendar_epoch", ""),
         "calendar_anchor_day": s.get("calendar_anchor_day"),
-        "canon_events": canon_events,
+        "canon_events": canon_events_view,
+        "canon_interventions": canon_interventions_view(s),
         "canon_event_tracker": tracker,
         "canon_events_fired": s.get("canon_events_fired", []),
         "scheduled_events": game.visible_schedule(),
@@ -1415,6 +1433,11 @@ def api_panels():
         "campaign_canon": s.get("campaign_canon", []),
         "chapter_summaries": [chapter_view(row, s.get("name", "")) for row in s.get("chapter_summaries", []) if isinstance(row, dict)], "chapter_buffer": s.get("chapter_buffer", []),
         "npc_clocks": s.get("npc_clocks", {}), "faction_clocks": s.get("faction_clocks", {}),
+        "character_paths": character_paths_view(s),
+        "world_conflict": world_conflict_view(s),
+        "organization_command": organization_command_view(s),
+        "public_reputation": public_reputation_view(s),
+        "property_economy": property_economy_view(s),
         "relationships_view": relationship_snapshot(s),
         "progression_preset": progression_preset_for(world), "difficulty_controls": normalize_tuning(s),
         "campaign_health": campaign_health(s), "lore_sources": list_lore_sources(),
@@ -1533,6 +1556,55 @@ def api_campaign_correct():
         game.append("[PLAYER CORRECTION]\n" + record["fact"], "meta")
         game.autosave()
         return jsonify({"ok": True, "correction": record, "state": game.public_state(), "story": game._flush_story()})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/character-paths/pin", methods=["POST"])
+def api_character_path_pin():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    try:
+        from character_paths import pin
+        view = pin(game.state, (request.get_json(silent=True) or {}).get("path_id", ""))
+        game.autosave()
+        return jsonify({"ok": True, "character_paths": view, "state": game.public_state()})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/canon-interventions", methods=["POST"])
+def api_canon_interventions():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    d = request.get_json(silent=True) or {}
+    try:
+        from canon_divergence import target, cancel, public_view
+        action = str(d.get("action") or "target")
+        if action == "target": target(game.state, d.get("event_id"))
+        elif action == "cancel": cancel(game.state, d.get("event_id"))
+        else: raise ValueError("Unknown canon-intervention action.")
+        game.autosave()
+        return jsonify({"ok": True, "canon_interventions": public_view(game.state), "state": game.public_state()})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/organization-command", methods=["POST"])
+def api_organization_command():
+    if not game.campaign_active:
+        return jsonify({"error": "Start or load a campaign first."}), 400
+    d = request.get_json(silent=True) or {}
+    try:
+        from organization_command import start_assignment, cancel_assignment, start_project, public_view
+        action = str(d.get("action") or "start")
+        if action == "start":
+            result = start_assignment(game.state, d.get("group_id"), d.get("task"), d.get("members") or [], d.get("target", ""))
+        elif action == "cancel": result = cancel_assignment(game.state, d.get("assignment_id"))
+        elif action == "project": result = start_project(game.state, d.get("group_id"), d.get("property_id"), d.get("facility"))
+        else: raise ValueError("Unknown organization-command action.")
+        game.autosave()
+        return jsonify({"ok": True, "result": result, "organization_command": public_view(game.state), "state": game.public_state()})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 

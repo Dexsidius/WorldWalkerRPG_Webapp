@@ -1821,6 +1821,7 @@ function animateStateChanges(previous, next) {
 }
 
 function renderState(state) {
+  if (window.WorldwalkerRosterSync) state._organization_roster = WorldwalkerRosterSync.reconcile(state?._organization_roster, state || {});
   const rosterLabel = state?._organization_roster?.label || "Group";
   $$('#journal-tabs [data-tab="party"], [data-journal="party"]').forEach(button => { button.textContent = rosterLabel; });
   const mobileRosterLabel = $('[data-mobile-open="party"] b');
@@ -1829,6 +1830,7 @@ function renderState(state) {
   $("#turn-recovery-notice").hidden = !(state?.last_failed_turn?.route || APP.retryRequest);
   const previousState = APP.state;
   APP.state = state;
+  if (window.WorldwalkerTeamMembership) WorldwalkerTeamMembership.handle(state);
   restorePendingRequest(state);
   checkTrophyProposals(state);
   const s = state;
@@ -2941,6 +2943,10 @@ function setBusy(b) {
 async function submitAction(text) {
   if (APP.busy || !text) return;
   if (!APP.campaignActive) { showToast("Start a campaign first.", "system"); openModal("modal-campaign"); return; }
+  if (window.WorldwalkerTeamMembership?.preflightJoin) {
+    const membership = await WorldwalkerTeamMembership.preflightJoin(text, APP.state);
+    if (membership?.handled && !membership.accepted) return;
+  }
   playSfx("ui_click");
   try {
     let result = await apiPost("/api/actions/queue", { action: text });
@@ -4304,6 +4310,7 @@ async function refreshMainLivingMap(signature = "") {
   const sequence = ++livingMapRefreshSequence;
   try {
     const data = await apiGet("/api/panels");
+    if (window.WorldwalkerRosterSync) data.organization_roster = WorldwalkerRosterSync.reconcile(data.organization_roster, APP.state || {});
     if (sequence !== livingMapRefreshSequence) return;
     const activeWorld = APP.state?.world || "Custom World";
     if (data.world !== activeWorld) throw new Error(`Map data mismatch: expected ${activeWorld}, received ${data.world || "unknown"}.`);
@@ -4392,10 +4399,10 @@ function renderMainLivingMap(data) {
     const majorKinds = new Set(["capital", "city", "village", "nation", "region", "realm", "island", "kingdom", "empire", "floor"]);
     const major = majorKinds.has(String(node.kind || "").toLowerCase());
     dot.type = "button";
-    dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
+    dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "") + ((node.contested_by?.length || node.conflict_operations?.length) ? " territory-contested" : "");
     dot.style.left = `${node.x}%`;
     dot.style.top = `${node.y}%`;
-    dot.title = `${node.display_name || node.name} · ${node.kind || "landmark"}${node.controller && node.controller !== "Unknown" ? ` · ${node.controller}` : ""}`;
+    dot.title = `${node.display_name || node.name} · ${node.kind || "landmark"}${node.controller && node.controller !== "Unknown" ? ` · ${node.controller}` : ""}${node.contested_by?.length ? ` · Contested by ${node.contested_by.join(', ')}` : ""}${node.conflict_operations?.length ? ` · ${node.conflict_operations.length} active faction operation${node.conflict_operations.length===1?'':'s'}` : ""}`;
     dot.dataset.mapNode = node.name;
     dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.display_name || node.name)}</span>`;
     mapCanvas.appendChild(dot);
@@ -4518,9 +4525,31 @@ async function openJournal(tab) {
   if (tab === "party") {
     const combinations = data.companion_combinations || [];
     const playerSummary = s._uses_xp ? `Level ${s.level ?? 1} · ${worldIdentityLabel(s)}` : worldIdentityLabel(s);
-    const partyRows = renderOrganizationRoster(data.organization_roster || s._organization_roster || {groups: []});
+    const reconciledRoster = window.WorldwalkerRosterSync ? WorldwalkerRosterSync.reconcile(data.organization_roster || s._organization_roster || {groups: []}, s) : (data.organization_roster || s._organization_roster || {groups: []});
+    const partyRows = renderOrganizationRoster(reconciledRoster);
     const comboRows = combinations.length ? `<h3>Combination abilities</h3>${combinations.map((combo) => `<details class="combination-card"><summary><b>${escapeHtml(combo.name)}</b><span>${escapeHtml(combo.mastery || 0)}% mastery</span></summary><p>${escapeHtml(combo.description || "A practiced shared technique.")}</p><small>${escapeHtml((combo.participants || []).join(" + "))}</small>${combo.activation ? `<p><b>Use:</b> ${escapeHtml(combo.activation)}</p>` : ""}${combo.limitation ? `<p><b>Limit:</b> ${escapeHtml(combo.limitation)}</p>` : ""}</details>`).join("")}` : "";
-    panel.innerHTML = partyRows + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — ${escapeHtml(playerSummary)}</div>` + comboRows;
+    const command = data.organization_command || { groups: [], assignments: [], reports: [], task_types: [] };
+    const ownedProperties = (data.property_economy?.properties || []);
+    const commandForms = (command.groups || []).map((group) => {
+      const memberChecks = (group.members || []).map((m) => `<label class="org-command-member${m.busy ? " is-busy" : ""}"><input type="checkbox" name="member" value="${escapeHtml(m.name)}"${m.busy ? " disabled" : ""}><span><b>${escapeHtml(m.name)}</b><small>${escapeHtml(m.position || "Member")} · ${escapeHtml(m.power_label || "Unassessed")}${m.busy ? " · Assigned" : ""}</small></span></label>`).join("");
+      const taskOptions = (command.task_types || []).map((task) => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.label)} · ${escapeHtml(formatDuration(task.duration_minutes))} · risk ${escapeHtml(task.risk)}</option>`).join("");
+      const projectForm = group.authority === "leader" && ownedProperties.length ? `<form class="org-project-form" data-org-project-form data-group-id="${escapeHtml(group.id)}"><b>Develop an organization base</b><label>Owned base<select name="property">${ownedProperties.map((property) => `<option value="${escapeHtml(property.id)}">${escapeHtml(property.name)} · ${escapeHtml(property.location)}</option>`).join("")}</select></label><label>Facility<select name="facility"><option value="quarters">Member quarters</option><option value="training_hall">Training hall</option><option value="infirmary">Infirmary</option><option value="intelligence_office">Intelligence office</option><option value="defenses">Defenses</option><option value="storage">Storage wing</option><option value="workshop">Production floor</option></select></label><button type="submit">START 2-DAY PROJECT</button></form>` : "";
+      return `<section class="organization-command-card"><header><b>${escapeHtml(group.name)}</b><span>${escapeHtml(group.authority)}</span></header><p class="hint">Resources: ${Object.entries(group.resources || {}).map(([k,v]) => `${escapeHtml(humanLabel(k))} ${escapeHtml(v)}`).join(" · ")}</p><form data-org-command-form data-group-id="${escapeHtml(group.id)}"><label>Assignment<select name="task">${taskOptions}</select></label><label>Objective / destination<input name="target" placeholder="What should this team accomplish?"></label><fieldset><legend>Assign members</legend>${memberChecks || '<span class="hint">No commandable members are currently available.</span>'}</fieldset><button type="submit"${memberChecks ? "" : " disabled"}>ISSUE ORDER</button></form>${projectForm}</section>`;
+    }).join("");
+    const assignmentRows = (command.assignments || []).slice().reverse().map((a) => `<article class="org-assignment"><header><b>${escapeHtml(a.group)} · ${escapeHtml(a.label || humanLabel(a.task))}</b><span>${escapeHtml(a.status)} · ${escapeHtml(a.progress || 0)}%</span></header><p>${escapeHtml(a.target)}</p><small>${escapeHtml((a.members || []).join(" · "))}</small>${a.report ? `<p>${escapeHtml(a.report)}</p>` : ""}${a.status === "active" ? `<button type="button" data-org-cancel="${escapeHtml(a.id)}">RECALL TEAM</button>` : ""}</article>`).join("");
+    const commandCenter = commandForms ? `<h3>Organization command</h3><p class="hint">Delegate work through established authority. Assignments advance while campaign time passes; independent allies cannot be ordered.</p>${commandForms}${assignmentRows ? `<h3>Assignments & reports</h3>${assignmentRows}` : ""}` : "";
+    panel.innerHTML = partyRows + `<div class="jrow"><b>${escapeHtml(s.name || "Traveler")}</b> — ${escapeHtml(playerSummary)}</div>` + commandCenter + comboRows;
+    panel.querySelectorAll('[data-org-command-form]').forEach((form) => form.addEventListener('submit', async (event) => {
+      event.preventDefault(); const button=form.querySelector('button[type="submit"]');button.disabled=true;
+      try { const payload={action:'start',group_id:form.dataset.groupId,task:form.elements.task.value,target:form.elements.target.value,members:[...form.querySelectorAll('input[name="member"]:checked')].map(x=>x.value)}; await apiPost('/api/organization-command',payload); showToast('Organization assignment issued.','success'); return openJournal('party'); } catch(error){showToast(error.message,'danger');button.disabled=false;}
+    }));
+    panel.querySelectorAll('[data-org-project-form]').forEach((form) => form.addEventListener('submit', async (event) => {
+      event.preventDefault(); const button=form.querySelector('button[type="submit"]');button.disabled=true;
+      try { await apiPost('/api/organization-command',{action:'project',group_id:form.dataset.groupId,property_id:form.elements.property.value,facility:form.elements.facility.value}); showToast('Organization base project started.','success'); return openJournal('party'); } catch(error){showToast(error.message,'danger');button.disabled=false;}
+    }));
+    panel.querySelectorAll('[data-org-cancel]').forEach((button) => button.addEventListener('click', async () => {
+      try { await apiPost('/api/organization-command',{action:'cancel',assignment_id:button.dataset.orgCancel}); showToast('Team recalled.','success'); return openJournal('party'); } catch(error){showToast(error.message,'danger');}
+    }));
   } else if (tab === "search") {
     panel.innerHTML = `<div class="system-summary"><b>SEARCH YOUR CAMPAIGN</b><span>Find old actions, people, quests, skills, chapters, facts, and player corrections without scrolling through the entire Chronicle.</span></div><form id="campaign-search-form" class="campaign-search-form"><input id="campaign-search-query" type="search" minlength="2" placeholder="Try a name, place, ability, promise, or event" required><button class="btn-primary" type="submit">SEARCH</button></form><div id="campaign-search-results" class="campaign-search-results"><div class="jrow hint">Enter at least two characters to search locally. This makes no AI call.</div></div>`;
     setTimeout(() => $("#campaign-search-query")?.focus(), 0);
@@ -4636,6 +4665,7 @@ async function openJournal(tab) {
     const logs = (data.progression_log || []).slice(-40).reverse();
     const ledger = (data.progression_ledger || []).slice(-40).reverse();
     const depth = data.world_depth || {};
+    const masteryRows = (data.character_paths?.paths || []).map((path) => `<article class="progress-entry mastery-entry${path.pinned ? ' pinned' : ''}"><header><b>${escapeHtml(path.title || path.skill)}</b><span>${escapeHtml(path.stage)} · ${escapeHtml(path.mastery)}%</span></header><div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(path.mastery || 0)))}%"></i></div><p>${(path.next_steps || []).map(escapeHtml).join(' · ')}</p><small>Combat refinement: +${escapeHtml(path.upgrades?.combat_bonus || 0)} · Resource efficiency ${escapeHtml(path.upgrades?.resource_efficiency_pct || 0)}%${path.upgrades?.range_bonus?` · Range +${escapeHtml(path.upgrades.range_bonus)}`:''}${path.upgrades?.duration_bonus?` · Duration +${escapeHtml(path.upgrades.duration_bonus)} round`:''}${path.upgrades?.potency_bonus?` · Effect potency +${escapeHtml(path.upgrades.potency_bonus)}%`:''}</small>${(path.mentor_candidates || []).length ? `<small>Known mentors: ${(path.mentor_candidates || []).map(escapeHtml).join(' · ')}</small>` : ''}<button type="button" data-character-path="${escapeHtml(path.pinned ? '' : path.id)}">${path.pinned ? 'Unpin development goal' : 'Pin as development goal'}</button></article>`).join("");
     const pathRows = (depth.progression_paths || []).map((path) => `<details class="progress-entry path-entry"><summary><b>${escapeHtml(path.name || "Development path")}</b><span>${escapeHtml(path.status || "Available")}</span></summary><div><p>${escapeHtml(path.description || "")}</p>${(path.possible_routes || []).length ? `<small>Possible routes — not a required order</small><ul>${path.possible_routes.map((route) => `<li>${escapeHtml(route)}</li>`).join("")}</ul>` : ""}${(path.hard_requirements || []).length ? `<small>True setting requirements</small><ul>${path.hard_requirements.map((requirement) => `<li>${escapeHtml(requirement)}</li>`).join("")}</ul>` : ""}</div></details>`).join("");
     const techniqueRows = (depth.signature_techniques || []).map((technique) => `<details class="progress-entry signature-entry"><summary><b>${escapeHtml(technique.name || "Signature technique")}</b><span>${escapeHtml(technique.stage || "Established")}</span></summary><div>${technique.mechanism ? `<p>${escapeHtml(technique.mechanism)}</p>` : ""}${technique.activation ? `<p><b>Use:</b> ${escapeHtml(technique.activation)}</p>` : ""}${technique.cost ? `<p><b>Cost or limitation:</b> ${escapeHtml(technique.cost)}</p>` : ""}${(technique.counters || []).length ? `<p><b>Counters:</b> ${escapeHtml(technique.counters.join(" · "))}</p>` : ""}${technique.next_milestone ? `<p><b>Possible next step:</b> ${escapeHtml(technique.next_milestone)}</p>` : ""}</div></details>`).join("");
     const ledgerRows = ledger.map((entry) => {
@@ -4659,7 +4689,11 @@ async function openJournal(tab) {
     const summary = data.uses_xp
       ? `<div class="progress-summary"><b>LEVEL ${escapeHtml(data.level || 1)}</b><span>${escapeHtml(data.xp || 0)} / ${escapeHtml(data.xp_next || 100)} XP toward the next level</span></div><p class="hint">Meaningful actions earn contextual XP. Base stats increase automatically when XP produces a level.</p>`
       : `<div class="progress-summary"><b>WORLD-BASED GROWTH</b><span>No artificial XP or levels in this setting</span></div><p class="hint">Stats, techniques, knowledge, titles, ranks, and proficiency improve directly through world-valid experience.</p>`;
-    panel.innerHTML = summary + `<h3>Flexible development paths</h3><p class="hint">These explain what is possible and what the world truly requires. They are not a mandatory order or locked skill tree.</p>` + (pathRows || '<div class="jrow hint">No world-specific paths are available yet.</div>') + (techniqueRows ? `<h3>Signature techniques</h3>${techniqueRows}` : "") + `<h3>Why your character changed</h3>` + (ledgerRows || '<div class="jrow hint">No lasting growth changes have been recorded yet.</div>') + `<h3>Training and XP history</h3>` + (rows || '<div class="jrow hint">No progression has been recorded yet.</div>');
+    panel.innerHTML = summary + `<h3>Character mastery</h3><p class="hint">Pin one established ability as your current development goal. Timed mastery sessions appear in Local activities when a goal is pinned; this does not lock other growth.</p>` + (masteryRows || '<div class="jrow hint">Learn an ability before a mastery path can be tracked.</div>') + `<h3>Flexible development paths</h3><p class="hint">These explain what is possible and what the world truly requires. They are not a mandatory order or locked skill tree.</p>` + (pathRows || '<div class="jrow hint">No world-specific paths are available yet.</div>') + (techniqueRows ? `<h3>Signature techniques</h3>${techniqueRows}` : "") + `<h3>Why your character changed</h3>` + (ledgerRows || '<div class="jrow hint">No lasting growth changes have been recorded yet.</div>') + `<h3>Training and XP history</h3>` + (rows || '<div class="jrow hint">No progression has been recorded yet.</div>');
+    panel.querySelectorAll('[data-character-path]').forEach((button) => button.addEventListener('click', async () => {
+      try { await apiPost('/api/character-paths/pin', {path_id: button.dataset.characterPath || ''}); showToast(button.dataset.characterPath ? 'Development goal pinned.' : 'Development goal unpinned.', 'notify'); openJournal('progression'); }
+      catch (error) { showToast(error.message, 'danger'); }
+    }));
   } else if (tab === "chapters") {
     const chapters = [...(data.chapter_summaries || [])].reverse();
     const recent = data.chapter_buffer || [];
@@ -4675,7 +4709,8 @@ async function openJournal(tab) {
         (clock.core_ambition ? `<p><b>Deep down wants:</b> ${escapeHtml(clock.core_ambition)}</p>` : "");
       return `<article class="clock-row"><header><b>${escapeHtml(clock.name || "Unknown")}</b><span class="clock-status ${escapeHtml(clock.status || "active")}">${escapeHtml((clock.status || "active").replace(/_/g, " "))}</span></header><p>${escapeHtml(clock.immediate_goal || clock.goal || "Private agenda")}</p>${layers}<div class="clock-track"><i style="width:${Math.max(0, Math.min(100, Number(clock.progress || 0)))}%"></i></div><small>${escapeHtml(clock.progress || 0)} / ${escapeHtml(clock.threshold || 100)} · last moved ${escapeHtml(clock.last_update || "not yet")}</small>${clock.last_cause ? `<small class="causal-reason">Because: ${escapeHtml(clock.last_cause)}</small>` : ""}${clock.blocked_reason ? `<small class="causal-blocked">Blocked: ${escapeHtml(clock.blocked_reason)}</small>` : ""}${clock.opponent ? `<small>⚔ Power ${escapeHtml(clock.power ?? 50)} vs ${escapeHtml(clock.opponent)}${clock.contested_location ? ` over ${escapeHtml(clock.contested_location)}` : ""}</small>` : ""}</article>`;
     }).join("") : '<div class="jrow hint">No visible clocks yet. Important NPCs and factions gain clocks as they enter the campaign.</div>');
-    panel.innerHTML = renderClocks("Faction agendas", data.faction_clocks) + renderClocks("NPC agendas", data.npc_clocks);
+    const conflictRows=(data.world_conflict?.operations||[]).map((op)=>`<article class="clock-row conflict-operation"><header><b>${escapeHtml(op.faction)} · ${escapeHtml(op.type || 'operation')}</b><span class="clock-status ${escapeHtml(op.status || 'active')}">${escapeHtml(op.status || 'active')}</span></header><p>${escapeHtml(op.objective || 'Faction operation')}</p><div class="clock-track"><i style="width:${Math.max(0,Math.min(100,Number(op.progress||0)))}%"></i></div><small>${escapeHtml(op.target || 'Unspecified front')} · ${escapeHtml(op.progress || 0)}%</small>${op.recent_outcome?`<small>${escapeHtml(op.recent_outcome)}</small>`:''}</article>`).join('');
+    panel.innerHTML = renderClocks("Faction agendas", data.faction_clocks) + `<h3>Active faction operations</h3>${conflictRows || '<div class="jrow hint">No visible strategic operations are active.</div>'}` + renderClocks("NPC agendas", data.npc_clocks);
   } else if (tab === "causality") {
     const recent = [...(data.causality?.recent || [])].reverse();
     const actorRows = [...(data.causality?.factions || []), ...(data.causality?.npcs || [])];
@@ -4698,8 +4733,11 @@ async function openJournal(tab) {
     const affiliations = data.relationships_view?.affiliations || [];
     const npcNetwork = data.relationships_view?.npc_network || [];
     const intentionMap = data.simulation?.intentions || {};
+    const publicRep = data.public_reputation || { fame: 0, infamy: 0, identity: "Unknown", jurisdictions: [], history: [] };
+    const repRows = (publicRep.jurisdictions || []).map((j) => `<article class="reputation-row"><header><b>${escapeHtml(j.faction)}</b><span>${escapeHtml(j.wanted || "Clear")}</span></header><p>${escapeHtml(j.band || "Unknown")} · standing ${Number(j.standing || 0) >= 0 ? "+" : ""}${escapeHtml(j.standing || 0)} · heat ${escapeHtml(j.heat || 0)}</p><small>Recognition ${escapeHtml(j.recognition || 0)}%</small></article>`).join("");
     panel.innerHTML = `<div class="system-summary"><b>RELATIONSHIPS &amp; FACTIONS</b><span>Trust is evidence, not automatic obedience.</span></div>` +
       `<h3>Affiliations — your rank and standing</h3>` + (affiliations.length ? affiliations.map((a) => `<div class="jrow affiliation-row${a.status && a.status !== "active" ? ` ${escapeHtml(a.status)}` : ""}"><b>${escapeHtml(a.rank || "Member")}</b> — ${escapeHtml(a.faction)}${a.status && a.status !== "active" ? `<span class="affiliation-status">${escapeHtml(a.status)}</span>` : ""}${a.joined ? `<br><small>Joined: ${escapeHtml(a.joined)}</small>` : ""}${a.notes ? `<br><small>${escapeHtml(a.notes)}</small>` : ""}</div>`).join("") : '<div class="jrow hint">Not formally affiliated with any group, alliance, or hierarchy yet.</div>') +
+      `<h3>Public profile</h3><div class="public-reputation-summary"><b>${escapeHtml(publicRep.identity || "Unknown")}</b><span>Fame ${escapeHtml(publicRep.fame || 0)} · Infamy ${escapeHtml(publicRep.infamy || 0)}</span><small>Public attention follows recorded witnesses, faction standing, and formal wanted/bounty records; private knowledge does not become reputation automatically.</small></div>${repRows || '<div class="jrow hint">No jurisdiction has developed a public stance toward you yet.</div>'}` +
       `<h3>People</h3>` + (people.length ? people.map((person) => {
         // mid_term_goal/core_ambition are optional depth beyond the one
         // goal line every tracked NPC already gets — most won't have them,
@@ -4837,7 +4875,11 @@ async function openJournal(tab) {
       return `<div class="jrow shop-block"><b>${escapeHtml(sh.name || "Shop")}</b><small>${escapeHtml(sh.type || "Merchant")}</small>${itemRows}</div>`;
     }).join("") : `<div class="jrow">${data.shop_types.map((t) => "• " + t).join("<br/>")}</div>`;
     const accessNote = tracksCurrency ? currencyRowHtml(currency.name, currency.amount, currency) : `<div class="system-summary"><b>SUPPLY ACCESS</b><span>This world handles routine equipment through rank, authorization, favors, requisitions, availability, or story events instead of a permanent money balance.</span></div>`;
-    panel.innerHTML = accessNote + shopBlocks +
+    const economy = data.property_economy || { properties: [], work_orders: [], market: {} };
+    const propertyRows = (economy.properties || []).map((p) => `<article class="property-card"><header><b>${escapeHtml(p.name)}</b><span>${escapeHtml(humanLabel(p.type || "property"))} · ${escapeHtml(p.location)}</span></header><p>Treasury: ${escapeHtml(p.treasury || 0)} ${escapeHtml(currency.name)}</p><small>${escapeHtml((p.facilities_readable || []).join(" · ") || "No facility upgrades yet")}</small></article>`).join("");
+    const orderRows = (economy.work_orders || []).slice().reverse().map((o) => `<div class="jrow"><b>${escapeHtml(o.recipe)}</b> — ${escapeHtml(o.status)}<br><small>${escapeHtml((economy.properties || []).find(p => p.id === o.property_id)?.name || "Workshop")}</small></div>`).join("");
+    const economyPanel = `<h3>Property & local economy</h3><div class="system-summary"><b>${escapeHtml((economy.market?.condition || "stable").toUpperCase())} MARKET</b><span>${escapeHtml(economy.market?.location || data.location || "Current location")} · price index ×${escapeHtml(economy.market?.price_multiplier || 1)}</span><small>Conflict, route conditions, and local public standing influence current market prices. Property proceeds accrue locally and must be collected there.</small></div>${propertyRows || '<div class="jrow hint">You do not own a tracked property yet. Available purchases and upgrades appear under Living Map → Local activities.</div>'}${orderRows ? `<h3>Production orders</h3>${orderRows}` : ""}`;
+    panel.innerHTML = accessNote + shopBlocks + economyPanel +
       `<div class="jrow"><b>Training Focus</b><br/>${data.training_options.map(escapeHtml).join(", ")}</div>` +
       (Object.keys(data.ability_progress || {}).length ? `<div class="jrow"><b>Progress</b><br/>${Object.entries(data.ability_progress).map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join("<br/>")}</div>` : "");
   } else if (tab === "map") {
@@ -4870,9 +4912,9 @@ async function openJournal(tab) {
       dot.type = "button";
       const majorKinds = new Set(["capital", "city", "village", "nation", "region", "realm", "island"]);
       const major = majorKinds.has(String(node.kind || "").toLowerCase());
-      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "");
+      dot.className = "map-node " + (node.current ? "here" : node.discovered ? "known" : "unknown") + (major ? " map-major" : "") + (node.danger_level ? " danger-" + node.danger_level.toLowerCase() : "") + (node.recently_changed ? " territory-changed" : "") + ((node.contested_by?.length || node.conflict_operations?.length) ? " territory-contested" : "");
       dot.style.left = node.x + "%"; dot.style.top = node.y + "%";
-      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}${node.recently_changed ? " · Control recently changed" : ""}`;
+      dot.title = `${node.name} · ${node.kind || "landmark"} · Tier ${node.tier ?? "?"}${node.controller && node.controller !== "Unknown" ? ` · Controlled by ${node.controller}` : ""}${node.danger_level ? ` · ${node.danger_level} danger` : ""}${node.recently_changed ? " · Control recently changed" : ""}${node.contested_by?.length ? ` · Contested by ${node.contested_by.join(', ')}` : ""}`;
       dot.setAttribute("data-map-node", node.name);
       dot.innerHTML = `<span class="map-pip"></span><span class="map-label">${escapeHtml(node.name)}</span>`;
       canvas.appendChild(dot);

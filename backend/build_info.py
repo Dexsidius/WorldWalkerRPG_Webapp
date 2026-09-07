@@ -1,13 +1,13 @@
-"""Release build ID; existing campaign save schema remains 21."""
-BUILD_ID = "3.63.0-adventures-1"
+"""Membership-truth hotfix build ID; save schema and base app version remain stable."""
+BUILD_ID = "3.64.0-membership-truth-1"
 PATCH_NOTES = {
-    "title": "Living Adventures and world calendars",
-    "summary": "Timed location activities, journey choices, tactical objectives and lasting aftermaths. A visible canon reference and fixed world calendars help plan your campaign.",
+    "title": "One official team roster everywhere",
+    "summary": "The Team screen, GM, and Advisor now read the same engine-owned membership ledger; old-save entity pollution is repaired without treating relationships or locations as people.",
     "highlights": [
-        {"title": "Review the time, then act", "example": "Local activities display their duration and costs. Confirm once to resolve; your draft and queued itinerary remain separate."},
-        {"title": "Plan a real journey", "example": "Compare mapped routes, pace, access requirements and available companions. Meaningful calendar boundaries pause rather than silently consume the remainder."},
-        {"title": "Win the objective", "example": "Recover a dispatch, protect a relief beacon or reach an escape route. Terrain, positioning and preparation matter; defeating everyone is not always the goal."},
-        {"title": "Return to a changed place", "example": "Completed local adventures can improve roads, establish shelter or earn a trusted contact. The location links back to the recorded Chronicle event."},
-        {"title": "Dates and canon at a glance", "example": "The visible Canon timeline shows future events and campaign changes. World calendars use fixed anchors; reconstructed dates and game conventions are explicitly labeled."},
+        {"title": "One membership source of truth", "example": "Official members come from the organization ledger for the Team screen, GM context, Advisor context, commands, and faction-roster mirror."},
+        {"title": "Old-save roster repair", "example": "Places and organizations such as Amegakure or Akatsuki are removed when they were accidentally stored as member names; legitimate character-backed members are recovered once."},
+        {"title": "Candidates are not members", "example": "Invitations, recruitment attempts, affiliates, and refused offers do not appear as official party members until the engine-owned Yes/No decision establishes membership."},
+        {"title": "Relationships do not imply membership", "example": "High affinity, a contact record, being in the same location, or appearing in old prose can no longer put an entity on a team."},
+        {"title": "Recruitment prompts remain authoritative", "example": "Future named recruits and player join requests still use the explicit local confirmation system from the previous hotfix."},
     ],
 }
