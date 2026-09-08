@@ -40,9 +40,11 @@ def test_modal_open_close_and_mobile_layout(ui):
  page.set_viewport_size({'width':390,'height':844})
  page.get_by_role('button',name='HELP',exact=True).click()
  page.locator('[data-action="help"]').click()
- page.wait_for_selector('.modal-backdrop.open')
- modal=page.locator('.modal-backdrop.open').first
- modal.locator('.modal-close').first.click()
- page.wait_for_function("!document.querySelector('.modal-backdrop.open')")
+ page.wait_for_selector('.modal-backdrop.open, #offline-help[open]')
+ if page.locator('#offline-help[open]').count():
+  page.locator('#offline-help button').click()
+ else:
+  page.locator('.modal-backdrop.open .modal-close').first.click()
+ page.wait_for_function("!document.querySelector('.modal-backdrop.open, #offline-help[open]')")
  assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
  assert not calls
