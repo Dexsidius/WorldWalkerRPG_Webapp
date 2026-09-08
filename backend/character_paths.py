@@ -36,6 +36,7 @@ def _stage(value):
     return next((label for threshold,label in reversed(STAGES) if value>=threshold),'Familiar')
 
 def _mentor_candidates(state):
+    from relationship_life import available
     out=[]
     records={}
     for field in ('npc_memories','contacts'):
@@ -43,7 +44,7 @@ def _mentor_candidates(state):
     life=state.get('life_simulation') if isinstance(state.get('life_simulation'),dict) else {}
     explicit={str(r.get('mentor') or '') for r in life.get('mentorships',[]) if isinstance(r,dict) and r.get('active',True)}
     for name,row in records.items():
-        if not isinstance(row,dict): continue
+        if not isinstance(row,dict) or not available(state,str(name)): continue
         blob=' '.join(_text(row.get(k)) for k in ('role','profession','notes','relationship_reason','public_goal','known_goal'))
         if name in explicit or re.search(r'\b(mentor|sensei|teacher|master|instructor|captain|coach|trainer|senior)\b',blob,re.I): out.append(str(name))
     return list(dict.fromkeys(out))[:12]
@@ -121,13 +122,19 @@ def actions(state,people_here=None):
       {'id':f'path:efficiency:{pid}','label':f'Refine {skill} efficiency','minutes':180,'description':'Work specifically on reducing waste and improving repeatability. Costs 12% of maximum energy.'},
       {'id':f'path:application:{pid}','label':f'Experiment with {skill} applications','minutes':180,'description':'Develop practical flexibility without changing the ability’s established governing concept. Costs 15% of maximum energy.'},
     ]
-    present={str(x.get('name') if isinstance(x,dict) else x) for x in (people_here or [])}
+    if people_here is None:
+        from living_adventures import available_people
+        people_here=available_people(state,state.get('location',''))
+    present={str(x.get('name') if isinstance(x,dict) else x).casefold() for x in people_here}
+    from organization_command import active_assignment_members
+    present-=active_assignment_members(state)
     for mentor in row.get('mentor_candidates',[]):
-        if not present or mentor in present:
+        if mentor.casefold() in present:
             out.append({'id':f'path:mentor:{pid}:{mentor}','label':f'Train {skill} with {mentor}','minutes':180,'description':'Instruction accelerates mastery only because an established mentor is actually present. Costs 12% of maximum energy.'})
     return out
 
 def resolve_session(state,action,elapsed_minutes,complete=True,facility_bonus=0):
+    validate_mentor(state,action)
     parts=str(action or '').split(':')
     if len(parts)<3 or parts[0]!='path': raise ValueError('Unknown character-path session.')
     kind,pid=parts[1],parts[2]; root=normalize(state); path=root['paths'].get(pid)
@@ -145,6 +152,16 @@ def resolve_session(state,action,elapsed_minutes,complete=True,facility_bonus=0)
     cost_pct={'fundamentals':.10,'efficiency':.12,'application':.15,'mentor':.12}[kind]
     maximum=float(state.get('resource_max',100) or 100); cost=int(round(maximum*cost_pct*ratio)); state['resource']=max(0,int(state.get('resource',0) or 0)-cost)
     return {'path':copy.deepcopy(path),'mastery_gain':gain,'completed':bool(complete),'stage_changed':previous!=path['stage'],'previous_stage':previous}
+
+def validate_mentor(state,action):
+    if not str(action).startswith('path:mentor:'): return
+    from living_adventures import available_people
+    from organization_command import active_assignment_members
+    parts=str(action).split(':',3)
+    name=parts[3] if len(parts)==4 else ''
+    present={r['name'].casefold() for r in available_people(state,state.get('location',''))}
+    if name not in _mentor_candidates(state) or name.casefold() not in present or name.casefold() in active_assignment_members(state):
+        raise ValueError('That mentor is no longer present and available. Cancel or choose another training session.')
 
 def record_turn(before,state,actions,elapsed_minutes):
     root=normalize(state); text_blob=' '.join(map(str,actions or [])); results=[]

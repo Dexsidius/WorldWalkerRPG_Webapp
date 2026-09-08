@@ -78,8 +78,10 @@ def available_people(s,place):
         for name,r in obj(s.get(field)).items():
             if not isinstance(r,dict):continue
             if text(r.get('status')).lower() in UNAVAILABLE or r.get('alive') is False:continue
-            loc=text(r.get('last_known_location') or r.get('location'))
-            present=name in seq(obj(s.get('scene_state')).get('present')) and place==location_node(s)['name']
+            loc=text(r.get('location') or r.get('last_known_location'))
+            scene=obj(s.get('scene_state'))
+            present_names={text(p.get('name') if isinstance(p,dict) else p).casefold() for p in seq(scene.get('present'))}
+            present=name.casefold() in present_names and scene.get('location',s.get('location'))==s.get('location') and place==location_node(s)['name']
             if loc.casefold()==place.casefold() or present:
                 people[name]={'name':name,'location':place,'goal':text(r.get('known_goal') or r.get('public_goal')), 'basis':'present' if present else 'last known'}
     for r in seq(s.get('companions')):
@@ -87,7 +89,8 @@ def available_people(s,place):
         if text(r.get('status')).lower() in UNAVAILABLE or r.get('alive') is False:continue
         loc=text(r.get('location') or s.get('location'))
         if loc.casefold()==place.casefold():people[r['name']]={'name':r['name'],'location':place,'goal':'','basis':'companion'}
-    return [p for p in people.values() if p['name'].casefold() not in unavailable][:24]
+    from relationship_life import available
+    return [p for p in people.values() if p['name'].casefold() not in unavailable and available(s,p['name'])][:24]
 
 
 def companions_here(s,place):
@@ -340,6 +343,8 @@ def action_spec(s,payload):
     if action=='activity:resume':
         pending=obj(store(s).get('pending_activity')); original=copy.deepcopy(pending.get('spec',{}))
         if original.get('place')!=place:raise ValueError('Return to the activity location or cancel the unfinished activity.')
+        from character_paths import validate_mentor
+        validate_mentor(s,original.get('id',''))
         if original.get('id','').startswith(('property:','craft:')):
             from property_economy import refresh_spec
             original=refresh_spec(s,original)

@@ -8,6 +8,7 @@
 /release-v*/
 /output/
 /.test-*/
+/.build-test-data/
 /.playwright-cli/
 
 # Shipped release archives — attached to GitHub Releases instead of committed

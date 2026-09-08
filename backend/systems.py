@@ -353,7 +353,7 @@ def _normalize_faction_strategy(state, name, clock):
         leadership.setdefault("status", "stable" if leadership.get("leader") else "unconfirmed")
     clock["leadership"] = leadership
     operations = [copy.deepcopy(op) for op in (clock.get("operations") or []) if isinstance(op, dict)][-12:]
-    if not any(op.get("status") == "active" for op in operations):
+    if not any(op.get("status") in {"active", "awaiting_resolution"} for op in operations):
         objective = clock["immediate_goal"]
         operations.append({
             "id": f"{re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-')}-op-{int(state.get('turn', 0) or 0)}",
@@ -374,11 +374,13 @@ NEMESIS_CLOCK_THRESHOLD = 260
 
 
 def tick_world_clocks(state, elapsed_minutes):
+    from world_conflict import refresh, elapsed_steps, visible
     faction_clocks = state.setdefault("faction_clocks", {})
     for name in state.get("factions", {}):
         faction_clocks.setdefault(name, _clock(name, "faction", f"Advance {name}'s current agenda"))
     for name, clock in faction_clocks.items():
         if isinstance(clock, dict): _normalize_faction_strategy(state, name, clock)
+    refresh(state, elapsed_minutes)
     npc_clocks = state.setdefault("npc_clocks", {})
     for name, memory in state.get("npc_memories", {}).items():
         if not isinstance(memory, dict): continue
@@ -397,28 +399,12 @@ def tick_world_clocks(state, elapsed_minutes):
     for clock_kind, clocks in (("faction", faction_clocks), ("npc", npc_clocks)):
         for key, clock in clocks.items():
             if not isinstance(clock, dict) or clock.get("status") not in {None, "active"}: continue
-            causal_step = advance_causal_clock(state, clock.get("name") or key, clock, step, elapsed_days, clock_kind)
+            clock_step = elapsed_steps(state, 'clock:'+str(key), elapsed_minutes) if clock_kind == 'faction' else step
+            if not clock_step: continue
+            causal_step = advance_causal_clock(state, clock.get("name") or key, clock, clock_step, elapsed_days, clock_kind)
             if clock_kind == "faction":
-                active_operation = next((op for op in clock.get("operations", []) if isinstance(op, dict) and op.get("status") == "active"), None)
-                if active_operation:
-                    resource_key = {"military":"logistics", "economic":"capacity", "intelligence":"intelligence", "diplomatic":"influence"}.get(active_operation.get("type"), "influence")
-                    resource = int((clock.get("resources") or {}).get(resource_key, 50) or 50)
-                    operation_step = max(1, round(causal_step * (.65 + resource / 140)))
-                    active_operation["progress"] = min(100, int(active_operation.get("progress", 0) or 0) + operation_step)
-                    if active_operation["progress"] >= 100:
-                        active_operation["status"] = "completed"; active_operation["completed_turn"] = int(state.get("turn", 0) or 0)
-                        outcome = {"turn": int(state.get("turn", 0) or 0), "operation": active_operation.get("objective"), "result": "Reached a strategic decision point"}
-                        clock["recent_outcomes"] = [*clock.get("recent_outcomes", []), outcome][-12:]
-                        clock["immediate_goal"] = f"Consolidate the result of {active_operation.get('objective')}"
-                        events.append({"type":"world", "faction": key,
-                                       "message": f"{key} has brought an operation to a decision point: {active_operation.get('objective')}."})
-                    # Activity spends capacity but ordinary time also restores
-                    # organizational readiness. This keeps resources relevant
-                    # without turning them into a second economy screen.
-                    clock["resources"][resource_key] = max(0, resource - max(0, operation_step // 8))
-                    clock["resources"]["capacity"] = min(100, int(clock["resources"].get("capacity", 50)) + max(1, int(elapsed_days // 7)))
                 leadership = clock.get("leadership", {})
-                if leadership.get("status") == "succession pressure" and not leadership.get("pressure_reported"):
+                if visible(clock) and leadership.get("status") == "succession pressure" and not leadership.get("pressure_reported"):
                     events.append({"type":"world", "faction": key,
                                    "message": f"{key} faces a leadership vacuum; its existing agenda continues, but internal contenders are beginning to shape how it is pursued."})
                     leadership["pressure_reported"] = True
@@ -443,6 +429,8 @@ def tick_world_clocks(state, elapsed_minutes):
                 # doing right now) is what a turning point should describe,
                 # not the flat placeholder .goal every faction starts with.
                 current_goal = clock.get("immediate_goal") or clock.get("goal")
+                if not visible(clock) or (clock_kind == 'faction' and any(not visible(op) for op in clock.get('operations',[]))):
+                    continue
                 if clock.get("nemesis"):
                     events.append({"type": "world", "nemesis": True,
                                     "message": f"⚠ Word reaches you that {who}'s scheme has reached a breaking point: {current_goal}."})

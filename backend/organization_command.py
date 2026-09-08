@@ -42,11 +42,13 @@ def active_assignment_for(s,name):
     q=_text(name).casefold()
     return next((copy.deepcopy(a) for a in _obj(_obj(s.get('organization_command')).get('assignments')).values() if isinstance(a,dict) and a.get('status')=='active' and any(_text(x).casefold()==q for x in _seq(a.get('members')))),None)
 def commandable_members(s,gid):
+    from relationship_life import available
     groups=_groups(s);group=_obj(groups.get(gid));player=_text(s.get('name'));people=known_people(s);out=[]
     if not _authority(group,player):return out
     for name,row in _obj(group.get('members')).items():
         if name==player or not isinstance(row,dict) or row.get('status') not in ACTIVE or row.get('status')=='missing' or row.get('independent') is True:continue
         if not command_chain(group,name,player):continue
+        if not available(s,name):continue
         p=power_for(s,name,row,people);busy=active_assignment_for(s,name)
         out.append({'name':name,'position':row.get('position','Member'),'power':p.get('score'),'power_label':p.get('label'),'unit':row.get('unit',''),'busy':bool(busy),'assignment_id':busy.get('id') if busy else ''})
     return out
@@ -70,6 +72,7 @@ def cancel_assignment(s,aid):
     if not a or a.get('status')!='active':raise ValueError('That assignment is not active.')
     a['status']='cancelled';a['report']='Recalled before completion.';return copy.deepcopy(a)
 def _resolve(s,a):
+    if _invalidate_assignment(s,a): return a['report']
     groups=ensure_organizations(s);g=_obj(groups.get(a.get('group_id')));people=known_people(s);scores=[]
     for n in a.get('members',[]):
         row=_obj(_obj(g.get('members')).get(n));p=power_for(s,n,row,people);scores.append(_num(p.get('score'),25))
@@ -99,9 +102,19 @@ def advance(s,elapsed_minutes):
     root=_root(s);now=_minute(s)
     for a in root['assignments'].values():
         if not isinstance(a,dict) or a.get('status')!='active':continue
+        if _invalidate_assignment(s,a):continue
         start=int(a.get('started_minute',now));due=max(start+1,int(a.get('due_minute',start+1)));a['progress']=min(99,max(0,round((now-start)/(due-start)*100)))
         if now>=due:_resolve(s,a)
     advance_projects(s);return public_view(s)
+
+def _invalidate_assignment(s,a):
+    allowed={m['name'] for m in commandable_members(s,a.get('group_id'))}
+    unavailable=[n for n in a.get('members',[]) if n not in allowed]
+    if a.get('members') and not unavailable: return False
+    a['status']='cancelled';a['resolved_minute']=_minute(s)
+    a['report']='Assignment stopped: '+(', '.join(unavailable) or 'the assigned team')+' cannot continue under your command. No result or reward was granted.'
+    root=_root(s);root['reports'].append({'id':a['id'],'group':a.get('group'),'report':a['report'],'success':False,'turn':s.get('turn'),'canon_day':s.get('canon_day')});root['reports']=root['reports'][-80:]
+    return True
 def start_project(s,gid,property_id,facility):
     if facility not in FACILITY_PROJECTS:raise ValueError('Unknown organization facility project.')
     groups=ensure_organizations(s);g=_obj(groups.get(gid));

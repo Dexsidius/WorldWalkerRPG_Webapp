@@ -1342,7 +1342,9 @@ def api_background_poll():
 # ---------- shops / training / codex snapshots (derived, no AI call) ----------
 @app.route("/api/panels")
 def api_panels():
-    s = game.state
+    s = copy.deepcopy(game.state)
+    from world_conflict import sanitize_public
+    sanitize_public(s)
     normalize_quest_state_machine(s)
     ex = expansion_for(s.get("world", "Custom World"))
     world = s.get("world", "Custom World")

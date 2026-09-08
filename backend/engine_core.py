@@ -861,6 +861,10 @@ class CoreMixin:
         max_output_tokens = output_budget(max_output_tokens, self.simulation_mode())
         client = client or self.ai
         payload = prepare_request(self.state, payload)
+        from world_conflict import resolution_context
+        faction_resolution = resolution_context(self.state)
+        if faction_resolution['pending']:
+            payload['faction_resolution'] = faction_resolution
         instructions += CONSISTENCY_RULE
         usage_before = copy.deepcopy(getattr(client, "usage", {}))
         from turn_recovery import stage, request_signature
