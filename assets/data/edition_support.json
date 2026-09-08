@@ -1,0 +1,297 @@
+{
+  "schema": 1,
+  "routes": {
+    "/api/action/retry_failed": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/action/rewind_death": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/action/submit": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/action/undo": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/actions/move": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/actions/queue": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/actions/remove": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/actions/update": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/adventures/preview": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/adventures/resolve": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/advisor/ask": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/auth/login": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/auth/logout": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/auth/register": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/background/run": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/campaign/correct": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/campaign/correct/preview": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/campaign/health/repair": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/campaign/new": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/campaign/opening": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/campaign/preview": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/campaign/preview/reroll": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/campaign/tuning": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/canon-interventions": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/character-paths/pin": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/chats/read": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/chats/send": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/combat/action": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/combat/mercy": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/combat/narrate": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/combat/tactical": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/dice/d100": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/evaluations/compare": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/evaluations/local": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/evaluations/run": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/event/respond": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/finance/debt/pay": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/load": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/lore/automation": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/lore/import": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/lore/refresh": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/lore/update-url": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/multiplayer/create": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/multiplayer/join": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/multiplayer/leave": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/multiplayer/ready": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/multiplayer/resolve": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/multiplayer/time": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/music/open_folder": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/offline/create": {
+      "support": "offline-only",
+      "offline_behavior": "Choice-only local creation"
+    },
+    "/api/organization-command": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/portrait/form/end": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/portrait/generate": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/portrait/identity": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/portrait/reference": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/portrait/revert": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/purchase_offer/buy": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/quests/note": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/quick_action": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/reentry_recap": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/save": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/save/delete": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/save/import": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/save/recover": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/settings": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/settings/detect_models": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/settings/test_ai": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/shop/buy": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/status_window/dismiss": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/time/assess": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/time/resolve": {
+      "support": "main-only",
+      "offline_behavior": "Use listed local activities; this text, AI or online service is unavailable offline."
+    },
+    "/api/trophies/resolve": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    },
+    "/api/turn/rate_good": {
+      "support": "shared",
+      "offline_behavior": "Shared engine/UI operation; maintain both-mode regression coverage."
+    }
+  }
+}

@@ -3,7 +3,8 @@ scene/portrait keyword resolvers ported from the original Tkinter build."""
 import os, re, copy, sys, hashlib, tempfile
 from pathlib import Path
 
-APP_DIR_NAME = "WorldwalkerRPG"
+from runtime_mode import offline_enabled
+APP_DIR_NAME = "WorldwalkerRPGOfflinePrototype" if offline_enabled() else "WorldwalkerRPG"
 
 
 def data_dir():

@@ -5,6 +5,7 @@ client prose/costs. Writes run inside app.atomic_game_call and reuse the normal
 clock/world simulation. The ordinary composer/standing itinerary is preserved.
 """
 from __future__ import annotations
+from runtime_mode import offline_enabled
 import copy
 import hashlib
 import heapq
@@ -180,7 +181,7 @@ def action_list(s,place):
         out.append({'id':'prepare','label':'Study route reports and prepare a field kit','minutes':45,'description':'For the next journey: clearer route exposure and a smaller pursuit encounter if one is triggered. No automatic purchase.'})
         out.extend(catalog(s,place))
     for person in available_people(s,place):
-        out.append({'id':'talk:'+person['name'],'label':'Check in with '+person['name'],'minutes':15,'description':'Discuss your established local connections; freeform chat remains available.'})
+        out.append({'id':'talk:'+person['name'],'label':'Check in with '+person['name'],'minutes':15,'description':('Choose a topic from People to continue the conversation.' if offline_enabled() else 'Discuss your established local connections; freeform chat remains available.')})
     mission=mission_offer(s,place)
     if mission and (settlement or active):
         if mission['status']=='available':out.append({'id':'mission:accept','label':'Accept: '+mission['title'],'minutes':15,'description':mission['description']})
@@ -214,6 +215,8 @@ def action_list(s,place):
         if any(float(j.get('heat',0) or 0)>0 for j in reputation_view(s).get('jurisdictions',[])):
             out.append({'id':'reputation:laylow','label':'Lay low and reduce public attention','minutes':240,'description':'Keep a low profile for four hours. This can cool local heat; it does not erase established faction standing.'})
     except Exception: pass
+    from offline_life import actions as offline_actions
+    if offline_enabled():out.extend(offline_actions(s,place))
     return out
 
 
@@ -355,6 +358,10 @@ def action_spec(s,payload):
         if original.get('place')!=place:raise ValueError('Return to the activity location or cancel the unfinished activity.')
         from character_paths import validate_mentor
         validate_mentor(s,original.get('id',''))
+        if original.get('id','').startswith('offline:'):
+            if not offline_enabled():raise ValueError('Continue this offline activity in the offline edition, or cancel it.')
+            from offline_life import validate
+            validate(s,original)
         if original.get('id','').startswith(('property:','craft:')):
             from property_economy import refresh_spec
             original=refresh_spec(s,original)
@@ -581,6 +588,9 @@ def resolve(game,payload,spec):
         game.append(f"{spec['label']} — mastery +{outcome['mastery_gain']:g}; {outcome['path']['stage']}.",'narrative',canon_day=s.get('canon_day'))
     if not complete:
         ad['pending_activity']={'label':spec['label'],'spec':copy.deepcopy(spec),'remaining_minutes':duration-elapsed}
+    elif action.startswith('offline:'):
+        from offline_life import resolve as resolve_offline
+        game.append(resolve_offline(game,spec),'narrative',canon_day=s.get('canon_day'))
     elif action.startswith('path:'):pass
     elif action.startswith('conflict:'):
         from world_conflict import resolve_intervention

@@ -74,6 +74,7 @@ def _compile_skill_mechanics(state):
 
 
 APP_OWNED = {
+    "offline_choices", "offline_life", "offline_chronicle",
     'subsystem_health','world_plan_archive','world_plan_outcomes',
     "adventures", "travel_access", "_world_calendar",
     "character_paths", "world_conflict", "expeditions", "canon_interventions",

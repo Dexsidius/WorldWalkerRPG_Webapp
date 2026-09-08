@@ -1,8 +1,14 @@
+import os
+edition = os.environ.get("WORLDWALKER_BUILD_EDITION", "main")
+if edition not in {"main", "offline"}: raise ValueError("Unknown build edition")
+entry = "offline_launcher.py" if edition == "offline" else "launcher.py"
+app_name = "WorldwalkerOfflinePrototype" if edition == "offline" else "WorldwalkerRPG"
+
 # -*- mode: python ; coding: utf-8 -*-
 
 
 a = Analysis(
-    ['launcher.py'],
+    [entry],
     pathex=['backend'],
     binaries=[],
     # Music is copied beside the finished EXE by the release packaging step.
@@ -30,7 +36,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='WorldwalkerRPG',
+    name=app_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -51,5 +57,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='WorldwalkerRPG',
+    name=app_name,
 )

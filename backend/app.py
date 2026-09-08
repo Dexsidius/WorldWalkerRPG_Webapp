@@ -15,6 +15,7 @@ from chapter_recaps import chapter_view
 from organizations import roster_view
 from gm_refinements import fingerprint
 from util import ASSET_ROOT, DATA_DIR, world_slug, scene_selection_reason
+from runtime_mode import offline_enabled
 from game import GameSession
 from portrait_generator import (PORTRAIT_CACHE_DIR, clear_active_portrait_form, generate_portrait,
                                 save_reference, portrait_history, revert_portrait,
@@ -60,7 +61,7 @@ ensure_music_folders()
 
 app = Flask(__name__, static_folder=None)
 app.json.sort_keys = False  # preserve dict insertion order (ability lists, skills, etc. are meaningfully ordered)
-ACCOUNTS_ENABLED = os.getenv("WORLDWALKER_ACCOUNTS_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
+ACCOUNTS_ENABLED = not offline_enabled() and os.getenv("WORLDWALKER_ACCOUNTS_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}
 app.secret_key = persistent_secret()
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -235,6 +236,7 @@ def _start_due_lore_refresh_once():
 
 @app.before_request
 def start_background_lore_refresh():
+    if offline_enabled():return
     _start_due_lore_refresh_once()
     _start_multiplayer_worker_once()
 
@@ -563,6 +565,11 @@ def _render_index():
     html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
     html = html.replace('href="/css/style.css"', f'href="/css/style.css?v={APP_VERSION}"')
     html = html.replace('src="/js/app.js"', f'src="/js/app.js?v={APP_VERSION}"')
+    if offline_enabled():
+        html = "\n".join(line for line in html.splitlines() if "fonts.googleapis.com" not in line and "fonts.gstatic.com" not in line)
+        html = html.replace("</head>", f'<link rel="stylesheet" href="/css/offline-play.css?v={BUILD_ID}"></head>')
+        html = html.replace("</body>", f'<script src="/js/offline-play.js?v={BUILD_ID}"></script></body>')
+        html = html.replace("<title>Worldwalker RPG</title>", "<title>Worldwalker Offline RPG</title>")
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
@@ -878,9 +885,9 @@ def api_campaign_opening():
 @app.route("/api/state")
 def api_state():
     return jsonify({"state": request_public_state(), "busy": game.busy, "campaign_active": game.campaign_active,
-                     "tactical_story":game.story_log[-300:] if tactical_feature_enabled() and game.state.get('world') in {'Naruto','One Piece','Bleach'} and not getattr(g,'worldwalker_room',None) else [],
+                     "tactical_story":game.state.get("offline_chronicle", [])[-300:] if game.offline_mode() else game.story_log[-300:] if tactical_feature_enabled() and game.state.get('world') in {'Naruto','One Piece','Bleach'} and not getattr(g,'worldwalker_room',None) else [],
                      "ai_ready": game.ai_ready(), "ai_connection_status": game.settings.get("ai_connection_status", "untested"),
-                     "local_mode": game.local_mode()})
+                     "offline_mode": game.offline_mode(), "local_mode": game.local_mode()})
 
 
 @app.route("/api/action/submit", methods=["POST"])
@@ -1944,7 +1951,7 @@ def api_save_recover():
         return jsonify({"error": "Leave multiplayer before recovering a personal save."}), 409
     try:
         state = game.recover_save(request.get_json(force=True).get("name", ""))
-        return jsonify({"state": state, "story": game.story_log})
+        return jsonify({"state": state, "story": (game.state.get("offline_chronicle") or game.story_log) if game.offline_mode() else game.story_log})
     except Exception as e:
         return err(e, 400)
 
@@ -1981,7 +1988,7 @@ def api_load():
     d = request.get_json(force=True)
     try:
         state = game.load(d.get("name", ""))
-        return jsonify({"state": state, "story": game.story_log})
+        return jsonify({"state": state, "story": (game.state.get("offline_chronicle") or game.story_log) if game.offline_mode() else game.story_log})
     except Exception as e:
         return err(e)
 
@@ -2258,6 +2265,9 @@ def api_adventure_resolve():
     finally:
         release_busy()
 
+
+from offline_routes import register as register_offline
+register_offline(app, lambda: game, acquire_busy, release_busy)
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=8765, debug=True, threaded=True, use_reloader=False)

@@ -1422,6 +1422,7 @@ def start_options_for(world):
 
 
 BASE_STATE = {
+    "offline_choices": {}, "offline_life": {}, "offline_chronicle": [],
     "name":"Traveler","age":"","age_at_campaign_start":"","age_anchor_year":1,"position":"","world":"Custom World","difficulty":"Adventurer","background":"","custom_world":"","race":"","calendar_epoch":"","calendar_anchor_day":None,"last_protagonist_tick_day":None,"active_canon_event":"","active_event_context":"","active_event_prompt":"","player_identity":{"mode":"original","canon_character_id":"","canon_gravity":True},
     "level":1,"xp":0,"xp_next":100,"hp":100,"hp_max":100,"resource_name":"Energy","resource":100,"resource_max":100,
     "stats":{"Strength":10,"Dexterity":10,"Constitution":10,"Intelligence":10,"Wisdom":10,"Charisma":10},"hidden_stats":{},

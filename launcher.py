@@ -9,8 +9,12 @@ from urllib.request import urlopen
 from urllib.parse import quote
 from pathlib import Path
 
+if "--offline" in sys.argv:
+    os.environ["WORLDWALKER_MODE"]="offline"
+
 sys.path.insert(0, str(Path(__file__).resolve().parent / "backend"))
 from util import DATA_DIR
+from runtime_mode import offline_enabled
 
 # Some machines (older/integrated GPUs, remote desktop sessions, certain
 # hybrid-GPU laptops) can render the embedded WebView2 browser as a solid
@@ -190,7 +194,7 @@ if LAN_MODE:
     _LOCAL_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
 
-if __name__ == "__main__":
+def main():
     if "--self-test" not in sys.argv and not webview2_installed():
         warn_missing_webview2()
         raise SystemExit(1)
@@ -212,6 +216,26 @@ if __name__ == "__main__":
             state = json.load(response)
         if version.get("version") != APP_VERSION or state.get("campaign_active") is not False or state.get("state", {}).get("turn") != 0:
             raise RuntimeError("Packaged fresh-launch self-test failed.")
+        if offline_enabled():
+            from urllib.request import Request
+            def local_request(path, payload=None):
+                req=Request(url+path, data=json.dumps(payload).encode() if payload is not None else None,
+                            headers={'Content-Type':'application/json'})
+                with urlopen(req,timeout=30,context=_LOCAL_SSL_CONTEXT) as response:return json.load(response)
+            meta=local_request('api/offline/creation')
+            for world in ('One Piece','Naruto','Bleach','Overgeared'):
+                c=meta['worlds'][world]
+                created=local_request('api/offline/create',dict(world=world,name=meta['names'][0],age=21,
+                    background=meta['backgrounds'][0],difficulty='Adventurer',origin=c['origins'][0],
+                    archetype=c['archetypes'][0],start_location=c['starts'][0]['location'],starting_era_id=c['eras'][0]['id']))
+                q=local_request('api/adventures/preview',{'place':created['state']['location'],'action':'offline:work:0'})
+                local_request('api/adventures/resolve',dict(token=q['token'],confirmed=True,request_id=world+'-self-test',
+                    expected_campaign=q['expected_campaign'],expected_guard=q['expected_guard']))
+                assert local_request('api/offline/life')['career']==1
+                assert local_request('api/state')['tactical_story']
+            for asset in ('js/offline-play.js','css/offline-play.css','js/world-atlas.js','tactical/campaign.html'):
+                with urlopen(url+asset,timeout=5,context=_LOCAL_SSL_CONTEXT) as response:
+                    assert response.status==200 and len(response.read())>200
         SERVER.shutdown()
         raise SystemExit(0)
     if LAN_MODE:
@@ -220,8 +244,12 @@ if __name__ == "__main__":
         title = f"Worldwalker Phone Host — {phone_url}"
         webview.create_window(title, window_url, width=1180, height=860, min_size=(720, 620))
     else:
-        webview.create_window("Worldwalker RPG", url, width=1520, height=940, min_size=(1180, 720))
+        webview.create_window("Worldwalker Offline RPG" if offline_enabled() else "Worldwalker RPG", url, width=1520, height=940, min_size=(1180, 720))
     try:
         webview.start()
     finally:
         SERVER.shutdown()
+
+
+if __name__ == "__main__":
+    main()

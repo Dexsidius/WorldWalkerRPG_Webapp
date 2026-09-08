@@ -1,5 +1,5 @@
 """Simulation reliability hotfix; save schema and base version remain stable."""
-BUILD_ID = "3.64.0-gameplay-integrity-3"
+BUILD_ID = "3.64.0-shared-editions-1"
 PATCH_NOTES = {
     "title": "Reliable rewards, orders and world outcomes",
     "summary": "Military outcomes require evidence; income and mastery no longer depend on repeated messages or requests. Completed plans make room for new goals, infirmaries improve rest, and local simulation failures are reported safely.",

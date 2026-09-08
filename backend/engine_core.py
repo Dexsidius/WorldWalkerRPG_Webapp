@@ -10,6 +10,8 @@ from worlds import WORLD_DATA, WORLD_EXPANSIONS, DIFFICULTIES, BASE_STATE, DEFAU
 from world_progression import WORLD_MECHANIC_RULES, NARRATIVE_CRAFTING_RULE
 from world_activity import activity_rules_for
 from world_depth import world_depth_rules
+from runtime_mode import offline_enabled
+from offline_simulation import OfflineSimulationClient
 from ai_client import AI
 from lore import format_lore_context
 from portrait_generator import portrait_view
@@ -219,6 +221,9 @@ class CoreMixin:
             self.settings_path.with_name("generated_abilities.json")
         )
         self.settings = self.load_settings()
+        self._offline_mode = offline_enabled()
+        if self._offline_mode:
+            self.settings.update(provider="offline", portrait_generation_enabled=False, portrait_auto_generate=False, lore_auto_refresh=False)
         self.ai = self.make_client(self.settings.get("model", ""))
         self.ai_bg = self.make_client(self.settings.get("secondary_model", "") or self.settings.get("model", ""))
         major_model = self.settings.get("major_event_model", "")
@@ -326,7 +331,12 @@ class CoreMixin:
         temporary.write_text(json.dumps(self.settings, indent=2), encoding="utf-8")
         temporary.replace(self.settings_path)
 
+    def offline_mode(self):
+        return getattr(self, "_offline_mode", False)
+
     def make_client(self, model, provider=None):
+        if self.offline_mode():
+            return OfflineSimulationClient(lambda: getattr(self, "state", {}))
         s = self.settings
         provider = provider if provider in {"local", "cloud"} else s.get("provider", "local")
         return AI(
@@ -342,6 +352,7 @@ class CoreMixin:
         return self.settings.get("provider", "local") != "cloud"
 
     def ai_ready(self):
+        if self.offline_mode():return True
         configured = bool(self.settings.get("model", "")) and (self.local_mode() or bool(self.settings.get("api_key", "")))
         # Tests, extensions, and embedded hosts may inject a working client
         # object directly rather than configure a provider connection.
@@ -354,6 +365,7 @@ class CoreMixin:
         return bool(self.settings.get("api_key", "") and self.settings.get("model", ""))
 
     def ai_bg_ready(self):
+        if self.offline_mode():return True
         configured = bool(self.settings.get("secondary_model", "") or self.settings.get("model", ""))
         if configured and not isinstance(self.ai_bg, AI):
             return True
@@ -377,6 +389,8 @@ class CoreMixin:
             if not math.isfinite(value) or value != int(value) or not 0 <= value <= 5:
                 raise ValueError("Automatic repair limit must be an integer from 0 to 5.")
             patch["max_ai_retries_per_turn"] = int(value)
+        if self.offline_mode():
+            patch.update(provider="offline", portrait_generation_enabled=False, portrait_auto_generate=False, lore_auto_refresh=False)
         self.settings.update(patch)
         self.save_settings()
         self.ai = self.make_client(self.settings["model"])
@@ -545,6 +559,10 @@ class CoreMixin:
         if detail:
             entry["detail"] = detail
         self.story_log.append(entry)
+        if self.offline_mode():
+            archive=self.state.setdefault("offline_chronicle",[])
+            archive.append(copy.deepcopy(entry))
+            self.state["offline_chronicle"]=archive[-1200:]
 
     def log(self, text):
         self.system_log.append(text)

@@ -6265,7 +6265,7 @@ async function openLoadModal() {
         APP.campaignActive = true;
         clearTransientFeedback();
         $("#story-feed").innerHTML = "";
-        appendStoryEntries(res.story.map((s) => ({ text: s.text, tag: s.tag })));
+        appendStoryEntries(res.story || []);
         renderState(res.state);
         closeModal("modal-load");
         showToast(save.kind === "autosave" ? "Autosave recovered." : "Campaign loaded.", "notify");

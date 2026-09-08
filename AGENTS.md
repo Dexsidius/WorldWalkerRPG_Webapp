@@ -1,5 +1,16 @@
 # Worldwalker contributor instructions
 
+## Shared main and offline editions
+
+Main and offline now share this repository and release commit. Read
+`SHARED_EDITIONS.md` before implementation/release work. Preserve main's normal
+AI/freeform behavior; isolate offline choices and guards behind runtime mode.
+Never maintain a separate offline copy of the atlas, combat or shared engine.
+Review offline behavior for every feature; new POST APIs require an entry in
+`assets/data/edition_support.json`. Run main and offline checks and build both
+packages with `tools/build_editions.py`. Keep save directories separate. Do not
+publish one member of a release pair if the other fails validation.
+
 ## Publishing
 
 Approved implementation updates go to `richardmadden1030-dot/worldwalker-rpg`,

@@ -325,10 +325,15 @@ class PersistenceMixin:
         with self.lock:
             had_canon_clock = "canon_time_minutes" in b.get("state", {})
             self.state = migrate_state(b["state"], b.get("version", "Legacy"))
+            if self.offline_mode():
+                from offline_life import migrate
+                migrate(self.state)
             normalize_quest_state_machine(self.state)
             self.history = b.get("history", [])[-600:]
             self.checkpoints = [compact_checkpoint_state(row) for row in b.get("checkpoints", [])[-4:] if isinstance(row, dict)]
             self.story_log = b.get("story_log", [])[-1200:]
+            if self.offline_mode() and not self.state.get("offline_chronicle"):
+                self.state["offline_chronicle"]=copy.deepcopy(self.story_log)
             self.system_log = b.get("system_log", [])[-400:]
             # Visible Chronicle rows live outside state in the save bundle.
             # Scan them after state migration, retain the historical text,
