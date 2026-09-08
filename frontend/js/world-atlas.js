@@ -7,7 +7,7 @@ window.WorldAtlas = (() => {
   let sceneryModule;
   function scenery(plane,atlas) {
     if(!['Naruto','One Piece'].includes(String(atlas.id).split(':')[0]))return;
-    sceneryModule ||= import('/js/atlas-scenery.js?v=3.64.0-shared-maps-2');
+    sceneryModule ||= import('/js/atlas-scenery.js?v=3.64.0-world-ui-1');
     sceneryModule.then(module=>{if(plane.isConnected)plane._atlasScenery=module.mount(plane,atlas,color);}).catch(error=>{sceneryModule=null;console.warn('3D scenery unavailable; retaining the vector atlas.',error);});
   }
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
