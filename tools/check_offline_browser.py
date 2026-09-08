@@ -23,7 +23,7 @@ def test_event_marker_opens_intervention_without_journal_or_state_change(ui,mobi
     game.state.update(canon_time_minutes=pack['opens'],canon_day=pack['opens']//1440,opening_complete=True)
     if mobile:page.set_viewport_size({'width':390,'height':844})
     page.reload()
-    page.wait_for_function("APP.state?.world==='Naruto'")
+    page.wait_for_function("typeof APP !== 'undefined' && APP.state?.world==='Naruto'")
     if page.locator('#modal-patch-notes.open').count():
         page.locator('#modal-patch-notes button').last.click()
     if mobile:
@@ -50,7 +50,7 @@ def test_offline_work_cancel_confirm_and_chronicle_reload(ui):
     assert game.state==before
     page.locator('[data-activity="offline:work:0"]').click()
     page.locator('[data-confirm-yes]').click()
-    page.wait_for_function('APP.state.offline_life?.career===1')
+    page.wait_for_function("typeof APP !== 'undefined' && APP.state.offline_life?.career===1")
     assert game.state['canon_time_minutes']==before['canon_time_minutes']+480
     page.reload()
     page.wait_for_function("document.querySelector('#story-feed')?.innerText.includes('Career experience 1')")
@@ -64,7 +64,7 @@ def test_offline_creation_and_mobile_map_remain_playable(ui):
     assert_no_typing(page)
     page.locator('#offline-creator select[name="world"]').select_option('One Piece')
     page.get_by_role('button',name='Begin this life',exact=True).click()
-    page.wait_for_function("APP.state?.world==='One Piece' && APP.state.opening_complete")
+    page.wait_for_function("typeof APP !== 'undefined' && APP.state?.world==='One Piece' && APP.state.opening_complete")
     page.set_viewport_size({'width':390,'height':844})
     page.locator('#mobile-bottom-nav [data-mobile-view="actions"]').click()
     page.wait_for_selector('#offline-play [data-map]')
