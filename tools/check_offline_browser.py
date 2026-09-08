@@ -13,6 +13,32 @@ def assert_no_typing(page):
       !e.disabled && !e.readOnly && !['checkbox','radio','range','file','hidden','button','submit'].includes(e.type)
       && getComputedStyle(e).visibility==='visible' && e.getClientRects().length).length''')==0
 
+@pytest.mark.parametrize('mobile',[False,True])
+def test_event_marker_opens_intervention_without_journal_or_state_change(ui,mobile):
+    from test_offline_world import setup
+    from offline_world import tick
+    page,game,_=ui
+    game.state,pack=setup()
+    tick(game.state,game.state['canon_time_minutes'],pack['opens'])
+    game.state.update(canon_time_minutes=pack['opens'],canon_day=pack['opens']//1440,opening_complete=True)
+    if mobile:page.set_viewport_size({'width':390,'height':844})
+    page.reload()
+    page.wait_for_function("APP.state?.world==='Naruto'")
+    if page.locator('#modal-patch-notes.open').count():
+        page.locator('#modal-patch-notes button').last.click()
+    if mobile:
+        page.locator('#mobile-bottom-nav [data-mobile-view="map"]').click()
+    else:page.locator('#workspace-map-tab').click()
+    page.get_by_role('button',name='Might Duy · Encounter participant',exact=True).click()
+    page.get_by_role('button',name='View encounter choices',exact=True).click()
+    page.locator('[data-town-action="worldevent:duy"]').click()
+    page.wait_for_selector('#adventure-confirmation[open]')
+    before=copy.deepcopy(game.state)
+    page.locator('[data-confirm-cancel]').click()
+    assert game.state==before
+    assert not page.locator('#modal-journal.open').count()
+    assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
+
 def test_offline_work_cancel_confirm_and_chronicle_reload(ui):
     page,game,_=ui
     page.locator('#offline-play [data-category="Work"]').click()

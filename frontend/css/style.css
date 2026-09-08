@@ -102,7 +102,7 @@ body.health-critical .world-lighting{ box-shadow:inset 0 0 100px rgba(var(--dang
 #phone-host-banner button{ grid-row:1/3; grid-column:2; border:1px solid var(--accent2); border-radius:8px; padding:9px 12px; background:rgba(var(--accent2-rgb),.12); color:var(--accent2); font-size:10px; font-weight:900; }
 body.phone-hosting .app-shell{ height:calc(100vh - 62px); margin-top:62px; }
 button{ font-family:inherit; cursor:pointer; transition:transform .15s var(--ease-out),border-color .2s ease,color .2s ease,background .2s ease; }
-button:active:not(:disabled){ transform:translateY(1px) scale(.98); }
+button:active:not(:disabled):not(.map-person):not(.map-node):not(.piece){ transform:translateY(1px) scale(.98); }
 input,select,textarea{ font-family:inherit; }
 ::selection{ background:rgba(var(--accent2-rgb),.35); }
 
@@ -1966,6 +1966,10 @@ body[data-world="Reincarnated as a Slime"] .percentile-tray{ background:radial-g
 .living-map-main .map-person:hover>span:last-child,.living-map-main .map-person:focus-visible>span:last-child{ opacity:1; }
 .living-map-main .map-person.nemesis .person-portrait{ border-color:var(--danger); box-shadow:0 0 13px rgba(var(--danger-rgb),.65),0 3px 10px #000c; }
 .living-map-main[data-zoom-band="world"] .map-person{ opacity:0; pointer-events:none; }
+.living-map-main[data-zoom-band="world"] .map-person.event-lead{ opacity:1; pointer-events:auto; }
+.living-map-main .map-person.event-lead{ z-index:30; }
+.living-map-main .map-motion-toggle{ min-height:32px; padding:5px 9px; border:1px solid var(--border-soft); border-radius:5px; color:var(--text); background:var(--panel); font:600 10px var(--font-ui, sans-serif); cursor:pointer; }
+@media (pointer:coarse){ .living-map-main .map-person.event-lead{ min-width:44px; min-height:44px; } }
 .living-map-main[data-zoom-band="world"] .map-node:not(.map-major):not(.here){ opacity:0; pointer-events:none; }
 .living-map-main[data-zoom-band="regional"] .map-node:not(.map-major):not(.known):not(.here) .map-label{ opacity:0; }
 .living-map-main[data-map-mode="danger"] .map-territories{ opacity:.45; filter:saturate(.55); }

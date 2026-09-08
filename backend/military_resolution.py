@@ -54,10 +54,17 @@ def resolve_operation(state, faction, clock, operation):
     success=attack>defense*fort
     operation.pop('blocked_reason',None)
     operation.update(status='completed' if success else 'failed',resolution='success' if success else 'held',worldwalker_settled=True)
+    capture_summary = None
     if success:
-        detail['controlling_faction']=faction
-        detail['controller_changed_turn']=int(state.get('turn',0))
+        from runtime_mode import offline_enabled
+        if offline_enabled() and state.get('world') in {'Naruto','One Piece','Bleach'}:
+            from offline_politics import record_capture
+            capture_summary=record_capture(state,faction,target,defender)
+        else:
+            detail['controlling_faction']=faction
+            detail['controller_changed_turn']=int(state.get('turn',0))
     summary=(f'{faction} took control of {target} from {defender}.' if success else f'{defender} held {target} against {faction}; control is unchanged.')
+    if capture_summary:summary=capture_summary
     operation['recent_outcome']=summary
     settled[key]={k:operation[k] for k in ('status','resolution','worldwalker_settled','recent_outcome')}
     disclosed=visible(clock) and visible(operation)

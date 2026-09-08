@@ -8,6 +8,9 @@ def objective(state):
     row=combat.get('adventure_objective')
     return row if isinstance(row,dict) else {}
 
+def target_label(goal):
+    return str(goal.get('target_label') or 'the relief beacon')[:120]
+
 
 def initialize(state,board):
     goal=objective(state)
@@ -38,6 +41,12 @@ def public_view(state,board):
        'protection':'Keep the beacon above 0 HP for four full rounds. Nearby allies can shield it; defeating all attackers also secures it.',
        'escape':'Move your character onto the teal exit. Defeating all opponents does not replace reaching the exit.'}[g['kind']]
     g['enemy_intents']=[{'id':u['id'],'name':u['name'],'intent':'Advance toward and attack the beacon' if g['kind']=='protection' else 'Intercept the nearest exposed opponent'} for u in board['units'] if u['side']=='enemy' and not u.get('defeated')]
+    if g['kind']=='protection' and g.get('target_label'):
+        label=target_label(g)
+        g['title']='Protect '+label
+        g['interaction_label']='Cover '+label+' · 1 action'
+        g['instructions']=f"Keep {label} above 0 HP for {g.get('rounds_required',4)} full rounds. Nearby allies can cover the group; defeating all attackers also secures the retreat."
+        for intent in g['enemy_intents']:intent['intent']='Advance toward '+label
     return g
 
 
@@ -51,7 +60,7 @@ def interact(game,board,actor):
         if g.get('carried_by'):raise ValueError('The dispatch is already being carried.')
         g['carried_by']=actor['id'];label='takes the dispatch'
     elif g['kind']=='protection':
-        actor['guarding']=True;g['shield_round']=int(game.state['combat'].get('round',1));label='shields the beacon for this round'
+        actor['guarding']=True;g['shield_round']=int(game.state['combat'].get('round',1));label='covers '+target_label(g)+' for this round'
     else:raise ValueError('Reach the marked exit to complete this objective.')
     actor['action_used']=True
     game.state['combat']['log'].append({'actor':actor['side'],'name':actor['name'],'unit_id':actor['id'],'action':label,'round':game.state['combat']['round']})
@@ -92,11 +101,11 @@ def npc_action(game,board,actor):
     path=routes[destination];actor['x'],actor['y']=destination
     actor['movement_left']=max(0,actor['movement_max']-len(path));actor['action_used']=True
     log=game.state['combat']['log'];rnd=game.state['combat'].get('round',1)
-    if path:log.append({'name':actor['name'],'actor':'enemy','action':'moves toward beacon','round':rnd,'path':[list(p) for p in path]})
+    if path:log.append({'name':actor['name'],'actor':'enemy','action':'moves toward '+target_label(g),'round':rnd,'path':[list(p) for p in path]})
     if distance<=1:
         protected=g.get('shield_round')==rnd or any(u['side']=='ally' and not u.get('defeated') and u.get('guarding') and abs(u['x']-target[0])+abs(u['y']-target[1])<=1 for u in board['units'])
         damage=max(3,min(20,round(actor['power']*.3)))
         if protected:damage=max(1,damage//3)
         prior=g['target_hp'];g['target_hp']=max(0,prior-damage)
-        log.append({'name':actor['name'],'actor':'enemy','action':'attacks relief beacon','target':'Relief beacon','damage':prior-g['target_hp'],'round':rnd,'shielded':protected})
+        log.append({'name':actor['name'],'actor':'enemy','action':'attacks '+target_label(g),'target':target_label(g),'damage':prior-g['target_hp'],'round':rnd,'shielded':protected})
     return True

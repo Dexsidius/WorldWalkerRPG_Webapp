@@ -3,7 +3,7 @@ window.OfflinePlay = (() => {
   'use strict';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let panel, creator, metadata, active='Adventure', revision=0, scheduled;
-  const categories=['Adventure','People','Work','Life','Mastery','Economy','World'];
+  const categories=['Adventure','People','Work','Life','Mastery','Economy','Politics','World'];
   const category=a=>a.category||(/^(train:|path:)/.test(a.id)?'Mastery':/^(purchase:|property:|craft:)/.test(a.id)?'Economy':/^(conflict:|reputation:)/.test(a.id)?'World':a.id.startsWith('talk:')?'People':'Adventure');
   const editable='textarea,input:not([type]),input[type=text],input[type=search],input[type=email],input[type=password],input[type=url],input[type=number],[contenteditable]';
   const watched=new WeakSet();
@@ -51,6 +51,11 @@ window.OfflinePlay = (() => {
       panel.querySelectorAll('[data-category]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.category===active)));
       panel.querySelector('.offline-actions').innerHTML=s.combat?.active?'<p>A battle is in progress. Use the tactical board to act, move, defend, or retreat.</p>':rows.length?rows.map(a=>`<button type="button" class="offline-choice" data-activity="${esc(a.id)}"><b>${esc(a.label)}</b><small>${esc(LivingAdventures.duration(a.minutes))}${a.cost?' · '+esc(a.cost)+' '+esc(a.currency):''}</small>${a.description?`<span>${esc(a.description)}</span>`:''}</button>`).join(''):`<p>${active==='People'?'Meet a local contact under People when one is available. Travel to find other communities.':'No activities in this category are available here yet. Try Adventure, Work, or another mapped location.'}</p>`;
       panel.querySelectorAll('[data-activity]').forEach(b=>b.onclick=()=>LivingAdventures.preview({place:s.location,action:b.dataset.activity}));
+      if(active==='Politics' && life.politics){
+        const p=life.politics, summary=document.createElement('p');
+        summary.textContent=Object.entries(p.support||{}).map(([group,value])=>`${group}: ${value}/60`).join(' · ')+(p.mandate?` · ${p.mandate}`:'')+(p.pending?' · Petition awaiting review':'');
+        panel.querySelector('.offline-actions').prepend(summary);
+      }
     }catch(e){if(run===revision)panel.querySelector('.offline-actions').textContent=e.message;}
   }
   function requestRefresh(){clearTimeout(scheduled);scheduled=setTimeout(refresh,80);}

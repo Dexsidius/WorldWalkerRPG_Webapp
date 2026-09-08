@@ -73,5 +73,6 @@ def register(app, get_game, acquire_busy, release_busy):
     @app.get('/api/offline/life')
     def life():
         from offline_life import view
+        from offline_politics import view as politics_view
         game=get_game()
-        with game.lock:return jsonify(view(game.state))
+        with game.lock:return jsonify({**view(game.state), 'politics': politics_view(game.state)})

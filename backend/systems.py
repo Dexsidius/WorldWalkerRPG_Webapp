@@ -1393,6 +1393,8 @@ def map_snapshot(state, world_map, world):
                       "notable_individuals": _notable_individuals_for(state, name), "danger_level": str(detail.get("danger_level") or ""),
                       "recently_changed": recently_changed})
     result = {"nodes": nodes, "regions": political_regions_for_map(state, nodes), "meta": copy.deepcopy(WORLD_MAP_META.get(world, WORLD_MAP_META["Custom World"]))}
+    from offline_world import visible_parties
+    result['event_parties'] = visible_parties(state)
     if world == "Bleach":
         boards = []
         active_realm, fallback_anchor = _bleach_realm_and_anchor(current)

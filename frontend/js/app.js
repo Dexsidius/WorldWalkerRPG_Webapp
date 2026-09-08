@@ -4279,7 +4279,7 @@ document.addEventListener("click", async (event) => {
     return;
   }
   const portrait = event.target.closest("[data-person-open]");
-  if (!portrait || portrait.closest(".contact-item,.suggestion-card,.roster-unit,.piece")) return;
+  if (!portrait || portrait.closest(".contact-item,.suggestion-card,.roster-unit,.piece,.map-person")) return;
   const name = portrait.getAttribute("data-person-open");
   if (!name || normalizePersonName(name) === normalizePersonName(APP.state?.name)) return;
   await openJournal("relationships");
@@ -4350,12 +4350,20 @@ function trackedLivingMapPeople(data, nodes) {
       return candidate === key || candidate.includes(key) || key.includes(candidate);
     }) || null;
   };
-  return (data.relationships_view?.people || []).filter((person) => {
+  const eventPeople = (data.map_data?.event_parties || []).filter(p => locate(p.last_known_location));
+  const eventNames = new Set(eventPeople.map(p => normalizePersonName(p.name)));
+  return [...eventPeople, ...(data.relationships_view?.people || []).filter(p => !eventNames.has(normalizePersonName(p.name)))].filter((person) => {
     const score = Math.abs(Number(person.score) || 0);
-    return score >= 20 || person.nemesis || rosterNames.has(normalizePersonName(person.name));
+    return person.event_id || score >= 20 || person.nemesis || rosterNames.has(normalizePersonName(person.name));
   }).map((person, index) => {
     const node = locate(person.last_known_location);
     if (!node) return null;
+    if (person.event_id && person.route_from) {
+      const a = locate(person.route_from), b = locate(person.route_to);
+      if (!a || !b) return null;
+      const t = Math.max(0, Math.min(1, Number(person.route_progress) || 0));
+      return {...person, x: Number(a.x) + (Number(b.x) - Number(a.x)) * t, y: Number(a.y) + (Number(b.y) - Number(a.y)) * t};
+    }
     const angle = (index % 8) * Math.PI / 4, radius = 1.15 + (index % 3) * .35;
     return { ...person, x: Number(node.x) + Math.cos(angle) * radius, y: Number(node.y) + Math.sin(angle) * radius };
   }).filter(Boolean);
@@ -4418,12 +4426,29 @@ function renderMainLivingMap(data) {
   });
   const previousPeople = APP.lastLivingMapPeople || {};
   const nextPeople = {};
+  const eventLeads = new Set();
+  let mapMotion = !window.matchMedia('(pointer: coarse), (prefers-reduced-motion: reduce)').matches;
+  try { const saved = localStorage.getItem('worldwalker-map-motion'); if (saved !== null) mapMotion = saved === 'on'; } catch (_) {}
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) mapMotion = false;
+  if (!mapMotion) mapCanvas.querySelectorAll('.map-player-piece').forEach(p => p.style.transition = 'none');
+  const motionButton = document.createElement('button');
+  motionButton.className = 'map-motion-toggle';
+  motionButton.type = 'button'; motionButton.textContent = mapMotion ? 'Movement: animated' : 'Movement: instant';
+  motionButton.setAttribute('aria-pressed', String(mapMotion));
+  motionButton.title = 'Only changes animation. Parties and the world keep advancing.';
+  motionButton.onclick = () => { try { localStorage.setItem('worldwalker-map-motion', mapMotion ? 'off' : 'on'); } catch (_) {} renderMainLivingMap(data); };
+  host.querySelector('.map-heading').appendChild(motionButton);
   trackedLivingMapPeople(data, nodes).forEach((person) => {
     const marker = document.createElement("button"), key = `${atlasKey}:${normalizePersonName(person.name)}`;
     const previous = previousPeople[key];
     marker.type = "button"; marker.className = `map-person${person.nemesis ? " nemesis" : ""}`;
+    if (person.event_id && !eventLeads.has(person.event_id)) {
+      marker.classList.add('event-lead'); eventLeads.add(person.event_id);
+    }
+    marker.style.transition = mapMotion ? 'left 900ms cubic-bezier(.22,.61,.36,1), top 900ms cubic-bezier(.22,.61,.36,1)' : 'none';
     marker.style.left = `${previous?.x ?? person.x}%`; marker.style.top = `${previous?.y ?? person.y}%`;
     marker.dataset.mapPerson = person.name;
+    marker.setAttribute('aria-label', `${person.name} · ${person.event_id ? 'Encounter participant' : 'Known person'}`);
     marker.title = `${person.name} · ${person.label || "Known person"} · last known at ${person.last_known_location}`;
     marker.innerHTML = `${personPortraitHtml(person.name, person, { size: "sm" })}<span>${escapeHtml(person.name)}</span>`;
     mapCanvas.appendChild(marker);
@@ -4494,11 +4519,17 @@ function wireMainLivingMap(host, world, mapPayload, atlas = {}) {
 
 function showLivingMapPerson(name) {
   LivingAdventures.cancelSelection();
-  const person = (APP.latestMapData?.relationships_view?.people || []).find((row) => row.name === name), detail = $("#map-detail");
+  const person = [...(APP.latestMapData?.map_data?.event_parties || []), ...(APP.latestMapData?.relationships_view?.people || [])].find((row) => row.name === name), detail = $("#map-detail");
   if (!person || !detail) return;
   detail.classList.add("open");
   detail.innerHTML = `<div class="map-person-heading">${personPortraitHtml(person.name, person, { size: "md" })}<div><b>${escapeHtml(person.name)}</b><small>${escapeHtml(person.label || "Known person")}</small></div></div><p>${escapeHtml(person.goal || "No current goal is known.")}</p><dl><dt>Relationship</dt><dd>${escapeHtml(person.score ?? 0)}</dd><dt>Last known</dt><dd>${escapeHtml(person.last_known_location || "Unknown")}</dd><dt>Knowledge</dt><dd>${person.knowledge?.length ? person.knowledge.map(escapeHtml).join(", ") : "Nothing reliably established"}</dd></dl>`;
   detail.focus({ preventScroll: true });
+  if (person.event_id) {
+    const encounterButton = document.createElement('button'); encounterButton.type = 'button';
+    encounterButton.textContent = 'View encounter choices';
+    encounterButton.onclick = () => LivingAdventures.showLocation(person.last_known_location);
+    detail.appendChild(encounterButton);
+  }
   detail.insertAdjacentHTML('afterbegin','<button type="button" class="atlas-close" data-atlas-close aria-label="Close map details">×</button>');
 }
 

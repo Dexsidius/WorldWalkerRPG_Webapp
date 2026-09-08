@@ -291,6 +291,7 @@ class JournalMixin:
         # but is intentionally not a visible management dashboard.
         s.pop("polity_state", None)
         s.pop('world_plans',None)
+        s.pop('offline_world',None)
         s.pop('relationship_life',None)
         s.pop('world_benefits',None)
         # Latent Nen is fixed at creation so later awakening is consistent,

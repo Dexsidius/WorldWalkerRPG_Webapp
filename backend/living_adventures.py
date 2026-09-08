@@ -216,7 +216,12 @@ def action_list(s,place):
             out.append({'id':'reputation:laylow','label':'Lay low and reduce public attention','minutes':240,'description':'Keep a low profile for four hours. This can cool local heat; it does not erase established faction standing.'})
     except Exception: pass
     from offline_life import actions as offline_actions
-    if offline_enabled():out.extend(offline_actions(s,place))
+    if offline_enabled():
+        out.extend(offline_actions(s,place))
+        from offline_world import actions as world_actions
+        out.extend(world_actions(s,place))
+        from offline_politics import actions as political_actions
+        out.extend(political_actions(s,place))
     return out
 
 
@@ -227,10 +232,12 @@ def location_view(s,place=None):
     active=obj(store(s).get('active'))
     from util import scene_image_url
     picture,_=scene_image_url({**s,'location':name,'combat':{}})
+    activities=action_list(s,name)
+    urgent=next((a for a in activities if a['id'].startswith('worldevent:')),None)
     return {'scene_image':picture,'world':s.get('world'),'campaign_id':s.get('campaign_id'),'place':name,'kind':node['kind'],'current':name==location_node(s)['name'],
-            'situation':text(local.get('notes') or local.get('description') or local.get('activity')) or 'No local crisis has been established. Explore, prepare, or follow an existing lead.',
+            'situation':urgent['description'] if urgent else text(local.get('notes') or local.get('description') or local.get('activity')) or 'No local crisis has been established. Explore, prepare, or follow an existing lead.',
             'services':seq(local.get('services')) or list(flavor[:4] if settlement else ['Camp','Survey point','Practice area']),
-            'people':available_people(s,name),'actions':action_list(s,name),'mission':mission_offer(s,name) if settlement or active else None,
+            'people':available_people(s,name),'actions':activities,'mission':mission_offer(s,name) if settlement or active else None,
             'aftermath':[copy.deepcopy(r) for r in seq(store(s).get('aftermath')) if r.get('location')==name][-12:],
             'journey':copy.deepcopy(obj(store(s).get('journey'))),'calendar':calendar_view(s),
             'preparation':copy.deepcopy(obj(store(s).get('preparation'))),
@@ -404,6 +411,10 @@ def boundary(s,minutes):
     deadline=s.get('tower_floor_deadline_day')
     if s.get('world')=='Solo Max-Level Newbie' and isinstance(deadline,(int,float)) and start<int(deadline)*1440<end:
         found.append((int(deadline)*1440,'Tower floor deadline'))
+    if offline_enabled():
+        from offline_world import boundary as world_boundary
+        stop = world_boundary(s,start,end,here)
+        if stop: found.append(stop)
     return min(found) if found else None
 
 
@@ -485,6 +496,10 @@ def _finish(game,mission,method,successful=True):
 def combat_finished(game,outcome):
     combat=obj(game.state.get('combat'));objective=obj(combat.get('adventure_objective'))
     if not objective or objective.get('settled'):return
+    if objective.get('world_event'):
+        from offline_world import combat_finished as finish_world_event
+        finish_world_event(game,outcome)
+        return
     if objective.get('expedition_id'):
         from expeditions import combat_finished as expedition_combat_finished
         expedition_combat_finished(game,outcome)
@@ -588,6 +603,12 @@ def resolve(game,payload,spec):
         game.append(f"{spec['label']} — mastery +{outcome['mastery_gain']:g}; {outcome['path']['stage']}.",'narrative',canon_day=s.get('canon_day'))
     if not complete:
         ad['pending_activity']={'label':spec['label'],'spec':copy.deepcopy(spec),'remaining_minutes':duration-elapsed}
+    elif action.startswith('political:'):
+        from offline_politics import resolve as resolve_politics
+        game.append(resolve_politics(s,spec),'narrative',canon_day=s.get('canon_day'))
+    elif action.startswith('worldevent:'):
+        from offline_world import resolve as resolve_world_event
+        game.append(resolve_world_event(game,spec),'narrative',canon_day=s.get('canon_day'))
     elif action.startswith('offline:'):
         from offline_life import resolve as resolve_offline
         game.append(resolve_offline(game,spec),'narrative',canon_day=s.get('canon_day'))
