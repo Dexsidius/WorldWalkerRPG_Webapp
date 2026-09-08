@@ -1,4 +1,9 @@
 /* Strategy atlas, not a background picture. All geometry shares one plane. */
+.atlas-scenery{position:absolute;inset:0;width:100%!important;height:100%!important;pointer-events:none}
+.atlas-3d-ready .atlas-geography>rect,.atlas-3d-ready .atlas-geography>path{opacity:0}
+.atlas-3d-ready .atlas-geography>g[clip-path]>:not(.atlas-control-change){opacity:0}
+.atlas-3d-ready .atlas-polity-label{color:#f0e2b8;text-shadow:0 1px 3px #172d28,1px 0 2px #172d28}
+.living-map-main:not([data-map-mode="political"]) .atlas-scenery{opacity:.58}
 .living-map-main .map-layout{display:block;position:relative;isolation:isolate}
 .living-map-main .map-wrap{width:100%;height:100%;min-height:300px;background:#19383e;overflow:hidden;touch-action:none;border:0;border-radius:0}
 .living-map-main .atlas-plane{position:absolute;inset:0 auto auto 0;background:none!important;transform-origin:0 0;overflow:visible;will-change:transform}

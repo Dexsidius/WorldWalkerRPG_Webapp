@@ -4,6 +4,12 @@ window.WorldAtlas = (() => {
   const ns = 'http://www.w3.org/2000/svg';
   const views = new Map(), histories = new Map();
   let active = null, observer = null;
+  let sceneryModule;
+  function scenery(plane,atlas) {
+    if(!['Naruto','One Piece'].includes(String(atlas.id).split(':')[0]))return;
+    sceneryModule ||= import('/js/atlas-scenery.js?v=3.64.0-shared-maps-1');
+    sceneryModule.then(module=>{if(plane.isConnected)plane._atlasScenery=module.mount(plane,atlas,color);}).catch(error=>{sceneryModule=null;console.warn('3D scenery unavailable; retaining the vector atlas.',error);});
+  }
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const palette = ['#81a56d','#d5ad68','#74aab2','#c58678','#ae99b7','#c3bc82','#8babc2','#b49772','#90bda2','#d8b29a','#a9b0ca','#c3a652'];
   const fixed = {'Konohagakure':'#76a36a','Sunagakure':'#d8b36e','Iwagakure':'#b38361','Kumogakure':'#d8c479','Kirigakure':'#7bacbb','Amegakure':'#9586a5','Iron Country':'#bfc5c8','Japan':'#95b1a1','World Government':'#adc3ce','Saharan Empire':'#b4827b','Eternal Kingdom':'#83a8be'};
@@ -85,6 +91,7 @@ window.WorldAtlas = (() => {
       const label=document.createElement('span'); label.className='atlas-polity-label'; label.textContent=name; label.style.left=c.x+'%';label.style.top=c.y+'%';label.title=name;label.dataset.weight=o.cells.length; labelLayer.append(label);
     }
     plane.append(labelLayer);
+    scenery(plane,atlas);
     return {owners:[...owners.keys()],changed:changed.length};
   }
   let bindingController;
@@ -133,6 +140,7 @@ window.WorldAtlas = (() => {
     a.px=Math.max(bx,Math.min(1-bx,a.px));a.py=Math.max(by,Math.min(1-by,a.py));
     a.plane.style.transform=`translate(${w/2-a.px*a.w*a.z}px,${h/2-a.py*a.h*a.z}px) scale(${a.z})`;
     a.plane.style.setProperty('--atlas-inverse',1/a.z);
+    a.plane._atlasScenery?.setZoom(a.z);
     views.set(a.key,{z:a.z,px:a.px,py:a.py});a.onZoom(a.z);labels();
   }
   function labels(){
