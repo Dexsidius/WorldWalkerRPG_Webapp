@@ -43,7 +43,7 @@ jobs:
       - name: Offline edition regressions without network generation
         env:
           WORLDWALKER_MODE: offline
-        run: python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py -q
+        run: python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py tools/check_offline_browser.py -q
       - name: Build and verify both editions from this commit
         run: python tools/build_editions.py --output "${{ runner.temp }}/worldwalker-pair"
       - uses: actions/upload-artifact@v7

@@ -56,5 +56,6 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - run: python -m pip install flask cryptography pillow pytest
-      - run: python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py -q
+      - run: python -m pip install flask cryptography pillow pytest playwright
+      - run: python -m playwright install --with-deps chromium
+      - run: python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py tools/check_offline_browser.py -q
