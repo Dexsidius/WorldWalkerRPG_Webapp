@@ -53,7 +53,7 @@ window.OfflinePlay = (() => {
       panel.querySelectorAll('[data-activity]').forEach(b=>b.onclick=()=>LivingAdventures.preview({place:s.location,action:b.dataset.activity}));
       if(active==='Politics' && life.politics){
         const p=life.politics, summary=document.createElement('p');
-        summary.textContent=Object.entries(p.support||{}).map(([group,value])=>`${group}: ${value}/60`).join(' · ')+(p.mandate?` · ${p.mandate}`:'')+(p.pending?' · Petition awaiting review':'');
+        summary.textContent=Object.entries(p.support||{}).map(([group,value])=>`${group}: ${value}/60`).join(' · ')+(p.mandate?` · ${p.mandate}`:'')+(p.pending?' · Petition awaiting review':'')+(p.government?.last_decision?` · ${p.government.owner}: ${p.government.last_decision}`:'');
         panel.querySelector('.offline-actions').prepend(summary);
       }
     }catch(e){if(run===revision)panel.querySelector('.offline-actions').textContent=e.message;}

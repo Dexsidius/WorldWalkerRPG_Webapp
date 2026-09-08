@@ -4429,7 +4429,7 @@ function renderMainLivingMap(data) {
   const eventLeads = new Set();
   let mapMotion = !window.matchMedia('(pointer: coarse), (prefers-reduced-motion: reduce)').matches;
   try { const saved = localStorage.getItem('worldwalker-map-motion'); if (saved !== null) mapMotion = saved === 'on'; } catch (_) {}
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) mapMotion = false;
+  if (!APP.animationsEnabled || window.matchMedia('(prefers-reduced-motion: reduce)').matches) mapMotion = false;
   if (!mapMotion) mapCanvas.querySelectorAll('.map-player-piece').forEach(p => p.style.transition = 'none');
   const motionButton = document.createElement('button');
   motionButton.className = 'map-motion-toggle';

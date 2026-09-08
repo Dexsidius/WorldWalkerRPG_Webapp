@@ -1576,6 +1576,8 @@ class TimeSkipMixin:
         from offline_politics import tick as tick_offline_politics, tick_governments
         pending_appends.extend(tick_offline_politics(self.state, before_minutes, after_minutes))
         pending_appends.extend(tick_governments(self.state, after_minutes))
+        from offline_governance import tick as tick_governance
+        pending_appends.extend(tick_governance(self.state, before_minutes, after_minutes))
         anchor_day = self.state.get("calendar_anchor_day")
         dependency_rows = {row["id"]: row for row in canon_dependency_graph(self.state).get("events", [])}
         # This campaign's own start (not the world's generic default) is what

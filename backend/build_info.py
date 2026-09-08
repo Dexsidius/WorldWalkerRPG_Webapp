@@ -1,9 +1,12 @@
 """Simulation reliability hotfix; save schema and base version remain stable."""
-BUILD_ID = "3.64.0-offline-world-preview-1"
+BUILD_ID = "3.64.0-offline-living-world-1"
 PATCH_NOTES = {
-    "title": "Offline living-world foundation preview",
-    "summary": "An initial offline preview: three authored canon interventions, local civic support, scheduled petitions and occupation distinct from government. This is not complete canon-event or political-campaign coverage. Main AI play remains available.",
+    "title": "Offline living world — first playable release",
+    "summary": "Naruto, One Piece and Bleach gain local civic support, weekly government decisions, evidence-backed military planning and three authored intervention encounters. This release does not include every canon event or a complete succession/coalition campaign. Main AI play remains available.",
     "highlights": [
+        {"title": "Government decisions without AI", "example": "Established local governments budget for public works and order every campaign week. Time skips and save/reload preserve the same decisions; local reports explain what was funded."},
+        {"title": "Plan a local campaign", "example": "Muster present members with recorded strength, survey an established garrison, then commit forces and pay for supplies. Unknown forces remain unknown; armies cannot teleport or be reused immediately."},
+        {"title": "Rescue is not conquest", "example": "Protecting villagers does not itself defeat Arlong. Canon aftermath resolves separately and does not overwrite land already captured by someone else."},
         {"title": "Three local intervention encounters", "example": "Protect Duy’s team before the Eighth Gate, protect villagers at Arlong Park, or cover Rukia’s retreat at Sokyoku Hill. Arrive within the intervention window; success requires the tactical objective."},
         {"title": "Support is not sovereignty", "example": "Offline civic activities build local support. Advisory petitions receive scheduled responses; military victories secure one foothold before a separate local-government charter."},
         {"title": "Optional map animation", "example": "Known event participants can be selected on the map. Instant movement defaults on touch devices and does not stop the simulation."},

@@ -18,8 +18,21 @@ def read(s, place):
 
 
 def writable(s, place):
-    root = s.setdefault('offline_politics', {'version': 1, 'communities': {}})
-    return root.setdefault('communities', {}).setdefault(place, {'support': {}, 'last_work': {}, 'petitions': []})
+    if not isinstance(s.get('offline_politics'), dict):
+        s['offline_politics'] = {'version': 1}
+    root = s['offline_politics']
+    for key in ('communities', 'occupations'):
+        if not isinstance(root.get(key), dict):
+            root[key] = {}
+    if not isinstance(root['communities'].get(place), dict):
+        root['communities'][place] = {}
+    row = root['communities'][place]
+    for key in ('support', 'last_work'):
+        if not isinstance(row.get(key), dict):
+            row[key] = {}
+    if not isinstance(row.get('petitions'), list):
+        row['petitions'] = []
+    return row
 
 
 def actions(s, place):
@@ -27,7 +40,8 @@ def actions(s, place):
         return []
     from living_adventures import location_node, SETTLEMENTS
     if location_node(s, place).get('kind') not in SETTLEMENTS and not (s.get('world') == 'Bleach' and place == 'Seireitei'):
-        return []
+        from offline_governance import actions as governance_actions
+        return governance_actions(s, place)
     from offline_life import wage, paid
     r = read(s, place)
     groups = GROUPS[s['world']]
@@ -59,10 +73,14 @@ def actions(s, place):
                          'category': 'Politics', 'minutes': 480,
                          'description': 'Establish civil administration in the captured holding. Representatives review the charter after seven days. Only this holding changes government; the surrounding country is not annexed.',
                          'government': kind})
-    return rows
+    from offline_governance import actions as governance_actions
+    return rows + governance_actions(s, place)
 
 
 def resolve(s, spec):
+    if spec['id'].startswith(('political:survey', 'political:operation:', 'political:policy:', 'political:muster:')):
+        from offline_governance import resolve as governance_resolve
+        return governance_resolve(s, spec)
     place = spec['place']
     current = next((a for a in actions(s, place) if a['id'] == spec['id']), None)
     if not current:
@@ -98,7 +116,7 @@ def tick(s, before, after):
             # negative twist on every successful player action.
             detail = obj(obj(s.get('location_details')).get(place))
             occupied = (s.get('world') == 'One Piece' and place in {'Arlong Park', 'Cocoyasi Village'}
-                        and after < 14 * 1440 + 480 and detail.get('controlling_faction', 'Arlong Pirates') == 'Arlong Pirates')
+                        and detail.get('controlling_faction', 'Arlong Pirates' if after < 14 * 1440 + 480 else '') == 'Arlong Pirates')
             blocked = detail.get('civic_assembly_forbidden') is True or occupied
             petition['status'] = 'refused' if blocked else 'accepted'
             petition['resolved'] = after
@@ -121,7 +139,11 @@ def record_capture(s, faction, place, defender):
     National sovereignty and Naruto's village/country split are left intact.
     """
     ident = 'occupation-' + hashlib.sha256(f'{s.get("world")}|{place}'.encode()).hexdigest()[:16]
-    root = s.setdefault('offline_politics', {'version': 1, 'communities': {}})
+    writable(s, place)
+    root = s['offline_politics']
+    existing = obj(root['occupations'].get(place))
+    if existing.get('controller') == faction and existing.get('status') in {'occupied','charter_pending','governed'}:
+        return f'{faction} retains its existing holding at {place}; no additional land was annexed.'
     root.setdefault('occupations', {})[place] = {'controller': faction, 'previous_controller': defender,
         'claim_id': ident, 'status': 'occupied', 'captured': clock(s)}
     claims = s.setdefault('political_regions', [])
@@ -139,7 +161,7 @@ def tick_governments(s, after):
         return []
     news=[]
     for place, occupation in obj(obj(s.get('offline_politics')).get('occupations')).items():
-        if occupation.get('status') != 'charter_pending' or occupation.get('charter_due', after+1) > after:
+        if not isinstance(occupation, dict) or occupation.get('status') != 'charter_pending' or occupation.get('charter_due', after+1) > after:
             continue
         claim=next((r for r in s.get('political_regions', []) if isinstance(r,dict) and r.get('id')==occupation['claim_id']),None)
         if not claim or claim.get('controller') != occupation['controller'] or claim.get('status') != 'active':
@@ -161,6 +183,8 @@ def tick_governments(s, after):
 def view(s):
     place = s.get('location', '')
     r = read(s, place)
+    government = obj(obj(obj(s.get('offline_governance')).get('governments')).get(place))
     return {'place': place, 'support': {g: int(obj(r.get('support')).get(g, 0)) for g in GROUPS.get(s.get('world'), ())},
             'mandate': obj(r.get('mandate')).get('office', ''),
+            'government': {key:government[key] for key in ('owner','policy','last_decision') if key in government},
             'pending': sum(p.get('status') == 'pending' for p in r.get('petitions', []) if isinstance(p, dict))}

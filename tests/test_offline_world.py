@@ -70,7 +70,9 @@ def test_real_transaction_starts_encounter_and_resolves_once(session,world):
     saved=copy.deepcopy(game.state['canon_divergences'])
     combat_finished(game,'objective_complete')
     assert game.state['canon_divergences']==saved
-    assert tick(game.state,p['opens'],p['due']+60)[1]==[]
+    aftermath=tick(game.state,p['opens'],p['due']+60)[1]
+    assert len(aftermath)==(0 if world=='Naruto' else 1)
+    assert tick(game.state,p['due']+60,p['due']+120)[1]==[]
     assert game.state['offline_world']['appointments'][p['key']]['status']=='intervened'
 
 

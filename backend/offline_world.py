@@ -25,7 +25,7 @@ PACKS = {
         'actors': ['Nami', 'Genzo', 'Nojiko'], 'enemy': 'Arlong Pirates', 'power': 110, 'count': 4,
         'offer': 'Protect the villagers during the revolt',
         'brief': 'Hold off the raiders for four rounds while the villagers escape the fighting. This does not make you ruler of their island.',
-        'saved': 'The villagers reach safety under your protection. The revolt ends Arlong’s occupation; the community remains independent of you.',
+        'saved': 'The villagers reach safety under your protection. Arlong’s occupation is not ended by this rescue alone; his defeat remains a separate event.',
         'default': 'The Straw Hats defeat Arlong and end his occupation. Nami joins their crew.',
     }],
     'Bleach': [{
@@ -33,7 +33,7 @@ PACKS = {
         'actors': ['Rukia Kuchiki', 'Renji Abarai'], 'enemy': 'Execution detail', 'power': 180, 'count': 4,
         'offer': 'Cover Rukia and Renji’s escape from the execution ground',
         'brief': 'Protect the escape route for four rounds. This changes your part in the rescue; it does not automatically defeat Aizen or cancel his plans.',
-        'saved': 'You cover Rukia and Renji’s escape from the execution ground. Aizen’s conspiracy is exposed; protecting the retreat has not defeated him.',
+        'saved': 'You cover Rukia and Renji’s escape from the execution ground. This has not defeated Aizen or exposed his conspiracy to anyone who did not witness it.',
         'default': 'Ichigo interrupts the execution. Aizen exposes his conspiracy at Sokyoku Hill and defects with Gin and Tosen.',
     }],
 }
@@ -95,7 +95,7 @@ def eligible(s, pack, before):
 def settled(s, pack, row, status, message):
     row.update(status=status, resolved_minute=clock(s), summary=message)
     s.setdefault('canon_event_states', {})[pack['event_id']] = {
-        'status': 'replaced' if status == 'intervened' else 'occurred',
+        'status': 'replaced' if status in {'intervened', 'cancelled'} else 'occurred',
         'reason': message, 'resolved_day': clock(s) // 1440,
     }
     fired = s.setdefault('canon_events_fired', [])
@@ -107,6 +107,9 @@ def settled(s, pack, row, status, message):
         for field in ('npc_memories', 'contacts'):
             record = obj(s.get(field)).get(pack['death'])
             if isinstance(record, dict):
+                record.update(alive=False, status='dead')
+        for record in s.get('companions', []):
+            if isinstance(record, dict) and record.get('name') == pack['death']:
                 record.update(alive=False, status='dead')
 
 
@@ -122,23 +125,49 @@ def tick(s, before, after):
         row = rows[pack['key']]
         row.setdefault('status', 'scheduled')
         owned.add(pack['event_id'])
+        # A rescue and the surrounding canon outcome are separate phases.
+        # Preventing Duy's sacrifice ends that event; rescuing civilians does
+        # not grant a free victory over Arlong or Aizen.
+        if row.get('aftermath_due') is not None and after >= row['aftermath_due'] and not row.get('aftermath_resolved'):
+            row['aftermath_resolved'] = True
+            recorded = obj(obj(s.get('canon_event_states')).get(pack['event_id']))
+            required = ['Monkey D. Luffy'] if pack['key'] == 'arlong' else ['Ichigo Kurosaki','Sosuke Aizen']
+            changed = recorded.get('reason') != row.get('summary') or any(
+                obj(obj(s.get('npc_memories')).get(name)).get('alive') is False for name in required)
+            if not changed:
+                message = pack['default']
+                if pack['key'] == 'arlong':
+                    liberate_arlong(s)
+                news.append({'text': '[WORLD EVENT]\n'+message, 'tag':'system', 'canon_day':pack['due']//1440,
+                             'major':False,'event_title':pack['title']+' — aftermath'})
         if row['status'] in {'occurred', 'intervened', 'cancelled'}:
             continue
         if pack['invalid']:
-            row['status'] = 'cancelled'
+            settled(s, pack, row, 'cancelled', 'Earlier campaign changes prevented this scheduled encounter.')
             continue
         if row['status'] == 'combat':
             continue
         # A known death invalidates an appointment; it never resurrects an actor.
         if any(obj(obj(s.get('npc_memories')).get(name)).get('alive') is False for name in pack['actors']):
-            row['status'] = 'cancelled'
+            settled(s, pack, row, 'cancelled', 'A required participant is no longer alive; this encounter cannot occur as originally scheduled.')
             continue
         row['status'] = 'available' if after >= pack['opens'] else 'traveling' if after >= pack['depart'] else 'scheduled'
         if after >= pack['due']:
             settled(s, pack, row, 'occurred', pack['default'])
+            if pack['key'] == 'arlong':
+                liberate_arlong(s)
             news.append({'text': '[WORLD EVENT]\n' + pack['default'], 'tag': 'system',
                          'canon_day': pack['due'] // 1440, 'major': False, 'event_title': pack['title']})
     return owned, news
+
+
+def liberate_arlong(s):
+    # No annexation and no overwrite of a campaign's intervening conqueror.
+    for place in ('Arlong Park', 'Cocoyasi Village'):
+        detail = obj(obj(s.get('location_details')).get(place))
+        if detail.get('controlling_faction') == 'Arlong Pirates':
+            detail.update(controlling_faction='Conomi Communities', controller_changed_turn=s.get('turn', 0))
+            s.setdefault('factions', {}).setdefault('Conomi Communities', {})
 
 
 def boundary(s, start, end, place):
@@ -156,6 +185,13 @@ def actions(s, place):
     rows = []
     for p in definitions(s):
         a = appointment(s, p)
+        if (not p['invalid'] and eligible(s,p,clock(s)) and p['depart']-1440 <= clock(s) < p['depart']
+                and place == p['origin'] and not a.get('route_report')):
+            present = [name for name in p['actors'] if obj(obj(s.get('npc_memories')).get(name)).get('location') == place
+                       and obj(obj(s.get('npc_memories')).get(name)).get('alive') is not False]
+            if present:
+                rows.append({'id':'worldevent:report:'+p['key'], 'label':'Ask '+present[0]+' about the planned journey',
+                    'category':'World','minutes':0,'description':'Record the route shared by this person here. Only eligible allies or group members can then appear as distant moving markers.'})
         if (not p['invalid'] and a.get('status') not in {'occurred', 'intervened', 'cancelled', 'combat'}
                 and not a.get('attempted') and p['opens'] <= clock(s) < p['due'] and p['place'] == place
                 and eligible(s, p, clock(s))):
@@ -168,6 +204,14 @@ def resolve(game, spec):
     s = game.state
     if not any(a['id'] == spec['id'] for a in actions(s, spec['place'])):
         raise ValueError('This intervention is no longer available at this location.')
+    if spec['id'].startswith('worldevent:report:'):
+        pack = next(p for p in definitions(s) if p['key'] == spec['id'].split(':')[-1])
+        writable(s)['appointments'].setdefault(pack['key'], {'status':'scheduled'})['route_report'] = True
+        for name in pack['actors']:
+            memory = obj(obj(s.get('npc_memories')).get(name))
+            if memory.get('location') == spec['place'] and memory.get('alive') is not False:
+                memory['tracking_confirmed'] = True
+        return 'The party shares its planned journey from '+pack['origin']+' to '+pack['place']+'. This is a route report, not knowledge of the event’s outcome.'
     pack = next(p for p in definitions(s) if 'worldevent:' + p['key'] == spec['id'])
     writable(s)['appointments'].setdefault(pack['key'], {}).update(status='combat', attempted=True)
     s['combat'] = {'active': True, 'tactical_enabled': True, 'cause': pack['brief'],
@@ -198,6 +242,8 @@ def combat_finished(game, outcome):
     message = pack['saved'] if success else 'Your intervention did not secure the retreat. The danger remains; the scheduled event has not been prevented.'
     if success:
         settled(s, pack, row, 'intervened', message)
+        if pack['key'] in {'arlong','sokyoku'}:
+            row['aftermath_due'] = pack['due']
     else:
         row['status'] = 'available'
     game.append(message, 'narrative', canon_day=s.get('canon_day'))
@@ -208,6 +254,13 @@ def visible_parties(s):
     rows = []
     companions = {p.get('name') for p in s.get('companions', []) if isinstance(p, dict) and p.get('alive') is not False
                   and p.get('status', '').lower() not in {'dead', 'left', 'dismissed'}}
+    groups = {a.get('faction') or a.get('name') for a in s.get('affiliations', []) if isinstance(a, dict)
+              and a.get('status') not in {'left','dismissed','inactive'}}
+    for group in groups:
+        roster = obj(s.get('faction_rosters')).get(group, [])
+        if isinstance(roster, list):
+            companions.update(p if isinstance(p,str) else obj(p).get('name') for p in roster
+                              if isinstance(p,str) or obj(p).get('alive') is not False and obj(p).get('status') not in {'dead','left','dismissed'})
     for p in definitions(s):
         a = appointment(s, p)
         if a.get('status') not in {'traveling', 'available', 'combat'}:

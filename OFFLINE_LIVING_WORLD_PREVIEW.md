@@ -1,7 +1,9 @@
-# Offline living-world foundation — development preview
+# Offline living world — first playable release
 
-This is **not the completed living-world update**. Do not describe it as full
-canon coverage or a completed autonomous political campaign system.
+This paired preview ships the first playable release of the local engine.
+It is **not full canon coverage or a completed autonomous political campaign**.
+The broader requested update remains incomplete; the content below is the
+tested release scope, not a claim that every planned milestone is finished.
 
 ## Implemented in this pass
 
@@ -30,30 +32,47 @@ canon coverage or a completed autonomous political campaign system.
 - Council/protectorate charters establish civil administration and public
   accounts in that holding only. These are institutional state, not yet a
   complete tax/policy/elections simulation.
+- Existing recorded governments make weekly budget decisions for services,
+  local order and reserves. These abstract civilian budget units are not
+  currency, troops, canon power estimates or automatic territorial expansion.
+  Controlled local budgets can prioritize services or security. Only local
+  reports are disclosed; private government bookkeeping is excluded from state.
+- Offline military planning: muster present organization members with explicit
+  power records, survey established garrisons, buy supplies and commit local
+  available forces through the shared evidence-based resolver. Unknown defense
+  or force data does not become fabricated military strength. Committed forces
+  cannot be reused immediately or teleported to a different location.
+- Organization members with an explicit route report can use event tracking.
+  Reports can be obtained from an actual present participant before departure.
+- Canon rescue and aftermath are separate. Protecting villagers does not itself
+  defeat Arlong; later liberation changes only recorded Arlong-controlled places,
+  without overwriting another campaign owner. Cancelled events cannot resurrect
+  dead participants. Duy's default death also synchronizes companion status.
+- Repeat captures retain an established local government; malformed optional
+  politics dictionaries are repaired when written. Global animation settings
+  now also disable map-piece motion.
 
 ## Important limitations / next milestones
 
 1. Author additional event branches, prerequisites and canon-specific combat
    rosters. Current encounter strengths are fixed **gameplay estimates** and
    use shared attack templates; no claim that these are precise canon stats.
-2. Add independently scheduled political goals, resource budgets, succession,
-   negotiations and competing coalitions. Current scheduled civic reviews are
-   player-initiated petitions, not a full NPC government planner.
-3. Add the offline military planning/defense-survey activities that provide
-   trustworthy force evidence. The existing military resolver intentionally
-   does not invent missing garrisons, access, troops or supplies.
+2. Extend weekly civic budgets into succession, negotiations, competing
+   coalitions and independently selected strategic military goals.
+3. Author additional world garrison/force records and withdrawal/redeployment
+   flows. Military planning intentionally remains unavailable where campaign
+   evidence is missing; a declined or failed operation does not invent casualties.
 4. Extend tracked travel to organization parties, route reports and player
    interception. Current map enrollment is conservative and does not reveal
    every NPC or simulate every named character's itinerary.
-5. Sync canonical territorial outcomes (e.g. liberation of the Conomi Islands)
-   with polity state, accounting for earlier campaign changes. Protecting
-   civilians is not itself defeating Arlong or receiving his whole territory.
+5. Expand canonical territorial outcomes beyond the initial Arlong liberation
+   adapter. Protecting civilians is not receiving their territory.
 6. Add event-specific objectives and allied participants to tactical boards.
    The initial encounters currently reuse the generic protection objective.
 7. Long-skip intervention at intermediate travel waypoints, save/load replay
    tests across complete campaigns, and representative low-end phone profiling.
-8. Paired packages and release verification only after these previews are
-   reviewed as an explicitly limited release, or the broader work is completed.
+8. Continue expanding this explicitly limited paired preview. Main and offline
+   packages must always pass validation together before publication.
 
 ## User decisions preserved
 

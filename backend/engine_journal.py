@@ -292,6 +292,7 @@ class JournalMixin:
         s.pop("polity_state", None)
         s.pop('world_plans',None)
         s.pop('offline_world',None)
+        s.pop('offline_governance',None)
         s.pop('relationship_life',None)
         s.pop('world_benefits',None)
         # Latent Nen is fixed at creation so later awakening is consistent,
