@@ -1,5 +1,5 @@
 /* Strategy atlas, not a background picture. All geometry shares one plane. */
-.atlas-scenery{position:absolute;inset:0;width:100%!important;height:100%!important;pointer-events:none}
+.atlas-scenery{position:absolute;inset:0;width:100%!important;height:100%!important;pointer-events:none;filter:saturate(1.3) contrast(1.06)}
 .atlas-3d-ready .atlas-geography>rect,.atlas-3d-ready .atlas-geography>path{opacity:0}
 .atlas-3d-ready .atlas-geography>g[clip-path]>:not(.atlas-control-change){opacity:0}
 .atlas-3d-ready .atlas-polity-label{color:#f0e2b8;text-shadow:0 1px 3px #172d28,1px 0 2px #172d28}
