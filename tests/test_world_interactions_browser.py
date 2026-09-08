@@ -29,15 +29,17 @@ def test_reduced_motion_and_disabled_states(ui):
  page.emulate_media(reduced_motion='reduce')
  page.evaluate("document.body.dataset.world='One Piece'")
  page.wait_for_function("getComputedStyle(document.querySelector('#btn-advance')).transitionDuration==='0s'")
- page.evaluate("document.querySelector('#btn-advance').disabled=true")
- page.locator('#btn-advance').hover()
- assert page.locator('#btn-advance').evaluate("e=>getComputedStyle(e).cursor")=='not-allowed'
+ button=page.get_by_role('button',name='GAME',exact=True)
+ button.evaluate('e=>e.disabled=true')
+ button.hover()
+ assert button.evaluate("e=>getComputedStyle(e).cursor")=='not-allowed'
  assert not calls
 
 def test_modal_open_close_and_mobile_layout(ui):
  page,game,calls=ui
  page.set_viewport_size({'width':390,'height':844})
- page.locator('#btn-settings-gear').click()
+ page.get_by_role('button',name='HELP',exact=True).click()
+ page.locator('[data-action="help"]').click()
  page.wait_for_selector('.modal-backdrop.open')
  modal=page.locator('.modal-backdrop.open').first
  modal.locator('.modal-close').first.click()
