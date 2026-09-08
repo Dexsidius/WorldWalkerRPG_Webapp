@@ -72,13 +72,17 @@ def refresh(state,elapsed_minutes=0):
         for op in ops:
             if not isinstance(op,dict):continue
             op.setdefault('id',_operation_id(faction,op));op.setdefault('type','influence');op.setdefault('target_location',_target(state,faction,clock,op));op.setdefault('status','active')
+            if op.get('status')=='awaiting_resolution' and op.get('type')=='military':
+                from military_resolution import resolve_operation
+                resolve_operation(state,faction,clock,op)
+                continue
             if op.get('status')!='active':continue
             pace=elapsed_steps(state,'operation:'+str(faction)+':'+op['id'],elapsed)
             op['progress']=min(100,int(op.get('progress',0) or 0)+pace)
             if int(op.get('progress',0) or 0)<100:continue
             if op.get('type')=='military':
-                op['status']='awaiting_resolution'
-                op['resolution_requirements']='Resolve from established attackers, defenders, fortifications, access and supplies. Preparation alone changes no territory. Unknown opposition requires investigation or narrative resolution, not assumed victory.'
+                from military_resolution import resolve_operation
+                resolve_operation(state,faction,clock,op)
                 continue
             chance=_chance(clock,op.get('type','influence'));success=(_hash(state.get('campaign_id'),op['id'])%100)<chance
             target=op.get('target_location') or _target(state,faction,clock,op);kind=op.get('type','influence');changes=[]
@@ -132,37 +136,38 @@ def public_view(state):
     operations=[]
     for faction,clock in (state.get('faction_clocks') or {}).items():
         if not visible(clock):continue
-        for op in clock.get('operations',[]) or []:
+        for op in [*(clock.get('operations',[]) or []),clock.get('military_operation')]:
             if not visible(op):continue
             operations.append({'faction':faction,'id':_operation_id(faction,op),'type':op.get('type','influence'),'objective':op.get('objective') or clock.get('immediate_goal'),'target':op.get('target_location') or _target(state,faction,clock,op),'progress':int(op.get('progress',0) or 0),'status':op.get('status','active'),'resolution':op.get('resolution',''),'recent_outcome':op.get('recent_outcome','')})
     root=_existing_store(state)
     allowed={(r['faction'],r['id']) for r in operations}
-    history=[r for r in root.get('history',[]) if visible(r) and (r.get('faction'),r.get('id')) in allowed]
+    history=[r for r in root.get('history',[]) if visible(r) and ((r.get('faction'),r.get('id')) in allowed or (r.get('known_to_player') is True and visible((state.get('faction_clocks') or {}).get(r.get('faction'),{}))))]
     return {'operations':operations[:40],'history':copy.deepcopy(history[-30:]),'interventions':copy.deepcopy(root.get('interventions',[])[-20:])}
 
 def sanitize_public(state):
     """Use on an already-copied public snapshot, never on simulation state."""
     hidden_summaries={r.get('summary') for r in _existing_store(state).get('history',[]) if isinstance(r,dict) and not visible(r)}
-    concealed={name for name,clock in (state.get('faction_clocks') or {}).items() if not visible(clock) or any(not visible(op) for op in clock.get('operations',[]))}
+    concealed={name for name,clock in (state.get('faction_clocks') or {}).items() if not visible(clock) or any(not visible(op) for op in clock.get('operations',[])) or (isinstance(clock.get('military_operation'),dict) and not visible(clock['military_operation']))}
     state['world_conflict']=public_view(state)
     clocks={}
     for name,clock in (state.get('faction_clocks') or {}).items():
         if not visible(clock):continue
         ops=[op for op in clock.get('operations',[]) if visible(op)]
         # Parent goals and recent outcomes may repeat a concealed operation.
-        clocks[name]=dict(clock,operations=ops) if len(ops)==len(clock.get('operations',[])) else {'name':name,'operations':ops}
+        clocks[name]=dict(clock,operations=ops) if name not in concealed else {'name':name,'operations':ops}
     state['faction_clocks']=clocks
     state['background_world_feed']=[r for r in state.get('background_world_feed',[]) if not isinstance(r,dict) or (visible(r) and r.get('summary') not in hidden_summaries)]
     state['causality_ledger']=[r for r in state.get('causality_ledger',[]) if isinstance(r,dict) and visible(r) and r.get('actor') not in concealed]
 
 def resolution_context(state):
+    from military_resolution import RULE
     pending=[]
     for faction,clock in (state.get('faction_clocks') or {}).items():
         if not isinstance(clock,dict):continue
-        for op in clock.get('operations',[]):
+        for op in [*clock.get('operations',[]),clock.get('military_operation')]:
             if isinstance(op,dict) and op.get('status')=='awaiting_resolution':
                 pending.append({'faction':faction,'id':op.get('id'),'objective':op.get('objective'),'target':op.get('target_location'),'resources':clock.get('resources',{}),'requirements':op.get('resolution_requirements')})
-    return {'pending':pending[:8],'rule':'Military preparation is not victory. Resolve only when established forces, defenders, access and supplies support the outcome; otherwise leave awaiting_resolution. Return the operation status completed/failed and resolution evidence in faction_clocks through the normal state patch. Record actual ownership changes through the existing political/location fields; never infer them from a timer. Keep secret operations out of player prose until a credible information path exists.'}
+    return {'pending':pending[:8],'rule':RULE}
 def location_status(state,place):
     detail=(state.get('location_details') or {}).get(place,{}) if isinstance(state.get('location_details'),dict) else {}
     return {'controller':detail.get('controlling_faction','') if isinstance(detail,dict) else '', 'contested_by':copy.deepcopy(detail.get('contested_by',[]) if isinstance(detail,dict) else []),'conflict_pressure':copy.deepcopy(detail.get('conflict_pressure',{}) if isinstance(detail,dict) else {}),'fortification':int(detail.get('fortification',0) or 0) if isinstance(detail,dict) else 0,'operations':operations_at(state,place)}

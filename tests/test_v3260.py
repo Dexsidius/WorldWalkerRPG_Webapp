@@ -144,7 +144,8 @@ class WorldwalkerV3260TradeAndFactionConflictTests(unittest.TestCase):
         rules = game.task_rules("moment")
         self.assertIn("opponent (a rival faction/NPC)", rules)
         self.assertIn("contested_location", rules)
-        self.assertIn("the application resolves a real strength-weighted outcome automatically", rules)
+        self.assertIn("rough power alone cannot capture territory or destroy a faction", rules)
+        self.assertIn("military_evidence", rules)
         self.assertIn("This applies to trade disputes and blockades exactly like open conflict", rules)
 
     def test_gm_rules_require_real_consequences_for_trade_and_resource_scarcity(self):

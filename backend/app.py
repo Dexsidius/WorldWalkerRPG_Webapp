@@ -1211,6 +1211,8 @@ def api_retry_failed_turn():
             result = atomic_game_call(route, payload, lambda: game.resolve_combat_round(payload.get("action", "attack"), ability_name=payload.get("ability")))
         elif route == "combat_narrate":
             result = atomic_game_call(route, payload, lambda: game.narrate_combat())
+        elif route == 'organization_command':
+            result = atomic_game_call(route,payload,lambda:_apply_organization_command(payload))
         else:
             return jsonify({"error": "That older failed operation cannot be retried automatically."}), 400
         return jsonify(result)
@@ -1598,17 +1600,21 @@ def api_organization_command():
         return jsonify({"error": "Start or load a campaign first."}), 400
     d = request.get_json(silent=True) or {}
     try:
-        from organization_command import start_assignment, cancel_assignment, start_project, public_view
-        action = str(d.get("action") or "start")
-        if action == "start":
-            result = start_assignment(game.state, d.get("group_id"), d.get("task"), d.get("members") or [], d.get("target", ""))
-        elif action == "cancel": result = cancel_assignment(game.state, d.get("assignment_id"))
-        elif action == "project": result = start_project(game.state, d.get("group_id"), d.get("property_id"), d.get("facility"))
-        else: raise ValueError("Unknown organization-command action.")
-        game.autosave()
-        return jsonify({"ok": True, "result": result, "organization_command": public_view(game.state), "state": game.public_state()})
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
+        if not d.get('request_id'):raise ValueError('Refresh the game to send a retry-safe organization command.')
+        return jsonify(atomic_game_call('organization_command',d,lambda:_apply_organization_command(d)))
+    except Exception as exc:
+        return err(exc)
+
+
+def _apply_organization_command(d):
+    from organization_command import start_assignment, cancel_assignment, start_project, public_view
+    action = str(d.get('action') or 'start')
+    if action == 'start':
+        result=start_assignment(game.state,d.get('group_id'),d.get('task'),d.get('members') or [],d.get('target',''))
+    elif action == 'cancel':result=cancel_assignment(game.state,d.get('assignment_id'))
+    elif action == 'project':result=start_project(game.state,d.get('group_id'),d.get('property_id'),d.get('facility'))
+    else:raise ValueError('Unknown organization-command action.')
+    return {'ok':True,'result':result,'organization_command':public_view(game.state),'state':game.public_state()}
 
 
 @app.route("/api/travel/route")

@@ -147,6 +147,11 @@ def mission_offer(s,place):
     return None
 
 
+def recovery_rate(s,place):
+    from property_economy import recovery_multiplier
+    shelter=1.25 if obj(obj(s.get('location_details')).get(place)).get('adventure_shelter') else 1
+    return .12*shelter*recovery_multiplier(s,place)
+
 def action_list(s,place):
     node=location_node(s,place);here=node['name']==location_node(s)['name']
     if not here:return []
@@ -164,6 +169,11 @@ def action_list(s,place):
          {'id':'scout','label':'Survey the surrounding area','minutes':30,'description':'Identify connected routes and nearby landmarks; no forced random fight.'}]
     if settlement:
         out.append({'id':'rest:480','label':f'Recover at the {flavor[2].lower()}','minutes':480,'description':'A full rest restores ordinary health and energy, not unique conditions.'})
+    for row in out:
+        if row['id'].startswith('rest:'):
+            rate=recovery_rate(s,place)
+            row['recovery_rate_per_hour']=rate
+            row['description']=f"Recover up to {min(100,rate*row['minutes']/60*100):g}% of maximum health and energy. Includes local shelter and infirmary bonuses; special injuries are unchanged."
     for name in list(obj(s.get('stats')))[:12]:
         out.append({'id':'train:'+name,'label':f'Practice {name}','minutes':120,'description':'Uses the existing training progression rules and 10% of maximum energy.'})
     if settlement:
@@ -548,7 +558,7 @@ def resolve(game,payload,spec):
     stop=boundary(s,duration);elapsed=stop[0]-now(s) if stop else duration
     complete=elapsed==duration;patch={};label=spec['label'];training=action.startswith('train:')
     if action.startswith('rest:'):
-        rate=.12*(1.25 if obj(obj(s.get('location_details')).get(place)).get('adventure_shelter') else 1)
+        rate=recovery_rate(s,place)
         for field in ('hp','resource'):
             cap=max(1,int(s.get(field+'_max',100)));patch[field]=min(cap,float(s.get(field,0))+round(cap*rate*elapsed/60))
         label=f"You rest at {place} for {elapsed} minutes, recovering ordinary health and {s.get('resource_name','energy')}. Special injuries remain unchanged."
@@ -564,13 +574,14 @@ def resolve(game,payload,spec):
     # purchase, information or mission effect; the transaction protects both.
     result=_local_turn(game,label,elapsed,patch,training,stop[1] if stop else '')
     s=game.state;ad=writable(s)
-    if not complete:
-        ad['pending_activity']={'label':spec['label'],'spec':copy.deepcopy(spec),'remaining_minutes':duration-elapsed}
-    elif action.startswith('path:'):
+    if action.startswith('path:'):
         from character_paths import resolve_session
         from property_economy import training_bonus
         outcome=resolve_session(s,action,elapsed,complete,training_bonus(s,place))
         game.append(f"{spec['label']} — mastery +{outcome['mastery_gain']:g}; {outcome['path']['stage']}.",'narrative',canon_day=s.get('canon_day'))
+    if not complete:
+        ad['pending_activity']={'label':spec['label'],'spec':copy.deepcopy(spec),'remaining_minutes':duration-elapsed}
+    elif action.startswith('path:'):pass
     elif action.startswith('conflict:'):
         from world_conflict import resolve_intervention
         game.append(resolve_intervention(s,action,elapsed)['message'],'narrative',canon_day=s.get('canon_day'))

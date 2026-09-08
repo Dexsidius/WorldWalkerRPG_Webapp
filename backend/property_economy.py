@@ -1,6 +1,7 @@
 """Persistent property, local market, passive proceeds, and workshop orders."""
 from __future__ import annotations
 import copy,hashlib,math,re
+from fractions import Fraction
 from worlds import expansion_for
 from systems import currency_balance,record_currency_transaction
 
@@ -32,7 +33,7 @@ def bootstrap_established_holdings(state):
         if not isinstance(row,dict) or not row.get('player_led'):continue
         place=_text(row.get('anchor') or row.get('name'));pid='established-'+_id(state.get('campaign_id'),place)
         if pid in existing:continue
-        root['properties'].append({'id':pid,'name':property_name('holding',place),'type':'holding','location':place,'level':1,'condition':100,'facilities':{},'treasury':0.0,'income_remainder':0.0,'established':True,'organization':''});existing.add(pid)
+        root['properties'].append({'id':pid,'name':property_name('holding',place),'type':'holding','location':place,'level':1,'condition':100,'facilities':{},'treasury':0.0,'income_remainder':0.0,'established':True,'organization':'','acquired_minute':_minute(state)});existing.add(pid)
     return root
 
 def _market_factors(s,place):
@@ -109,7 +110,7 @@ def resolve(s,spec):
     if ident.startswith('property:buy:'):
         kind=ident.split(':',2)[2];cost=_num(spec.get('cost'));_spend(s,cost,f'Acquired {kind} in {place}','property_purchase')
         if any(p.get('type')==kind and p.get('location')==place for p in root['properties']):raise ValueError('You already own that type of property here.')
-        pid='property-'+_id(s.get('campaign_id'),place,kind,len(root['properties']));p={'id':pid,'name':property_name(kind,place),'type':kind,'location':place,'level':1,'condition':100,'facilities':{},'treasury':0.0,'income_remainder':0.0,'organization':''};root['properties'].append(p);msg=f"Acquired {p['name']} for {cost:g} {_currency(s)}."
+        pid='property-'+_id(s.get('campaign_id'),place,kind,len(root['properties']));p={'id':pid,'name':property_name(kind,place),'type':kind,'location':place,'level':1,'condition':100,'facilities':{},'treasury':0.0,'income_remainder':0.0,'organization':'','acquired_minute':_minute(s)};root['properties'].append(p);msg=f"Acquired {p['name']} for {cost:g} {_currency(s)}."
     elif ident.startswith('property:collect:'):
         pid=ident.split(':',2)[2];p=next((x for x in root['properties'] if x.get('id')==pid and x.get('location')==place),None)
         if not p:raise ValueError('That property is not available here.')
@@ -132,17 +133,26 @@ def resolve(s,spec):
     else:raise ValueError('Unknown property/economy action.')
     root['history'].append({'turn':s.get('turn'),'canon_day':s.get('canon_day'),'action':ident,'message':msg});root['history']=root['history'][-120:];return {'message':msg,'property_economy':public_view(s)}
 def advance(s,elapsed_minutes):
-    root=_store(s);now=_minute(s);last=int(root.get('last_tick_minute',now) or now);minutes=max(0,now-last if elapsed_minutes is None else int(elapsed_minutes or 0));hours=minutes/60
-    if hours:
+    root=_store(s);now=_minute(s);last=int(root.get('last_tick_minute',now))
+    minutes=max(0,now-last)
+    if elapsed_minutes is not None: minutes=min(minutes,max(0,int(elapsed_minutes or 0)))
+    if minutes:
         for p in root['properties']:
             if not isinstance(p,dict) or p.get('type')=='home':continue
-            fac=_obj(p.get('facilities'));base=_baseline(s)*.08/24;mult=1+int(fac.get('shopfront',0) or 0)*.05+int(fac.get('workshop',0) or 0)*.03
+            owned_minutes=max(0,now-max(now-minutes,int(p.get('acquired_minute',now-minutes))))
+            fac=_obj(p.get('facilities'));mult=Fraction(1)+int(fac.get('shopfront',0) or 0)*Fraction(5,100)+int(fac.get('workshop',0) or 0)*Fraction(3,100)
             try:danger=_market_factors(s,p.get('location'))['danger']
             except Exception:danger=0
-            income=max(0,base*hours*mult*(1-danger*.55));p['treasury']=round(_num(p.get('treasury'))+income,2)
+            income=Fraction(str(_baseline(s)))*Fraction(8,100)*owned_minutes/1440*mult*max(0,1-Fraction(str(danger))*Fraction(55,100))
+            fraction=_obj(p.get('income_fraction'))
+            remainder=Fraction(int(fraction.get('numerator',0)),max(1,int(fraction.get('denominator',1))))
+            scale=max(1,int(_num(_obj(s.get('currency')).get('minor_per_major'),100)))
+            total=income+remainder;units=int(total*scale);remainder=total-Fraction(units,scale)
+            p['treasury']=float(Fraction(str(_num(p.get('treasury'))))+Fraction(units,scale))
+            p['income_fraction']={'numerator':remainder.numerator,'denominator':remainder.denominator}
     for o in root['work_orders']:
         if isinstance(o,dict) and o.get('status')=='active' and now>=int(o.get('due_minute',10**18)):o['status']='complete'
-    root['last_tick_minute']=now
+    root['last_tick_minute']=max(last,now)
     return public_view(s)
 def facility_level(s,place,facility):return max([int(_obj(p.get('facilities')).get(facility,0) or 0) for p in properties_at(s,place)] or [0])
 def training_bonus(s,place):return facility_level(s,place,'training_hall')*.08

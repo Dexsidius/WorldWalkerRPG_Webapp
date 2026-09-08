@@ -2,6 +2,7 @@
 /* Network boundary and explicit, receipt-checked recovery. No automatic action
    resubmission: an unreadable response may belong to a successfully committed turn. */
 const GAME_REQUEST_ROUTES = Object.freeze({
+  "/api/organization-command":"organization_command",
   "/api/adventures/resolve":"adventure_resolve",
   "/api/time/resolve": "time_resolve",
   "/api/combat/action": "combat_action",
@@ -105,8 +106,15 @@ async function recoverGameRequest(pending) {
 }
 async function apiPost(path, body) {
   const retryable = Object.hasOwn(GAME_REQUEST_ROUTES, path);
-  const payload = { ...(body || {}) };
+  let payload = { ...(body || {}) };
   const existing = APP.retryRequest;
+  if (retryable && existing && !payload.request_id) {
+    const command = value => JSON.stringify(Object.fromEntries(Object.entries(value || {}).filter(([k]) => !["request_id", "expected_campaign", "expected_guard"].includes(k)).sort(([a],[b]) => a.localeCompare(b))));
+    if (existing.path !== path || command(existing.payload) !== command(payload)) {
+      throw new Error("Resolve the pending request with Retry before submitting a different action.");
+    }
+    payload = { ...existing.payload }; // A repeated click must check the existing receipt, not issue another order.
+  }
   if (retryable && !payload.request_id) {
     payload.request_id = window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     payload.expected_campaign = recoveryCampaignKey(APP.state);

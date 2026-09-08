@@ -167,6 +167,19 @@ def test_successful_but_unreadable_result_is_recovered_not_repeated(ui,bad_body)
     assert request_id
 
 
+def test_repeated_click_reuses_pending_receipt_without_explicit_id(ui):
+    page,game,calls=ui
+    if page.fixture_memory: page.evaluate('window.__fixtureFault={path:"/api/time/resolve",body:"unreadable"}')
+    else:
+        def damage(route):
+            route.fetch();route.fulfill(status=200,body='unreadable')
+        page.route('**/api/time/resolve',damage,times=1)
+    page.evaluate('''async()=>{try{await apiPost('/api/time/resolve',{orders:['Practice']});}catch(e){}}''')
+    assert len(calls)==1
+    result=page.evaluate('''async()=>await apiPost('/api/time/resolve',{orders:['Practice']})''')
+    assert result['replayed_request'] and len(calls)==1
+
+
 def test_pending_request_survives_browser_reload(ui):
     page,game,calls=ui
     def damage(route):

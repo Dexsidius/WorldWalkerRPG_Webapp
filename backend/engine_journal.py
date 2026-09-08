@@ -240,8 +240,10 @@ class JournalMixin:
         return visible
 
     def diagnostics_snapshot(self):
+        from subsystem_safety import public_view as subsystem_view
         scene_url, scene_category_name = scene_image_url(self.state)
         return {
+            'subsystem_health':subsystem_view(self.state),
             "app_version": APP_VERSION, "schema_version": self.state.get("schema_version"),
             "campaign": {"name": self.state.get("name"), "world": self.state.get("world"), "turn": self.state.get("turn")},
             "scene": {"category": scene_category_name, "label": scene_display_label(self.state, scene_url, scene_category_name), "image": scene_url, "location": self.state.get("location"), "weather": self.state.get("weather"), "context": scene_context(self.state),
@@ -329,4 +331,7 @@ class JournalMixin:
         s["_tension"] = tension_level(self.state)
         from world_conflict import sanitize_public
         sanitize_public(s)
+        from subsystem_safety import public_view as subsystem_view
+        s['subsystem_health']=subsystem_view(self.state)
+        s.pop('world_plan_archive',None);s.pop('world_plan_outcomes',None)
         return s

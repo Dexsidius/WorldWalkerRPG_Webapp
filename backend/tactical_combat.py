@@ -1100,6 +1100,13 @@ def submit_tactical_action(game, payload):
         return {'combat':copy.deepcopy(game.state['combat']),'replayed_request':True}
     try:
         result=resolve_tactical_action(game,payload)
+        from character_paths import record_turn
+        player_ids={u['id'] for u in board['units'] if u.get('player')}
+        old_log=seq(obj(before.get('combat')).get('log'))
+        new_log=seq(obj(game.state.get('combat')).get('log'))[len(old_log):]
+        outcomes=[{'skill':r.get('ability'),'success':True,'evidence':'Confirmed tactical use'} for r in new_log
+                  if isinstance(r,dict) and r.get('unit_id') in player_ids and r.get('success') is True and r.get('ability')]
+        record_turn(before,game.state,outcomes,0)
         board.setdefault('requests',{})[request_id]=digest
         if len(board['requests'])>128: board['requests'].pop(next(iter(board['requests'])))
         game.autosave()

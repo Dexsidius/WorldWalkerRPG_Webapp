@@ -1,9 +1,15 @@
 """Simulation reliability hotfix; save schema and base version remain stable."""
-BUILD_ID = "3.64.0-simulation-reliability-2"
+BUILD_ID = "3.64.0-gameplay-integrity-3"
 PATCH_NOTES = {
-    "title": "More reliable world operations and training",
-    "summary": "Faction operations follow campaign time, concealed operations stay out of player panels, and assignments and mentors recheck availability. Existing campaigns use these fixes automatically.",
+    "title": "Reliable rewards, orders and world outcomes",
+    "summary": "Military outcomes require evidence; income and mastery no longer depend on repeated messages or requests. Completed plans make room for new goals, infirmaries improve rest, and local simulation failures are reported safely.",
     "highlights": [
+        {"title": "No unsupported background conquest", "example": "Old faction battles and newer military operations share one resolver; missing forces, defenses, access or supplies leave the outcome pending."},
+        {"title": "Accurate passive income", "example": "Splitting one hour into short actions earns the same proceeds; fractions are retained and retries cannot pay the same interval twice."},
+        {"title": "Long-campaign plans", "example": "Finished plans are archived without blocking new plans or forgetting their dependency outcomes."},
+        {"title": "Earned mastery", "example": "Failed or merely mentioned techniques do not grant mastery; completed training segments and confirmed successful uses do."},
+        {"title": "Useful infirmaries", "example": "Each local infirmary level improves ordinary rest recovery by 12%, shown before confirming the action."},
+        {"title": "Safe organization orders", "example": "Orders have retry receipts, stale-state checks and rollback protection; subsystem failures preserve prior state and appear in Diagnostics."},
         {"title": "Time, not button presses", "example": "Faction operations accumulate one preparation point per six campaign hours, retain partial time, and do not count the same interval twice."},
         {"title": "Preparation is not conquest", "example": "A military operation at 100% awaits an evidence-based GM resolution instead of automatically taking territory."},
         {"title": "Concealed operations stay concealed", "example": "Explicitly hidden operations are filtered from player state, panels, local interventions, and generated operation news."},

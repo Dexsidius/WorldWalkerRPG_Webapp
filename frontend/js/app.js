@@ -6179,6 +6179,8 @@ async function runMenuAction(action) {
     const r = await apiGet("/api/diagnostics");
     const recoveryRows = (r.turn_recovery?.timeline || []).slice().reverse().map((row) => `<span><b>${escapeHtml(humanLabel(row.status || "checkpoint"))}</b>Turn ${escapeHtml(row.turn ?? "?")} · ${escapeHtml(humanLabel(row.route || "turn"))}</span>`).join("");
     $("#diagnostics-summary").innerHTML = `<div class="preview-grid"><div><b>Version</b><span>${escapeHtml(APP.state?._build_id || r.app_version || APP.state?._app_version || "?")}</span></div><div><b>Campaign</b><span>${escapeHtml(APP.state?.name || "None")}</span></div><div><b>Scene match</b><span>${escapeHtml(r.scene?.reason || "Unknown")}</span></div><div><b>Validation issues</b><span>${escapeHtml((r.validation_log || []).length)}</span></div></div>${recoveryRows ? `<details class="recovery-timeline"><summary>Recent safe turn checkpoints</summary>${recoveryRows}</details>` : ""}`;
+    const subsystemEvents = r.subsystem_health?.events || [];
+    if (subsystemEvents.length) $("#diagnostics-summary").insertAdjacentHTML("beforeend", `<details><summary>Local simulation diagnostics (${subsystemEvents.length})</summary>${subsystemEvents.slice(-12).map(e => `<p>${escapeHtml(humanLabel(e.subsystem))} · Turn ${escapeHtml(e.turn)} · ${escapeHtml(e.code)} · ${escapeHtml(r.subsystem_health?.systems?.[e.subsystem]?.status || "review needed")}</p>`).join("")}</details>`);
     $("#btn-retry-failed-turn").hidden = !r.turn_recovery?.last_failed?.route;
     $("#diagnostics-json").textContent = JSON.stringify(r, null, 2); openModal("modal-diagnostics");
   }

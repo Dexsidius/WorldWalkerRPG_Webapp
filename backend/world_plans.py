@@ -32,7 +32,9 @@ def normalize(state):
     store=state.setdefault('world_plans',{})
     if not isinstance(store,dict): store=state['world_plans']={}
     cleaned={}
-    for key,raw in list(store.items())[-80:]:
+    archive=state.setdefault('world_plan_archive',{})
+    if not isinstance(archive,dict):archive=state['world_plan_archive']={}
+    for key,raw in list(store.items()):
         if not isinstance(raw,dict):continue
         plan=copy.deepcopy(raw)
         plan['stages']=[s for s in seq(plan.get('stages')) if isinstance(s,dict)][:8]
@@ -40,7 +42,13 @@ def normalize(state):
         plan['stage']=min(len(plan['stages']),max(0,int(number(plan.get('stage')))))
         plan['elapsed_minutes']=max(0,number(plan.get('elapsed_minutes')))
         plan['history']=seq(plan.get('history'))[-12:]
-        cleaned[str(key)[:100]]=plan
+        if plan.get('status') in {'completed','cancelled'} and not plan.get('pending_report'):
+            archive[str(key)[:100]]={k:copy.deepcopy(plan.get(k)) for k in ('id','actor','goal','status','known_to_player','delivery','history')}
+        else: cleaned[str(key)[:100]]=plan
+    # Full history is bounded; compact outcome tombstones retain dependency truth.
+    outcomes=state.setdefault('world_plan_outcomes',{})
+    for key,plan in archive.items():outcomes[key]=plan.get('status')
+    while len(archive)>160:archive.pop(next(iter(archive)))
     state['world_plans']=cleaned
     return cleaned
 
@@ -52,7 +60,12 @@ def advance(state, elapsed_minutes=0, updates=None):
         if not isinstance(update,dict):continue
         key=text(update.get('id'),100); op=update.get('op'); plan=plans.get(key)
         if not key:continue
-        if op=='create' and not plan and len(plans)<80:
+        if op=='create' and not plan:
+            if key in obj(state.get('world_plan_outcomes')):continue
+            if sum(p.get('status') not in {'completed','cancelled'} for p in plans.values())>=80:
+                from subsystem_safety import diagnostic
+                diagnostic(state,'world_plans','active_plan_limit')
+                continue
             if text(update.get('actor')) not in actors(state) or not text(update.get('evidence')):continue
             stages=[]
             for raw in seq(update.get('stages'))[:8]:
@@ -116,7 +129,7 @@ def advance(state, elapsed_minutes=0, updates=None):
         remaining=elapsed
         while plan.get('status')=='active' and remaining>0 and plan['stage']<len(plan['stages']):
             stage=plan['stages'][plan['stage']]
-            if any(obj(plans.get(req)).get('status')!='completed' for req in seq(stage.get('requires'))):break
+            if any(obj(plans.get(req)).get('status',obj(state.get('world_plan_outcomes')).get(req))!='completed' for req in seq(stage.get('requires'))):break
             duration=max(60,number(stage.get('minutes'),10080))
             used=min(remaining,max(0,duration-plan['elapsed_minutes']))
             plan['elapsed_minutes']+=used; remaining-=used

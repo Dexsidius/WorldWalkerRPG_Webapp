@@ -786,36 +786,22 @@ def process_organizations(before, state, data, elapsed_minutes=0):
     apply_updates(state, data, campaign_day(before))
     _naruto_squad_offer(state)
     notices = advance_lives(state, elapsed_minutes, before)
-    actions = []
-    for key in ("completed_actions", "deferred_actions"):
-        actions.extend(text(x) for x in seq(data.get(key)) if text(x))
-    if text(data.get("narrative")): actions.append(text(data.get("narrative")))
-    try:
-        from character_paths import record_turn
-        record_turn(before, state, actions, elapsed_minutes)
-    except Exception:
-        pass
-    try:
-        from world_conflict import refresh as refresh_world_conflict
-        refresh_world_conflict(state, elapsed_minutes)
-    except Exception:
-        pass
-    try:
-        from reputation_system import sync as sync_reputation, advance as advance_reputation
-        sync_reputation(before, state, source=text(data.get("narrative")), events=seq(data.get("events")))
-        advance_reputation(state, elapsed_minutes)
-    except Exception:
-        pass
-    try:
-        from property_economy import bootstrap_established_holdings, advance as advance_property_economy
-        bootstrap_established_holdings(state); advance_property_economy(state, elapsed_minutes)
-    except Exception:
-        pass
-    try:
-        from organization_command import advance as advance_organization_command
-        advance_organization_command(state, elapsed_minutes)
-    except Exception:
-        pass
+    from subsystem_safety import run
+    from character_paths import record_turn
+    from world_conflict import refresh as refresh_world_conflict
+    from reputation_system import sync as sync_reputation, advance as advance_reputation
+    from property_economy import bootstrap_established_holdings, advance as advance_property_economy
+    from organization_command import advance as advance_organization_command
+    jobs={
+        'character_paths':lambda s:record_turn(before,s,seq(data.get('skill_use_outcomes')),elapsed_minutes),
+        'world_conflict':lambda s:refresh_world_conflict(s,elapsed_minutes),
+        'reputation':lambda s:(sync_reputation(before,s,source=text(data.get('narrative')),events=seq(data.get('events'))),advance_reputation(s,elapsed_minutes)),
+        'property_economy':lambda s:(bootstrap_established_holdings(s),advance_property_economy(s,elapsed_minutes)),
+        'organization_command':lambda s:advance_organization_command(s,elapsed_minutes),
+    }
+    for name,job in jobs.items():
+        if not run(state,name,job):
+            notices.append({'type':'system','title':'Simulation needs attention','narrative':f'{name.replace("_"," ").title()} could not update safely. Its prior state was preserved; details are recorded in Diagnostics.','importance':60})
     return notices
 
 def roster_view(state):

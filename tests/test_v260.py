@@ -1370,7 +1370,7 @@ class WorldwalkerV260Tests(unittest.TestCase):
         self.assertNotIn("last_major_beat_day", report["accepted"])
         self.assertEqual(game.state["director_notes"], "Lean into faction politics, ease off on combat.")
 
-    def test_faction_conflict_resolves_a_turning_point_and_can_destroy_the_loser(self):
+    def test_faction_turning_point_requires_evidence_before_conquest(self):
         from unittest.mock import patch
 
         state = {"factions": {}, "world_time": "Day 1", "location_details": {}, "npc_memories": {},
@@ -1384,12 +1384,10 @@ class WorldwalkerV260Tests(unittest.TestCase):
         with patch("systems.random.random", return_value=0.0):  # guarantees the actor (Leaf) wins
             events = tick_world_clocks(state, 1440)
         messages = [e["message"] for e in events]
-        self.assertTrue(any("Leaf has triumphed over Sand" in m for m in messages))
-        self.assertTrue(any(m.startswith("Sand has been effectively wiped out") for m in messages))
-        self.assertEqual(state["location_details"]["Border Fort"]["controlling_faction"], "Leaf")
-        self.assertEqual(state["faction_clocks"]["Sand"]["status"], "destroyed")
-        self.assertEqual(state["faction_clocks"]["Leaf"]["status"], "active")
-        self.assertEqual(state["faction_clocks"]["Leaf"]["opponent"], "")
+        self.assertFalse(any('triumphed' in m or 'wiped out' in m for m in messages))
+        self.assertNotIn('Border Fort',state['location_details'])
+        self.assertEqual(state['faction_clocks']['Sand']['power'],10)
+        self.assertEqual(state['faction_clocks']['Leaf']['status'],'awaiting_resolution')
 
     def test_off_screen_conflict_can_get_an_npc_killed(self):
         from unittest.mock import patch
@@ -1421,9 +1419,10 @@ class WorldwalkerV260Tests(unittest.TestCase):
         with patch("systems.random.random", return_value=0.0):
             events = tick_world_clocks(state, 1440)
         conflict_events = [e for e in events if e.get("conflict")]
-        self.assertEqual(len(conflict_events), 1)
+        self.assertEqual(len(conflict_events), 0)  # Neither has established battle evidence.
+        self.assertEqual(state['faction_clocks']['Alpha']['status'],'awaiting_resolution')
 
-    def test_ally_reinforcement_can_swing_an_otherwise_losing_matchup(self):
+    def test_ally_label_does_not_invent_available_reinforcements(self):
         from unittest.mock import patch
         from systems import resolve_clock_conflicts
 
@@ -1447,10 +1446,11 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # under 55/115 wins for Leaf — impossible without the ally (30/90).
         with patch("systems.random.random", return_value=0.4):
             events = resolve_clock_conflicts(state)
-        self.assertTrue(any("Leaf has triumphed over Sand" in e["message"] for e in events))
-        self.assertGreater(state["faction_clocks"]["Mist"]["power"], 50)  # ally shared in the win
+        self.assertEqual(events,[])
+        self.assertEqual(state['faction_clocks']['Leaf']['status'],'awaiting_resolution')
+        self.assertEqual(state['faction_clocks']['Mist']['power'],50)
 
-    def test_sim_proposed_conflict_always_ends_in_a_stalemate(self):
+    def test_sim_proposed_conflict_waits_instead_of_inventing_a_clash(self):
         from unittest.mock import patch
         from systems import resolve_clock_conflicts
 
@@ -1469,12 +1469,12 @@ class WorldwalkerV260Tests(unittest.TestCase):
                  "npc_clocks": {}}
         with patch("systems.random.random", return_value=0.0):  # would guarantee Leaf a win if not proposed
             events = resolve_clock_conflicts(state)
-        self.assertTrue(any("neither gains lasting advantage" in e["message"] for e in events))
+        self.assertEqual(events,[])
         self.assertEqual(state["location_details"]["Border Fort"]["controlling_faction"], "Sand")  # unchanged
         self.assertNotEqual(state["faction_clocks"]["Sand"]["status"], "destroyed")
-        self.assertFalse(state["faction_clocks"]["Leaf"]["proposed"])
+        self.assertEqual(state['faction_clocks']['Leaf']['status'],'awaiting_resolution')
 
-    def test_player_involved_lets_a_proposed_conflict_resolve_for_real(self):
+    def test_player_involvement_does_not_replace_battle_evidence(self):
         from unittest.mock import patch
         from systems import resolve_clock_conflicts
 
@@ -1489,9 +1489,10 @@ class WorldwalkerV260Tests(unittest.TestCase):
                  "npc_clocks": {}}
         with patch("systems.random.random", return_value=0.0):
             events = resolve_clock_conflicts(state)
-        self.assertTrue(any("Leaf has triumphed over Sand" in e["message"] for e in events))
+        self.assertEqual(events,[])
+        self.assertEqual(state['faction_clocks']['Leaf']['status'],'awaiting_resolution')
 
-    def test_faction_destruction_vacates_other_territory_and_costs_its_leader(self):
+    def test_unsupported_local_battle_cannot_erase_faction_and_leader(self):
         from unittest.mock import patch
         from systems import resolve_clock_conflicts
 
@@ -1513,12 +1514,9 @@ class WorldwalkerV260Tests(unittest.TestCase):
         # are not touched by the contest itself but must still end up
         # vacated once Sand is destroyed — a real power vacuum, not a
         # frozen status quo.
-        self.assertEqual(state["location_details"]["Border Fort"]["controlling_faction"], "Leaf")
-        self.assertEqual(state["location_details"]["Sand Capital"]["controlling_faction"], "")
-        self.assertEqual(state["location_details"]["Oasis Camp"]["controlling_faction"], "")
-        self.assertIn(state["npc_memories"]["Kage"]["status"], ("deceased", "captured", "exiled"))
-        self.assertTrue(any("unclaimed" in e["message"] for e in events))
-        self.assertTrue(any("Kage" in e["message"] and "collapse" in e["message"] for e in events))
+        self.assertTrue(all(r['controlling_faction']=='Sand' for r in state['location_details'].values()))
+        self.assertNotIn('status',state['npc_memories']['Kage'])
+        self.assertEqual(events,[])
 
     def test_propose_faction_conflicts_creates_an_eligible_matchup(self):
         from unittest.mock import patch
@@ -2592,9 +2590,9 @@ class WorldwalkerV260Tests(unittest.TestCase):
         with patch("systems.random.random", return_value=0.0):
             events = tick_world_clocks(state, 1440)
         messages = [e["message"] for e in events]
-        self.assertTrue(any("badly weakened" in m and "holds on" in m for m in messages))
+        self.assertFalse(any('badly weakened' in m for m in messages))
         self.assertNotEqual(state["faction_clocks"]["Konohagakure"]["status"], "destroyed")
-        self.assertGreater(state["faction_clocks"]["Konohagakure"]["power"], FACTION_DESTROYED_THRESHOLD)
+        self.assertEqual(state['faction_clocks']['Konohagakure']['power'],10)
 
     def test_canon_protected_npc_survives_a_conflict_instead_of_dying(self):
         state = {"world": "Naruto", "factions": {}, "world_time": "Day 1", "location_details": {},

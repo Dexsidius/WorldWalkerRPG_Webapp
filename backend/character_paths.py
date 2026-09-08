@@ -141,13 +141,20 @@ def resolve_session(state,action,elapsed_minutes,complete=True,facility_bonus=0)
     if not isinstance(path,dict) or not path.get('available'): raise ValueError('That development path is no longer available.')
     standard={'fundamentals':120,'efficiency':180,'application':180,'mentor':180}.get(kind)
     if not standard: raise ValueError('Unknown character-path focus.')
+    token=f"{state.get('turn',0)}:{state.get('canon_time_minutes',0)}:{action}"
+    if path.get('last_session_token')==token:
+        return {'path':copy.deepcopy(path),'mastery_gain':0,'completed':bool(complete),'stage_changed':False,'previous_stage':path['stage'],'replayed':True}
     ratio=max(0,min(1,float(elapsed_minutes or 0)/standard)); base={'fundamentals':5,'efficiency':6,'application':6,'mentor':9}[kind]
     if kind=='mentor' and len(parts)<4: base=6
     gain=round(base*ratio*(1+max(0,float(facility_bonus or 0))),1)
+    cost_pct={'fundamentals':.10,'efficiency':.12,'application':.15,'mentor':.12}[kind]
+    maximum=float(state.get('resource_max',100) or 100);cost=int(round(maximum*cost_pct*ratio))
+    if cost>float(state.get('resource',0) or 0):raise ValueError('Recover energy before continuing this training session.')
     previous=path.get('stage',_stage(path.get('mastery',0))); path['mastery']=round(min(100,float(path.get('mastery',0) or 0)+gain),1); path['stage']=_stage(path['mastery'])
     note=f"{kind.title()} work on {path['skill']}"; ev={'turn':state.get('turn',0),'canon_day':state.get('canon_day'),'kind':kind,'minutes':int(elapsed_minutes or 0),'gain':gain,'note':note}
     path.setdefault('evidence',[]).append(ev); path['evidence']=path['evidence'][-30:]; root.setdefault('history',[]).append({'path_id':pid,**ev}); root['history']=root['history'][-120:]
     _apply_upgrades(state,path); path['next_steps']=_next_steps(path)
+    path['last_session_token']=token
     # Training cost is bounded and prorated; local activity flow handles time/interruption.
     cost_pct={'fundamentals':.10,'efficiency':.12,'application':.15,'mentor':.12}[kind]
     maximum=float(state.get('resource_max',100) or 100); cost=int(round(maximum*cost_pct*ratio)); state['resource']=max(0,int(state.get('resource',0) or 0)-cost)
@@ -164,12 +171,15 @@ def validate_mentor(state,action):
         raise ValueError('That mentor is no longer present and available. Cancel or choose another training session.')
 
 def record_turn(before,state,actions,elapsed_minutes):
-    root=normalize(state); text_blob=' '.join(map(str,actions or [])); results=[]
-    if not TRAINING_RE.search(text_blob): return results
+    root=normalize(state); results=[]
+    # Only explicit successful outcomes qualify, never prose or deferred intent.
+    completed={str(r.get('skill','')).casefold() for r in (actions or []) if isinstance(r,dict) and r.get('success') is True and r.get('evidence')}
     for pid,path in root['paths'].items():
         if not isinstance(path,dict) or not path.get('available'): continue
         skill=str(path.get('skill',''))
-        if skill and skill.casefold() in text_blob.casefold():
-            gain=min(3,max(1,int(elapsed_minutes or 5)//60+1)); old=path['mastery']; path['mastery']=round(min(100,old+gain),1); path['stage']=_stage(path['mastery']); _apply_upgrades(state,path); path['next_steps']=_next_steps(path)
+        token=f"{state.get('turn',0)}:{state.get('canon_time_minutes',0)}"
+        if skill and skill.casefold() in completed and path.get('last_use_award')!=token:
+            gain=1; old=path['mastery']; path['mastery']=round(min(100,old+gain),1); path['stage']=_stage(path['mastery']); _apply_upgrades(state,path); path['next_steps']=_next_steps(path)
+            path['last_use_award']=token
             results.append({'path_id':pid,'skill':skill,'gain':path['mastery']-old,'mastery':path['mastery'],'stage':path['stage']})
     return results

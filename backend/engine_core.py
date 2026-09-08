@@ -408,6 +408,8 @@ class CoreMixin:
 
     AI_HIDDEN_FIELDS = ("adventures", "travel_access", "_world_calendar", "_request_receipts", "_recovery_guard", "relationship_life", "world_plans", "world_benefits", "campaign_arcs", "campaign_arc_archive", "campaign_arc_director", "life_simulation") + AI_HIDDEN_FIELDS
 
+    AI_HIDDEN_FIELDS = ('subsystem_health','world_plan_archive','world_plan_outcomes') + AI_HIDDEN_FIELDS
+
     def _relevant_npc_names(self):
         """Best-effort 'who's actually in play right now': present at the
         current location, a companion, a marked nemesis, or named in the
@@ -866,6 +868,7 @@ class CoreMixin:
         if faction_resolution['pending']:
             payload['faction_resolution'] = faction_resolution
         instructions += CONSISTENCY_RULE
+        instructions += '\nFor confirmed successful use of an owned skill, optionally return skill_use_outcomes:[{skill:exact owned name,success:true,evidence:concrete completed result}]. Omit failed, negated, planned, deferred or merely mentioned uses. Local timed training and tactical combat already award mastery; never duplicate those awards.'
         usage_before = copy.deepcopy(getattr(client, "usage", {}))
         from turn_recovery import stage, request_signature
         record = stage(self, "narrator", request_signature(instructions, payload, getattr(client, "model", ""), max_output_tokens))
@@ -1253,9 +1256,7 @@ AUTHORITATIVE CORE
         faction_trade_rule = (
             "- faction_clocks are living strategic records. Respect their strategic_goal, immediate_goal, leadership, resources, operations, alliances, rivals and recent_outcomes. Advance or react to the current operation instead of inventing an unrelated faction move. Resources constrain pace; alliances and rivalries shape responses; leadership loss creates a succession pressure rather than making the faction forget its agenda. "
             "faction_clocks and npc_clocks also support opponent (a rival faction/NPC), ally, power (1-100, rough current strength), "
-            "and contested_location (a real place actually at stake). Once a clock with an opponent reaches its turning point, the application "
-            "resolves a real strength-weighted outcome automatically — territory can change hands, and a side that loses badly enough is genuinely "
-            "destroyed or lost — independent of whether the player is present. Only set these fields when the stake is meant to be real; a conflict "
+            "and contested_location (a real place actually at stake). A faction conflict reaching its turning point awaits military evidence; rough power alone cannot capture territory or destroy a faction. Supply military_evidence only from established forces, garrisons, fortifications, access and supplies. A conflict "
             "the player experiences directly belongs in normal narrative/combat instead. This applies to trade disputes and blockades exactly like "
             "open conflict — a rival power actually contesting a trade route, port, or supply line is a real opponent/contested_location claim.\n"
             "- Tolls, blockades, secured or cut trade routes, and who actually supplies a settlement have real narrative weight — reflect it "
@@ -1521,10 +1522,7 @@ EVENT-SCENE JOB
                 f"\n- FACTION CONFLICT (this world's real factions: {', '.join(known_factions)}): faction_clocks and npc_clocks "
                 "support optional fields — opponent (the rival faction/NPC name), ally (a faction/NPC who reinforces this side "
                 "if the conflict resolves), power (1-100, their rough current strength), and contested_location (a place "
-                "actually at stake) — and once a clock with an opponent reaches its turning point, the application resolves a "
-                "real strength-weighted outcome automatically: territory can change hands, and a side that loses badly enough "
-                "is genuinely destroyed (a faction, which also vacates its other territory and can cost its tracked leader — "
-                "see npc_memories[name].leads_faction below) or lost (an NPC), off-screen, without needing the player present. "
+                "actually at stake). A prepared faction battle stays awaiting_resolution until military_evidence establishes forces, defenses, access and supplies. No default-strength conquest, faction destruction, or off-screen leader death follows merely from a timer. "
                 "Only set opponent/ally/power/contested_location when you intend that stake to be real. "
                 + (f"This campaign is {current_canon_day - max(all_event_days)} day(s) beyond this world's last established "
                    "canon event — there is no more real script to follow here, so extrapolate each faction's next move as a "

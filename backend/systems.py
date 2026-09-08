@@ -561,7 +561,7 @@ def resolve_clock_conflicts(state):
             # consumed as an actor or an opponent, it's settled for this tick.
             if name in resolved_this_tick:
                 continue
-            if not isinstance(clock, dict) or clock.get("status") != "turning_point":
+            if not isinstance(clock, dict) or clock.get("status") not in {"turning_point", "awaiting_resolution"}:
                 continue
             opponent_name = str(clock.get("opponent") or "").strip()
             if not opponent_name:
@@ -570,6 +570,16 @@ def resolve_clock_conflicts(state):
             resolved_this_tick.add(opponent_name)
             opp_coll, opp_clock = located.get(opponent_name, (None, None))
             location = str(clock.get("contested_location") or "").strip()
+
+            if coll_name == 'faction_clocks' or opp_coll == 'faction_clocks':
+                from military_resolution import resolve_legacy
+                result = resolve_legacy(state, name, clock, opponent_name)
+                if result: events.append(result)
+                # A mutual clock cannot independently replay the same battle.
+                if opp_clock and str(opp_clock.get('opponent') or '') == name and clock.get('status') == 'active':
+                    opp_clock.update(status='active',progress=0,opponent='',contested_location='',proposed=False)
+                    opp_clock.pop('military_operation',None)
+                continue
 
             if clock.get("proposed") and not clock.get("player_involved"):
                 # Pure dice never get to decide a faction's survival — a
