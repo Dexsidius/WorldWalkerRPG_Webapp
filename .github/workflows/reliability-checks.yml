@@ -48,7 +48,7 @@ jobs:
     timeout-minutes: 10
     env:
       WORLDWALKER_MODE: offline
-      WORLDWALKER_DATA_DIR: ${{ runner.temp }}/worldwalker-offline-tests
+      WORLDWALKER_DATA_DIR: ${{ github.workspace }}/.build-offline-test-data
       PYTHONPATH: backend:tests:tools
       PYTHONUTF8: '1'
     steps:

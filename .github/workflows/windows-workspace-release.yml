@@ -17,7 +17,7 @@ jobs:
       contents: write
     env:
       WORLDWALKER_MODE: main
-      WORLDWALKER_DATA_DIR: ${{ runner.temp }}/worldwalker-tests
+      WORLDWALKER_DATA_DIR: ${{ github.workspace }}/.build-test-data
       PYTHONUTF8: '1'
       PYTHONPATH: '${{ github.workspace }}/backend;${{ github.workspace }}/tests;${{ github.workspace }}/tools'
     steps:
