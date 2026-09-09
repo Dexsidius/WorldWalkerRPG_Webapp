@@ -187,10 +187,13 @@ def muster_strength(s, faction, place):
         return 0
     names = {p if isinstance(p,str) else obj(p).get('name') for p in roster}
     total = 0
+    unavailable = {'dead','deceased','missing','away','absent','hostile','imprisoned','left','dismissed'}
+    target = str(place or '').strip().casefold()
     for name in names:
         memory = obj(obj(s.get('npc_memories')).get(name))
-        if (memory.get('alive') is False or memory.get('status') in {'dead','left','dismissed'}
-                or memory.get('location') != place):
+        status = str(memory.get('status') or '').strip().casefold()
+        location = str(memory.get('location') or memory.get('last_known_location') or '').strip().casefold()
+        if memory.get('alive') is False or status in unavailable or location != target:
             continue
         total += number(memory.get('power_score'))
     return total

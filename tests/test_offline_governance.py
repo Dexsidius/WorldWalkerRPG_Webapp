@@ -49,10 +49,11 @@ def test_muster_excludes_unknown_absent_and_dead_members(session):
     _,game,client=session
     game.state=s=polity();place=s['location']
     s['faction_clocks']['Player League']['available_strength']=0
-    s['faction_rosters']={'Player League':['Local','Unknown','Absent','Dead']}
-    s['npc_memories']={'Local':{'location':place,'power_score':120},
-        'Unknown':{'location':place}, 'Absent':{'location':'Elsewhere','power_score':500},
-        'Dead':{'location':place,'power_score':900,'alive':False}}
+    s['faction_rosters']={'Player League':['Local','Unknown','Absent','Dead','Dismissed']}
+    s['npc_memories']={'Local':{'last_known_location':place,'power_score':120},
+        'Unknown':{'last_known_location':place}, 'Absent':{'last_known_location':'Elsewhere','power_score':500},
+        'Dead':{'last_known_location':place,'power_score':900,'status':'Deceased','alive':False},
+        'Dismissed':{'last_known_location':place,'power_score':300,'status':'Dismissed'}}
     offer=next(a for a in actions(s,place) if a['id'].startswith('political:muster:'))
     local(client,offer['id'],place)
     assert game.state['faction_clocks']['Player League']['available_strength']==120
