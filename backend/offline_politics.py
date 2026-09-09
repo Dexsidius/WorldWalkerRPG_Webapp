@@ -114,14 +114,15 @@ def tick(s, before, after):
                 continue
             # Explicit local restrictions determine the response, not a random
             # negative twist on every successful player action.
+            decision_time = int(petition['due'])
             detail = obj(obj(s.get('location_details')).get(place))
             occupied = (s.get('world') == 'One Piece' and place in {'Arlong Park', 'Cocoyasi Village'}
-                        and detail.get('controlling_faction', 'Arlong Pirates' if after < 14 * 1440 + 480 else '') == 'Arlong Pirates')
+                        and detail.get('controlling_faction', 'Arlong Pirates' if decision_time < 14 * 1440 + 480 else '') == 'Arlong Pirates')
             blocked = detail.get('civic_assembly_forbidden') is True or occupied
             petition['status'] = 'refused' if blocked else 'accepted'
-            petition['resolved'] = after
+            petition['resolved'] = decision_time
             if blocked:
-                r['retry_after'] = after + WEEK
+                r['retry_after'] = decision_time + WEEK
                 reason = 'Arlong’s occupation does not recognize an independent civic mandate' if occupied else 'the established local ban on civic assembly is still in force'
                 message = f'The petition at {place} cannot proceed: {reason}. Your community support is retained.'
             else:
@@ -172,7 +173,7 @@ def tick_governments(s, after):
         if not enough:
             occupation['status']='occupied'
             continue
-        occupation.update(status='governed', legitimacy='local charter', institutions=['civil administration','public accounts'], established=after)
+        occupation.update(status='governed', legitimacy='local charter', institutions=['civil administration','public accounts'], established=int(occupation['charter_due']))
         claim['name']=place+' '+('Council' if occupation['government']=='council' else 'Protectorate')
         message=f"The charter for {claim['name']} takes effect. Civil administration and public accounts are established in the captured holding. This does not confer sovereignty over the surrounding country."
         news.append({'text':'[LOCAL GOVERNMENT]\n'+message,'tag':'system','canon_day':occupation['charter_due']//1440,

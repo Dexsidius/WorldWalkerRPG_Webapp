@@ -47,6 +47,12 @@ def clock(s):
     return int(s.get('canon_time_minutes', int(s.get('canon_day', 0)) * 1440 + 480))
 
 
+def npc_at(memory, place):
+    """Use the shared NPC location contract without requiring legacy `location`."""
+    known = memory.get('location') or memory.get('last_known_location')
+    return str(known or '').strip().casefold() == str(place or '').strip().casefold()
+
+
 def definitions(s):
     if not offline_enabled():
         return []
@@ -187,7 +193,7 @@ def actions(s, place):
         a = appointment(s, p)
         if (not p['invalid'] and eligible(s,p,clock(s)) and p['depart']-1440 <= clock(s) < p['depart']
                 and place == p['origin'] and not a.get('route_report')):
-            present = [name for name in p['actors'] if obj(obj(s.get('npc_memories')).get(name)).get('location') == place
+            present = [name for name in p['actors'] if npc_at(obj(obj(s.get('npc_memories')).get(name)), place)
                        and obj(obj(s.get('npc_memories')).get(name)).get('alive') is not False]
             if present:
                 rows.append({'id':'worldevent:report:'+p['key'], 'label':'Ask '+present[0]+' about the planned journey',
@@ -209,7 +215,7 @@ def resolve(game, spec):
         writable(s)['appointments'].setdefault(pack['key'], {'status':'scheduled'})['route_report'] = True
         for name in pack['actors']:
             memory = obj(obj(s.get('npc_memories')).get(name))
-            if memory.get('location') == spec['place'] and memory.get('alive') is not False:
+            if npc_at(memory, spec['place']) and memory.get('alive') is not False:
                 memory['tracking_confirmed'] = True
         return 'The party shares its planned journey from '+pack['origin']+' to '+pack['place']+'. This is a route report, not knowledge of the event’s outcome.'
     pack = next(p for p in definitions(s) if 'worldevent:' + p['key'] == spec['id'])

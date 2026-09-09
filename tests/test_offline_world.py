@@ -2,7 +2,7 @@
 import copy
 import pytest
 import runtime_mode
-from offline_world import definitions, tick, actions, visible_parties, boundary, combat_finished
+from offline_world import definitions, tick, actions, visible_parties, boundary, combat_finished, resolve as resolve_world_event
 from test_reliability_update import session, state
 from test_living_adventures import local
 
@@ -154,6 +154,55 @@ def test_capture_is_one_holding_and_government_is_separate(world,place):
     assert tick_governments(s,100001+WEEK)==[]
     assert claim['hex_count']==1 and occupation['status']=='governed'
 
+
+
+def test_route_report_accepts_last_known_location():
+    s,p=setup()
+    s['canon_time_minutes']=p['depart']-60
+    s['canon_day']=s['canon_time_minutes']//1440
+    s['location']=p['origin']
+    actor=p['actors'][0]
+    s['npc_memories']={actor:{'last_known_location':p['origin'],'alive':True}}
+    offer=next(a for a in actions(s,p['origin']) if a['id']=='worldevent:report:'+p['key'])
+    game=type('Game',(),{'state':s})()
+    resolve_world_event(game,{'id':offer['id'],'place':p['origin']})
+    assert s['offline_world']['appointments'][p['key']]['route_report'] is True
+    assert s['npc_memories'][actor]['tracking_confirmed'] is True
+
+
+def test_petition_resolution_is_partition_invariant():
+    from offline_politics import tick as decision_tick, writable, WEEK
+    base=state('Naruto');place='Konohagakure'
+    base.update(location=place,canon_time_minutes=0,canon_day=0,
+                location_details={place:{'civic_assembly_forbidden':True}})
+    community=writable(base,place)
+    community['petitions']=[{'status':'pending','submitted':0,'due':WEEK}]
+    one_skip=copy.deepcopy(base);weekly=copy.deepcopy(base)
+    decision_tick(one_skip,0,WEEK*4)
+    for index in range(4):
+        decision_tick(weekly,index*WEEK,(index+1)*WEEK)
+    assert one_skip['offline_politics']==weekly['offline_politics']
+    petition=one_skip['offline_politics']['communities'][place]['petitions'][0]
+    assert petition['resolved']==WEEK
+    assert one_skip['offline_politics']['communities'][place]['retry_after']==WEEK*2
+
+
+def test_government_charter_uses_scheduled_established_time():
+    from offline_politics import tick_governments, writable, GROUPS, WEEK
+    base=state('Naruto');place='Konohagakure';claim_id='test-claim'
+    base.update(location=place,canon_time_minutes=0,canon_day=0,
+                political_regions=[{'id':claim_id,'name':'Foothold at '+place,'controller':'Player League','status':'active'}])
+    community=writable(base,place)
+    community['support']={group:50 for group in GROUPS['Naruto']}
+    base['offline_politics']['occupations'][place]={'controller':'Player League','claim_id':claim_id,
+        'status':'charter_pending','charter_due':WEEK,'government':'council'}
+    one_skip=copy.deepcopy(base);weekly=copy.deepcopy(base)
+    tick_governments(one_skip,WEEK*4)
+    tick_governments(weekly,WEEK)
+    for end in (WEEK*2,WEEK*3,WEEK*4):
+        tick_governments(weekly,end)
+    assert one_skip['offline_politics']==weekly['offline_politics']
+    assert one_skip['offline_politics']['occupations'][place]['established']==WEEK
 
 def test_missing_epoch_does_not_suppress_future_negative_day_event():
     s,p=setup();s.pop('calendar_anchor_day',None)
