@@ -13,10 +13,12 @@ publish one member of a release pair if the other fails validation.
 
 ## Publishing
 
-Approved implementation updates go to `richardmadden1030-dot/worldwalker-rpg`,
-branch `master`. Richard superseded the earlier dual-push instruction on
-September 6, 2026: he will handle `Dexsidius/WorldWalkerRPG_Webapp` -> `web_prod`
-himself. Do not retry, configure, or push to that repository without a new request.
+Approved implementation updates go to BOTH configured GitHub destinations:
+`richardmadden1030-dot/worldwalker-rpg` -> `master` and
+`Dexsidius/WorldWalkerRPG_Webapp` -> `web_prod`. Richard explicitly restored
+dual-repository publishing on September 12, 2026, superseding the September 6
+restriction. This is not permission to overwrite divergent work, update every
+branch, or directly administer the friend's hosted prod/dev servers.
 Read the latest source tip before changes, preserve unrelated work, use non-force
 writes, run relevant checks, and verify the actual resulting commit.
 Never include credentials, API keys, player saves, or personal data in commits.
