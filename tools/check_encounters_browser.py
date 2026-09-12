@@ -66,3 +66,21 @@ def test_loading_other_campaign_closes_old_encounter(ui):
     page.locator('[data-encounter-open]').click()
     game.state=seeded();game.state['campaign_id']='another-campaign';reload_state(page)
     page.wait_for_selector('#campaign-encounter[open]',state='hidden')
+
+
+def test_tactical_choice_leaves_encounter_window_and_requires_real_battle(ui):
+    page,game,calls=ui
+    game.state=seeded('Naruto','investigation');reload_state(page)
+    page.locator('[data-encounter-begin]').click()
+    page.wait_for_selector('[data-confirm-yes]:not(:disabled)');page.locator('[data-confirm-yes]').click()
+    page.wait_for_function('!APP.busy')
+    page.locator('[data-encounter-open]').click()
+    page.locator('[data-encounter-choice="encounter:direct"]').click()
+    page.wait_for_selector('[data-confirm-yes]:not(:disabled)');page.locator('[data-confirm-yes]').click()
+    # Naruto intentionally navigates to its full-screen tactical app. The
+    # Chronicle's APP global no longer exists in that separate document.
+    page.wait_for_url('**/tactical-preview/**')
+    assert not page.locator('#campaign-encounter[open]').count()
+    assert game.state['combat']['active'] and game.state['combat']['tactical']['units']
+    assert read(game.state)['active']['stage']=='combat'
+    assert not read(game.state)['resolved'] and not calls

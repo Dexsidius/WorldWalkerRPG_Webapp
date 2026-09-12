@@ -210,6 +210,12 @@ def main():
     else:
         raise RuntimeError("Worldwalker could not start its local game server.")
     if "--self-test" in sys.argv:
+        # Both frozen editions must include the authored director, not only
+        # its frontend. This catches missed dynamic modules during packaging.
+        from encounter_content import catalog as encounter_catalog, STORIES
+        from campaign_encounters import ai_summary as encounter_summary
+        assert sum(len(encounter_catalog(world)) for world in STORIES)==54
+        assert encounter_summary({})=={}
         with urlopen(f"{url}api/version", timeout=3, context=_LOCAL_SSL_CONTEXT) as response:
             version = json.load(response)
         with urlopen(f"{url}api/state", timeout=3, context=_LOCAL_SSL_CONTEXT) as response:

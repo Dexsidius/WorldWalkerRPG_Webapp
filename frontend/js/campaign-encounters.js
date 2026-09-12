@@ -57,7 +57,7 @@ window.CampaignEncounters = (() => {
   }
   async function refresh(){
     const run=++revision,id=APP.state?.campaign_id;
-    if(!id||APP.state?.multiplayer?.active){data=null;if(hub)hub.hidden=true;dialog?.close();return;}
+    if(!id||APP.state?.multiplayer?.active||APP.state?.combat?.active){data=null;if(hub)hub.hidden=true;dialog?.close();return;}
     if(campaign!==id){dialog?.close();data=null;if(hub)hub.hidden=true;campaign=id;}
     try{
       const result=await apiGet('/api/adventures/location');

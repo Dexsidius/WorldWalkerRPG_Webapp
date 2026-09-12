@@ -246,7 +246,7 @@ def resolve(game, spec):
     if spec['id'].startswith('worldevent:followup:'):
         p=next(p for p in definitions(s) if p['key']==spec['id'].split(':')[-1])
         a=writable(s)['appointments'][p['key']];a['followup_recorded']=True
-        return a['summary']+' '+('Duy’s later appearances must respect his survival. No unrelated death or memorial should be assumed.' if p['key']=='duy' else 'The surrounding canon conflict is separate from the people you protected.')
+        return a['summary']+' '+('Duy and his team have a future beyond this confrontation. The battles still ahead remain unwritten.' if p['key']=='duy' else 'The people you protected are clear of this confrontation. The wider conflict remains unresolved.')
     if spec['id'].startswith('worldevent:report:'):
         pack = next(p for p in definitions(s) if p['key'] == spec['id'].split(':')[-1])
         writable(s)['appointments'].setdefault(pack['key'], {'status':'scheduled'})['route_report'] = True

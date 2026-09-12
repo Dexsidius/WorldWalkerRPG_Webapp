@@ -37,6 +37,7 @@ def test_authored_coverage():
     assert len({p['title'] for p in packs})==54
     assert all(len(catalog(w))==6 for w in STORIES)
     assert all(p['prepared_result']!=p['direct_result'] and p['finding']!=p['invitation'] for p in packs)
+    assert all('threat has not been defeated' not in p['direct_result'] for p in packs)
     assert catalog('Not a world')==[]
 
 

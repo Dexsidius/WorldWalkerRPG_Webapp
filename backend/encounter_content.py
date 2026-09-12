@@ -216,5 +216,5 @@ def catalog(world):
         rows.append(dict(id=f'original:{world}:investigation',family='investigation',title=title,invitation=invitation,
             finding=finding,author=PEOPLE[world],prepared_label='Submit the verified account',
             prepared_result='You deliver the account through the local reporting contact. The report is received, not magically resolved: no enemy has been defeated and no territory changes hands.',
-            direct_label='Protect the withdrawal',direct_result='The relief group completes its withdrawal under your protection. The threat has not been defeated or driven out of the region.',enemy=enemy,power=power))
+            direct_label='Protect the withdrawal',direct_result='The relief group completes its withdrawal under your protection. You have secured their escape, not control of the surrounding region.',enemy=enemy,power=power))
     return rows

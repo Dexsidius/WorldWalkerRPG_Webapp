@@ -185,7 +185,7 @@ def resolve(game,spec):
     p,r=active_pack(s)
     if id=='encounter:close':root.pop('active',None);return
     if id=='encounter:leave':
-        finish(game,p,r,'declined','You leave this situation to its participants. No reward or unrelated penalty is applied.');return
+        finish(game,p,r,'declined','You excuse yourself and return to your own plans. The participants continue without your involvement.');return
     if id=='encounter:investigate':
         r['stage']='decision';r['history'].append({'title':'What you verified','text':p['finding']});remember(game,p['finding'],p['title']);return
     if id=='encounter:direct' and p.get('enemy'):
