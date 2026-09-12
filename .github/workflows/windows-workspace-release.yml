@@ -46,14 +46,8 @@ jobs:
         run: python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py tools/check_offline_browser.py -q
       - name: Build and verify both editions from this commit
         run: python tools/build_editions.py --output "${{ runner.temp }}/worldwalker-pair"
-      - uses: actions/upload-artifact@v7
-        with:
-          name: Worldwalker-paired-Windows-${{ github.sha }}
-          path: |
-            ${{ runner.temp }}/worldwalker-pair/*.zip
-            ${{ runner.temp }}/worldwalker-pair/RELEASE_PAIR.json
-          if-no-files-found: error
-          compression-level: 0
+      # The release below is the durable paired download. Do not also store
+      # ~650 MB of duplicate ZIPs in Actions' separately quota-limited storage.
       - name: Publish both previews together
         env:
           GH_TOKEN: ${{ github.token }}

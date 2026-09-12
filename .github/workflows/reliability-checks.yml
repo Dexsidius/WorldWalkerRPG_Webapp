@@ -38,6 +38,9 @@ jobs:
           python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py tools/check_adventures_browser.py -q --junitxml=qa/results.xml
       - uses: actions/upload-artifact@v7
         if: always()
+        # Optional diagnostics must not turn passing tests into a failed job
+        # when the Actions storage quota is full. Test failures still fail it.
+        continue-on-error: true
         with:
           name: campaign-reliability-results
           path: qa/
