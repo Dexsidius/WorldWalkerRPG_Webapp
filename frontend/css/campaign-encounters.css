@@ -1,0 +1,40 @@
+.encounter-hub[hidden]{display:none!important}
+body[data-mobile-view="actions"] .col-right>#campaign-encounter-hub:not([hidden]){display:block!important}
+.encounter-hub .panel-head{gap:12px;flex-wrap:wrap}
+.encounter-leads{display:grid;gap:8px;padding:12px}
+.encounter-leads button,.encounter-decisions button{display:grid;gap:7px;text-align:left;white-space:normal;overflow-wrap:anywhere;min-height:48px;padding:14px;background:var(--panel-bg,#18251f);color:var(--text,#f0e9d5);border:1px solid var(--border,#59604a);border-radius:8px;line-height:1.45}
+.encounter-leads small,.encounter-leads span{font-size:12px;opacity:.8}
+.encounter-leads b{font-size:16px}
+.encounter-window{--enc-paper:#e7d3a6;--enc-ink:#2b2418;box-sizing:border-box;width:min(1180px,96vw);max-width:96vw;max-height:92dvh;padding:0;border:1px solid #b69a58;border-radius:12px;background:#14221c;color:#f1e7cf;box-shadow:0 28px 90px #0009;overflow:auto}
+.encounter-window::backdrop{background:#07110cdc;backdrop-filter:blur(5px)}
+.encounter-window *{box-sizing:border-box}
+.encounter-header{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:22px 26px;border-bottom:1px solid #5f6342}
+.encounter-header h2{font:normal clamp(23px,3vw,32px)/1.2 Georgia,serif;margin:6px 0;overflow-wrap:anywhere;color:#edcf87}
+.encounter-window small{font-size:11px;letter-spacing:.09em;text-transform:uppercase;line-height:1.7}
+.encounter-header button{min-width:44px;min-height:44px;font-size:26px}
+.encounter-header button,.encounter-dossier button{background:#233629;color:#f5ecd8;border:1px solid #667c4a;border-radius:6px;padding:10px;font-family:inherit}
+.encounter-layout{display:grid;grid-template-columns:minmax(155px,1fr) minmax(0,2.7fr) minmax(220px,1.3fr)}
+.encounter-dossier,.encounter-decisions{padding:24px 20px;min-width:0}
+.encounter-dossier{border-right:1px solid #ffffff18}
+.encounter-dossier h3,.encounter-changes h3{font-size:17px;line-height:1.4}
+.encounter-dossier p,.encounter-decisions p{font-size:13px;line-height:1.65;overflow-wrap:anywhere}
+.encounter-dossier hr{border:0;border-top:1px solid #ffffff25;margin:24px 0}
+.encounter-dossier button{white-space:normal;min-height:44px}
+.encounter-muted{color:#c0c4b6}
+.encounter-story{min-width:0;background:#0c1712}
+.encounter-scene-art{display:block;width:100%;height:205px;object-fit:cover}
+.encounter-page{padding:30px 28px;background:var(--enc-paper);color:var(--enc-ink);min-height:280px;border-block:4px double #8a7246;font:17px/1.8 Georgia,serif;overflow-wrap:anywhere}
+.encounter-page p{white-space:pre-line;margin:12px 0 22px;color:inherit}
+.encounter-page h3,.encounter-page h4{color:inherit}
+.encounter-page summary{cursor:pointer;font:14px/1.6 system-ui,sans-serif;min-height:44px;padding-top:12px}
+.encounter-changes{border-top:1px solid #57482366;margin-top:24px;padding-top:8px;font:14px/1.65 system-ui,sans-serif}
+.encounter-decisions{display:flex;flex-direction:column;gap:10px}
+.encounter-decisions button{background:#233629;border-color:#667c4a;color:#f5ecd8;box-shadow:inset 3px 0 #c6a855}
+.encounter-decisions button span{font:12px/1.4 system-ui,sans-serif;color:#e6ce91}
+.encounter-window button:hover{border-color:#eed595;background:#354835}
+.encounter-window button:focus-visible,.encounter-hub button:focus-visible{outline:3px solid #f4d58d;outline-offset:3px}
+.encounter-window[data-world="One Piece"]{--enc-paper:#638093;--enc-ink:#0e2538;background:#102735}
+.encounter-window[data-world="Bleach"]{--enc-paper:#e0e0dc;--enc-ink:#19191d;background:#181921}
+.encounter-window[data-world="Overgeared"],.encounter-window[data-world="Solo Max-Level Newbie"]{--enc-paper:#222c50;--enc-ink:#f1f0e4;background:#121b33}
+@media(prefers-reduced-motion:no-preference){.encounter-window[open]{animation:encounter-arrival .2s ease-out}.encounter-window button,.encounter-hub button{transition:background .15s,border-color .15s}@keyframes encounter-arrival{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}}
+@media(max-width:760px){.encounter-window{width:96vw;max-height:94dvh}.encounter-layout{grid-template-columns:1fr}.encounter-header{padding:16px}.encounter-dossier{padding:14px 18px;border-right:0;border-bottom:1px solid #ffffff20}.encounter-dossier hr,.encounter-dossier .encounter-muted{display:none}.encounter-dossier p{margin:5px 0}.encounter-dossier h3{margin:4px 0}.encounter-scene-art{height:155px}.encounter-page{padding:22px 20px;font-size:16px}.encounter-decisions{padding:20px}.encounter-header{position:sticky;top:0;background:#14221cf5;z-index:1}}

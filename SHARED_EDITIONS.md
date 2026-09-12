@@ -22,8 +22,8 @@ The Windows workflow builds and publishes a paired preview on master pushes. Bot
 
 Set `PYTHONPATH` to `backend`, `tests`, and `tools` (use the platform path separator).
 
-Main: `python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py tools/check_adventures_browser.py -q`
+Main: `python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py tools/check_adventures_browser.py tools/check_encounters_browser.py -q`
 
-Offline: set `WORLDWALKER_MODE=offline`, then run `python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py tools/check_offline_browser.py -q`.
+Offline: set `WORLDWALKER_MODE=offline`, then run `python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py tests/test_campaign_encounters.py tools/check_offline_browser.py tools/check_encounters_browser.py -q`.
 
 Main-only features are deliberately absent offline where they require arbitrary text, account/network services, or AI generation. The support manifest documents those gaps. Sharing source automatically carries shared fixes; it cannot automatically author a local equivalent of a new AI feature.

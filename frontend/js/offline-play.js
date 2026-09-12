@@ -3,7 +3,7 @@ window.OfflinePlay = (() => {
   'use strict';
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   let panel, creator, metadata, active='Adventure', revision=0, scheduled;
-  const categories=['Adventure','People','Work','Life','Mastery','Economy','Politics','World'];
+  const categories=['Adventure','Encounters','People','Work','Life','Mastery','Economy','Politics','World'];
   const category=a=>a.category||(/^(train:|path:)/.test(a.id)?'Mastery':/^(purchase:|property:|craft:)/.test(a.id)?'Economy':/^(conflict:|reputation:)/.test(a.id)?'World':a.id.startsWith('talk:')?'People':'Adventure');
   const editable='textarea,input:not([type]),input[type=text],input[type=search],input[type=email],input[type=password],input[type=url],input[type=number],[contenteditable]';
   const watched=new WeakSet();

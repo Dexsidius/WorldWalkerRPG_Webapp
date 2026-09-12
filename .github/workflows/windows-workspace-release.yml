@@ -39,11 +39,11 @@ jobs:
           for path in [*Path('frontend/js').glob('*.js'),Path('frontend/sw.js'),Path('frontend/tactical/campaign.js')]:
               subprocess.run(['node','--check',str(path)],check=True)
       - name: Main edition and real-interface regressions
-        run: python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py tools/check_adventures_browser.py -q
+        run: python -m pytest tests tools/check_workspace_tabs.py tools/check_reliability_browser.py tools/check_adventures_browser.py tools/check_encounters_browser.py -q
       - name: Offline edition regressions without network generation
         env:
           WORLDWALKER_MODE: offline
-        run: python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py tools/check_offline_browser.py -q
+        run: python -m pytest tests/test_offline_current.py tests/test_shared_editions.py tests/test_living_adventures.py tests/test_campaign_encounters.py tools/check_offline_browser.py tools/check_encounters_browser.py -q
       - name: Build and verify both editions from this commit
         run: python tools/build_editions.py --output "${{ runner.temp }}/worldwalker-pair"
       # The release below is the durable paired download. Do not also store

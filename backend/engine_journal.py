@@ -293,6 +293,8 @@ class JournalMixin:
         s.pop('world_plans',None)
         s.pop('offline_world',None)
         s.pop('offline_governance',None)
+        if isinstance(s.get('adventures'),dict):
+            s['adventures'].pop('encounters',None)
         s.pop('relationship_life',None)
         s.pop('world_benefits',None)
         # Latent Nen is fixed at creation so later awakening is consistent,

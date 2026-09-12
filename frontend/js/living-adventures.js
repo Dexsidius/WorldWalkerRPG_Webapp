@@ -36,6 +36,12 @@ const LivingAdventures = (() => {
       ${v.mission?`<section class="adventure-mission"><small>${escape(v.mission.authorship)}</small><h3>${escape(v.mission.title)}</h3><p>${escape(v.mission.description)}</p><p class="adventure-meta">${escape(v.mission.contact)} · ${escape(v.mission.status)}</p>${v.actions.filter(a=>a.id.startsWith('mission:')).map(button).join('')}</section>`:''}
       ${v.aftermath.length?`<section class="adventure-aftermath"><h3>What changed here</h3>${v.aftermath.slice().reverse().map(r=>`<article><b>${escape(r.title)}</b><small>${escape(formatCalendarDate(v.world,r.canon_day,APP.state.calendar_epoch,APP.state.calendar_anchor_day))} · ${escape(r.method)}</small><p>${escape(r.description)}</p>${r.changes.map(c=>`<p>${escape(c)}</p>`).join('')}<button type="button" data-aftermath-story="${escape(r.story_id)}">Read the Chronicle event</button></article>`).join('')}</section>`:''}
       ${!v.current?'<section class="adventure-journey"><h3>Plan your journey</h3><label>Travel pace and preparation<select data-travel-preparation><option value="normal">Normal pace</option><option value="cautious">Cautious · more time, less exposure</option><option value="swift">Swift · less time, more exposure</option><option value="booked_passage">Book passage · where available</option></select></label><label>Available companion<select data-travel-companion><option value="">Travel alone</option></select></label><div data-route-options role="status">Checking mapped routes…</div></section>':''}`;
+      if(v.current&&(v.encounters?.active||v.encounters?.offers?.length||v.canon_encounters?.length)){
+        const encounters=document.createElement('section');encounters.className='adventure-group';
+        encounters.innerHTML='<h3>Playable encounters</h3>'+(v.encounters?.active?'<button type="button" data-local-encounter="original">Open current encounter</button>':'')+(v.canon_encounters||[]).map(s=>`<button type="button" data-local-encounter="${escape(s.key)}">${escape(s.title)}</button>`).join('')+(!v.encounters?.active?v.actions.filter(a=>a.id.startsWith('encounter:')).map(button).join(''):'');
+        target.querySelector('.adventure-place').after(encounters);
+        encounters.querySelectorAll('[data-local-encounter]').forEach(b=>b.onclick=async()=>{await window.CampaignEncounters?.refresh();window.CampaignEncounters?.open(b.dataset.localEncounter);});
+      }
       const image=target.querySelector('.adventure-location-art');
       if(image)image.addEventListener('error',()=>{image.hidden=true;},{once:true});
       target.querySelector('[data-town-action^="worldevent:"]')?.closest('details')?.setAttribute('open','');
@@ -85,6 +91,7 @@ const LivingAdventures = (() => {
   function draftKey(){return 'worldwalker.activity-draft.v1:'+String(APP.account?.id||'local')+':'+String(APP.state?.campaign_id||'');}
   function keepDraft(){try{sessionStorage.setItem(draftKey(),JSON.stringify({action:document.getElementById('action-input')?.value||'',plan:document.getElementById('time-plan')?.value||''}));}catch{}}
   function onState(){
+    window.CampaignEncounters?.onState();
     const time=document.getElementById('stat-time');if(time&&APP.state?._world_calendar)time.title=APP.state._world_calendar.note;
     try{const saved=JSON.parse(sessionStorage.getItem(draftKey())||'null');if(saved){for(const [key,id]of [['action','action-input'],['plan','time-plan']]){const el=document.getElementById(id);if(el&&!el.value)el.value=saved[key]||'';}if(!APP.state?.combat?.active)sessionStorage.removeItem(draftKey());}}catch{}
   }

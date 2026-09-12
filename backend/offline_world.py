@@ -191,6 +191,13 @@ def actions(s, place):
     rows = []
     for p in definitions(s):
         a = appointment(s, p)
+        if (p['place']==place and not p['invalid'] and a.get('status') not in {'occurred','cancelled','combat','intervened'}
+                and eligible(s,p,clock(s)) and p['opens']<=clock(s) and clock(s)+30<p['due'] and not a.get('withdrawal_prepared') and not a.get('attempted')):
+            rows.append({'id':'worldevent:prepare:'+p['key'],'label':'Scout the local withdrawal route','category':'World','minutes':30,
+                'description':'Use thirty minutes to mark a local withdrawal route. The protection objective then requires three rounds instead of four. Does not prevent the event or grant victory.'})
+        if p['place']==place and a.get('status')=='intervened' and not a.get('followup_recorded'):
+            rows.append({'id':'worldevent:followup:'+p['key'],'label':'Review the rescue and its aftermath','category':'World','minutes':0,
+                'description':'Record who was protected and what remains unresolved. This grants no extra victory, territory or reward.'})
         if (not p['invalid'] and eligible(s,p,clock(s)) and p['depart']-1440 <= clock(s) < p['depart']
                 and place == p['origin'] and not a.get('route_report')):
             present = [name for name in p['actors'] if npc_at(obj(obj(s.get('npc_memories')).get(name)), place)
@@ -202,14 +209,44 @@ def actions(s, place):
                 and not a.get('attempted') and p['opens'] <= clock(s) < p['due'] and p['place'] == place
                 and eligible(s, p, clock(s))):
             rows.append({'id': 'worldevent:' + p['key'], 'label': p['offer'], 'category': 'World',
-                         'minutes': 0, 'description': p['brief'] + ' Starts a tactical protection encounter; victory is not guaranteed.'})
+                         'minutes': 0, 'description': (p['brief'].replace('four rounds','three rounds') if a.get('withdrawal_prepared') else p['brief']) + ' Starts a tactical protection encounter; victory is not guaranteed.'})
     return rows
+
+
+def encounter_view(s,place):
+    """Local/observed appointment presentation, not the full future schedule."""
+    out=[]
+    for p in definitions(s):
+        a=appointment(s,p)
+        if p['place']!=place or s.get('location')!=place:continue
+        if a.get('followup_recorded'):continue
+        if a.get('status') in {'cancelled','occurred'}:continue
+        if not (p['opens']<=clock(s)<p['due'] and eligible(s,p,clock(s)) and not p['invalid']) and a.get('status') not in {'intervened','combat'}:continue
+        out.append({'title':p['title'],'kind':'Canon encounter','authorship':'Authored intervention; campaign timing is a game convention',
+            'stage':'aftermath' if a.get('status')=='intervened' else 'combat' if a.get('status')=='combat' else 'decision',
+            'narrative':a.get('summary') if a.get('status')=='intervened' else p['brief'].replace('four rounds','three rounds') if a.get('withdrawal_prepared') else p['brief'],
+            'place':place,'person':', '.join(p['actors']),'basis':'Present at this local encounter',
+            'prepared':bool(a.get('withdrawal_prepared')),'prefix':'worldevent:','key':p['key'],
+            'changes':['Local withdrawal route marked; protect for three rounds.'] if a.get('withdrawal_prepared') else [],'history':[]})
+    return out
 
 
 def resolve(game, spec):
     s = game.state
+    if spec['id'].startswith('worldevent:prepare:'):
+        # The confirmed thirty minutes have already elapsed. Do not require a
+        # second thirty-minute window when checking the completed preparation.
+        p=next((p for p in definitions(s) if p['key']==spec['id'].split(':')[-1]),None)
+        if not p or p['place']!=spec['place'] or s.get('location')!=spec['place'] or p['invalid'] or not p['opens']<=clock(s)<p['due'] or not eligible(s,p,clock(s)) or appointment(s,p).get('status') in {'occurred','cancelled','combat','intervened'} or appointment(s,p).get('withdrawal_prepared'):
+            raise ValueError('This preparation is no longer available at this location.')
+        writable(s)['appointments'].setdefault(p['key'],{})['withdrawal_prepared']=True
+        return 'You mark a local withdrawal route. Protecting the group now requires three rounds; preparation alone has not saved anyone.'
     if not any(a['id'] == spec['id'] for a in actions(s, spec['place'])):
         raise ValueError('This intervention is no longer available at this location.')
+    if spec['id'].startswith('worldevent:followup:'):
+        p=next(p for p in definitions(s) if p['key']==spec['id'].split(':')[-1])
+        a=writable(s)['appointments'][p['key']];a['followup_recorded']=True
+        return a['summary']+' '+('Duy’s later appearances must respect his survival. No unrelated death or memorial should be assumed.' if p['key']=='duy' else 'The surrounding canon conflict is separate from the people you protected.')
     if spec['id'].startswith('worldevent:report:'):
         pack = next(p for p in definitions(s) if p['key'] == spec['id'].split(':')[-1])
         writable(s)['appointments'].setdefault(pack['key'], {'status':'scheduled'})['route_report'] = True
@@ -225,13 +262,13 @@ def resolve(game, spec):
                              'hp_max': pack['power'] * 2 * pack['count'], 'is_group': True, 'group_size': pack['count']},
                    'adventure_objective': {'kind': 'protection', 'world_event': pack['key'],
                                            'target_label': {'duy': "Duy’s retreating team", 'arlong': 'the villagers', 'sokyoku': 'Rukia and Renji'}[pack['key']],
-                                           'rounds_required': 4, 'rounds_survived': 0,
+                                           'rounds_required': 3 if appointment(s,pack).get('withdrawal_prepared') else 4, 'rounds_survived': 0,
                                            'target_hp': 60, 'target_hp_max': 60, 'settled': False}, 'log': []}
     game.ensure_combat_numbers()
     from tactical_combat import ensure_board
     ensure_board(s)
     game.acknowledge_danger_scenario(pack['brief'])
-    return pack['brief']
+    return pack['brief'].replace('four rounds','three rounds') if appointment(s,pack).get('withdrawal_prepared') else pack['brief']
 
 
 def combat_finished(game, outcome):

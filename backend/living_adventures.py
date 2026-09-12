@@ -222,6 +222,8 @@ def action_list(s,place):
         out.extend(world_actions(s,place))
         from offline_politics import actions as political_actions
         out.extend(political_actions(s,place))
+    from campaign_encounters import actions as encounter_actions
+    out.extend(encounter_actions(s,place))
     return out
 
 
@@ -236,6 +238,8 @@ def location_view(s,place=None):
     urgent=next((a for a in activities if a['id'].startswith('worldevent:')),None)
     return {'scene_image':picture,'world':s.get('world'),'campaign_id':s.get('campaign_id'),'place':name,'kind':node['kind'],'current':name==location_node(s)['name'],
             'situation':urgent['description'] if urgent else text(local.get('notes') or local.get('description') or local.get('activity')) or 'No local crisis has been established. Explore, prepare, or follow an existing lead.',
+            'encounters':__import__('campaign_encounters').view(s,name),
+            'canon_encounters':__import__('offline_world').encounter_view(s,name) if offline_enabled() else [],
             'services':seq(local.get('services')) or list(flavor[:4] if settlement else ['Camp','Survey point','Practice area']),
             'people':available_people(s,name),'actions':activities,'mission':mission_offer(s,name) if settlement or active else None,
             'aftermath':[copy.deepcopy(r) for r in seq(store(s).get('aftermath')) if r.get('location')==name][-12:],
@@ -369,6 +373,9 @@ def action_spec(s,payload):
             if not offline_enabled():raise ValueError('Continue this offline activity in the offline edition, or cancel it.')
             from offline_life import validate
             validate(s,original)
+        if original.get('id','').startswith('encounter:'):
+            from campaign_encounters import validate
+            validate(s,original)
         if original.get('id','').startswith(('property:','craft:')):
             from property_economy import refresh_spec
             original=refresh_spec(s,original)
@@ -491,11 +498,18 @@ def _finish(game,mission,method,successful=True):
     ad.setdefault('aftermath',[]).append(row);ad['aftermath']=ad['aftermath'][-100:]
     ad.pop('active',None)
     game.archive_finished_quests()
+    if successful:
+        from campaign_encounters import record
+        record(s,'mission:completed',place)
 
 
 def combat_finished(game,outcome):
     combat=obj(game.state.get('combat'));objective=obj(combat.get('adventure_objective'))
     if not objective or objective.get('settled'):return
+    if objective.get('encounter_id'):
+        from campaign_encounters import combat_finished as finish_encounter
+        finish_encounter(game,outcome)
+        return
     if objective.get('world_event'):
         from offline_world import combat_finished as finish_world_event
         finish_world_event(game,outcome)
@@ -609,6 +623,9 @@ def resolve(game,payload,spec):
     elif action.startswith('worldevent:'):
         from offline_world import resolve as resolve_world_event
         game.append(resolve_world_event(game,spec),'narrative',canon_day=s.get('canon_day'))
+    elif action.startswith('encounter:'):
+        from campaign_encounters import resolve as resolve_encounter
+        resolve_encounter(game,spec)
     elif action.startswith('offline:'):
         from offline_life import resolve as resolve_offline
         game.append(resolve_offline(game,spec),'narrative',canon_day=s.get('canon_day'))
@@ -655,6 +672,9 @@ def resolve(game,payload,spec):
     elif action.startswith('mission:'):
         message=_mission_effect(game,action)
         game.append(message,'narrative',canon_day=s.get('canon_day'))
+    if complete:
+        from campaign_encounters import record
+        record(s,action,place)
     result['story']=list(result.get('story',[]))+game._flush_story();result['state']=game.public_state()
     result['adventure_view']=location_view(s,place)
     return result
@@ -708,6 +728,8 @@ def resolve_journey(game,spec):
         if row['destination'] not in known:known.append(row['destination'])
     if finished:
         ad.pop('journey',None);ad.pop('preparation',None)
+        from campaign_encounters import record
+        record(game.state,'journey:arrived',reached)
     elif pursuit:
         journey['encounter_triggered']=True;start_encounter(game,journey=journey)
     result['story']=list(result.get('story',[]))+game._flush_story();result['state']=game.public_state()

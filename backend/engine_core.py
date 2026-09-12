@@ -512,6 +512,7 @@ class CoreMixin:
             compiled = compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
             from world_plans import context as world_plan_context
             if purpose != 'chat': compiled['world_plan_context']=world_plan_context(self.state)
+            if purpose != 'chat': compiled['local_encounter']=__import__('campaign_encounters').ai_summary(self.state)
             return self._prune_ai_context(apply_prompt_budget(compiled, self.state, query, purpose, self.simulation_mode()))
         chapters = self.state.get("chapter_summaries") or []
         if chapters:
@@ -528,6 +529,7 @@ class CoreMixin:
         compiled = compile_context_snapshot(snapshot, self.state, query, self.simulation_mode())
         from world_plans import context as world_plan_context
         if purpose != 'chat': compiled['world_plan_context']=world_plan_context(self.state)
+        if purpose != 'chat': compiled['local_encounter']=__import__('campaign_encounters').ai_summary(self.state)
         from atlas_context import gm_map_context
         compiled['map_history'] = gm_map_context(self.state)
         # Polygon vertices, UI caches and empty defaults are saved locally but

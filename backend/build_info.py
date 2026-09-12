@@ -1,9 +1,15 @@
-"""Simulation reliability hotfix; save schema and base version remain stable."""
-BUILD_ID = "3.64.0-offline-living-world-2"
+"""Shared playable encounters; save schema and base version remain stable."""
+BUILD_ID = "3.64.0-playable-encounters-1"
 PATCH_NOTES = {
-    "title": "Offline living world — timing and recapture fixes",
-    "summary": "Scheduled offline decisions now resolve chronologically, and recaptures face the current holding's owner and garrison. Existing saves are preserved; unknown defenses remain unknown. Main AI play remains available. Broader canon and political content is still in development.",
+    "title": "Playable encounters — stories from your campaign",
+    "summary": "54 authored original situations across eight worlds and Custom World can emerge from completed local activities or established local ties. Investigate, choose an approach, and keep the resulting changes. Shared encounters work without model calls in both editions; main AI/freeform remains available. This first content batch expands the three existing offline canon interventions, not every timeline event.",
     "highlights": [
+        {"title": "Stories from what you do", "example": "Repeated surveys in Naruto can reveal a civilian signal post. Local work, training, social visits, community work and completed assignments lead to other authored situations."},
+        {"title": "Quiet moments count", "example": "An invitation to supper can simply be a pleasant visit. Training partners and community rest projects do not need a betrayal, fight or manufactured punishment."},
+        {"title": "Choose with verified information", "example": "Look into an encounter to learn its facts and unlock a prepared approach. Review the exact duration before confirming; interruptions retain the unfinished time."},
+        {"title": "Real outcomes, not promised ones", "example": "A public rest point improves ordinary recovery locally. Contacts extend field preparation. A protection investigation uses the existing tactical objective and grants no rescue reward on failure."},
+        {"title": "Prepare a canon withdrawal", "example": "At the three authored offline intervention sites, thirty minutes of route preparation reduces the protection objective from four rounds to three. It does not save anyone by itself."},
+        {"title": "Return without repeating the plot", "example": "Encounter stages survive saves and reloads. Completed and declined stories are remembered, and other invitations wait at least one campaign day after an outcome."},
         {"title": "Consistent time skips", "example": "A petition due before Arlong's defeat is decided under the occupation, even if one time skip also crosses his later defeat. Splitting the same time into days gives the same result."},
         {"title": "Fight the actual occupier", "example": "Recapturing a holding checks its current owner and committed garrison, not the former owner's weaker defenses. Stale plans are rejected; unknown old-save garrisons are not invented."},
         {"title": "Government decisions without AI", "example": "Established local governments budget for public works and order every campaign week. Time skips and save/reload preserve the same decisions; local reports explain what was funded."},
