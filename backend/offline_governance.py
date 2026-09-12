@@ -103,7 +103,8 @@ def actions(s, place):
                 result.append(dict(id='political:muster:'+ident, label='Muster '+faction+' members present here',
                     category='Politics', minutes=480, faction=faction, muster=True,
                     description=f'Organize {strength:g} explicitly recorded fighting strength from your local members. Unknown abilities and absent members are not counted.'))
-    detail = obj(obj(s.get('location_details')).get(place))
+    from military_resolution import defense_at
+    detail = defense_at(s, place)
     defender = detail.get('controlling_faction')
     if led and defender and defender not in led:
         # A survey can inspect an established garrison, not conjure numbers.
@@ -152,7 +153,8 @@ def resolve(s, spec):
     if current.get('policy'):
         r['governments'][place]['policy'] = current['policy']
         return 'The next local budget at '+place+' will use the '+current['policy']+' policy.'
-    detail = obj(obj(s.get('location_details')).get(place))
+    from military_resolution import defense_at
+    detail = defense_at(s, place)
     if spec['id'] == 'political:survey':
         r['plans'][place] = dict(defender=detail['controlling_faction'], surveyed=clock(s),
             strength=number(detail.get('defender_strength', detail.get('defender_power'))),

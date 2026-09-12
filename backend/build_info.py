@@ -1,9 +1,11 @@
 """Simulation reliability hotfix; save schema and base version remain stable."""
-BUILD_ID = "3.64.0-offline-living-world-1"
+BUILD_ID = "3.64.0-offline-living-world-2"
 PATCH_NOTES = {
-    "title": "Offline living world — first playable release",
-    "summary": "Naruto, One Piece and Bleach gain local civic support, weekly government decisions, evidence-backed military planning and three authored intervention encounters. This release does not include every canon event or a complete succession/coalition campaign. Main AI play remains available.",
+    "title": "Offline living world — timing and recapture fixes",
+    "summary": "Scheduled offline decisions now resolve chronologically, and recaptures face the current holding's owner and garrison. Existing saves are preserved; unknown defenses remain unknown. Main AI play remains available. Broader canon and political content is still in development.",
     "highlights": [
+        {"title": "Consistent time skips", "example": "A petition due before Arlong's defeat is decided under the occupation, even if one time skip also crosses his later defeat. Splitting the same time into days gives the same result."},
+        {"title": "Fight the actual occupier", "example": "Recapturing a holding checks its current owner and committed garrison, not the former owner's weaker defenses. Stale plans are rejected; unknown old-save garrisons are not invented."},
         {"title": "Government decisions without AI", "example": "Established local governments budget for public works and order every campaign week. Time skips and save/reload preserve the same decisions; local reports explain what was funded."},
         {"title": "Plan a local campaign", "example": "Muster present members with recorded strength, survey an established garrison, then commit forces and pay for supplies. Unknown forces remain unknown; armies cannot teleport or be reused immediately."},
         {"title": "Rescue is not conquest", "example": "Protecting villagers does not itself defeat Arlong. Canon aftermath resolves separately and does not overwrite land already captured by someone else."},

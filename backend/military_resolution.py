@@ -19,6 +19,29 @@ def numeric(v):
         return n if math.isfinite(n) and n>=0 else None
     except (TypeError,ValueError): return None
 
+
+def defense_at(state, target):
+    """The local holding overrides parent sovereignty, without annexing it.
+
+    Old holdings with no garrison record must not borrow the former owner's
+    defenses. Return an explicit unknown until campaign evidence establishes it.
+    """
+    detail=obj(obj(state.get('location_details')).get(target))
+    from runtime_mode import offline_enabled
+    if not offline_enabled() or state.get('world') not in {'Naruto','One Piece','Bleach'}:
+        return detail
+    occupation=obj(obj(obj(state.get('offline_politics')).get('occupations')).get(target))
+    if occupation.get('status') not in {'occupied','charter_pending','governed'}:
+        return detail
+    claim=next((r for r in state.get('political_regions',[]) if isinstance(r,dict)
+                and r.get('id')==occupation.get('claim_id')),None)
+    if claim and claim.get('status') != 'active':
+        return detail
+    owner=obj(claim).get('controller') or occupation.get('controller')
+    garrison=obj(occupation.get('garrison')) if owner==occupation.get('controller') else {}
+    return {'controlling_faction':owner, 'defender_strength':garrison.get('strength'),
+            'fortification_multiplier':garrison.get('fortification_multiplier'), 'occupied_holding':True}
+
 def resolve_operation(state, faction, clock, operation):
     from world_conflict import visible, _history, _store
     root=_store(state); settled=root.setdefault('military_results',{})
@@ -28,7 +51,7 @@ def resolve_operation(state, faction, clock, operation):
     operation['status']='awaiting_resolution'
     operation['resolution_requirements']=RULE
     target=str(operation.get('target_location') or clock.get('contested_location') or '').strip()
-    detail=obj(obj(state.get('location_details')).get(target))
+    detail=defense_at(state,target)
     defender=str(operation.get('opponent') or clock.get('opponent') or detail.get('controlling_faction') or '').strip()
     known=set(obj(state.get('factions')))|set(obj(state.get('faction_clocks')))
     evidence=obj(operation.get('military_evidence') or clock.get('military_evidence'))
@@ -45,6 +68,8 @@ def resolve_operation(state, faction, clock, operation):
     recorded=numeric(detail.get('defender_strength',detail.get('defender_power')))
     if recorded is not None and defense is not None: defense=max(defense,recorded)
     recorded_fort=numeric(detail.get('fortification_multiplier'))
+    if detail.get('occupied_holding') and (recorded is None or recorded_fort is None):
+        blockers.append('current holding garrison is not established; do not reuse the former owner’s defenses')
     if recorded_fort is not None and fort is not None: fort=max(fort,recorded_fort)
     elif numeric(detail.get('fortification')) not in (None,0) and not evidence.get('fortification_basis'):
         blockers.append('explain how recorded fortifications are represented')
@@ -60,6 +85,9 @@ def resolve_operation(state, faction, clock, operation):
         if offline_enabled() and state.get('world') in {'Naruto','One Piece','Bleach'}:
             from offline_politics import record_capture
             capture_summary=record_capture(state,faction,target,defender)
+            state['offline_politics']['occupations'][target]['garrison']={
+                'strength':attack,'fortification_multiplier':fort,
+                'basis':'Forces committed by resolved operation '+ident}
         else:
             detail['controlling_faction']=faction
             detail['controller_changed_turn']=int(state.get('turn',0))

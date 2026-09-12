@@ -5,6 +5,19 @@ It is **not full canon coverage or a completed autonomous political campaign**.
 The broader requested update remains incomplete; the content below is the
 tested release scope, not a claim that every planned milestone is finished.
 
+## Timing and recapture hotfix (offline-living-world-2)
+
+- Resolve canon transitions, civic petitions and charters in chronological
+  order; a later liberation cannot determine an earlier petition's response.
+  Weekly budgets accrue under the government that existed in that interval.
+- Resolve recaptures against the current local occupier and recorded garrison.
+  Surveys and operation validation share that same defense lookup. Stale plans
+  are rejected; old holdings without garrison records wait for established
+  evidence rather than inheriting the original owner's defenses.
+- Parent country ownership and the main edition's existing military behavior
+  are unchanged. Existing incorrect historical outcomes are not replayed or
+  silently rewritten by this patch.
+
 ## Implemented in this pass
 
 - Offline-only appointment ownership before the legacy canon backstop.
