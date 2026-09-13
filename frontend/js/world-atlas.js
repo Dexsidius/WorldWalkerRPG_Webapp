@@ -6,10 +6,14 @@ window.WorldAtlas = (() => {
   let active = null, observer = null;
   let sceneryModule;
   function scenery(plane,atlas) {
-    if(!['Naruto','One Piece'].includes(String(atlas.id).split(':')[0]))return;
-    sceneryModule ||= import('/js/atlas-scenery.js?v=3.64.0-playable-encounters-1');
-    sceneryModule.then(module=>{if(plane.isConnected)plane._atlasScenery=module.mount(plane,atlas,color);}).catch(error=>{sceneryModule=null;console.warn('3D scenery unavailable; retaining the vector atlas.',error);});
+    const generation=(plane._sceneryGeneration||0)+1;plane._sceneryGeneration=generation;plane._atlasData=atlas;
+    plane._atlasScenery?.dispose();plane._atlasScenery=null;
+    window.WorldwalkerGraphics?.control(plane.closest('.living-map-main')?.querySelector('.atlas-search'));
+    if(window.WorldwalkerGraphics?.low()||!['Naruto','One Piece'].includes(String(atlas.id).split(':')[0]))return;
+    sceneryModule ||= import('/js/atlas-scenery.js?v=3.64.0-dream-mobile-1');
+    sceneryModule.then(async module=>{if(plane.isConnected&&generation===plane._sceneryGeneration&&!window.WorldwalkerGraphics?.low()){const handle=await module.mount(plane,atlas,color);if(generation!==plane._sceneryGeneration||window.WorldwalkerGraphics?.low())handle?.dispose();else{plane._atlasScenery=handle;handle?.setZoom(active?.z||1);}}}).catch(error=>{sceneryModule=null;console.warn('3D scenery unavailable; retaining the vector atlas.',error);});
   }
+  window.addEventListener('worldwalker-graphics-change',()=>{document.querySelectorAll('.atlas-plane').forEach(p=>{if(p._atlasData)scenery(p,p._atlasData);});});
   const escape = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const palette = ['#81a56d','#d5ad68','#74aab2','#c58678','#ae99b7','#c3bc82','#8babc2','#b49772','#90bda2','#d8b29a','#a9b0ca','#c3a652'];
   const fixed = {'Konohagakure':'#76a36a','Sunagakure':'#d8b36e','Iwagakure':'#b38361','Kumogakure':'#d8c479','Kirigakure':'#7bacbb','Amegakure':'#9586a5','Iron Country':'#bfc5c8','Japan':'#95b1a1','World Government':'#adc3ce','Saharan Empire':'#b4827b','Eternal Kingdom':'#83a8be'};
@@ -171,7 +175,7 @@ window.WorldAtlas = (() => {
   if (!document.querySelector('.col-center #living-map-main') || document.getElementById('workspace-tabs-script')) return;
   const script = document.createElement('script');
   script.id = 'workspace-tabs-script';
-  script.src = '/js/workspace-tabs.js?v=3.64.0-gameplay-integrity-3';
+  script.src = '/js/workspace-tabs.js?v=3.64.0-dream-mobile-1';
   script.async = true;
   script.addEventListener('error', () => {
     script.remove();

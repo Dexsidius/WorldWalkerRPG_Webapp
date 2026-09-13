@@ -59,6 +59,7 @@ def ui(browser,tmp_path,monkeypatch):
     thread=threading.Thread(target=server.serve_forever,daemon=True) if server else None
     if thread: thread.start()
     context=browser.new_context(viewport={'width':1366,'height':900})
+    context.add_init_script("if(!localStorage.getItem('worldwalker.graphics.v1'))localStorage.setItem('worldwalker.graphics.v1','low')")
     page=context.new_page();errors=[]
     page.on('pageerror',lambda e:errors.append(str(e)))
     page.route('https://fonts.googleapis.com/**',lambda route:route.abort())

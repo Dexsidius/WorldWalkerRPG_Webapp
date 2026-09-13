@@ -1,0 +1,15 @@
+/* Approved Dream frame treatment; live campaign content and placement stay mounted. */
+body:is([data-world="Naruto"],[data-world="One Piece"]){--dream-edge:#826538;--dream-text:#f3cd83;--dream-panel:#102631}
+body[data-world="Naruto"]{--dream-panel:#1d211a;--dream-edge:#9e7841}
+body:is([data-world="Naruto"],[data-world="One Piece"]) :is(.panel,.living-map-main,.workspace-tabs){border-radius:5px;border-color:var(--dream-edge);box-shadow:inset 0 0 0 2px #070f1399,inset 0 0 18px #0004}
+body:is([data-world="Naruto"],[data-world="One Piece"]) .panel-head{background:var(--dream-panel);color:var(--dream-text);font-family:Georgia,serif;letter-spacing:.045em}
+body:is([data-world="Naruto"],[data-world="One Piece"]) .map-heading{background:var(--dream-panel);border-bottom:1px solid var(--dream-edge)}
+body:is([data-world="Naruto"],[data-world="One Piece"]) .offline-choice{border-radius:5px;border-color:var(--dream-edge);background:var(--dream-panel);overflow:hidden}
+body:is([data-world="Naruto"],[data-world="One Piece"]) .offline-choice b{font-family:Georgia,serif;color:var(--dream-text)}
+.offline-choice:has(.dream-activity-art){display:grid;grid-template-columns:76px minmax(0,1fr);column-gap:12px;align-content:start;min-height:108px}
+.offline-choice .dream-activity-art{grid-column:1;grid-row:1 / span 3;display:block;width:76px;height:92px;object-fit:cover;margin:0;pointer-events:none;border-radius:3px}
+.offline-choice:has(.dream-activity-art)>:is(b,small,span){grid-column:2;min-width:0}
+.atlas-search{flex-wrap:wrap}.atlas-search .graphics-quality{flex:0 1 auto}.atlas-search .graphics-quality select{min-width:0!important;width:auto!important}
+html[data-graphics-quality="low"] .dream-activity-art{display:none}
+html[data-graphics-quality="low"] .offline-choice:has(.dream-activity-art){display:flex;min-height:0}
+@media(max-width:850px){.atlas-search .graphics-quality{width:100%;justify-content:space-between}.atlas-search .graphics-quality select{flex:1}}

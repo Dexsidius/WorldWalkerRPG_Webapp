@@ -19,11 +19,11 @@ function profile(o){
 function placement(o,t){const start=center(o.origin),end=center(o.aim||o.origin),q=travel(t);return {start,end,q,point:{x:start.x+(end.x-start.x)*q,y:start.y+(end.y-start.y)*q}};}
 class AtlasCache{
  constructor(fetcher=(...args)=>fetch(...args),decoder=(...args)=>createImageBitmap(...args)){this.fetcher=fetcher;this.decoder=decoder;this.items=new Map();this.manifest=null;}
- async json(){if(!this.manifest){const res=await this.fetcher('../assets/unity-attack-library/manifest.json',{cache:'no-store',signal:AbortSignal.timeout(8000)});if(!res.ok)throw Error('Unity library manifest unavailable');const m=await res.json();if(!m.renderer.startsWith('Unity ')||m.frameSize!==256||m.frames!==48||m.columns!==8||m.rows!==6||!Array.isArray(m.effects))throw Error('Unexpected Unity library format');this.manifest=m;}return this.manifest;}
+ async json(){if(!this.manifest){const res=await this.fetcher('/assets/unity-attack-library/manifest.json',{cache:'no-store',signal:AbortSignal.timeout(8000)});if(!res.ok)throw Error('Unity library manifest unavailable');const m=await res.json();if(!m.renderer.startsWith('Unity ')||m.frameSize!==256||m.frames!==48||m.columns!==8||m.rows!==6||!Array.isArray(m.effects))throw Error('Unexpected Unity library format');this.manifest=m;}return this.manifest;}
  async get(id){if(this.items.has(id)){const hit=this.items.get(id);this.items.delete(id);this.items.set(id,hit);return hit;}
   const m=await this.json(),meta=m.effects.find(e=>e.id===id);if(!meta)throw Error('No Unity asset for '+id);
   if(!/^[a-z0-9-]+$/.test(id))throw Error('Invalid effect asset identifier');
-  const response=await this.fetcher('../assets/unity-attack-library/'+id+'.png?v='+m.revision,{signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error('Unity effect download unavailable');
+  const response=await this.fetcher('/assets/unity-attack-library/'+id+'.png?v='+m.revision,{signal:AbortSignal.timeout(8000)});if(!response.ok)throw Error('Unity effect download unavailable');
   const image=await this.decoder(await response.blob());if(image.width!==2048||image.height!==1536){image.close();throw Error('Incomplete Unity sprite atlas');}
   const entry={image,meta,manifest:m};this.items.set(id,entry);
   while(this.items.size>2){const oldest=this.items.keys().next().value;this.items.get(oldest).image.close();this.items.delete(oldest);}
@@ -44,7 +44,7 @@ class UnityBattleFX extends Base{
  async play(outcome,options={}){
   this.cancel();const request=this.request,spec=profile(outcome);this.active=null;this.canvas.dataset.renderer='browser';
   if(spec&&!this.reduced())try{this.active=await this.cache.get(spec.asset);if(spec.asset==='clone-barrage')await this.loadPortraits(outcome);this.canvas.dataset.renderer='Unity';delete this.canvas.dataset.assetError;delete this.canvas.dataset.assetFailure;}catch(error){this.canvas.dataset.assetFailure=error.name+': '+error.message;this.canvas.dataset.assetError='Unity asset unavailable; browser effect used. Combat result unchanged.';}
-  if(request!==this.request||document.hidden){this.active=null;options.onImpact?.();return;}
+  if(request!==this.request||document.hidden||this.reduced()){this.active=null;if(this.reduced())this.cache.clear();if(request!==this.request||document.hidden){options.onImpact?.();return;}}
   this.durationMs=this.active?2000:1750;this.impactTime=this.active ? .62 : .48;
   try{await super.play(outcome,options);}finally{this.active=null;}
  }

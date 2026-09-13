@@ -1,30 +1,13 @@
-"""Shared playable encounters; save schema and base version remain stable."""
-BUILD_ID = "3.64.0-playable-encounters-1"
+"""Approved Dream map art and device-local graphics quality, shared by both editions."""
+BUILD_ID = "3.64.0-dream-mobile-1"
 PATCH_NOTES = {
-    "title": "Playable encounters — stories from your campaign",
-    "summary": "54 authored original situations across eight worlds and Custom World can emerge from completed local activities or established local ties. Investigate, choose an approach, and keep the resulting changes. Shared encounters work without model calls in both editions; main AI/freeform remains available. This first content batch expands the three existing offline canon interventions, not every timeline event.",
+    "title": "Richer world maps, lighter phone combat",
+    "summary": "Approved Naruto and One Piece scenery now uses the live campaign map. Choose High for the 3D artwork or Low for the lightweight 2D atlas. Auto defaults to Low on phones.",
     "highlights": [
-        {"title": "Stories from what you do", "example": "Repeated surveys in Naruto can reveal a civilian signal post. Local work, training, social visits, community work and completed assignments lead to other authored situations."},
-        {"title": "Quiet moments count", "example": "An invitation to supper can simply be a pleasant visit. Training partners and community rest projects do not need a betrayal, fight or manufactured punishment."},
-        {"title": "Choose with verified information", "example": "Look into an encounter to learn its facts and unlock a prepared approach. Review the exact duration before confirming; interruptions retain the unfinished time."},
-        {"title": "Real outcomes, not promised ones", "example": "A public rest point improves ordinary recovery locally. Contacts extend field preparation. A protection investigation uses the existing tactical objective and grants no rescue reward on failure."},
-        {"title": "Prepare a canon withdrawal", "example": "At the three authored offline intervention sites, thirty minutes of route preparation reduces the protection objective from four rounds to three. It does not save anyone by itself."},
-        {"title": "Return without repeating the plot", "example": "Encounter stages survive saves and reloads. Completed and declined stories are remembered, and other invitations wait at least one campaign day after an outcome."},
-        {"title": "Consistent time skips", "example": "A petition due before Arlong's defeat is decided under the occupation, even if one time skip also crosses his later defeat. Splitting the same time into days gives the same result."},
-        {"title": "Fight the actual occupier", "example": "Recapturing a holding checks its current owner and committed garrison, not the former owner's weaker defenses. Stale plans are rejected; unknown old-save garrisons are not invented."},
-        {"title": "Government decisions without AI", "example": "Established local governments budget for public works and order every campaign week. Time skips and save/reload preserve the same decisions; local reports explain what was funded."},
-        {"title": "Plan a local campaign", "example": "Muster present members with recorded strength, survey an established garrison, then commit forces and pay for supplies. Unknown forces remain unknown; armies cannot teleport or be reused immediately."},
-        {"title": "Rescue is not conquest", "example": "Protecting villagers does not itself defeat Arlong. Canon aftermath resolves separately and does not overwrite land already captured by someone else."},
-        {"title": "Three local intervention encounters", "example": "Protect Duy’s team before the Eighth Gate, protect villagers at Arlong Park, or cover Rukia’s retreat at Sokyoku Hill. Arrive within the intervention window; success requires the tactical objective."},
-        {"title": "Support is not sovereignty", "example": "Offline civic activities build local support. Advisory petitions receive scheduled responses; military victories secure one foothold before a separate local-government charter."},
-        {"title": "Optional map animation", "example": "Known event participants can be selected on the map. Instant movement defaults on touch devices and does not stop the simulation."},
-        {"title": "World-specific interactions", "example": "Menu entrances, button edges and press feedback fit the active world without delaying actions."},
-        {"title": "Clearer themed cursors", "example": "A faceted Naruto kunai and broad-grinning straw-hat skull replace the earlier simplified cursors; remaining worlds have their own motifs."},
-        {"title": "Accessible on desktop and phone", "example": "Keyboard focus stays visible, disabled controls stay still, touch has press feedback and reduced motion removes new animation."},
-        {"title": "Approved richer colors", "example": "Map scenery has 30% more saturation and slightly stronger contrast. Text, portraits and interface colors remain unchanged."},
-        {"title": "World-specific scenery", "example": "Naruto villages and One Piece islands have distinct terrain and landmark silhouettes."},
-        {"title": "Zoom reveals detail", "example": "Smaller building details and tree trunks appear as you zoom closer."},
-        {"title": "Campaign map preserved", "example": "Ownership colors use the existing campaign atlas; markers, search, mobile navigation and travel remain available."},
-        {"title": "Works locally in both editions", "example": "The renderer and dependencies are bundled; no AI requests or online asset downloads are required."},
+        {"title": "The approved world scenery", "example": "Textured Naruto mountains, forests and villages; One Piece islands, Red Line cliffs, ports and ambient ocean movement. Current campaign ownership still supplies borders and control colors."},
+        {"title": "Graphics that suit your device", "example": "The map and combat have an Auto / High / Low selector. Low removes 3D map rendering and heavy attack sheets, while retaining locations, targeting, portraits and outcomes. The choice stays on this browser."},
+        {"title": "Lighter phone battles", "example": "Low mode caps combat canvases at 768 pixels on their longest edge, uses simple impact highlights, and skips large Unity sprite downloads. Your ability range, turn order, movement and damage do not change."},
+        {"title": "Less work between actions", "example": "Unchanged combat snapshots no longer rebuild the board, static terrain is cached, and hidden combat pages do not poll. Static map buildings are batched; offscreen scenery pauses and Low releases its renderer."},
+        {"title": "Shared main and offline", "example": "Both editions use the same map and combat code. Main keeps AI and written actions outside tactical battles. No save conversion or paid model calls are needed for these graphics."}
     ],
 }

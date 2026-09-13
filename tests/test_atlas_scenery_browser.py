@@ -11,6 +11,8 @@ def test_scenery_keeps_campaign_and_map_controls(ui,world,width):
     from worlds import WORLD_DATA
     page,game,calls=ui
     game.state.update(world=world,location=WORLD_DATA[world]['map'][0][0])
+    page.add_init_script("localStorage.setItem('worldwalker.graphics.v1','high')")
+    page.evaluate("localStorage.setItem('worldwalker.graphics.v1','high')")
     page.reload()
     page.wait_for_selector('#workspace-map-tab')
     page.locator('#workspace-map-tab').click()
@@ -29,6 +31,7 @@ def test_scenery_keeps_campaign_and_map_controls(ui,world,width):
 def test_context_loss_restores_vector_atlas(ui):
     page,game,_=ui
     game.state.update(world='Naruto',location='Konohagakure')
+    page.evaluate("localStorage.setItem('worldwalker.graphics.v1','high')")
     page.reload()
     page.locator('#workspace-map-tab').click()
     page.wait_for_selector('.atlas-3d-ready',timeout=45000)
@@ -41,6 +44,7 @@ def test_country_repaint_uses_changed_atlas_without_mutating_input(ui):
     from world_atlas import base_atlas
     page,game,_=ui
     game.state.update(world='Naruto',location='Konohagakure')
+    page.evaluate("localStorage.setItem('worldwalker.graphics.v1','high')")
     page.reload()
     page.locator('#workspace-map-tab').click()
     page.wait_for_selector('.atlas-3d-ready',timeout=45000)
