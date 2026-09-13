@@ -164,7 +164,9 @@ def tick(s, before, after):
                 liberate_arlong(s)
             news.append({'text': '[WORLD EVENT]\n' + pack['default'], 'tag': 'system',
                          'canon_day': pack['due'] // 1440, 'major': False, 'event_title': pack['title']})
-    return owned, news
+    from offline_canon_plans import tick as plan_tick
+    ids, entries = plan_tick(s, before, after)
+    return owned | ids, news + entries
 
 
 def liberate_arlong(s):
@@ -184,6 +186,10 @@ def boundary(s, start, end, place):
             continue
         if eligible(s, pack, start) and place == pack['place'] and start < pack['opens'] <= end:
             stops.append((pack['opens'], pack['title'] + ' — intervention window'))
+    from offline_canon_plans import boundary as plan_boundary
+    extra = plan_boundary(s, start, end, place)
+    if extra:
+        stops.append(extra)
     return min(stops) if stops else None
 
 
@@ -210,7 +216,8 @@ def actions(s, place):
                 and eligible(s, p, clock(s))):
             rows.append({'id': 'worldevent:' + p['key'], 'label': p['offer'], 'category': 'World',
                          'minutes': 0, 'description': (p['brief'].replace('four rounds','three rounds') if a.get('withdrawal_prepared') else p['brief']) + ' Starts a tactical protection encounter; victory is not guaranteed.'})
-    return rows
+    from offline_canon_plans import actions as plan_actions
+    return rows + plan_actions(s, place)
 
 
 def encounter_view(s,place):
@@ -228,11 +235,15 @@ def encounter_view(s,place):
             'place':place,'person':', '.join(p['actors']),'basis':'Present at this local encounter',
             'prepared':bool(a.get('withdrawal_prepared')),'prefix':'worldevent:','key':p['key'],
             'changes':['Local withdrawal route marked; protect for three rounds.'] if a.get('withdrawal_prepared') else [],'history':[]})
-    return out
+    from offline_canon_plans import view as plan_view
+    return out + plan_view(s, place)
 
 
 def resolve(game, spec):
     s = game.state
+    if spec['id'].startswith('worldevent:plan:'):
+        from offline_canon_plans import resolve as resolve_plan
+        return resolve_plan(game, spec)
     if spec['id'].startswith('worldevent:prepare:'):
         # The confirmed thirty minutes have already elapsed. Do not require a
         # second thirty-minute window when checking the completed preparation.
@@ -276,6 +287,9 @@ def combat_finished(game, outcome):
     objective = obj(obj(s.get('combat')).get('adventure_objective'))
     if not objective.get('world_event') or objective.get('settled'):
         return
+    if str(objective['world_event']).startswith('plan-'):
+        from offline_canon_plans import combat_finished as finish_plan
+        return finish_plan(game, outcome)
     pack = next((p for p in definitions(s) if p['key'] == objective['world_event']), None)
     if pack is None:
         raise ValueError('Missing authored world encounter definition.')
@@ -325,7 +339,9 @@ def visible_parties(s):
             elif not local:
                 continue  # Unknown route is not a straight line across an ocean/realm.
             rows.append(row)
-    return rows
+    from offline_canon_plans import visible_parties as plan_parties, normal
+    seen = {normal(r['name']) for r in rows}
+    return rows + [r for r in plan_parties(s) if normal(r['name']) not in seen]
 
 
 def route_position(s, pack):

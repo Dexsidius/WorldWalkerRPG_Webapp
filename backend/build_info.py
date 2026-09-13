@@ -1,13 +1,13 @@
-"""Approved Dream map art and device-local graphics quality, shared by both editions."""
-BUILD_ID = "3.64.0-dream-mobile-1"
+"""Offline canon appointment coverage, shared-source paired release."""
+BUILD_ID = "3.64.0-canon-plans-1"
 PATCH_NOTES = {
-    "title": "Richer world maps, lighter phone combat",
-    "summary": "Approved Naruto and One Piece scenery now uses the live campaign map. Choose High for the 3D artwork or Low for the lightweight 2D atlas. Auto defaults to Low on phones.",
+    "title": "Canon plans that respect your campaign",
+    "summary": "Naruto, One Piece and Bleach now have authored offline plans covering the current timelines. Future events offer local choices; old saves do not replay past history. Main's AI and written-action controls remain unchanged.",
     "highlights": [
-        {"title": "The approved world scenery", "example": "Textured Naruto mountains, forests and villages; One Piece islands, Red Line cliffs, ports and ambient ocean movement. Current campaign ownership still supplies borders and control colors."},
-        {"title": "Graphics that suit your device", "example": "The map and combat have an Auto / High / Low selector. Low removes 3D map rendering and heavy attack sheets, while retaining locations, targeting, portraits and outcomes. The choice stays on this browser."},
-        {"title": "Lighter phone battles", "example": "Low mode caps combat canvases at 768 pixels on their longest edge, uses simple impact highlights, and skips large Unity sprite downloads. Your ability range, turn order, movement and damage do not change."},
-        {"title": "Less work between actions", "example": "Unchanged combat snapshots no longer rebuild the board, static terrain is cached, and hidden combat pages do not poll. Static map buildings are batched; offscreen scenery pauses and Low releases its renderer."},
-        {"title": "Shared main and offline", "example": "Both editions use the same map and combat code. Main keeps AI and written actions outside tactical battles. No save conversion or paid model calls are needed for these graphics."}
+        {"title": "Full timeline coverage", "example": "52 Naruto, 40 One Piece and 27 Bleach entries have authored casts and local situations. This includes 100 new runnable appointments, the three existing rescue packs, and 16 historical references that remain in the past."},
+        {"title": "Help is not an automatic victory", "example": "You can assess the situation, complete a specific thirty-minute contribution, or decline without a penalty. Seven additional rescue branches require tactical combat. Preparing a withdrawal helps; it does not defeat an entire faction."},
+        {"title": "Changed history stays changed", "example": "Dead or unavailable participants cannot carry out their original plans. Rescuing Ace suspends the specific grief-driven training continuation, not unrelated events in Wano. Unwritten alternate arcs are not fabricated."},
+        {"title": "No duplicate hero or secret tracker", "example": "The scheduler waits instead of controlling your canon character. Secret meetings require access; distant moving markers need confirmed tracking and an eligible ally or group member. Same-day encounters run in order."},
+        {"title": "Timeline corrections", "example": "Kannabi Bridge no longer includes Rin's later death. Kaguya's revival uses Madara, not Obito. Ace's death no longer says Whitebeard died first. Existing event dates and IDs are preserved."}
     ],
 }

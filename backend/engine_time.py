@@ -1572,6 +1572,10 @@ class TimeSkipMixin:
         world = self.state.get("world", "Custom World")
         from offline_schedule import advance as advance_offline_schedule
         owned_offline_events, offline_news = advance_offline_schedule(self.state, before_minutes, after_minutes)
+        from offline_canon_plans import definitions as offline_plan_definitions
+        # Covered plans own their history too: introducing this feature to an
+        # old save must not replay past events through the ordinary backstop.
+        owned_offline_events.update(p['event_id'] for p in offline_plan_definitions(self.state))
         pending_appends.extend(offline_news)
         anchor_day = self.state.get("calendar_anchor_day")
         dependency_rows = {row["id"]: row for row in canon_dependency_graph(self.state).get("events", [])}

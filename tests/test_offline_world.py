@@ -29,7 +29,7 @@ def test_default_once_and_read_purity(world):
     assert visible_parties(s)==[]
     assert s==before
     owned,news=tick(s,s['canon_time_minutes'],p['due']+1)
-    assert p['event_id'] in owned and len(news)==1
+    assert p['event_id'] in owned and len([n for n in news if n['event_title']==p['title']])==1
     assert tick(s,p['due']+1,p['due']+999)[1]==[]
     assert s['canon_events_fired'].count(p['event_id'])==1
 
@@ -109,7 +109,7 @@ def test_remote_route_requires_explicit_tracking():
 def test_civic_work_and_scheduled_petition(session,world,place):
     from offline_politics import actions as offers, tick as decision_tick, GROUPS, WEEK
     _,game,client=session;game.state=state(world);s=game.state
-    s.update(location=place,canon_time_minutes=20*1440,canon_day=20,currency={'name':'Test','amount':100000})
+    s.update(location=place,canon_time_minutes=21*1440,canon_day=21,currency={'name':'Test','amount':100000})
     before=copy.deepcopy(s);assert len(offers(s,place))==3;assert s==before
     local(client,'political:work:0',place)
     r=s['offline_politics']['communities'][place]

@@ -12,7 +12,8 @@ def advance(s, before, after):
     def add(value):
         if isinstance(value, (int, float)) and before < value <= after:
             moments.add(int(value))
-    for event in definitions(s):
+    from offline_canon_plans import definitions as plan_definitions
+    for event in definitions(s) + plan_definitions(s):
         for key in ('depart', 'opens', 'due'):
             add(event[key])
     for row in obj(obj(s.get('offline_world')).get('appointments')).values():

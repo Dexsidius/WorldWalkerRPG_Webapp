@@ -12,7 +12,7 @@ window.CampaignEncounters = (() => {
     return true;
   }
   function choices(scene){
-    return (data?.actions||[]).filter(a=>scene.key==='original'?a.id.startsWith('encounter:'):a.id.startsWith('worldevent:')&&a.id.split(':').at(-1)===scene.key);
+    return (data?.actions||[]).filter(a=>scene.key==='original'?a.id.startsWith('encounter:'):scene.prefix?.startsWith('worldevent:plan:')?a.id.startsWith(scene.prefix):a.id.startsWith('worldevent:')&&a.id.split(':').at(-1)===scene.key);
   }
   function ensureDialog(){
     if(dialog)return dialog;

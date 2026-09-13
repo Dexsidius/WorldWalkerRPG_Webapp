@@ -1,15 +1,15 @@
-const CACHE = "worldwalker-v3640-dream-mobile-1";
+const CACHE = "worldwalker-v3640-canon-plans-1";
 const SHELL = [
-  "/js/graphics-quality.js?v=3.64.0-dream-mobile-1", "/css/dream-worlds.css?v=3.64.0-dream-mobile-1",
-  "/css/campaign-encounters.css?v=1", "/js/campaign-encounters.js?v=1",
+  "/js/graphics-quality.js?v=3.64.0-canon-plans-1", "/css/dream-worlds.css?v=3.64.0-canon-plans-1",
+  "/css/campaign-encounters.css?v=1", "/js/campaign-encounters.js?v=2",
   "/css/world-interactions.css?v=1", "/cursors/naruto-kunai.svg?v=2", "/cursors/one-piece-strawhat-jolly-roger.svg?v=2",
   "/cursors/world-crystal.svg", "/cursors/hunter-license.svg", "/cursors/system-pointer.svg", "/cursors/satisfy-blade.svg", "/cursors/slime-pointer.svg",
-  "/js/world-calendar.js?v=3.64.0-dream-mobile-1", "/js/living-adventures.js?v=3.64.0-dream-mobile-1",
-  "/css/living-adventures.css?v=3.64.0-dream-mobile-1",
-  "/js/api-client.js?v=3.64.0-dream-mobile-1", "/js/roster-sync.js?v=3.64.0-dream-mobile-1", "/js/team-membership.js?v=3.64.0-dream-mobile-1", "/js/action-deck.js?v=3.64.0-dream-mobile-1",
-  "/css/compact-workspace.css?v=3.64.0-dream-mobile-1",
-  "/js/turn-feedback.js?v=3.64.0-dream-mobile-1", "/css/turn-feedback.css?v=3.64.0-dream-mobile-1",
-  "/", "/css/style.css?v=3.64.0-dream-mobile-1", "/js/app.js?v=3.64.0-dream-mobile-1", "/css/world-atlas.css?v=3.64.0-dream-mobile-1", "/js/world-atlas.js?v=3.64.0-dream-mobile-1", "/js/workspace-tabs.js?v=3.64.0-dream-mobile-1", "/manifest.webmanifest",
+  "/js/world-calendar.js?v=3.64.0-canon-plans-1", "/js/living-adventures.js?v=3.64.0-canon-plans-1",
+  "/css/living-adventures.css?v=3.64.0-canon-plans-1",
+  "/js/api-client.js?v=3.64.0-canon-plans-1", "/js/roster-sync.js?v=3.64.0-canon-plans-1", "/js/team-membership.js?v=3.64.0-canon-plans-1", "/js/action-deck.js?v=3.64.0-canon-plans-1",
+  "/css/compact-workspace.css?v=3.64.0-canon-plans-1",
+  "/js/turn-feedback.js?v=3.64.0-canon-plans-1", "/css/turn-feedback.css?v=3.64.0-canon-plans-1",
+  "/", "/css/style.css?v=3.64.0-canon-plans-1", "/js/app.js?v=3.64.0-canon-plans-1", "/css/world-atlas.css?v=3.64.0-canon-plans-1", "/js/world-atlas.js?v=3.64.0-canon-plans-1", "/js/workspace-tabs.js?v=3.64.0-canon-plans-1", "/manifest.webmanifest",
   "/assets/branding/worldwalker-emblem.png", "/cursors/naruto-kunai.svg", "/cursors/naruto-shuriken.svg",
   "/cursors/bleach-zanpakuto.svg", "/cursors/jjk-sukuna-finger.svg", "/cursors/one-piece-strawhat-jolly-roger.svg", "/fonts/nova-square.ttf"
 ];

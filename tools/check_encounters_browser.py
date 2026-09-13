@@ -84,3 +84,39 @@ def test_tactical_choice_leaves_encounter_window_and_requires_real_battle(ui):
     assert game.state['combat']['active'] and game.state['combat']['tactical']['units']
     assert read(game.state)['active']['stage']=='combat'
     assert not read(game.state)['resolved'] and not calls
+
+
+@pytest.mark.parametrize('width',[1440,390])
+@pytest.mark.parametrize('world,title',[
+    ('Naruto','Ninja Registration Day'),
+    ('One Piece','Luffy leaves Foosha Village'),
+    ('Bleach','Rukia Kuchiki arrives in Karakura Town'),
+])
+def test_authored_calendar_choices_render_and_commit(ui,monkeypatch,width,world,title):
+    import runtime_mode
+    from test_offline_canon_plans import setup,arrive
+    from offline_canon_plans import rows
+    monkeypatch.setattr(runtime_mode,'MODE','offline')
+    page,game,calls=ui
+    page.set_viewport_size({'width':width,'height':900 if width>720 else 844})
+    game.state,p=setup(world,title);arrive(game.state,p);reload_state(page)
+    if width<720:page.locator('#mobile-bottom-nav [data-mobile-view="actions"]').click()
+    page.locator(f'[data-encounter-open="{p["key"]}"]').click()
+    action='worldevent:plan:'+p['key']+':contribute'
+    page.wait_for_selector(f'[data-encounter-choice="{action}"]')
+    before=game.state['canon_time_minutes']
+    page.locator(f'[data-encounter-choice="{action}"]').click()
+    page.wait_for_selector('[data-confirm-yes]:not(:disabled)')
+    page.locator('[data-confirm-cancel]').click()
+    assert game.state['canon_time_minutes']==before
+    assert not rows(game.state)[p['key']].get('contributed')
+    assert page.evaluate('document.querySelector("#campaign-encounter").scrollWidth <= document.querySelector("#campaign-encounter").clientWidth + 1')
+    for box in page.locator('[data-encounter-choice]').all():assert box.bounding_box()['height']>=44
+    out=os.getenv('WORLDWALKER_ENCOUNTER_SCREENSHOTS')
+    if out:
+        Path(out).mkdir(parents=True,exist_ok=True)
+        page.screenshot(path=str(Path(out)/f'canon-{world.lower().replace(" ","-")}-{width}.png'))
+    choose(page,action)
+    page.wait_for_function('!APP.busy')
+    assert game.state['canon_time_minutes']==before+30
+    assert rows(game.state)[p['key']]['contributed'] and not calls
