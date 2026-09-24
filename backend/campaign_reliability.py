@@ -337,6 +337,8 @@ def build_grounding_packet(state, query="", purpose="moment", max_items=18):
                "latest": copy.deepcopy((row.get("history") or [])[-3:])}
         for name, row in list((state.get("ability_evolution") or {}).items())[:12] if isinstance(row, dict)
     }
+    from canon_consequences import ai_facts as confirmed_canon_rescues
+    packet["confirmed_canon_rescues"] = confirmed_canon_rescues(state, query)
 
     people = []
     companion_rows = state.get("companions") if isinstance(state.get("companions"), list) else []

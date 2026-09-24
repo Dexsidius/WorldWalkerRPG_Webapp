@@ -246,6 +246,9 @@ def _match_divergence(divergence, title):
 def canon_dependency_graph(state):
     """Explain how fixed events depend on earlier story dominoes."""
     events = timeline_for(state.get("world", "Custom World")).get("events", [])
+    world = state.get("world", "Custom World")
+    from canon_event_plans import REQUIRES as authored_requires
+    explicit_world = world in authored_requires
     fired = set(state.get("canon_events_fired", []))
     divergences = state.get("canon_divergences", []) if isinstance(state.get("canon_divergences"), list) else []
     current_day = int(state.get("canon_day", 0) or 0)
@@ -254,7 +257,12 @@ def canon_dependency_graph(state):
         title, day = ai_text(event.get("title")), int(event.get("day", 0) or 0)
         event_id = f"day:{day}:{title or 'event'}"
         requires = list(event.get("requires") or []) if isinstance(event.get("requires"), list) else []
-        if not requires and last_major and not event.get("historical_only"):
+        for prerequisite in authored_requires.get(world, {}).get(title, []):
+            if prerequisite not in requires:
+                requires.append(prerequisite)
+        # A neighboring date is not a causal dependency. The three authored
+        # worlds have explicit links; keep the legacy fallback elsewhere.
+        if not requires and not explicit_world and last_major and not event.get("historical_only"):
             requires = [last_major]
         matched = next((d for d in reversed(divergences) if _match_divergence(d, title)), None)
         status, reason, replacement, effective_day = ("occurred" if event_id in fired else "upcoming"), "Its known prerequisites remain possible.", "", day
@@ -268,11 +276,19 @@ def canon_dependency_graph(state):
             if isinstance(matched, dict):
                 try: effective_day = int(matched.get("new_day", matched.get("delayed_until", day)))
                 except (TypeError, ValueError): effective_day = day
+        recorded = state.get('canon_event_states', {})
+        recorded = recorded.get(event_id, {}) if isinstance(recorded, dict) else {}
+        if isinstance(recorded, dict) and recorded.get('status') in {'replaced', 'impossible', 'prevented', 'cancelled'}:
+            status = 'replaced' if recorded['status'] == 'replaced' else 'impossible'
+            reason = ai_text(recorded.get('reason')) or reason
+            replacement = ai_text(recorded.get('replacement')) or replacement
         blocked = []
         for requirement in requires:
             requirement_row = next((row for row in rows if row["title"].lower() == ai_text(requirement).lower()), None)
-            if requirement_row and requirement_row["status"] == "impossible": blocked.append(requirement_row["title"])
+            if requirement_row and requirement_row["status"] in {"impossible", "replaced"}: blocked.append(requirement_row["title"])
         if blocked and status not in {"occurred", "history"}:
+            from canon_consequences import variant_for
+            replacement = variant_for(state, title) or replacement
             status = "replaced" if replacement else "impossible"
             reason = "A required earlier event is no longer possible: " + ", ".join(blocked)
         rows.append({"id": event_id, "title": title, "day": day, "location": event.get("location", "Unknown"),

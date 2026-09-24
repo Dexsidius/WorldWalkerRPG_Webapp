@@ -13,12 +13,21 @@ def advance(s, before, after):
         if isinstance(value, (int, float)) and before < value <= after:
             moments.add(int(value))
     from offline_canon_plans import definitions as plan_definitions
-    for event in definitions(s) + plan_definitions(s):
+    authored_plans = plan_definitions(s)
+    from canon_consequences import reconcile_old_rescues
+    reconcile_old_rescues(s, authored_plans)
+    for event in definitions(s) + authored_plans:
         for key in ('depart', 'opens', 'due'):
             add(event[key])
     for row in obj(obj(s.get('offline_world')).get('appointments')).values():
         if not obj(row).get('aftermath_resolved'):
             add(obj(row).get('aftermath_due'))
+    from canon_consequences import read as consequence_rows, tick as consequence_tick
+    for row in consequence_rows(s).values():
+        if obj(row).get('status') not in {'complete', 'cancelled'}:
+            add(obj(row).get('opens'))
+            add(obj(row).get('decision_opens'))
+            add(obj(row).get('due'))
     politics = obj(s.get('offline_politics'))
     for community in obj(politics.get('communities')).values():
         for petition in obj(community).get('petitions', []):
@@ -40,6 +49,7 @@ def advance(s, before, after):
             ids, entries = event_tick(s, cursor, minute)
             owned.update(ids)
             news.extend(entries)
+            news.extend(consequence_tick(s, cursor, minute))
             # Same-time order is explicit: canon transition, petition, charter.
             news.extend(petition_tick(s, cursor, minute))
             news.extend(tick_governments(s, minute))

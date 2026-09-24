@@ -7,7 +7,13 @@ now with a real animated HTML/CSS/JS interface instead of Tkinter, running in
 a native desktop window via `pywebview`.
 
 Current app version: **3.64.0** (compatible with save schema 21).
-Current preview build: **3.64.0-membership-truth-1**.
+Current preview build: **3.64.0-living-consequences-1**.
+
+Living Consequences adds authored local follow-ups after confirmed Yahiko, Ace
+and Rukia rescues. The Naruto, One Piece and Bleach timeline graph now uses
+explicit causal links instead of chaining every neighboring event. The GM and
+Advisor receive compact verified rescue facts. See `docs/LIVING_CONSEQUENCES.md`
+for the precise player-facing scope and limitations.
 
 
 Version 3.64.0 adds character mastery paths, persistent faction operations, multi-stage expeditions and boss phases, player-targeted minor canon-event intervention, organization delegation, public reputation/wanted status, property/economy/production, and engine-owned official team membership. The Team screen, GM and Advisor now consume the same canonical organization ledger; relationships, locations and faction names cannot become members. Named recruitment and player join decisions require explicit local confirmation.

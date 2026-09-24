@@ -1,6 +1,6 @@
 """Flask application: serves the frontend, game assets, and the JSON API
 that the browser-based UI drives the game engine through."""
-import copy, io, json, os, secrets, threading, traceback, sys, time
+import copy, io, json, os, re, secrets, threading, traceback, sys, time
 from datetime import timedelta
 from urllib.parse import quote
 from pathlib import Path
@@ -553,7 +553,7 @@ def _start_multiplayer_worker_once():
 
 # ---------- static / frontend ----------
 def _render_index():
-    """Serve index.html with its CSS/JS hrefs tagged to APP_VERSION.
+    """Serve index.html with its CSS/JS hrefs tagged to the build ID.
 
     A desktop build's own no-store headers only stop the plain HTTP cache —
     they do nothing about a browser engine's Cache Storage / service-worker
@@ -563,8 +563,10 @@ def _render_index():
     resource it has never seen, so there is nothing stale left to serve.
     """
     html = (FRONTEND_DIR / "index.html").read_text(encoding="utf-8")
-    html = html.replace('href="/css/style.css"', f'href="/css/style.css?v={APP_VERSION}"')
-    html = html.replace('src="/js/app.js"', f'src="/js/app.js?v={APP_VERSION}"')
+    # Older templates already contain versioned hrefs. Stamp every static
+    # template URL at serving time so a build-ID change reaches phones even
+    # when APP_VERSION and save schema intentionally stay compatible.
+    html = re.sub(r'(?<=\?v=)[A-Za-z0-9._-]+', BUILD_ID, html)
     if offline_enabled():
         html = "\n".join(line for line in html.splitlines() if "fonts.googleapis.com" not in line and "fonts.gstatic.com" not in line)
         html = html.replace("</head>", f'<link rel="stylesheet" href="/css/offline-play.css?v={BUILD_ID}"></head>')

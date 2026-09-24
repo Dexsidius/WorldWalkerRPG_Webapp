@@ -46,7 +46,7 @@ class WorldwalkerV3100Tests(unittest.TestCase):
                 if event.get("historical_only"):
                     continue
                 self.assertTrue(event.get("spoiler"), f"{world}: {event['title']}")
-                if previous:
+                if previous and world not in {'Naruto', 'One Piece', 'Bleach'}:
                     self.assertTrue(event.get("requires"), f"{world}: {event['title']}")
                 previous = event["title"]
 

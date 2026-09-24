@@ -158,6 +158,8 @@ REQUIRES = {
  },
  'Bleach': {
   'Rukia is sentenced to execution': ['Renji and Byakuya come for Rukia'],
+  'Training with Urahara Kisuke': ['Rukia is sentenced to execution'],
+  'The push into Seireitei': ['Rukia is sentenced to execution'],
   'Hueco Mundo rescue begins': ['Orihime is taken to Hueco Mundo'],
   'Royal Guard training': ['The first invasion of Soul Society'],
  },

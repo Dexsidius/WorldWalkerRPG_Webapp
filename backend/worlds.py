@@ -729,7 +729,7 @@ WORLD_STARTING_ERAS = {
 
 
 def _normalize_builtin_timeline_contracts():
-    """Add secrecy and causal ordering without adding or moving any event."""
+    """Add secrecy and legacy ordering without moving any event."""
     for world, timeline in CANON_TIMELINES.items():
         if world == "Custom World":
             continue
@@ -739,7 +739,10 @@ def _normalize_builtin_timeline_contracts():
                 # Timeline details are metagame spoilers until their date is
                 # reached.  Players can still opt into canon foreknowledge.
                 event.setdefault("spoiler", True)
-                if previous_title:
+                # Naruto, One Piece and Bleach now have authored causal links.
+                # Adjacent calendar entries are not necessarily dependent:
+                # rescuing Ace cannot erase unrelated later islands.
+                if previous_title and world not in {'Naruto', 'One Piece', 'Bleach'}:
                     event.setdefault("requires", [previous_title])
                 previous_title = str(event.get("title") or previous_title)
             event.setdefault("scope", "wide" if event.get("major", False) else "personal")

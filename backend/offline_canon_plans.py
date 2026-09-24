@@ -179,6 +179,7 @@ def guard(s, p):
         if actor_unavailable(s, name, allow_captive=captive):
             return name+' is unavailable; the original plan cannot proceed.'
     by_title = {r.get('title'): r for r in rows(s).values() if isinstance(r, dict)}
+    graph = None
     for title in p['requires']:
         if obj(by_title.get(title)).get('status') in {'intervened', 'cancelled'}:
             return title+' changed. This dependent continuation needs a different plan.'
@@ -190,6 +191,13 @@ def guard(s, p):
                {'replaced', 'impossible', 'prevented', 'cancelled'}
                for eid, value in obj(s.get('canon_event_states')).items()):
             return title+' was replaced earlier in this campaign.'
+        # A direct prerequisite can already be impossible through an authored
+        # upstream rescue even before its own appointment enrolls tomorrow.
+        if graph is None:
+            from simulation_integrity import canon_dependency_graph
+            graph = {row['title']: row for row in canon_dependency_graph(s)['events']}
+        if obj(graph.get(title)).get('status') in {'replaced', 'impossible'}:
+            return title+' changed. This dependent continuation needs a different plan.'
     return ''
 
 
@@ -204,13 +212,13 @@ def local(s, p, place):
                for n in p['actors'] for m in memories(s, n))
 
 
-def finish(s, p, r, status, message):
+def finish(s, p, r, status, message, replacement=''):
     if r.get('status') in TERMINAL:
         return
     r.update(status=status, summary=message, resolved_minute=now(s))
     s.setdefault('canon_event_states', {})[p['event_id']] = {
         'status': 'occurred' if status == 'occurred' else 'replaced',
-        'reason': message, 'resolved_day': now(s)//1440}
+        'reason': message, 'replacement': replacement, 'resolved_day': now(s)//1440}
     fired = s.setdefault('canon_events_fired', [])
     if p['event_id'] not in fired:
         fired.append(p['event_id'])
@@ -239,7 +247,10 @@ def tick(s, before, after):
             continue
         reason = guard(s, p)
         if reason:
-            finish(s, p, r, 'cancelled', reason)
+            from canon_consequences import variant_for
+            alternative = variant_for(s, p['title']) if any(
+                reason.startswith(title + ' changed') for title in p['requires']) else ''
+            finish(s, p, r, 'cancelled', reason, alternative)
             continue
         if r.get('status') == 'combat':
             continue
@@ -408,6 +419,8 @@ def combat_finished(game, outcome):
         for m in memories(s, p['rescue'][0]):
             if str(m.get('status', '')).casefold() in {'captured', 'imprisoned'}:
                 m['status'] = 'recovering'
+        from canon_consequences import record_rescue
+        record_rescue(s, p, p['rescue'][0])
     else:
         r['status'] = 'available'
         message = 'The withdrawal was not secured. The scheduled outcome has not been prevented, and no death is applied before its deadline.'

@@ -1,13 +1,13 @@
-"""Offline canon appointment coverage, shared-source paired release."""
-BUILD_ID = "3.64.0-canon-plans-1"
+"""Living Consequences patch; source-compatible with save schema 21."""
+BUILD_ID = "3.64.0-living-consequences-1"
 PATCH_NOTES = {
-    "title": "Canon plans that respect your campaign",
-    "summary": "Naruto, One Piece and Bleach now have authored offline plans covering the current timelines. Future events offer local choices; old saves do not replay past history. Main's AI and written-action controls remain unchanged.",
+    "title": "Living Consequences",
+    "summary": "Confirmed rescues now lead to grounded follow-ups, and Naruto, One Piece and Bleach no longer treat every neighboring canon event as causally dependent. Your AI and offline campaigns keep the same saves and controls.",
     "highlights": [
-        {"title": "Full timeline coverage", "example": "52 Naruto, 40 One Piece and 27 Bleach entries have authored casts and local situations. This includes 100 new runnable appointments, the three existing rescue packs, and 16 historical references that remain in the past."},
-        {"title": "Help is not an automatic victory", "example": "You can assess the situation, complete a specific thirty-minute contribution, or decline without a penalty. Seven additional rescue branches require tactical combat. Preparing a withdrawal helps; it does not defeat an entire faction."},
-        {"title": "Changed history stays changed", "example": "Dead or unavailable participants cannot carry out their original plans. Rescuing Ace suspends the specific grief-driven training continuation, not unrelated events in Wano. Unwritten alternate arcs are not fabricated."},
-        {"title": "No duplicate hero or secret tracker", "example": "The scheduler waits instead of controlling your canon character. Secret meetings require access; distant moving markers need confirmed tracking and an eligible ally or group member. Same-day encounters run in order."},
-        {"title": "Timeline corrections", "example": "Kannabi Bridge no longer includes Rin's later death. Kaguya's revival uses Madara, not Obito. Ace's death no longer says Whitebeard died first. Existing event dates and IDs are preserved."}
+        {"title": "After a rescue", "example": "Save Yahiko, Ace or Rukia in tactical combat and a local changed-history encounter opens later. Speak with survivors, help with recovery, then choose one of two practical follow-up directions—or leave them to decide."},
+        {"title": "The right future changes", "example": "Yahiko's survival removes the original death-driven Pain assault; Ace's survival removes the assumption that grief made Luffy train. Unrelated village days and later islands remain available."},
+        {"title": "NPCs keep moving", "example": "Survivors receive a modest recovery or regrouping goal. Their later victories, territories and relationships are not awarded automatically."},
+        {"title": "No omniscient updates", "example": "Follow-ups appear where the player is actually present. Leaving does not broadcast private meetings or control a canon player character."},
+        {"title": "Old saves stay intact", "example": "A previously confirmed rescue can enroll its follow-up from the original rescue time. Past events are not replayed, and no outcome is inferred from a vague rumor."}
     ],
 }

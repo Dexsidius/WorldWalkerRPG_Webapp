@@ -190,6 +190,10 @@ def boundary(s, start, end, place):
     extra = plan_boundary(s, start, end, place)
     if extra:
         stops.append(extra)
+    from canon_consequences import boundary as consequence_boundary
+    extra = consequence_boundary(s, start, end, place)
+    if extra:
+        stops.append(extra)
     return min(stops) if stops else None
 
 
@@ -217,7 +221,8 @@ def actions(s, place):
             rows.append({'id': 'worldevent:' + p['key'], 'label': p['offer'], 'category': 'World',
                          'minutes': 0, 'description': (p['brief'].replace('four rounds','three rounds') if a.get('withdrawal_prepared') else p['brief']) + ' Starts a tactical protection encounter; victory is not guaranteed.'})
     from offline_canon_plans import actions as plan_actions
-    return rows + plan_actions(s, place)
+    from canon_consequences import actions as consequence_actions
+    return rows + plan_actions(s, place) + consequence_actions(s, place)
 
 
 def encounter_view(s,place):
@@ -236,11 +241,15 @@ def encounter_view(s,place):
             'prepared':bool(a.get('withdrawal_prepared')),'prefix':'worldevent:','key':p['key'],
             'changes':['Local withdrawal route marked; protect for three rounds.'] if a.get('withdrawal_prepared') else [],'history':[]})
     from offline_canon_plans import view as plan_view
-    return out + plan_view(s, place)
+    from canon_consequences import view as consequence_view
+    return out + plan_view(s, place) + consequence_view(s, place)
 
 
 def resolve(game, spec):
     s = game.state
+    if spec['id'].startswith('worldevent:consequence:'):
+        from canon_consequences import resolve as resolve_consequence
+        return resolve_consequence(s, spec)
     if spec['id'].startswith('worldevent:plan:'):
         from offline_canon_plans import resolve as resolve_plan
         return resolve_plan(game, spec)
