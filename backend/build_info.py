@@ -1,5 +1,5 @@
 """Living Consequences patch; source-compatible with save schema 21."""
-BUILD_ID = "3.64.0-living-consequences-1"
+BUILD_ID = "3.64.0-living-consequences-2"
 PATCH_NOTES = {
     "title": "Living Consequences",
     "summary": "Confirmed rescues now lead to grounded follow-ups, and Naruto, One Piece and Bleach no longer treat every neighboring canon event as causally dependent. Your AI and offline campaigns keep the same saves and controls.",

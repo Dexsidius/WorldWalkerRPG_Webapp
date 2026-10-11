@@ -6232,6 +6232,20 @@ $("#btn-inline-retry").addEventListener("click", async (event) => {
       if (result.story) appendStoryEntries(result.story, { focusNew: true });
     }
     $("#turn-recovery-notice").hidden = true;
+  } catch (error) {
+    showToast(error.message, "danger");
+    if (error.code === "PENDING_REQUEST_STALE") { try { renderState(await apiGet("/api/state")); } catch (_) { /* Chronicle can be reloaded manually. */ } }
+  }
+  finally { button.disabled = false; }
+});
+$("#btn-inline-discard").addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    discardPendingRequest();
+    const latest = await apiGet("/api/state");
+    renderState(latest);
+    showToast("The saved action was discarded without being sent. Check the Chronicle for what actually happened, then act again.", "notify");
   } catch (error) { showToast(error.message, "danger"); }
   finally { button.disabled = false; }
 });

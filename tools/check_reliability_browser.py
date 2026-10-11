@@ -206,6 +206,21 @@ def test_unknown_changed_state_is_not_resent(ui):
     assert page.evaluate('!!APP.retryRequest')
 
 
+def test_stale_saved_action_does_not_lock_out_a_new_action(ui):
+    page,game,calls=ui
+    if page.fixture_memory: page.evaluate('window.__fixtureFault={path:"/api/time/resolve",body:"bad gateway",status:502,before:true}')
+    else: page.route('**/api/time/resolve',lambda r:r.fulfill(status=502,body='bad gateway'),times=1)
+    page.evaluate('apiPost("/api/time/resolve",{orders:["Practice"]}).catch(()=>{})')
+    game.state['hp']-=1
+    # Retry cannot safely replay the saved action: it is reported, never sent...
+    error=page.evaluate('apiPost(APP.retryRequest.path,APP.retryRequest.payload).then(()=>"").catch(e=>e.code+"|"+e.message)')
+    assert 'PENDING_REQUEST_STALE' in error and 'safely match' in error and not calls
+    # ...and the player can then enter a different action instead of being stuck behind Retry.
+    result=page.evaluate('apiPost("/api/time/resolve",{orders:["Rest"]})')
+    assert result['status']=='resolved' and len(calls)==1
+    assert page.evaluate('APP.retryRequest') is None
+
+
 def test_confirmation_recovery_opens_confirmation_not_result(ui,monkeypatch):
     page,game,calls=ui
     monkeypatch.setattr(game,'run_time_skip',lambda *a,**k:{'status':'lethal_confirm_required','check':{'lethal_risk':'high','lethal_warning':'Confirm this test'}})

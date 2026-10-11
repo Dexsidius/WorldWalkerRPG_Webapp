@@ -37,6 +37,13 @@ function clearPendingRequest() {
   const notice = document.getElementById("turn-recovery-notice");
   if (notice) notice.hidden = true;
 }
+/* The only way out of a pending request that Retry can no longer safely replay (the host has
+   no record of it completing and the campaign has since changed). It is always the player's
+   choice, never automatic: the saved action is dropped without being sent, and the host's
+   current campaign is what the Chronicle then shows. */
+function discardPendingRequest() {
+  clearPendingRequest();
+}
 function checkedGameResult(data) {
   const status = data?.status;
   const confirmation = apiRecord(data) && (
@@ -98,7 +105,16 @@ async function recoverGameRequest(pending) {
   if (receipt.status === "in_progress") throw new Error("The host is still resolving this action. It has not been sent again.");
   if (receipt.status !== "failed" && !(receipt.status === "unknown" && pending.beforeGuard &&
       receipt.guard === pending.beforeGuard && receipt.campaign === pending.campaign)) {
-    throw new Error("The host could not safely match this request to the current campaign. Reload the campaign and inspect the Chronicle before submitting a new action.");
+    // The host has no record of this action completing and the campaign has moved on, so it cannot be
+    // replayed. It was never sent. Mark it stale so the player can enter a new action instead of
+    // being locked behind a Retry that can no longer succeed.
+    pending.stale = true;
+    rememberPendingRequest(pending);
+    // Adopt the host's current guard so the player's next action is prepared against the campaign as it is now.
+    if (APP.state && typeof receipt.guard === "string") APP.state._recovery_guard = receipt.guard;
+    const error = new Error("The host could not safely match this request to the current campaign, so the saved action was not sent. Check the Chronicle, then enter a new action to continue.");
+    error.code = "PENDING_REQUEST_STALE";
+    throw error;
   }
   return checkedGameResult(await api(pending.path, {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(pending.payload),
@@ -107,6 +123,7 @@ async function recoverGameRequest(pending) {
 async function apiPost(path, body) {
   const retryable = Object.hasOwn(GAME_REQUEST_ROUTES, path);
   let payload = { ...(body || {}) };
+  if (retryable && APP.retryRequest?.stale && !payload.request_id) clearPendingRequest();
   const existing = APP.retryRequest;
   if (retryable && existing && !payload.request_id) {
     const command = value => JSON.stringify(Object.fromEntries(Object.entries(value || {}).filter(([k]) => !["request_id", "expected_campaign", "expected_guard"].includes(k)).sort(([a],[b]) => a.localeCompare(b))));
